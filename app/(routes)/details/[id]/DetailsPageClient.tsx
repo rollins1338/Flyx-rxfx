@@ -12,20 +12,8 @@ import { SeasonSelector } from './SeasonSelector';
 import { EpisodeList } from './EpisodeList';
 import styles from './DetailsPage.module.css';
 
-// Prefetch video stream data on component mount
-const prefetchStreamData = async (contentId: string, mediaType: 'movie' | 'tv') => {
-  try {
-    // Prefetch stream extraction in the background using extract-shadowlands
-    fetch(`/api/extract-shadowlands?tmdbId=${contentId}${mediaType === 'tv' ? '&season=1&episode=1' : ''}`, {
-      method: 'GET',
-      priority: 'low',
-    } as any).catch(() => {
-      // Silent fail - this is just a prefetch optimization
-    });
-  } catch (error) {
-    // Silent fail
-  }
-};
+// Note: Removed prefetch to avoid duplicate requests
+// SimpleVideoPlayer will handle stream extraction when user clicks "Watch Now"
 
 interface DetailsPageClientProps {
   content: MediaItem | null;
@@ -59,12 +47,7 @@ export default function DetailsPageClient({
     }
   }, [selectedSeason, content]);
 
-  // Prefetch video stream data on page load
-  useEffect(() => {
-    if (content) {
-      prefetchStreamData(content.id, content.mediaType);
-    }
-  }, [content]);
+  // Removed prefetch - SimpleVideoPlayer handles extraction on demand
 
   const loadSeasonEpisodes = async (seasonNumber: number) => {
     if (!content) return;

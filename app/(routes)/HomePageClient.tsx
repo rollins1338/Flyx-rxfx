@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
 import type { MediaItem } from '@/types/media';
 import { HeroSection } from '@/components/content/HeroSection';
 import { CategoryRow } from '@/components/content/CategoryRow';
@@ -10,6 +11,9 @@ import { Navigation } from '@/components/layout/Navigation';
 import { Footer } from '@/components/layout/Footer';
 import { PageTransition } from '@/components/layout/PageTransition';
 import { GlassPanel } from '@/components/ui/GlassPanel';
+import { FluidButton } from '@/components/ui/FluidButton';
+import { Card3D } from '@/components/ui/Card3D';
+import { ParallaxContainer } from '@/components/ui/ParallaxContainer';
 import styles from './HomePage.module.css';
 
 interface HomePageClientProps {
@@ -130,14 +134,131 @@ export default function HomePageClient({
               />
             )}
 
+            {/* Welcome Banner */}
+            <section className={styles.welcomeBanner}>
+              <ParallaxContainer height="h-auto" className="py-16">
+                <div className="container mx-auto px-4 text-center">
+                  <motion.div
+                    initial={{ opacity: 0, y: 30 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.8 }}
+                  >
+                    <h2 className={styles.welcomeTitle}>
+                      Welcome to the Future of Entertainment
+                    </h2>
+                    <p className={styles.welcomeSubtitle}>
+                      Discover unlimited movies and TV shows with crystal-clear streaming, 
+                      personalized recommendations, and zero interruptions.
+                    </p>
+                    <div className={styles.welcomeFeatures}>
+                      <div className={styles.featureItem}>
+                        <div className={styles.featureIcon}>🎬</div>
+                        <span>Unlimited Content</span>
+                      </div>
+                      <div className={styles.featureItem}>
+                        <div className={styles.featureIcon}>⚡</div>
+                        <span>Lightning Fast</span>
+                      </div>
+                      <div className={styles.featureItem}>
+                        <div className={styles.featureIcon}>🎯</div>
+                        <span>Smart Recommendations</span>
+                      </div>
+                      <div className={styles.featureItem}>
+                        <div className={styles.featureIcon}>📱</div>
+                        <span>All Devices</span>
+                      </div>
+                    </div>
+                  </motion.div>
+                </div>
+              </ParallaxContainer>
+            </section>
+
             {/* Content Sections */}
             <main id="main-content" className={styles.contentSections}>
               {/* Trending Today */}
               {trendingToday.length > 0 && (
                 <section className={styles.section}>
                   <CategoryRow
-                    title="Trending Today"
+                    title="🔥 Trending Today"
                     items={trendingToday}
+                    onItemClick={handleContentClick}
+                  />
+                </section>
+              )}
+
+              {/* Quick Stats Section */}
+              <section className={styles.statsSection}>
+                <div className="container mx-auto px-4">
+                  <div className={styles.statsGrid}>
+                    <Card3D className={styles.statCard}>
+                      <div className={styles.statNumber}>50K+</div>
+                      <div className={styles.statLabel}>Movies & Shows</div>
+                    </Card3D>
+                    <Card3D className={styles.statCard}>
+                      <div className={styles.statNumber}>4K</div>
+                      <div className={styles.statLabel}>Ultra HD Quality</div>
+                    </Card3D>
+                    <Card3D className={styles.statCard}>
+                      <div className={styles.statNumber}>24/7</div>
+                      <div className={styles.statLabel}>Always Available</div>
+                    </Card3D>
+                    <Card3D className={styles.statCard}>
+                      <div className={styles.statNumber}>0</div>
+                      <div className={styles.statLabel}>Ads or Interruptions</div>
+                    </Card3D>
+                  </div>
+                </div>
+              </section>
+
+              {/* Popular Movies */}
+              {popularMovies.length > 0 && (
+                <section className={styles.section}>
+                  <CategoryRow
+                    title="🎭 Popular Movies"
+                    items={popularMovies}
+                    onItemClick={handleContentClick}
+                  />
+                </section>
+              )}
+
+              {/* Genre Spotlight */}
+              <section className={styles.genreSpotlight}>
+                <div className="container mx-auto px-4">
+                  <h2 className={styles.sectionTitle}>🎨 Explore by Genre</h2>
+                  <div className={styles.genreGrid}>
+                    {[
+                      { name: 'Action', emoji: '💥', color: 'from-red-500 to-orange-500' },
+                      { name: 'Comedy', emoji: '😂', color: 'from-yellow-500 to-pink-500' },
+                      { name: 'Drama', emoji: '🎭', color: 'from-purple-500 to-blue-500' },
+                      { name: 'Horror', emoji: '👻', color: 'from-gray-800 to-red-900' },
+                      { name: 'Sci-Fi', emoji: '🚀', color: 'from-cyan-500 to-blue-500' },
+                      { name: 'Romance', emoji: '💕', color: 'from-pink-500 to-rose-500' },
+                    ].map((genre, index) => (
+                      <motion.div
+                        key={genre.name}
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: index * 0.1 }}
+                        className={styles.genreCard}
+                        onClick={() => handleSearch(genre.name)}
+                      >
+                        <div className={`${styles.genreBackground} bg-gradient-to-br ${genre.color}`} />
+                        <div className={styles.genreContent}>
+                          <div className={styles.genreEmoji}>{genre.emoji}</div>
+                          <div className={styles.genreName}>{genre.name}</div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              </section>
+
+              {/* Popular TV Shows */}
+              {popularTV.length > 0 && (
+                <section className={styles.section}>
+                  <CategoryRow
+                    title="📺 Popular TV Shows"
+                    items={popularTV}
                     onItemClick={handleContentClick}
                   />
                 </section>
@@ -147,39 +268,53 @@ export default function HomePageClient({
               {trendingWeek.length > 0 && (
                 <section className={styles.section}>
                   <CategoryRow
-                    title="Trending This Week"
+                    title="📈 Trending This Week"
                     items={trendingWeek}
                     onItemClick={handleContentClick}
                   />
                 </section>
               )}
 
-              {/* Popular Movies */}
-              {popularMovies.length > 0 && (
-                <section className={styles.section}>
-                  <CategoryRow
-                    title="Popular Movies"
-                    items={popularMovies}
-                    onItemClick={handleContentClick}
-                  />
-                </section>
-              )}
-
-              {/* Popular TV Shows */}
-              {popularTV.length > 0 && (
-                <section className={styles.section}>
-                  <CategoryRow
-                    title="Popular TV Shows"
-                    items={popularTV}
-                    onItemClick={handleContentClick}
-                  />
-                </section>
-              )}
+              {/* Features Showcase */}
+              <section className={styles.featuresShowcase}>
+                <div className="container mx-auto px-4">
+                  <h2 className={styles.sectionTitle}>✨ Why Choose FlyX?</h2>
+                  <div className={styles.featuresGrid}>
+                    <motion.div
+                      className={styles.featureCard}
+                      whileHover={{ scale: 1.05 }}
+                      transition={{ type: "spring", stiffness: 300 }}
+                    >
+                      <div className={styles.featureIconLarge}>🎯</div>
+                      <h3>Smart Recommendations</h3>
+                      <p>AI-powered suggestions based on your viewing history and preferences</p>
+                    </motion.div>
+                    <motion.div
+                      className={styles.featureCard}
+                      whileHover={{ scale: 1.05 }}
+                      transition={{ type: "spring", stiffness: 300 }}
+                    >
+                      <div className={styles.featureIconLarge}>⚡</div>
+                      <h3>Instant Streaming</h3>
+                      <p>Lightning-fast loading with adaptive quality for your connection</p>
+                    </motion.div>
+                    <motion.div
+                      className={styles.featureCard}
+                      whileHover={{ scale: 1.05 }}
+                      transition={{ type: "spring", stiffness: 300 }}
+                    >
+                      <div className={styles.featureIconLarge}>📱</div>
+                      <h3>Multi-Device Sync</h3>
+                      <p>Start on your phone, continue on your TV - seamlessly</p>
+                    </motion.div>
+                  </div>
+                </div>
+              </section>
 
               {/* All Trending Content Grid with Infinite Scroll */}
               {(trendingWeek.length > 0 || additionalContent.length > 0) && (
                 <section className={styles.section}>
-                  <h2 className={styles.sectionTitle}>Discover More</h2>
+                  <h2 className={styles.sectionTitle}>🌟 Discover More</h2>
                   <ContentGrid
                     items={[...trendingWeek, ...additionalContent]}
                     onItemClick={handleContentClick}
@@ -187,6 +322,40 @@ export default function HomePageClient({
                   />
                 </section>
               )}
+
+              {/* Call to Action */}
+              <section className={styles.ctaSection}>
+                <ParallaxContainer height="h-auto" className="py-20">
+                  <div className="container mx-auto px-4 text-center">
+                    <motion.div
+                      initial={{ opacity: 0, y: 30 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.8 }}
+                    >
+                      <h2 className={styles.ctaTitle}>Ready to Start Watching?</h2>
+                      <p className={styles.ctaSubtitle}>
+                        Join millions of users enjoying unlimited entertainment
+                      </p>
+                      <div className={styles.ctaButtons}>
+                        <FluidButton
+                          variant="primary"
+                          size="lg"
+                          onClick={() => handleSearch('trending')}
+                        >
+                          🚀 Start Exploring
+                        </FluidButton>
+                        <FluidButton
+                          variant="secondary"
+                          size="lg"
+                          onClick={() => router.push('/about')}
+                        >
+                          📖 Learn More
+                        </FluidButton>
+                      </div>
+                    </motion.div>
+                  </div>
+                </ParallaxContainer>
+              </section>
 
               {/* Infinite Scroll Trigger */}
               <div ref={loadMoreRef} className={styles.loadMoreTrigger}>

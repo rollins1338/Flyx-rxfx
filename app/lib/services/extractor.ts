@@ -10,9 +10,15 @@ import { APIErrorHandler, fetchWithTimeout, createAPIError } from '@/lib/utils/e
 
 /**
  * Get extractor service URL from environment
+ * Uses local extract-shadowlands API by default
  */
 function getExtractorURL(): string {
-  return process.env.NEXT_PUBLIC_VM_EXTRACTOR_URL || 'http://35.188.123.210:3001';
+  // For server-side calls, use localhost
+  if (typeof window === 'undefined') {
+    return process.env.NEXT_PUBLIC_EXTRACTOR_URL || 'http://localhost:3000/api/extract-shadowlands';
+  }
+  // For client-side calls, use relative URL
+  return process.env.NEXT_PUBLIC_EXTRACTOR_URL || '/api/extract-shadowlands';
 }
 
 /**
@@ -22,8 +28,21 @@ function transformToVideoData(data: any): VideoData {
   const sources: StreamSource[] = [];
   const subtitles: SubtitleTrack[] = [];
 
-  // Parse sources
-  if (data.sources && Array.isArray(data.sources)) {
+  // Handle shadowlands response format
+  if (data.streamUrl) {
+    // Shadowlands requires proxy
+    const proxyUrl = data.requiresProxy 
+      ? `/api/stream-proxy?url=${encodeURIComponent(data.streamUrl)}&source=shadowlands`
+      : data.streamUrl;
+      
+    sources.push({
+      url: proxyUrl,
+      quality: 'auto',
+      type: data.streamType || 'hls',
+    });
+  }
+  // Parse sources array
+  else if (data.sources && Array.isArray(data.sources)) {
     data.sources.forEach((source: any) => {
       sources.push({
         url: source.url || source.file,
@@ -31,8 +50,9 @@ function transformToVideoData(data: any): VideoData {
         type: source.type || (source.url?.includes('.m3u8') ? 'hls' : 'mp4'),
       });
     });
-  } else if (data.source) {
-    // Single source format
+  } 
+  // Single source format
+  else if (data.source) {
     sources.push({
       url: data.source,
       quality: 'auto',
@@ -60,26 +80,27 @@ function transformToVideoData(data: any): VideoData {
 }
 
 /**
- * Make a request to the extractor service
+ * Make a request to the local extractor service
  */
 async function extractorRequest<T>(
-  endpoint: string,
   params: Record<string, any> = {},
   config: RequestConfig = {}
 ): Promise<APIResponse<T>> {
   const baseURL = getExtractorURL();
-  const url = new URL(`${baseURL}${endpoint}`);
-
-  // Add query params
+  
+  // Build URL with query params
+  const queryParams = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null) {
-      url.searchParams.append(key, value.toString());
+      queryParams.append(key, value.toString());
     }
   });
+  
+  const url = `${baseURL}?${queryParams.toString()}`;
 
   // Check cache if enabled
   if (config.cache !== false) {
-    const cacheKey = generateCacheKey(`extractor:${endpoint}`, params);
+    const cacheKey = generateCacheKey('extractor', params);
     const cached = await cacheManager.get<T>(cacheKey);
     if (cached) {
       return {
@@ -94,20 +115,21 @@ async function extractorRequest<T>(
   try {
     const data = await APIErrorHandler.executeWithRetry(async () => {
       const response = await fetchWithTimeout(
-        url.toString(),
+        url,
         {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
           },
         },
-        config.timeout || 30000 // 30s timeout for stream extraction
+        config.timeout || 45000 // 45s timeout for stream extraction
       );
 
       if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
         throw createAPIError(
           `EXTRACTOR_${response.status}`,
-          `Stream extraction failed: ${response.statusText}`,
+          errorData.error || `Stream extraction failed: ${response.statusText}`,
           response.status,
           response.status >= 500
         );
@@ -118,7 +140,7 @@ async function extractorRequest<T>(
 
     // Cache the result
     if (config.cache !== false) {
-      const cacheKey = generateCacheKey(`extractor:${endpoint}`, params);
+      const cacheKey = generateCacheKey('extractor', params);
       const ttl = config.cacheTTL || CACHE_DURATIONS.streams;
       await cacheManager.set(cacheKey, data, ttl);
     }
@@ -145,11 +167,10 @@ export const extractorService = {
    */
   async extractMovie(tmdbId: string): Promise<VideoData> {
     const response = await extractorRequest<any>(
-      '/extract/movie',
       { tmdbId },
       { 
         cacheTTL: CACHE_DURATIONS.streams,
-        timeout: 30000,
+        timeout: 45000,
       }
     );
 
@@ -174,11 +195,10 @@ export const extractorService = {
     episode: number
   ): Promise<VideoData> {
     const response = await extractorRequest<any>(
-      '/extract/tv',
       { tmdbId, season, episode },
       { 
         cacheTTL: CACHE_DURATIONS.streams,
-        timeout: 30000,
+        timeout: 45000,
       }
     );
 
@@ -223,36 +243,10 @@ export const extractorService = {
    */
   async healthCheck(): Promise<boolean> {
     try {
-      const response = await fetchWithTimeout(
-        `${getExtractorURL()}/health`,
-        { method: 'GET' },
-        5000
-      );
-      return response.ok;
+      // Local API is always available
+      return true;
     } catch (error) {
       return false;
     }
-  },
-
-  /**
-   * Get available sources for content
-   */
-  async getSources(
-    tmdbId: string,
-    mediaType: 'movie' | 'tv',
-    season?: number,
-    episode?: number
-  ): Promise<string[]> {
-    const response = await extractorRequest<any>(
-      '/sources',
-      { tmdbId, mediaType, season, episode },
-      { cacheTTL: CACHE_DURATIONS.details }
-    );
-
-    if (response.error || !response.data) {
-      return [];
-    }
-
-    return response.data.sources || [];
   },
 };

@@ -59,7 +59,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     >
       {/* Background layer with parallax */}
       <ParallaxLayer speed={0.5} className="absolute inset-0" zIndex={0}>
-        <div className="relative w-full h-full">
+        <div className="relative w-full h-full min-h-[70vh] md:min-h-[80vh]">
           {/* Backdrop image */}
           {item.backdropPath && (
             <>
@@ -93,7 +93,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           <div className="max-w-3xl space-y-6">
             {/* Media type badge */}
             <motion.div
-              initial={{ opacity: 0, x: -20 }}
+              initial={false}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.2 }}
             >
@@ -107,7 +107,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             {/* Title */}
             <motion.h1
               className="text-4xl md:text-6xl lg:text-7xl font-bold text-white leading-tight"
-              initial={{ opacity: 0, y: 30 }}
+              initial={false}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3, duration: 0.6 }}
             >
@@ -117,7 +117,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             {/* Metadata */}
             <motion.div
               className="flex flex-wrap items-center gap-4 text-sm md:text-base"
-              initial={{ opacity: 0, y: 20 }}
+              initial={false}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
             >
@@ -161,7 +161,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             {item.genres && item.genres.length > 0 && (
               <motion.div
                 className="flex flex-wrap gap-2"
-                initial={{ opacity: 0, y: 20 }}
+                initial={false}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 }}
               >
@@ -179,7 +179,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             {/* Overview */}
             <motion.p
               className="text-base md:text-lg text-gray-300 leading-relaxed line-clamp-3 max-w-2xl"
-              initial={{ opacity: 0, y: 20 }}
+              initial={false}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.6 }}
             >
@@ -189,7 +189,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             {/* Action buttons */}
             <motion.div
               className="flex flex-wrap gap-4 pt-4"
-              initial={{ opacity: 0, y: 20 }}
+              initial={false}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.7 }}
             >

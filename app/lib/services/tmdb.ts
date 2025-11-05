@@ -7,7 +7,6 @@ import type { MediaItem, SearchResult, Genre, Season, Episode } from '@/types/me
 import type { APIResponse, RequestConfig } from '@/types/api';
 import { cacheManager, CACHE_DURATIONS, generateCacheKey } from '@/lib/utils/cache';
 import { APIErrorHandler, fetchWithTimeout, createAPIError } from '@/lib/utils/error-handler';
-import { requestDeduplicator, generateRequestKey } from '@/lib/utils/request-deduplication';
 
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 const TMDB_IMAGE_BASE_URL = 'https://image.tmdb.org/t/p';
@@ -109,25 +108,18 @@ async function tmdbRequest<T>(
     }
   });
 
-  // Generate request key for deduplication
-  const requestKey = generateRequestKey(endpoint, params);
-
-  // Deduplicate the request
-  return requestDeduplicator.deduplicate(
-    requestKey,
-    async () => {
-      // Check cache if enabled
-      if (config.cache !== false) {
-        const cacheKey = generateCacheKey(endpoint, params);
-        const cached = await cacheManager.get<T>(cacheKey);
-        if (cached) {
-          return {
-            data: cached,
-            cached: true,
-            timestamp: Date.now(),
-          };
-        }
-      }
+  // Check cache if enabled
+  if (config.cache !== false) {
+    const cacheKey = generateCacheKey(endpoint, params);
+    const cached = await cacheManager.get<T>(cacheKey);
+    if (cached) {
+      return {
+        data: cached,
+        cached: true,
+        timestamp: Date.now(),
+      };
+    }
+  }
 
   // Make request with retry logic
   try {
@@ -173,9 +165,6 @@ async function tmdbRequest<T>(
       timestamp: Date.now(),
     };
   }
-    },
-    { maxAge: 5000 } // Deduplicate for 5 seconds
-  );
 }
 
 /**

@@ -20,7 +20,8 @@
     "db:stats": "bun run server/db/manage.ts stats",
     "db:health": "bun run server/db/manage.ts health",
     "db:cleanup": "bun run server/db/manage.ts cleanup",
-    "admin:create": "bun run scripts/create-admin.ts"
+    "admin:create": "bun run scripts/create-admin.ts",
+    "admin:reset-password": "bun run scripts/reset-admin-password.ts"
   },
   "dependencies": {
     "bcryptjs": "3.0.3",
@@ -39,6 +40,7 @@
   },
   "devDependencies": {
     "@types/bcryptjs": "3.0.0",
+    "@types/bun": "1.3.1",
     "@types/jsonwebtoken": "9.0.10",
     "@types/node": "^20",
     "@types/react": "^18",

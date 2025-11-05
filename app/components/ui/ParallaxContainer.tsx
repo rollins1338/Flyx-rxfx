@@ -129,6 +129,7 @@ export const ParallaxContainer: React.FC<ParallaxContainerProps> = ({
       return (
         <motion.div
           className={child.props.className}
+          initial={false}
           style={{
             y: scrollY,
             x: mouseXTransform,
@@ -147,12 +148,13 @@ export const ParallaxContainer: React.FC<ParallaxContainerProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`parallax-container relative ${height} ${className}`}
+      className={`parallax-container ${height} ${className}`}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       role={role}
       aria-label={ariaLabel}
       style={{
+        position: 'relative',
         transformStyle: 'preserve-3d',
         perspective: '1000px',
       }}
