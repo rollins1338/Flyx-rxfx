@@ -192,6 +192,35 @@ function extractProRcpUrl(html, logger) {
   return null;
 }
 
+// Replace server placeholders with actual server names
+function replacePlaceholders(url, logger) {
+  const originalUrl = url;
+  
+  // Common shadowlands server replacements
+  const serverReplacements = {
+    '{v1}': 'shadowlandschronicles.com',
+    '{v2}': 'shadowlandschronicles.com', 
+    '{v3}': 'shadowlandschronicles.com',
+    '{v4}': 'shadowlandschronicles.com',
+    '{v5}': 'shadowlandschronicles.com'
+  };
+  
+  // Replace placeholders
+  for (const [placeholder, replacement] of Object.entries(serverReplacements)) {
+    if (url.includes(placeholder)) {
+      url = url.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), replacement);
+      logger.info('Replaced server placeholder', { 
+        placeholder, 
+        replacement,
+        before: originalUrl.substring(0, 100) + '...',
+        after: url.substring(0, 100) + '...'
+      });
+    }
+  }
+  
+  return url;
+}
+
 // Extract Shadowlands URL from ProRCP HTML
 function extractShadowlandsUrl(html, logger) {
   logger.info('Extracting Shadowlands URL from ProRCP HTML...');
@@ -258,6 +287,9 @@ function extractShadowlandsUrl(html, logger) {
               url = `https://${url}`;
             }
           }
+          
+          // Replace server placeholders with actual server names
+          url = replacePlaceholders(url, logger);
           
           logger.info('Found Shadowlands URL', { url: url.substring(0, 80) + '...' });
           return url;
