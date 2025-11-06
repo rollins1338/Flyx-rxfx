@@ -4,6 +4,7 @@ import { useRef, useState, useEffect } from 'react';
 import Hls from 'hls.js';
 import { useAnalytics } from '../analytics/AnalyticsProvider';
 import { useWatchProgress } from '@/lib/hooks/useWatchProgress';
+import { streamRetryManager } from '@/lib/utils/stream-retry';
 import styles from './VideoPlayer.module.css';
 
 interface VideoPlayerProps {
@@ -133,12 +134,44 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
           video.play().catch(e => console.log('Autoplay prevented:', e));
         });
 
-        hls.on(Hls.Events.ERROR, (_event, data) => {
+        hls.on(Hls.Events.ERROR, async (_event, data) => {
           if (data.fatal) {
             switch (data.type) {
               case Hls.ErrorTypes.NETWORK_ERROR:
                 console.error('Network error, trying to recover...');
-                hls.startLoad();
+                
+                // Check if this might be an expired stream (404, 403, etc.)
+                if (streamRetryManager.isStreamExpired(data)) {
+                  console.log('Stream appears to be expired, attempting re-extraction...');
+                  setError('Stream expired, getting fresh URL...');
+                  
+                  try {
+                    const freshData = await streamRetryManager.retryStreamExtraction(
+                      tmdbId,
+                      mediaType,
+                      season,
+                      episode,
+                      {
+                        maxRetries: 2,
+                        onRetry: (attempt) => {
+                          setError(`Retrying stream extraction (${attempt}/2)...`);
+                        }
+                      }
+                    );
+                    
+                    if (freshData?.sources && freshData.sources.length > 0) {
+                      setStreamUrl(freshData.sources[0].url);
+                      setError(null);
+                    } else {
+                      setError('Failed to get fresh stream URL');
+                    }
+                  } catch (retryError) {
+                    console.error('Stream retry failed:', retryError);
+                    setError('Stream unavailable, please try again later');
+                  }
+                } else {
+                  hls.startLoad();
+                }
                 break;
               case Hls.ErrorTypes.MEDIA_ERROR:
                 console.error('Media error, trying to recover...');

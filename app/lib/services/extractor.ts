@@ -40,6 +40,12 @@ function transformToVideoData(data: any): VideoData {
       url: proxyUrl,
       quality: 'auto',
       type: data.streamType || 'hls',
+      // Add metadata for expiration tracking
+      metadata: {
+        extractedAt: Date.now(),
+        source: 'shadowlands',
+        requiresProxy: data.requiresProxy
+      }
     });
   }
   // Parse sources array

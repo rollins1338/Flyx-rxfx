@@ -62,6 +62,12 @@ export interface StreamSource {
   url: string;
   quality: 'auto' | '1080p' | '720p' | '480p' | '360p';
   type: 'hls' | 'mp4';
+  metadata?: {
+    extractedAt?: number;
+    source?: string;
+    requiresProxy?: boolean;
+    [key: string]: any;
+  };
 }
 
 export interface SubtitleTrack {
