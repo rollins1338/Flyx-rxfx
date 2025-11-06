@@ -3,7 +3,7 @@
  * GET /api/admin/me - Get current admin user info
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import { initializeDB, getDB } from '@/lib/db/connection';
