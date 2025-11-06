@@ -4,35 +4,73 @@ import { NextResponse } from 'next/server';
 const rateLimitStore = new Map();
 const connectionPool = new Map();
 
-// Active logger for stream-proxy debugging
+// Enhanced logger for stream-proxy debugging with VERY VISIBLE output
 function createLogger(requestId) {
+  const timestamp = () => new Date().toISOString();
+  
   return {
     info: (message, data = {}) => {
-      console.log(`[${requestId}] INFO: ${message}`, JSON.stringify(data, null, 2));
+      console.log(`\n🔵 [${timestamp()}] [${requestId}] INFO: ${message}`);
+      if (Object.keys(data).length > 0) {
+        console.log(`📊 Data:`, JSON.stringify(data, null, 2));
+      }
+      console.log('─'.repeat(80));
     },
     warn: (message, data = {}) => {
-      console.warn(`[${requestId}] WARN: ${message}`, JSON.stringify(data, null, 2));
+      console.warn(`\n🟡 [${timestamp()}] [${requestId}] WARN: ${message}`);
+      if (Object.keys(data).length > 0) {
+        console.warn(`⚠️  Data:`, JSON.stringify(data, null, 2));
+      }
+      console.log('─'.repeat(80));
     },
     error: (message, error = null, data = {}) => {
-      console.error(`[${requestId}] ERROR: ${message}`, {
-        error: error ? {
+      console.error(`\n🔴 [${timestamp()}] [${requestId}] ERROR: ${message}`);
+      if (error) {
+        console.error(`💥 Error Details:`, {
           name: error.name,
           message: error.message,
-          stack: error.stack
-        } : null,
-        ...data
-      });
+          stack: error.stack?.split('\n').slice(0, 5).join('\n') // First 5 lines of stack
+        });
+      }
+      if (Object.keys(data).length > 0) {
+        console.error(`📋 Additional Data:`, JSON.stringify(data, null, 2));
+      }
+      console.log('═'.repeat(80));
     },
     debug: (message, data = {}) => {
-      console.log(`[${requestId}] DEBUG: ${message}`, JSON.stringify(data, null, 2));
+      console.log(`\n🔍 [${timestamp()}] [${requestId}] DEBUG: ${message}`);
+      if (Object.keys(data).length > 0) {
+        console.log(`🐛 Debug Data:`, JSON.stringify(data, null, 2));
+      }
+      console.log('─'.repeat(80));
     },
     timing: (label, startTime) => {
       const duration = Date.now() - startTime;
-      console.log(`[${requestId}] TIMING: ${label} took ${duration}ms`);
+      console.log(`\n⏱️  [${timestamp()}] [${requestId}] TIMING: ${label} took ${duration}ms`);
+      console.log('─'.repeat(80));
       return duration;
+    },
+    request: (method, url, headers = {}) => {
+      console.log(`\n🌐 [${timestamp()}] [${requestId}] ${method} REQUEST: ${url}`);
+      console.log(`📤 Headers:`, Object.fromEntries(
+        Object.entries(headers).map(([k, v]) => [k, typeof v === 'string' && v.length > 100 ? v.substring(0, 100) + '...' : v])
+      ));
+      console.log('─'.repeat(80));
+    },
+    response: (status, headers = {}, contentPreview = '') => {
+      console.log(`\n📥 [${timestamp()}] [${requestId}] RESPONSE: ${status}`);
+      console.log(`📋 Response Headers:`, Object.fromEntries(
+        Object.entries(headers).map(([k, v]) => [k, typeof v === 'string' && v.length > 100 ? v.substring(0, 100) + '...' : v])
+      ));
+      if (contentPreview) {
+        console.log(`📄 Content Preview:`, contentPreview.substring(0, 200) + (contentPreview.length > 200 ? '...' : ''));
+      }
+      console.log('─'.repeat(80));
     }
   };
 }
+
+
 
 // Rate limiting configuration
 const RATE_LIMIT_CONFIG = {
@@ -61,6 +99,25 @@ const CONNECTION_POOL_CONFIG = {
 function generateRequestId() {
   return `proxy_${Date.now()}`;
 }
+
+// Startup logging (after all configs are defined)
+console.log('\n🚀 STREAM-PROXY ROUTE LOADED');
+console.log('═'.repeat(80));
+console.log('📅 Loaded at:', new Date().toISOString());
+console.log('🔧 Rate Limit Config:', {
+  windowMs: RATE_LIMIT_CONFIG.windowMs,
+  maxRequests: RATE_LIMIT_CONFIG.maxRequests,
+  blockDuration: RATE_LIMIT_CONFIG.blockDuration
+});
+console.log('🔄 Retry Config:', {
+  maxRetries: RETRY_CONFIG.maxRetries,
+  baseDelay: RETRY_CONFIG.baseDelay
+});
+console.log('🔗 Connection Config:', {
+  maxConnections: CONNECTION_POOL_CONFIG.maxConnections,
+  timeout: CONNECTION_POOL_CONFIG.timeout
+});
+console.log('═'.repeat(80));
 
 // Enhanced rate limiting
 function checkRateLimit(clientIp, logger, isLightningbolt = false) {
@@ -196,20 +253,51 @@ async function fetchWithHeaderFallback(url, baseOptions, logger, userAgent, sour
   }
   
   try {
-    logger.debug('Fetch attempt', {
-      url: url.substring(0, 100),
+    console.log('\n🌐🌐🌐 MAKING FETCH REQUEST 🌐🌐🌐');
+    console.log('═'.repeat(100));
+    
+    logger.info('🚀 FETCH ATTEMPT STARTING', {
+      targetUrl: url.substring(0, 150) + (url.length > 150 ? '...' : ''),
       retryCount: retryCount,
       isShadowlands: isShadowlands,
-      headers: Object.keys(options.headers || {})
+      source: source,
+      method: options.method || 'GET',
+      headersCount: Object.keys(options.headers || {}).length,
+      headers: options.headers || {},
+      hasTimeout: !!options.signal,
+      keepalive: options.keepalive
     });
     
+    const fetchStartTime = Date.now();
     const response = await fetch(url, options);
+    const fetchDuration = Date.now() - fetchStartTime;
+    
+    console.log('\n📡📡📡 FETCH RESPONSE RECEIVED 📡📡📡');
+    console.log('═'.repeat(100));
+    
+    logger.response(response.status, Object.fromEntries(response.headers.entries()));
+    
+    logger.info('🎯 FETCH RESPONSE DETAILS', {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      contentType: response.headers.get('content-type'),
+      contentLength: response.headers.get('content-length'),
+      server: response.headers.get('server'),
+      cacheControl: response.headers.get('cache-control'),
+      fetchDuration: `${fetchDuration}ms`,
+      url: url.substring(0, 100) + '...',
+      responseHeaders: Object.fromEntries(
+        [...response.headers.entries()].slice(0, 10) // First 10 headers
+      )
+    });
     
     // If response is successful, return it
     if (response.ok) {
-      logger.info('Fetch successful', {
+      logger.info('✅ FETCH SUCCESSFUL - RETURNING RESPONSE', {
         status: response.status,
-        contentType: response.headers.get('content-type')
+        contentType: response.headers.get('content-type'),
+        duration: `${fetchDuration}ms`
       });
       return response;
     }
@@ -217,12 +305,29 @@ async function fetchWithHeaderFallback(url, baseOptions, logger, userAgent, sour
     // Only retry server errors once
     const isRetryableError = response.status >= 500;
     
+    console.log('\n❌❌❌ FETCH FAILED - ANALYZING ERROR ❌❌❌');
+    console.log('═'.repeat(100));
+    
+    logger.error('🚨 FETCH FAILED', null, {
+      status: response.status,
+      statusText: response.statusText,
+      url: url.substring(0, 100) + '...',
+      isRetryableError,
+      retryCount,
+      maxRetries: RETRY_CONFIG.maxRetries,
+      willRetry: isRetryableError && retryCount < RETRY_CONFIG.maxRetries,
+      responseHeaders: Object.fromEntries(response.headers.entries())
+    });
+    
     if (isRetryableError && retryCount < RETRY_CONFIG.maxRetries) {
       const delay = RETRY_CONFIG.baseDelay;
       
-      logger.warn('Server error, single retry attempt', {
+      logger.warn('🔄 SERVER ERROR - ATTEMPTING RETRY', {
         status: response.status,
-        delay
+        statusText: response.statusText,
+        delay: `${delay}ms`,
+        retryAttempt: retryCount + 1,
+        maxRetries: RETRY_CONFIG.maxRetries
       });
       
       await new Promise(resolve => setTimeout(resolve, delay));
@@ -451,10 +556,24 @@ export async function GET(request) {
   const requestStartTime = Date.now();
   const clientIp = getClientIp(request);
 
+  // SUPER VISIBLE REQUEST START
+  console.log('\n🚨🚨🚨 STREAM-PROXY REQUEST INCOMING 🚨🚨🚨');
+  console.log('═'.repeat(100));
+  
+  logger.request('GET', request.url, {
+    'user-agent': request.headers.get('user-agent'),
+    'referer': request.headers.get('referer'),
+    'origin': request.headers.get('origin'),
+    'x-forwarded-for': request.headers.get('x-forwarded-for')
+  });
+
   logger.info('Stream proxy request started', {
+    requestId,
     timestamp: new Date().toISOString(),
     clientIp,
-    userAgent: request.headers.get('user-agent'),
+    fullUrl: request.url,
+    method: request.method,
+    userAgent: request.headers.get('user-agent')?.substring(0, 100) + '...',
     referer: request.headers.get('referer'),
     origin: request.headers.get('origin')
   });
@@ -476,6 +595,13 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const streamUrl = searchParams.get('url');
   const source = searchParams.get('source'); // 'vidsrc', 'embed.su', 'shadowlands', etc.
+
+  logger.info('URL Parameters Parsed', {
+    fullRequestUrl: request.url,
+    streamUrl: streamUrl ? streamUrl.substring(0, 150) + (streamUrl.length > 150 ? '...' : '') : 'NULL',
+    source: source || 'NULL',
+    allParams: Object.fromEntries(searchParams.entries())
+  });
 
   // Rate limiting check (Requirement 5.3)
   const isLightningboltUrl = (streamUrl?.includes('lightningbolt') || streamUrl?.includes('lightningbolts.ru')) || false;
