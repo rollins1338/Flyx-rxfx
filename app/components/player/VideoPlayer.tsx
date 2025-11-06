@@ -25,7 +25,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
   const { handleProgress, loadProgress } = useWatchProgress({
     contentId: tmdbId,
     contentType,
-    onProgress: (time, duration) => {
+    onProgress: (_time, _duration) => {
       // This will be called by the hook when progress is updated
     },
   });
