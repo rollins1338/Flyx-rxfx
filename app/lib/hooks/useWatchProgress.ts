@@ -18,7 +18,7 @@ const MIN_WATCH_THRESHOLD = 10; // Minimum 10 seconds watched to save
 
 export function useWatchProgress(options: WatchProgressOptions) {
   const { contentId, contentType, onProgress } = options;
-  const { trackWatchProgress, trackEvent } = useAnalytics();
+  const { trackWatchProgress } = useAnalytics();
   const lastSaveTimeRef = useRef<number>(0);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastAnalyticsTimeRef = useRef<number>(0);

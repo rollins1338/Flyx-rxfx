@@ -31,7 +31,7 @@ export async function GET() {
     const db = getDB();
 
     // Get popular searches ordered by trending score
-    const popularSearches = db.query(`
+    const popularSearches = db.prepare(`
       SELECT 
         display_query,
         search_count,
@@ -45,7 +45,7 @@ export async function GET() {
     `).all();
 
     // Get recent trending searches (last 7 days)
-    const recentTrending = db.query(`
+    const recentTrending = db.prepare(`
       SELECT 
         display_query,
         search_count,
@@ -94,14 +94,14 @@ export async function POST(request: NextRequest) {
     const searchId = `search_${timestamp}_${Math.random().toString(36).substring(2)}`;
 
     // Insert search query record
-    db.query(`
+    db.prepare(`
       INSERT INTO ${TABLES.SEARCH_QUERIES} 
       (id, query, normalized_query, session_id, results_count, clicked_result, timestamp)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(searchId, query, normalizedQuery, sessionId, resultsCount || 0, clickedResult || false, timestamp);
 
     // Update or insert popular search
-    const existingPopular = db.query(`
+    const existingPopular = db.prepare(`
       SELECT * FROM ${TABLES.POPULAR_SEARCHES} WHERE normalized_query = ?
     `).get(normalizedQuery) as any;
 
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
       const newClickCount = existingPopular.click_count + (clickedResult ? 1 : 0);
       const newTrendingScore = calculateTrendingScore(newSearchCount, timestamp);
 
-      db.query(`
+      db.prepare(`
         UPDATE ${TABLES.POPULAR_SEARCHES}
         SET 
           search_count = ?,
@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
       // Insert new popular search
       const trendingScore = calculateTrendingScore(1, timestamp);
       
-      db.query(`
+      db.prepare(`
         INSERT INTO ${TABLES.POPULAR_SEARCHES}
         (normalized_query, display_query, search_count, click_count, last_searched, trending_score, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)

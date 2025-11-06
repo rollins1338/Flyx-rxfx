@@ -29,7 +29,7 @@ export async function GET() {
     // Get user from database
     await initializeDB();
     const db = getDB();
-    const stmt = db.query('SELECT id, username, created_at, last_login FROM admin_users WHERE id = ?');
+    const stmt = db.prepare('SELECT id, username, created_at, last_login FROM admin_users WHERE id = ?');
     const admin = stmt.get(decoded.id) as any;
 
     if (!admin) {

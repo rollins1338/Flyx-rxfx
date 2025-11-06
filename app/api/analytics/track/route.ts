@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     // Initialize database and insert events
     await initializeDB();
     const db = getDB();
-    const insertStmt = db.query(`
+    const insertStmt = db.prepare(`
       INSERT INTO analytics_events (id, session_id, timestamp, event_type, metadata)
       VALUES (?, ?, ?, ?, ?)
     `);
@@ -134,7 +134,7 @@ async function updateContentStats(event: TrackingEvent) {
 
     await initializeDB();
     const db = getDB();
-    const upsertStmt = db.query(`
+    const upsertStmt = db.prepare(`
       INSERT INTO content_stats (content_id, content_type, view_count, total_watch_time, last_viewed, updated_at)
       VALUES (?, ?, 1, ?, ?, ?)
       ON CONFLICT(content_id) DO UPDATE SET

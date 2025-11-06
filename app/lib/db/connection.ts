@@ -1,15 +1,15 @@
 /**
- * Database Connection Management using Bun's built-in SQLite
+ * Database Connection Management using better-sqlite3
  */
 
-import { Database } from 'bun:sqlite';
+import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 import { ALL_TABLES, SCHEMA_VERSION, TABLES } from './schema';
 
-class BunDatabaseConnection {
-  private static instance: BunDatabaseConnection | null = null;
-  private db: Database | null = null;
+class DatabaseConnection {
+  private static instance: DatabaseConnection | null = null;
+  private db: Database.Database | null = null;
   private dbPath: string;
   private isInitialized = false;
 
@@ -26,11 +26,11 @@ class BunDatabaseConnection {
   /**
    * Get singleton database instance
    */
-  static getInstance(): BunDatabaseConnection {
-    if (!BunDatabaseConnection.instance) {
-      BunDatabaseConnection.instance = new BunDatabaseConnection();
+  static getInstance(): DatabaseConnection {
+    if (!DatabaseConnection.instance) {
+      DatabaseConnection.instance = new DatabaseConnection();
     }
-    return BunDatabaseConnection.instance;
+    return DatabaseConnection.instance;
   }
 
   /**
@@ -42,7 +42,7 @@ class BunDatabaseConnection {
     }
 
     try {
-      // Create database connection using Bun's built-in SQLite
+      // Create database connection using better-sqlite3
       this.db = new Database(this.dbPath);
 
       // Enable WAL mode for better concurrency
@@ -66,7 +66,7 @@ class BunDatabaseConnection {
       await this.ensureSchemaVersion();
 
       this.isInitialized = true;
-      console.log('✓ Bun SQLite database initialized successfully');
+      console.log('✓ SQLite database initialized successfully');
     } catch (error) {
       console.error('Failed to initialize database:', error);
       throw new Error(`Database initialization failed: ${error}`);
@@ -80,13 +80,13 @@ class BunDatabaseConnection {
     if (!this.db) throw new Error('Database not initialized');
 
     const existingVersion = this.db
-      .query(`SELECT version FROM ${TABLES.SCHEMA_MIGRATIONS} ORDER BY version DESC LIMIT 1`)
+      .prepare(`SELECT version FROM ${TABLES.SCHEMA_MIGRATIONS} ORDER BY version DESC LIMIT 1`)
       .get() as { version: number } | null;
 
     if (!existingVersion) {
       // First time setup
       this.db
-        .query(`INSERT INTO ${TABLES.SCHEMA_MIGRATIONS} (version, name) VALUES (?, ?)`)
+        .prepare(`INSERT INTO ${TABLES.SCHEMA_MIGRATIONS} (version, name) VALUES (?, ?)`)
         .run(SCHEMA_VERSION, 'initial_schema');
     }
   }
@@ -94,7 +94,7 @@ class BunDatabaseConnection {
   /**
    * Get database instance
    */
-  getDatabase(): Database {
+  getDatabase(): Database.Database {
     if (!this.db || !this.isInitialized) {
       throw new Error('Database not initialized. Call initialize() first.');
     }
@@ -107,7 +107,7 @@ class BunDatabaseConnection {
   executeQuery<T = any>(query: string, params: any[] = []): T {
     try {
       const db = this.getDatabase();
-      const stmt = db.query(query);
+      const stmt = db.prepare(query);
       return stmt.get(...params) as T;
     } catch (error) {
       console.error('Query execution failed:', error);
@@ -118,7 +118,7 @@ class BunDatabaseConnection {
   /**
    * Execute multiple queries in a transaction
    */
-  transaction<T>(callback: (db: Database) => T): T {
+  transaction<T>(callback: (db: Database.Database) => T): T {
     const db = this.getDatabase();
     return db.transaction(() => {
       return callback(db);
@@ -133,7 +133,7 @@ class BunDatabaseConnection {
       this.db.close();
       this.db = null;
       this.isInitialized = false;
-      BunDatabaseConnection.instance = null;
+      DatabaseConnection.instance = null;
       console.log('✓ Database connection closed');
     }
   }
@@ -144,7 +144,7 @@ class BunDatabaseConnection {
   healthCheck(): boolean {
     try {
       const db = this.getDatabase();
-      const result = db.query('SELECT 1 as health').get() as { health: number };
+      const result = db.prepare('SELECT 1 as health').get() as { health: number };
       return result.health === 1;
     } catch (error) {
       console.error('Health check failed:', error);
@@ -154,11 +154,11 @@ class BunDatabaseConnection {
 }
 
 // Initialize and export database instance
-let dbInstance: BunDatabaseConnection | null = null;
+let dbInstance: DatabaseConnection | null = null;
 
 export const initializeDB = async () => {
   if (!dbInstance) {
-    dbInstance = BunDatabaseConnection.getInstance();
+    dbInstance = DatabaseConnection.getInstance();
     await dbInstance.initialize();
   }
   return dbInstance;
@@ -172,4 +172,4 @@ export const getDB = () => {
 };
 
 // Export for direct access
-export { BunDatabaseConnection };
+export { DatabaseConnection };

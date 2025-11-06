@@ -3,15 +3,15 @@
  * Handles schema updates and versioning
  */
 
-import { Database } from 'bun:sqlite';
-import { getDB } from './connection';
+import Database from 'better-sqlite3';
+import { getDB, initializeDB } from './connection';
 import { TABLES, SCHEMA_VERSION } from './schema';
 
 export interface Migration {
   version: number;
   name: string;
-  up: (db: Database) => void;
-  down?: (db: Database) => void;
+  up: (db: Database.Database) => void;
+  down?: (db: Database.Database) => void;
 }
 
 /**
@@ -22,7 +22,7 @@ const migrations: Migration[] = [
   {
     version: 1,
     name: 'initial_schema',
-    up: (db: Database) => {
+    up: (_db: Database.Database) => {
       // Initial schema is created by connection.ts
       console.log('✓ Initial schema already created');
     },
@@ -32,7 +32,7 @@ const migrations: Migration[] = [
   // {
   //   version: 2,
   //   name: 'add_user_preferences',
-  //   up: (db: Database) => {
+  //   up: (db: Database.Database) => {
   //     db.exec(`
   //       CREATE TABLE user_preferences (
   //         user_id TEXT PRIMARY KEY,
@@ -41,7 +41,7 @@ const migrations: Migration[] = [
   //       );
   //     `);
   //   },
-  //   down: (db: Database) => {
+  //   down: (db: Database.Database) => {
   //     db.exec('DROP TABLE IF EXISTS user_preferences;');
   //   },
   // },
@@ -51,10 +51,10 @@ const migrations: Migration[] = [
  * Migration Manager
  */
 export class MigrationManager {
-  private db: Database;
+  private db: Database.Database;
 
   constructor() {
-    this.db = getDB().getDatabase();
+    this.db = getDB();
   }
 
   /**
@@ -63,7 +63,7 @@ export class MigrationManager {
   getCurrentVersion(): number {
     try {
       const result = this.db
-        .query(`SELECT MAX(version) as version FROM ${TABLES.SCHEMA_MIGRATIONS}`)
+        .prepare(`SELECT MAX(version) as version FROM ${TABLES.SCHEMA_MIGRATIONS}`)
         .get() as { version: number | null };
       
       return result.version || 0;
@@ -79,7 +79,7 @@ export class MigrationManager {
   getAppliedMigrations(): Array<{ version: number; name: string; appliedAt: number }> {
     try {
       const rows = this.db
-        .query(`SELECT * FROM ${TABLES.SCHEMA_MIGRATIONS} ORDER BY version ASC`)
+        .prepare(`SELECT * FROM ${TABLES.SCHEMA_MIGRATIONS} ORDER BY version ASC`)
         .all() as any[];
       
       return rows.map(row => ({
@@ -99,7 +99,7 @@ export class MigrationManager {
   isMigrationApplied(version: number): boolean {
     try {
       const result = this.db
-        .query(`SELECT COUNT(*) as count FROM ${TABLES.SCHEMA_MIGRATIONS} WHERE version = ?`)
+        .prepare(`SELECT COUNT(*) as count FROM ${TABLES.SCHEMA_MIGRATIONS} WHERE version = ?`)
         .get(version) as { count: number };
       
       return result.count > 0;
@@ -114,7 +114,7 @@ export class MigrationManager {
    */
   private recordMigration(version: number, name: string): void {
     this.db
-      .query(`INSERT INTO ${TABLES.SCHEMA_MIGRATIONS} (version, name) VALUES (?, ?)`)
+      .prepare(`INSERT INTO ${TABLES.SCHEMA_MIGRATIONS} (version, name) VALUES (?, ?)`)
       .run(version, name);
   }
 
@@ -123,7 +123,7 @@ export class MigrationManager {
    */
   private removeMigration(version: number): void {
     this.db
-      .query(`DELETE FROM ${TABLES.SCHEMA_MIGRATIONS} WHERE version = ?`)
+      .prepare(`DELETE FROM ${TABLES.SCHEMA_MIGRATIONS} WHERE version = ?`)
       .run(version);
   }
 
@@ -280,7 +280,7 @@ export class MigrationManager {
       console.log('✓ All tables dropped');
       
       // Reinitialize database
-      await getDB().initialize();
+      await initializeDB();
       
       // Run all migrations
       await this.runMigrations();

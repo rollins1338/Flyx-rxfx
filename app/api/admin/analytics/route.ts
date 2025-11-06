@@ -104,7 +104,7 @@ function getOverviewStats(db: any, startTimestamp: number, endTimestamp: number,
   const contentFilter = contentType ? `AND JSON_EXTRACT(metadata, '$.content_type') = '${contentType}'` : '';
   
   // Total views
-  const viewsStmt = db.query(`
+  const viewsStmt = db.prepare(`
     SELECT COUNT(*) as count
     FROM analytics_events
     WHERE timestamp BETWEEN ? AND ?
@@ -114,7 +114,7 @@ function getOverviewStats(db: any, startTimestamp: number, endTimestamp: number,
   const views = viewsStmt.get(startTimestamp, endTimestamp) as { count: number };
 
   // Total watch time
-  const watchTimeStmt = db.query(`
+  const watchTimeStmt = db.prepare(`
     SELECT SUM(CAST(JSON_EXTRACT(metadata, '$.watch_time') AS INTEGER)) as total
     FROM analytics_events
     WHERE timestamp BETWEEN ? AND ?
@@ -125,7 +125,7 @@ function getOverviewStats(db: any, startTimestamp: number, endTimestamp: number,
   const watchTime = watchTimeStmt.get(startTimestamp, endTimestamp) as { total: number };
 
   // Unique sessions
-  const sessionsStmt = db.query(`
+  const sessionsStmt = db.prepare(`
     SELECT COUNT(DISTINCT session_id) as count
     FROM analytics_events
     WHERE timestamp BETWEEN ? AND ?
@@ -134,7 +134,7 @@ function getOverviewStats(db: any, startTimestamp: number, endTimestamp: number,
   const sessions = sessionsStmt.get(startTimestamp, endTimestamp) as { count: number };
 
   // Average session duration
-  const avgSessionStmt = db.query(`
+  const avgSessionStmt = db.prepare(`
     SELECT AVG(session_duration) as avg_duration
     FROM (
       SELECT session_id, (MAX(timestamp) - MIN(timestamp)) / 1000 as session_duration
@@ -158,7 +158,7 @@ function getOverviewStats(db: any, startTimestamp: number, endTimestamp: number,
 function getDailyMetrics(db: any, startTimestamp: number, endTimestamp: number, contentType?: string) {
   const contentFilter = contentType ? `AND JSON_EXTRACT(metadata, '$.content_type') = '${contentType}'` : '';
   
-  const stmt = db.query(`
+  const stmt = db.prepare(`
     SELECT 
       DATE(timestamp / 1000, 'unixepoch') as date,
       COUNT(CASE WHEN event_type = 'content_view' THEN 1 END) as views,
@@ -189,7 +189,7 @@ function getDailyMetrics(db: any, startTimestamp: number, endTimestamp: number, 
 function getTopContent(db: any, startTimestamp: number, endTimestamp: number, contentType?: string) {
   const contentFilter = contentType ? `AND content_type = '${contentType}'` : '';
   
-  const stmt = db.query(`
+  const stmt = db.prepare(`
     SELECT 
       content_id,
       content_type,
@@ -207,7 +207,7 @@ function getTopContent(db: any, startTimestamp: number, endTimestamp: number, co
 }
 
 function getGeographicData(db: any, startTimestamp: number, endTimestamp: number) {
-  const stmt = db.query(`
+  const stmt = db.prepare(`
     SELECT 
       JSON_EXTRACT(metadata, '$.country') as country,
       JSON_EXTRACT(metadata, '$.region') as region,
@@ -225,7 +225,7 @@ function getGeographicData(db: any, startTimestamp: number, endTimestamp: number
 }
 
 function getDeviceData(db: any, startTimestamp: number, endTimestamp: number) {
-  const stmt = db.query(`
+  const stmt = db.prepare(`
     SELECT 
       CASE 
         WHEN JSON_EXTRACT(metadata, '$.user_agent') LIKE '%Mobile%' THEN 'Mobile'

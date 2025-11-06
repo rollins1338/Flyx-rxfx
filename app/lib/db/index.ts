@@ -12,16 +12,17 @@ export { TABLES, SCHEMA_VERSION, ALL_TABLES } from './schema';
  * Initialize database with all tables and migrations
  */
 export async function initializeDatabase() {
-  const { getDB } = await import('./connection');
+  const { initializeDB } = await import('./connection');
   const { getMigrationManager } = await import('./migrations');
   
   // Initialize connection and create tables
-  await getDB().initialize();
+  await initializeDB();
   
   // Run any pending migrations
   const migrationManager = getMigrationManager();
   await migrationManager.runMigrations();
   
+  const { getDB } = await import('./connection');
   return getDB();
 }
 

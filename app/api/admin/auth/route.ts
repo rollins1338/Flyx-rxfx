@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     // Initialize database and get admin user
     await initializeDB();
     const db = getDB();
-    const stmt = db.query('SELECT * FROM admin_users WHERE username = ?');
+    const stmt = db.prepare('SELECT * FROM admin_users WHERE username = ?');
     const admin = stmt.get(username) as any;
 
     if (!admin || !bcrypt.compareSync(password, admin.password_hash)) {
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Update last login
-    const updateStmt = db.query('UPDATE admin_users SET last_login = ? WHERE id = ?');
+    const updateStmt = db.prepare('UPDATE admin_users SET last_login = ? WHERE id = ?');
     updateStmt.run(Date.now(), admin.id);
 
     // Create JWT token

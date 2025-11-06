@@ -3,14 +3,14 @@
  * CRUD operations for all tables
  */
 
-import { Database } from 'bun:sqlite';
+import Database from 'better-sqlite3';
 import { getDB } from './connection';
 import { TABLES } from './schema';
 import type {
   AnalyticsEvent,
   MetricsData,
   ContentStats,
-} from '@/types/analytics';
+} from '../../types/analytics';
 
 /**
  * Analytics Events Queries
@@ -20,8 +20,8 @@ export class AnalyticsQueries {
    * Insert a new analytics event
    */
   static insertEvent(event: AnalyticsEvent): void {
-    const db = getDB().getDatabase();
-    const stmt = db.query(`
+    const db = getDB();
+    const stmt = db.prepare(`
       INSERT INTO ${TABLES.ANALYTICS_EVENTS} 
       (id, session_id, timestamp, event_type, metadata)
       VALUES (?, ?, ?, ?, ?)
@@ -42,8 +42,8 @@ export class AnalyticsQueries {
   static insertEventsBatch(events: AnalyticsEvent[]): void {
     const dbConnection = getDB();
     
-    dbConnection.transaction((db: Database) => {
-      const stmt = db.query(`
+    dbConnection.transaction((db: Database.Database) => {
+      const stmt = db.prepare(`
         INSERT INTO ${TABLES.ANALYTICS_EVENTS} 
         (id, session_id, timestamp, event_type, metadata)
         VALUES (?, ?, ?, ?, ?)
@@ -65,8 +65,8 @@ export class AnalyticsQueries {
    * Get events by session ID
    */
   static getEventsBySession(sessionId: string): AnalyticsEvent[] {
-    const db = getDB().getDatabase();
-    const stmt = db.query(`
+    const db = getDB();
+    const stmt = db.prepare(`
       SELECT * FROM ${TABLES.ANALYTICS_EVENTS}
       WHERE session_id = ?
       ORDER BY timestamp DESC
@@ -90,8 +90,8 @@ export class AnalyticsQueries {
     startTime: number,
     endTime: number
   ): AnalyticsEvent[] {
-    const db = getDB().getDatabase();
-    const stmt = db.query(`
+    const db = getDB();
+    const stmt = db.prepare(`
       SELECT * FROM ${TABLES.ANALYTICS_EVENTS}
       WHERE event_type = ? AND timestamp BETWEEN ? AND ?
       ORDER BY timestamp DESC
@@ -111,8 +111,8 @@ export class AnalyticsQueries {
    * Get events within time range
    */
   static getEventsByTimeRange(startTime: number, endTime: number): AnalyticsEvent[] {
-    const db = getDB().getDatabase();
-    const stmt = db.query(`
+    const db = getDB();
+    const stmt = db.prepare(`
       SELECT * FROM ${TABLES.ANALYTICS_EVENTS}
       WHERE timestamp BETWEEN ? AND ?
       ORDER BY timestamp DESC
@@ -133,8 +133,8 @@ export class AnalyticsQueries {
    * Delete old events (for data retention)
    */
   static deleteOldEvents(beforeTimestamp: number): number {
-    const db = getDB().getDatabase();
-    const stmt = db.query(`
+    const db = getDB();
+    const stmt = db.prepare(`
       DELETE FROM ${TABLES.ANALYTICS_EVENTS}
       WHERE timestamp < ?
     `);
@@ -147,8 +147,8 @@ export class AnalyticsQueries {
    * Get event count by type
    */
   static getEventCountByType(startTime: number, endTime: number): Record<string, number> {
-    const db = getDB().getDatabase();
-    const stmt = db.query(`
+    const db = getDB();
+    const stmt = db.prepare(`
       SELECT event_type, COUNT(*) as count
       FROM ${TABLES.ANALYTICS_EVENTS}
       WHERE timestamp BETWEEN ? AND ?
@@ -171,8 +171,8 @@ export class MetricsQueries {
    * Insert or update daily metrics
    */
   static upsertDailyMetrics(metrics: MetricsData): void {
-    const db = getDB().getDatabase();
-    const stmt = db.query(`
+    const db = getDB();
+    const stmt = db.prepare(`
       INSERT INTO ${TABLES.METRICS_DAILY} 
       (date, total_views, total_watch_time, unique_sessions, avg_session_duration, top_content)
       VALUES (?, ?, ?, ?, ?, ?)
@@ -199,8 +199,8 @@ export class MetricsQueries {
    * Get daily metrics for a specific date
    */
   static getDailyMetrics(date: string): MetricsData | null {
-    const db = getDB().getDatabase();
-    const stmt = db.query(`
+    const db = getDB();
+    const stmt = db.prepare(`
       SELECT * FROM ${TABLES.METRICS_DAILY}
       WHERE date = ?
     `);
@@ -222,8 +222,8 @@ export class MetricsQueries {
    * Get metrics for date range
    */
   static getMetricsRange(startDate: string, endDate: string): MetricsData[] {
-    const db = getDB().getDatabase();
-    const stmt = db.query(`
+    const db = getDB();
+    const stmt = db.prepare(`
       SELECT * FROM ${TABLES.METRICS_DAILY}
       WHERE date BETWEEN ? AND ?
       ORDER BY date ASC
@@ -249,8 +249,8 @@ export class MetricsQueries {
     uniqueSessions: number;
     avgSessionDuration: number;
   } {
-    const db = getDB().getDatabase();
-    const stmt = db.query(`
+    const db = getDB();
+    const stmt = db.prepare(`
       SELECT 
         SUM(total_views) as total_views,
         SUM(total_watch_time) as total_watch_time,
@@ -278,8 +278,8 @@ export class ContentStatsQueries {
    * Insert or update content stats
    */
   static upsertContentStats(stats: ContentStats): void {
-    const db = getDB().getDatabase();
-    const stmt = db.query(`
+    const db = getDB();
+    const stmt = db.prepare(`
       INSERT INTO ${TABLES.CONTENT_STATS}
       (content_id, content_type, view_count, total_watch_time, completion_rate, avg_watch_time, last_viewed)
       VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -307,8 +307,8 @@ export class ContentStatsQueries {
    * Get stats for specific content
    */
   static getContentStats(contentId: string): ContentStats | null {
-    const db = getDB().getDatabase();
-    const stmt = db.query(`
+    const db = getDB();
+    const stmt = db.prepare(`
       SELECT * FROM ${TABLES.CONTENT_STATS}
       WHERE content_id = ?
     `);
@@ -331,7 +331,7 @@ export class ContentStatsQueries {
    * Get top content by view count
    */
   static getTopContent(limit: number = 10, contentType?: 'movie' | 'tv'): ContentStats[] {
-    const db = getDB().getDatabase();
+    const db = getDB();
     
     let query = `
       SELECT * FROM ${TABLES.CONTENT_STATS}
@@ -346,7 +346,7 @@ export class ContentStatsQueries {
     query += ' ORDER BY view_count DESC LIMIT ?';
     params.push(limit);
     
-    const stmt = db.query(query);
+    const stmt = db.prepare(query);
     const rows = stmt.all(...params) as any[];
     
     return rows.map(row => ({
@@ -364,8 +364,8 @@ export class ContentStatsQueries {
    * Increment view count for content
    */
   static incrementViewCount(contentId: string, contentType: 'movie' | 'tv'): void {
-    const db = getDB().getDatabase();
-    const stmt = db.query(`
+    const db = getDB();
+    const stmt = db.prepare(`
       INSERT INTO ${TABLES.CONTENT_STATS}
       (content_id, content_type, view_count, last_viewed)
       VALUES (?, ?, 1, strftime('%s', 'now'))
@@ -386,7 +386,7 @@ export class ContentStatsQueries {
     watchTime: number,
     completed: boolean
   ): void {
-    const db = getDB().getDatabase();
+    const db = getDB();
     
     // Get current stats
     const current = this.getContentStats(contentId);
@@ -402,7 +402,7 @@ export class ContentStatsQueries {
         newCompletionRate = completedViews / current.viewCount;
       }
       
-      const stmt = db.query(`
+      const stmt = db.prepare(`
         UPDATE ${TABLES.CONTENT_STATS}
         SET 
           total_watch_time = ?,
@@ -425,8 +425,8 @@ export class AdminQueries {
    * Create admin user
    */
   static createAdmin(id: string, username: string, passwordHash: string): void {
-    const db = getDB().getDatabase();
-    const stmt = db.query(`
+    const db = getDB();
+    const stmt = db.prepare(`
       INSERT INTO ${TABLES.ADMIN_USERS}
       (id, username, password_hash)
       VALUES (?, ?, ?)
@@ -445,8 +445,8 @@ export class AdminQueries {
     createdAt: number;
     lastLogin: number | null;
   } | null {
-    const db = getDB().getDatabase();
-    const stmt = db.query(`
+    const db = getDB();
+    const stmt = db.prepare(`
       SELECT * FROM ${TABLES.ADMIN_USERS}
       WHERE username = ?
     `);
@@ -467,8 +467,8 @@ export class AdminQueries {
    * Update last login time
    */
   static updateLastLogin(username: string): void {
-    const db = getDB().getDatabase();
-    const stmt = db.query(`
+    const db = getDB();
+    const stmt = db.prepare(`
       UPDATE ${TABLES.ADMIN_USERS}
       SET last_login = strftime('%s', 'now')
       WHERE username = ?
@@ -481,8 +481,8 @@ export class AdminQueries {
    * Check if admin exists
    */
   static adminExists(username: string): boolean {
-    const db = getDB().getDatabase();
-    const stmt = db.query(`
+    const db = getDB();
+    const stmt = db.prepare(`
       SELECT COUNT(*) as count FROM ${TABLES.ADMIN_USERS}
       WHERE username = ?
     `);
@@ -500,8 +500,8 @@ export class AdminQueries {
     createdAt: number;
     lastLogin: number | null;
   }> {
-    const db = getDB().getDatabase();
-    const stmt = db.query(`
+    const db = getDB();
+    const stmt = db.prepare(`
       SELECT id, username, created_at, last_login
       FROM ${TABLES.ADMIN_USERS}
       ORDER BY created_at DESC
