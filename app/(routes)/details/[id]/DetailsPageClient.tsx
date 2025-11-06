@@ -118,13 +118,45 @@ export default function DetailsPageClient({
     return null;
   }
 
-  const formattedRating = content.rating.toFixed(1);
+  const formattedRating = (content.rating || content.vote_average || 0).toFixed(1);
   const releaseYear = content.releaseDate
     ? new Date(content.releaseDate).getFullYear()
     : 'N/A';
 
+  const handleGoBack = () => {
+    // Check if user came from search or has search in history
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      const referrer = document.referrer;
+      if (referrer.includes('/search')) {
+        router.push('/search');
+      } else {
+        router.back();
+      }
+    } else {
+      router.push('/');
+    }
+  };
+
   return (
     <div className={styles.container}>
+      {/* Back Navigation */}
+      <div className={styles.backNavigation}>
+        <motion.button
+          onClick={handleGoBack}
+          className={styles.backButton}
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.5 }}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className={styles.backIcon}>
+            <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+          </svg>
+          <span>Back</span>
+        </motion.button>
+      </div>
+
       {/* Hero Section with Parallax Backdrop */}
       <ParallaxContainer className={styles.heroSection}>
         {/* Backdrop Image */}

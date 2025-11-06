@@ -1,5 +1,6 @@
 import './globals.css'
 import { Metadata, Viewport } from 'next'
+import AnalyticsProvider from './components/analytics/AnalyticsProvider'
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -72,15 +73,12 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://image.tmdb.org" />
       </head>
       <body suppressHydrationWarning>
-        {/* Skip to main content link for keyboard navigation */}
-        <a href="#main-content" className="skip-to-main">
-          Skip to main content
-        </a>
-        
         {/* Screen reader announcements */}
         <div id="sr-announcements" role="status" aria-live="polite" aria-atomic="true" className="sr-only"></div>
         
-        {children}
+        <AnalyticsProvider>
+          {children}
+        </AnalyticsProvider>
       </body>
     </html>
   )

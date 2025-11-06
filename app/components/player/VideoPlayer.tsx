@@ -2,6 +2,8 @@
 
 import { useRef, useState, useEffect } from 'react';
 import Hls from 'hls.js';
+import { useAnalytics } from '../analytics/AnalyticsProvider';
+import { useWatchProgress } from '@/lib/hooks/useWatchProgress';
 import styles from './VideoPlayer.module.css';
 
 interface VideoPlayerProps {
@@ -16,6 +18,17 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Analytics and progress tracking
+  const { trackEvent } = useAnalytics();
+  const contentType = mediaType === 'tv' ? 'episode' : 'movie';
+  const { handleProgress, loadProgress } = useWatchProgress({
+    contentId: tmdbId,
+    contentType,
+    onProgress: (time, duration) => {
+      // This will be called by the hook when progress is updated
+    },
+  });
   
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -146,22 +159,70 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
     const video = videoRef.current;
     if (!video) return;
 
-    const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
+    const handlePlay = () => {
+      setIsPlaying(true);
+      trackEvent('video_play', {
+        content_id: tmdbId,
+        content_type: mediaType,
+        season,
+        episode,
+        title,
+        current_time: video.currentTime,
+      });
+    };
+
+    const handlePause = () => {
+      setIsPlaying(false);
+      trackEvent('video_pause', {
+        content_id: tmdbId,
+        content_type: mediaType,
+        season,
+        episode,
+        title,
+        current_time: video.currentTime,
+        duration: video.duration,
+      });
+    };
+
     const handleTimeUpdate = () => {
       setCurrentTime(video.currentTime);
       if (video.buffered.length > 0) {
         setBuffered((video.buffered.end(video.buffered.length - 1) / video.duration) * 100);
       }
+      
+      // Track watch progress
+      if (video.duration > 0) {
+        handleProgress(video.currentTime, video.duration);
+      }
     };
-    const handleDurationChange = () => setDuration(video.duration);
+
+    const handleDurationChange = () => {
+      setDuration(video.duration);
+      // Load saved progress when duration is available
+      const savedTime = loadProgress();
+      if (savedTime > 0 && savedTime < video.duration - 30) {
+        video.currentTime = savedTime;
+      }
+    };
+
     const handleVolumeChange = () => {
       setVolume(video.volume);
       setIsMuted(video.muted);
     };
+
     const handleWaiting = () => setIsBuffering(true);
     const handleCanPlay = () => setIsBuffering(false);
-    const handleLoadedData = () => setIsLoading(false);
+    const handleLoadedData = () => {
+      setIsLoading(false);
+      trackEvent('content_view', {
+        content_id: tmdbId,
+        content_type: mediaType,
+        season,
+        episode,
+        title,
+        quality,
+      });
+    };
 
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);

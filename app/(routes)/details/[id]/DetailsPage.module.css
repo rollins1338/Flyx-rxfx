@@ -3,6 +3,48 @@
   background: linear-gradient(to bottom, #0a0a0f, #1a1a2e);
 }
 
+/* Back Navigation */
+.backNavigation {
+  position: absolute;
+  top: 2rem;
+  left: 2rem;
+  z-index: 10;
+}
+
+.backButton {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50px;
+  color: white;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+}
+
+.backButton:hover {
+  background: rgba(0, 0, 0, 0.8);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+}
+
+.backIcon {
+  width: 20px;
+  height: 20px;
+  transition: transform 0.2s ease;
+}
+
+.backButton:hover .backIcon {
+  transform: translateX(-2px);
+}
+
 /* Hero Section */
 .heroSection {
   position: relative;
@@ -289,6 +331,16 @@
 }
 
 @media (max-width: 768px) {
+  .backNavigation {
+    top: 1.5rem;
+    left: 1.5rem;
+  }
+
+  .backButton {
+    padding: 0.625rem 1.25rem;
+    font-size: 0.875rem;
+  }
+
   .heroSection {
     min-height: auto;
   }
@@ -348,6 +400,16 @@
 }
 
 @media (max-width: 480px) {
+  .backNavigation {
+    top: 1rem;
+    left: 1rem;
+  }
+
+  .backButton {
+    padding: 0.5rem 1rem;
+    font-size: 0.8125rem;
+  }
+
   .heroContent {
     padding: 1rem;
   }

@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useCallback, useRef } from 'react';
+import { useAnalytics } from '@/components/analytics/AnalyticsProvider';
 
 interface WatchProgressOptions {
   contentId?: string;
@@ -17,8 +18,10 @@ const MIN_WATCH_THRESHOLD = 10; // Minimum 10 seconds watched to save
 
 export function useWatchProgress(options: WatchProgressOptions) {
   const { contentId, contentType, onProgress } = options;
+  const { trackWatchProgress, trackEvent } = useAnalytics();
   const lastSaveTimeRef = useRef<number>(0);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastAnalyticsTimeRef = useRef<number>(0);
 
   // Load saved progress
   const loadProgress = useCallback((): number => {
@@ -94,7 +97,15 @@ export function useWatchProgress(options: WatchProgressOptions) {
     if (timeSinceLastSave >= SAVE_INTERVAL) {
       debouncedSave(currentTime, duration);
     }
-  }, [onProgress, debouncedSave]);
+
+    // Track analytics every 30 seconds
+    const timeSinceLastAnalytics = Date.now() - lastAnalyticsTimeRef.current;
+    if (contentId && timeSinceLastAnalytics >= 30000) {
+      const mappedContentType = contentType === 'episode' ? 'tv' : 'movie';
+      trackWatchProgress(contentId, mappedContentType, currentTime, duration);
+      lastAnalyticsTimeRef.current = Date.now();
+    }
+  }, [onProgress, debouncedSave, contentId, contentType, trackWatchProgress]);
 
   // Cleanup on unmount
   useEffect(() => {

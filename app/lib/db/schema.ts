@@ -61,6 +61,47 @@ CREATE INDEX IF NOT EXISTS idx_view_count ON content_stats(view_count DESC);
 `;
 
 /**
+ * Search Queries Table
+ * Tracks search queries for popular searches analytics
+ */
+export const CREATE_SEARCH_QUERIES_TABLE = `
+CREATE TABLE IF NOT EXISTS search_queries (
+  id TEXT PRIMARY KEY,
+  query TEXT NOT NULL,
+  normalized_query TEXT NOT NULL,
+  session_id TEXT,
+  results_count INTEGER DEFAULT 0,
+  clicked_result BOOLEAN DEFAULT FALSE,
+  timestamp INTEGER NOT NULL,
+  created_at INTEGER DEFAULT (strftime('%s', 'now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_normalized_query ON search_queries(normalized_query);
+CREATE INDEX IF NOT EXISTS idx_timestamp_search ON search_queries(timestamp);
+CREATE INDEX IF NOT EXISTS idx_clicked_result ON search_queries(clicked_result);
+`;
+
+/**
+ * Popular Searches Table
+ * Aggregated popular search terms with counts
+ */
+export const CREATE_POPULAR_SEARCHES_TABLE = `
+CREATE TABLE IF NOT EXISTS popular_searches (
+  normalized_query TEXT PRIMARY KEY,
+  display_query TEXT NOT NULL,
+  search_count INTEGER DEFAULT 1,
+  click_count INTEGER DEFAULT 0,
+  last_searched INTEGER NOT NULL,
+  trending_score REAL DEFAULT 0,
+  updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_search_count ON popular_searches(search_count DESC);
+CREATE INDEX IF NOT EXISTS idx_trending_score ON popular_searches(trending_score DESC);
+CREATE INDEX IF NOT EXISTS idx_last_searched ON popular_searches(last_searched DESC);
+`;
+
+/**
  * Admin Users Table
  * Stores admin credentials and login info
  */
@@ -96,6 +137,8 @@ export const ALL_TABLES = [
   CREATE_ANALYTICS_EVENTS_TABLE,
   CREATE_METRICS_DAILY_TABLE,
   CREATE_CONTENT_STATS_TABLE,
+  CREATE_SEARCH_QUERIES_TABLE,
+  CREATE_POPULAR_SEARCHES_TABLE,
   CREATE_ADMIN_USERS_TABLE,
 ];
 
@@ -106,6 +149,8 @@ export const TABLES = {
   ANALYTICS_EVENTS: 'analytics_events',
   METRICS_DAILY: 'metrics_daily',
   CONTENT_STATS: 'content_stats',
+  SEARCH_QUERIES: 'search_queries',
+  POPULAR_SEARCHES: 'popular_searches',
   ADMIN_USERS: 'admin_users',
   SCHEMA_MIGRATIONS: 'schema_migrations',
 } as const;

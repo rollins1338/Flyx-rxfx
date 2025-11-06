@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { tmdbService } from '@/lib/services/tmdb';
 import { searchRateLimiter, getClientIP } from '@/lib/utils/api-rate-limiter';
-import { searchQuerySchema, validateQuery } from '@/lib/validation/content-schemas';
+
 
 export const dynamic = 'force-dynamic';
 
@@ -36,32 +36,62 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Validate query parameters
+    // Get query parameters
     const { searchParams } = new URL(request.url);
-    const validation = validateQuery(searchQuerySchema, searchParams);
+    const query = searchParams.get('query') || '';
+    const category = searchParams.get('category') || '';
+    const contentType = searchParams.get('type') || 'all';
+    const page = parseInt(searchParams.get('page') || '1');
+    const sessionId = searchParams.get('sessionId') || '';
 
-    if (!validation.success) {
+    if (!query && !category) {
       return NextResponse.json(
         {
           error: 'Validation error',
-          message: validation.error,
+          message: 'Query or category is required',
         },
         { status: 400 }
       );
     }
 
-    const { query, page } = validation.data;
+    let searchResults: any[] = [];
 
-    // Perform search (with built-in caching)
-    const searchResults = await tmdbService.search(query, page);
+    // Perform search based on type
+    if (category) {
+      // Category-based search
+      searchResults = await tmdbService.searchByCategory(category, contentType as any, page);
+    } else {
+      // Regular text search
+      searchResults = await tmdbService.search(query, page);
+    }
+
+    // Track the search query for popular searches
+    if (query && sessionId) {
+      try {
+        await fetch(`${request.nextUrl.origin}/api/search/popular`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query,
+            sessionId,
+            resultsCount: searchResults.length,
+            clickedResult: false
+          })
+        });
+      } catch (trackingError) {
+        console.error('Failed to track search:', trackingError);
+        // Don't fail the search if tracking fails
+      }
+    }
 
     return NextResponse.json(
       {
         success: true,
         data: searchResults,
         count: searchResults.length,
-        query,
+        query: query || category,
         page,
+        searchType: category ? 'category' : 'text'
       },
       {
         status: 200,

@@ -1,8 +1,92 @@
+/* New FlyX Homepage Styles */
 .homePage {
   min-height: 100vh;
-  background: linear-gradient(180deg, #0a0a0f 0%, #1a1a2e 30%, #0f0f1a 70%, #0a0a0f 100%);
+  background: #000000;
   position: relative;
   overflow-x: hidden;
+}
+
+/* Hide scrollbar for content sections */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Line clamp utilities */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Ensure SVG icons render properly */
+svg {
+  flex-shrink: 0;
+}
+
+/* Smooth animations and transitions */
+* {
+  transition-property: transform, opacity, box-shadow, background-color, border-color;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Enhanced button hover effects */
+.enhanced-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.enhanced-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.enhanced-button:hover::before {
+  left: 100%;
+}
+
+/* Media card improvements */
+.media-card {
+  transform-style: preserve-3d;
+  perspective: 1000px;
+}
+
+.media-card:hover {
+  transform: translateY(-8px) rotateX(2deg);
+}
+
+/* Gradient text effects */
+.gradient-text {
+  background: linear-gradient(135deg, #7c3aed 0%, #ec4899 50%, #06b6d4 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Glass morphism improvements */
+.glass-effect {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
 .errorContainer {

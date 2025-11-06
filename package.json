@@ -20,8 +20,8 @@
     "db:stats": "bun run server/db/manage.ts stats",
     "db:health": "bun run server/db/manage.ts health",
     "db:cleanup": "bun run server/db/manage.ts cleanup",
-    "admin:create": "bun run scripts/create-admin.ts",
-    "admin:reset-password": "bun run scripts/reset-admin-password.ts"
+    "admin:create": "bun scripts/create-admin.js",
+    "analytics:init": "bun scripts/init-analytics.js"
   },
   "dependencies": {
     "bcryptjs": "3.0.3",
@@ -29,6 +29,7 @@
     "hls.js": "^1.6.10",
     "jsonwebtoken": "9.0.2",
     "lucide-react": "^0.542.0",
+    "nanoid": "^5.0.4",
     "next": "^14.2.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

@@ -8,18 +8,28 @@ export interface Genre {
 }
 
 export interface MediaItem {
-  id: string;
-  title: string;
-  overview: string;
-  posterPath: string;
-  backdropPath: string;
-  releaseDate: string;
-  rating: number;
-  voteCount: number;
-  mediaType: 'movie' | 'tv';
-  genres: Genre[];
+  id: number | string;
+  title?: string;
+  name?: string;
+  overview?: string;
+  poster_path?: string;
+  backdrop_path?: string;
+  release_date?: string;
+  first_air_date?: string;
+  vote_average?: number;
+  vote_count?: number;
+  mediaType?: 'movie' | 'tv';
+  media_type?: 'movie' | 'tv';
+  genres?: Genre[];
+  genre_ids?: number[];
   runtime?: number;
   seasons?: Season[];
+  // Legacy support for backward compatibility
+  posterPath?: string;
+  backdropPath?: string;
+  releaseDate?: string;
+  rating?: number;
+  voteCount?: number;
 }
 
 export interface Season {

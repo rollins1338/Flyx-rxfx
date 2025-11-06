@@ -1,42 +1,36 @@
 /**
- * Database Connection Management
- * Handles SQLite connection pooling and lifecycle
+ * Database Connection Management using Bun's built-in SQLite
  */
 
 import { Database } from 'bun:sqlite';
 import path from 'path';
+import fs from 'fs';
 import { ALL_TABLES, SCHEMA_VERSION, TABLES } from './schema';
 
-interface DatabaseConfig {
-  filename: string;
-  readonly?: boolean;
-  create?: boolean;
-  readwrite?: boolean;
-}
-
-class DatabaseConnection {
-  private static instance: DatabaseConnection | null = null;
+class BunDatabaseConnection {
+  private static instance: BunDatabaseConnection | null = null;
   private db: Database | null = null;
-  private config: DatabaseConfig;
+  private dbPath: string;
   private isInitialized = false;
 
-  private constructor(config: DatabaseConfig) {
-    this.config = config;
+  private constructor() {
+    // Ensure database directory exists
+    const dbDir = path.join(process.cwd(), 'data');
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true });
+    }
+    
+    this.dbPath = path.join(dbDir, 'analytics.db');
   }
 
   /**
    * Get singleton database instance
    */
-  static getInstance(config?: DatabaseConfig): DatabaseConnection {
-    if (!DatabaseConnection.instance) {
-      const defaultConfig: DatabaseConfig = {
-        filename: path.join(process.cwd(), 'server', 'db', 'analytics.db'),
-        create: true,
-        readwrite: true,
-      };
-      DatabaseConnection.instance = new DatabaseConnection(config || defaultConfig);
+  static getInstance(): BunDatabaseConnection {
+    if (!BunDatabaseConnection.instance) {
+      BunDatabaseConnection.instance = new BunDatabaseConnection();
     }
-    return DatabaseConnection.instance;
+    return BunDatabaseConnection.instance;
   }
 
   /**
@@ -48,12 +42,8 @@ class DatabaseConnection {
     }
 
     try {
-      // Create database connection
-      this.db = new Database(this.config.filename, {
-        create: this.config.create,
-        readwrite: this.config.readwrite,
-        readonly: this.config.readonly,
-      });
+      // Create database connection using Bun's built-in SQLite
+      this.db = new Database(this.dbPath);
 
       // Enable WAL mode for better concurrency
       this.db.exec('PRAGMA journal_mode = WAL;');
@@ -64,8 +54,8 @@ class DatabaseConnection {
       // Set synchronous mode for better performance
       this.db.exec('PRAGMA synchronous = NORMAL;');
       
-      // Set cache size (negative value = KB)
-      this.db.exec('PRAGMA cache_size = -64000;'); // 64MB cache
+      // Set cache size (64MB)
+      this.db.exec('PRAGMA cache_size = -64000;');
 
       // Create all tables
       for (const tableSQL of ALL_TABLES) {
@@ -76,7 +66,7 @@ class DatabaseConnection {
       await this.ensureSchemaVersion();
 
       this.isInitialized = true;
-      console.log('✓ Database initialized successfully');
+      console.log('✓ Bun SQLite database initialized successfully');
     } catch (error) {
       console.error('Failed to initialize database:', error);
       throw new Error(`Database initialization failed: ${error}`);
@@ -130,16 +120,9 @@ class DatabaseConnection {
    */
   transaction<T>(callback: (db: Database) => T): T {
     const db = this.getDatabase();
-    try {
-      db.exec('BEGIN TRANSACTION;');
-      const result = callback(db);
-      db.exec('COMMIT;');
-      return result;
-    } catch (error) {
-      db.exec('ROLLBACK;');
-      console.error('Transaction failed:', error);
-      throw new Error(`Transaction failed: ${error}`);
-    }
+    return db.transaction(() => {
+      return callback(db);
+    })();
   }
 
   /**
@@ -150,7 +133,7 @@ class DatabaseConnection {
       this.db.close();
       this.db = null;
       this.isInitialized = false;
-      DatabaseConnection.instance = null;
+      BunDatabaseConnection.instance = null;
       console.log('✓ Database connection closed');
     }
   }
@@ -168,43 +151,25 @@ class DatabaseConnection {
       return false;
     }
   }
-
-  /**
-   * Get database statistics
-   */
-  getStats(): {
-    pageCount: number;
-    pageSize: number;
-    freePages: number;
-    sizeBytes: number;
-  } {
-    const db = this.getDatabase();
-    const pageCount = (db.query('PRAGMA page_count').get() as any).page_count || 0;
-    const pageSize = (db.query('PRAGMA page_size').get() as any).page_size || 0;
-    const freePages = (db.query('PRAGMA freelist_count').get() as any).freelist_count || 0;
-    
-    return {
-      pageCount,
-      pageSize,
-      freePages,
-      sizeBytes: pageCount * pageSize,
-    };
-  }
-
-  /**
-   * Optimize database (vacuum and analyze)
-   */
-  optimize(): void {
-    const db = this.getDatabase();
-    console.log('Optimizing database...');
-    db.exec('VACUUM;');
-    db.exec('ANALYZE;');
-    console.log('✓ Database optimized');
-  }
 }
 
-// Export singleton getter
-export const getDB = (config?: DatabaseConfig) => DatabaseConnection.getInstance(config);
+// Initialize and export database instance
+let dbInstance: BunDatabaseConnection | null = null;
+
+export const initializeDB = async () => {
+  if (!dbInstance) {
+    dbInstance = BunDatabaseConnection.getInstance();
+    await dbInstance.initialize();
+  }
+  return dbInstance;
+};
+
+export const getDB = () => {
+  if (!dbInstance) {
+    throw new Error('Database not initialized. Call initializeDB() first.');
+  }
+  return dbInstance.getDatabase();
+};
 
 // Export for direct access
-export { DatabaseConnection };
+export { BunDatabaseConnection };
