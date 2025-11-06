@@ -22,12 +22,31 @@ class NeonAdapter implements DatabaseAdapter {
     this.sql = neon(connectionString);
   }
 
+  private createTemplateString(sql: string): any {
+    // Create a proper template literal for Neon
+    const templateStrings = [sql];
+    (templateStrings as any).raw = [sql];
+    return templateStrings;
+  }
+
   async query(sql: string, params: any[] = []): Promise<any[]> {
-    return await this.sql(sql, params);
+    if (params.length === 0) {
+      // For DDL statements without parameters, use template literal
+      const templateStrings = this.createTemplateString(sql);
+      return await this.sql(templateStrings);
+    }
+    // Use neon's query method for parameterized queries
+    return await this.sql.query(sql, params);
   }
 
   async execute(sql: string, params: any[] = []): Promise<any> {
-    const result = await this.sql(sql, params);
+    if (params.length === 0) {
+      // For DDL statements without parameters, use template literal
+      const templateStrings = this.createTemplateString(sql);
+      return await this.sql(templateStrings);
+    }
+    // Use neon's query method for parameterized queries
+    const result = await this.sql.query(sql, params);
     return result;
   }
 
@@ -97,6 +116,8 @@ class DatabaseConnection {
       // Check for Neon connection string
       const neonConnectionString = process.env.DATABASE_URL;
       
+
+      
       if (neonConnectionString && neonConnectionString.includes('neon.tech')) {
         // Use Neon for production
         console.log('Initializing Neon PostgreSQL connection...');
@@ -148,7 +169,7 @@ class DatabaseConnection {
       `CREATE TABLE IF NOT EXISTS schema_migrations (
         version INTEGER PRIMARY KEY,
         name TEXT NOT NULL,
-        applied_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())
+        applied_at BIGINT
       )`,
       
       // Analytics events table
@@ -158,7 +179,7 @@ class DatabaseConnection {
         timestamp BIGINT NOT NULL,
         event_type TEXT NOT NULL,
         metadata JSONB NOT NULL,
-        created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())
+        created_at BIGINT
       )`,
       
       // Content stats table
@@ -170,7 +191,7 @@ class DatabaseConnection {
         completion_rate REAL DEFAULT 0,
         avg_watch_time REAL DEFAULT 0,
         last_viewed BIGINT,
-        updated_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())
+        updated_at BIGINT
       )`,
       
       // Admin users table
@@ -178,7 +199,7 @@ class DatabaseConnection {
         id TEXT PRIMARY KEY,
         username TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
-        created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW()),
+        created_at BIGINT,
         last_login BIGINT
       )`,
       
@@ -190,7 +211,7 @@ class DatabaseConnection {
         unique_sessions INTEGER DEFAULT 0,
         avg_session_duration REAL DEFAULT 0,
         top_content TEXT,
-        updated_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())
+        updated_at BIGINT
       )`
     ];
 
