@@ -3,7 +3,6 @@
  * CRUD operations for all tables
  */
 
-import Database from 'better-sqlite3';
 import { getDB } from './connection';
 import { TABLES } from './schema';
 import type {
@@ -40,9 +39,9 @@ export class AnalyticsQueries {
    * Batch insert multiple events (more efficient)
    */
   static insertEventsBatch(events: AnalyticsEvent[]): void {
-    const dbConnection = getDB();
+    const db = getDB();
     
-    dbConnection.transaction((db: Database.Database) => {
+    const insertTransaction = db.transaction(() => {
       const stmt = db.prepare(`
         INSERT INTO ${TABLES.ANALYTICS_EVENTS} 
         (id, session_id, timestamp, event_type, metadata)
@@ -59,6 +58,8 @@ export class AnalyticsQueries {
         );
       }
     });
+    
+    insertTransaction();
   }
 
   /**

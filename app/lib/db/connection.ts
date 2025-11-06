@@ -3,8 +3,8 @@
  */
 
 import { Database } from 'bun:sqlite';
-import path from 'path';
-import fs from 'fs';
+import * as path from 'path';
+import * as fs from 'fs';
 import { ALL_TABLES, SCHEMA_VERSION, TABLES } from './schema';
 
 class DatabaseConnection {

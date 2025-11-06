@@ -3,15 +3,15 @@
  * Handles schema updates and versioning
  */
 
-import Database from 'better-sqlite3';
+import { Database } from 'bun:sqlite';
 import { getDB, initializeDB } from './connection';
 import { TABLES, SCHEMA_VERSION } from './schema';
 
 export interface Migration {
   version: number;
   name: string;
-  up: (db: Database.Database) => void;
-  down?: (db: Database.Database) => void;
+  up: (db: Database) => void;
+  down?: (db: Database) => void;
 }
 
 /**
@@ -22,7 +22,7 @@ const migrations: Migration[] = [
   {
     version: 1,
     name: 'initial_schema',
-    up: (_db: Database.Database) => {
+    up: (_db: Database) => {
       // Initial schema is created by connection.ts
       console.log('✓ Initial schema already created');
     },
@@ -32,7 +32,7 @@ const migrations: Migration[] = [
   // {
   //   version: 2,
   //   name: 'add_user_preferences',
-  //   up: (db: Database.Database) => {
+  //   up: (db: Database) => {
   //     db.exec(`
   //       CREATE TABLE user_preferences (
   //         user_id TEXT PRIMARY KEY,
@@ -41,7 +41,7 @@ const migrations: Migration[] = [
   //       );
   //     `);
   //   },
-  //   down: (db: Database.Database) => {
+  //   down: (db: Database) => {
   //     db.exec('DROP TABLE IF EXISTS user_preferences;');
   //   },
   // },
@@ -51,7 +51,7 @@ const migrations: Migration[] = [
  * Migration Manager
  */
 export class MigrationManager {
-  private db: Database.Database;
+  private db: Database;
 
   constructor() {
     this.db = getDB();
