@@ -5,6 +5,7 @@ import Hls from 'hls.js';
 import { useAnalytics } from '../analytics/AnalyticsProvider';
 import { useWatchProgress } from '@/lib/hooks/useWatchProgress';
 import { streamRetryManager } from '@/lib/utils/stream-retry';
+import { trackWatchStart, trackWatchProgress, trackWatchPause, trackWatchComplete } from '@/lib/utils/live-activity';
 import styles from './VideoPlayer.module.css';
 
 interface VideoPlayerProps {
@@ -214,6 +215,15 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
       if (video.currentTime === 0) {
         // First play - track as start
         handleWatchStart(video.currentTime, video.duration);
+        
+        // Track live activity - watch start
+        trackWatchStart(
+          tmdbId, 
+          title || 'Unknown Title', 
+          mediaType, 
+          season, 
+          episode
+        );
       } else {
         // Resume from pause
         handleWatchResume(video.currentTime, video.duration);
@@ -234,6 +244,17 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
     const handlePause = () => {
       setIsPlaying(false);
       handleWatchPause(video.currentTime, video.duration);
+      
+      // Track live activity - watch pause
+      const progress = video.duration > 0 ? (video.currentTime / video.duration) * 100 : 0;
+      trackWatchPause(
+        tmdbId, 
+        title || 'Unknown Title', 
+        mediaType, 
+        progress, 
+        season, 
+        episode
+      );
       
       trackInteraction({
         element: 'video_player',
@@ -257,6 +278,35 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
       // Track watch progress
       if (video.duration > 0) {
         handleProgress(video.currentTime, video.duration);
+        
+        // Track live activity progress (throttled to every 30 seconds)
+        const progress = (video.currentTime / video.duration) * 100;
+        const currentTimeRounded = Math.floor(video.currentTime);
+        
+        if (currentTimeRounded > 0 && currentTimeRounded % 30 === 0) {
+          trackWatchProgress(
+            tmdbId,
+            title || 'Unknown Title',
+            mediaType,
+            progress,
+            video.currentTime,
+            season,
+            episode
+          );
+        }
+        
+        // Track completion at 90%
+        if (progress >= 90 && !video.dataset.completionTracked) {
+          video.dataset.completionTracked = 'true';
+          trackWatchComplete(
+            tmdbId,
+            title || 'Unknown Title',
+            mediaType,
+            video.currentTime,
+            season,
+            episode
+          );
+        }
       }
     };
 

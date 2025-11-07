@@ -6,6 +6,7 @@ import OverviewStats from './components/OverviewStats';
 import AnalyticsCharts from './components/AnalyticsCharts';
 import ContentStats from './components/ContentStats';
 import SystemStatus from './components/SystemStatus';
+import LiveActivityTracker from './components/LiveActivityTracker';
 
 interface User {
   id: string;
@@ -593,6 +594,18 @@ export default function AdminPage() {
                   <path d="M12 17L12 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
                 </svg>
               )
+            },
+            { 
+              key: 'live', 
+              label: 'Live Activity', 
+              icon: (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2"/>
+                  <path d="M12 1v6m0 6v6" stroke="currentColor" strokeWidth="2"/>
+                  <path d="m21 12-6-6m-6 6-6-6" stroke="currentColor" strokeWidth="2"/>
+                  <path d="m21 12-6 6m-6-6-6 6" stroke="currentColor" strokeWidth="2"/>
+                </svg>
+              )
             }
           ].map((tab) => (
             <button
@@ -751,6 +764,44 @@ export default function AdminPage() {
                 </p>
               </div>
               <ContentStats />
+            </div>
+          )}
+
+          {activeTab === 'live' && (
+            <div>
+              <div style={{
+                marginBottom: '32px',
+                paddingBottom: '20px',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
+              }}>
+                <h2 style={{
+                  margin: 0,
+                  color: '#f8fafc',
+                  fontSize: '24px',
+                  fontWeight: '600',
+                  letterSpacing: '-0.5px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px'
+                }}>
+                  <div style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    backgroundColor: '#10b981',
+                    animation: 'pulse 2s infinite'
+                  }}></div>
+                  Live Activity Monitor
+                </h2>
+                <p style={{
+                  margin: '8px 0 0 0',
+                  color: '#94a3b8',
+                  fontSize: '16px'
+                }}>
+                  Real-time monitoring of user activity and content consumption
+                </p>
+              </div>
+              <LiveActivityTracker />
             </div>
           )}
         </div>
