@@ -31,20 +31,20 @@ function transformToVideoData(data: any): VideoData {
 
   // Handle shadowlands response format
   if (data.streamUrl) {
-    // Shadowlands requires proxy
-    const proxyUrl = data.requiresProxy 
-      ? `/api/stream-proxy?url=${encodeURIComponent(data.streamUrl)}&source=shadowlands`
-      : data.streamUrl;
-      
+    // Return the raw shadowlands URL directly - client will handle proxying segments
     sources.push({
-      url: proxyUrl,
+      url: data.streamUrl, // Direct URL, not proxied
       quality: 'auto',
       type: data.streamType || 'hls',
       // Add metadata for expiration tracking
       metadata: {
         extractedAt: Date.now(),
         source: 'shadowlands',
-        requiresProxy: data.requiresProxy
+        requiresProxy: data.requiresProxy, // Client can check this if needed
+        // Store the proxy URL as metadata in case client needs it
+        proxyUrl: data.requiresProxy 
+          ? `/api/stream-proxy?url=${encodeURIComponent(data.streamUrl)}&source=shadowlands`
+          : undefined
       }
     });
   }
