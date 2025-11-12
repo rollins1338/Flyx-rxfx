@@ -234,16 +234,32 @@ function extractShadowlandsUrl(html, logger) {
     containsShadowlands: html.includes('shadowlands'),
     containsTmstr: html.includes('tmstr'),
     containsM3u8: html.includes('.m3u8'),
+    containsPutgate: html.includes('putgate'),
     htmlSample1: html.substring(html.indexOf('file:') - 100, html.indexOf('file:') + 200) || 'file: not found',
-    htmlSample2: html.substring(html.indexOf('.m3u8') - 100, html.indexOf('.m3u8') + 100) || '.m3u8 not found'
+    htmlSample2: html.substring(html.indexOf('.m3u8') - 100, html.indexOf('.m3u8') + 200) || '.m3u8 not found',
+    htmlSample3: html.substring(html.indexOf('putgate') - 100, html.indexOf('putgate') + 200) || 'putgate not found'
   });
   
+  // Check if the file parameter is empty (dynamic loading)
+  if (html.includes('file:""') || html.includes("file:''")) {
+    logger.warn('Detected empty file parameter - URL is loaded dynamically', {
+      hasPutgate: html.includes('putgate'),
+      hasPerformanceObserver: html.includes('PerformanceObserver'),
+      suggestion: 'Need to extract from dynamic loading code or fetch the actual stream URL'
+    });
+  }
+  
   const patterns = [
+    // Dynamic URL construction patterns (for putgate/tmstr URLs)
+    /new_pass_obj\s*=\s*new\s+URL\s*\(\s*['"]([^'"]+\.m3u8[^'"]*)['"]/gi,
+    /entry\.name[^\n]*['"]([^'"]+\.m3u8[^'"]*)['"]/gi,
+    
     // Playerjs file parameter - most common pattern
     /new\s+Playerjs\s*\([^)]*file\s*:\s*['"]([^'"]+\.m3u8[^'"]*)['"]/gi,
     /\bfile\s*:\s*['"]([^'"]+\.m3u8[^'"]*)['"]/gi,
     
-    // Direct URLs with full protocol
+    // Direct URLs with full protocol (tmstr, putgate, shadowlands)
+    /https?:\/\/[^\s"'<>]*(?:tmstr|putgate|shadowlands)[^\s"'<>]*\.m3u8[^\s"'<>]*/gi,
     /https?:\/\/[^\s"'<>]+\.m3u8[^\s"'<>]*/gi,
     
     // Player configurations
@@ -252,7 +268,7 @@ function extractShadowlandsUrl(html, logger) {
     /src\s*:\s*['"]([^'"]+\.m3u8[^'"]*)['"]/gi,
     
     // Quoted URLs (but must have more than just .m3u8)
-    /['"]([^'"]{10,}\.m3u8[^'"]*)['"]/gi
+    /['"]([^'"]{20,}\.m3u8[^'"]*)['"]/gi
   ];
 
   for (let i = 0; i < patterns.length; i++) {
