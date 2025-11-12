@@ -29,7 +29,9 @@ function createLogger(requestId) {
         console.error(`💥 Error Details:`, {
           name: error.name,
           message: error.message,
-          stack: error.stack?.split('\n').slice(0, 5).join('\n') // First 5 lines of stack
+          stack: error.stack?.split('\n').slice(0, 5).join('\n'), // First 5 lines of stack
+          cause: error.cause,
+          code: error.code
         });
       }
       if (Object.keys(data).length > 0) {
@@ -65,6 +67,32 @@ function createLogger(requestId) {
       if (contentPreview) {
         console.log(`📄 Content Preview:`, contentPreview.substring(0, 200) + (contentPreview.length > 200 ? '...' : ''));
       }
+      console.log('─'.repeat(80));
+    },
+    success: (message, data = {}) => {
+      console.log(`\n✅ [${timestamp()}] [${requestId}] SUCCESS: ${message}`);
+      if (Object.keys(data).length > 0) {
+        console.log(`🎉 Success Data:`, JSON.stringify(data, null, 2));
+      }
+      console.log('═'.repeat(80));
+    },
+    step: (stepNumber, stepName, data = {}) => {
+      console.log(`\n📍 [${timestamp()}] [${requestId}] STEP ${stepNumber}: ${stepName}`);
+      if (Object.keys(data).length > 0) {
+        console.log(`📝 Step Data:`, JSON.stringify(data, null, 2));
+      }
+      console.log('─'.repeat(80));
+    },
+    memory: () => {
+      if (global.gc) {
+        global.gc();
+      }
+      const usage = process.memoryUsage();
+      console.log(`\n💾 [${timestamp()}] [${requestId}] MEMORY USAGE:`);
+      console.log(`   RSS: ${Math.round(usage.rss / 1024 / 1024)}MB`);
+      console.log(`   Heap Used: ${Math.round(usage.heapUsed / 1024 / 1024)}MB`);
+      console.log(`   Heap Total: ${Math.round(usage.heapTotal / 1024 / 1024)}MB`);
+      console.log(`   External: ${Math.round(usage.external / 1024 / 1024)}MB`);
       console.log('─'.repeat(80));
     }
   };
@@ -256,8 +284,9 @@ async function fetchWithHeaderFallback(url, baseOptions, logger, userAgent, sour
     console.log('\n🌐🌐🌐 MAKING FETCH REQUEST 🌐🌐🌐');
     console.log('═'.repeat(100));
     
-    logger.info('🚀 FETCH ATTEMPT STARTING', {
+    logger.step(1, 'FETCH PREPARATION', {
       targetUrl: url.substring(0, 150) + (url.length > 150 ? '...' : ''),
+      urlLength: url.length,
       retryCount: retryCount,
       isShadowlands: isShadowlands,
       source: source,
@@ -265,39 +294,70 @@ async function fetchWithHeaderFallback(url, baseOptions, logger, userAgent, sour
       headersCount: Object.keys(options.headers || {}).length,
       headers: options.headers || {},
       hasTimeout: !!options.signal,
-      keepalive: options.keepalive
+      timeoutMs: options.signal ? CONNECTION_POOL_CONFIG.timeout : 'none',
+      keepalive: options.keepalive,
+      hasBody: !!options.body,
+      redirect: options.redirect || 'follow'
+    });
+    
+    logger.memory();
+    
+    logger.step(2, 'INITIATING FETCH REQUEST', {
+      timestamp: new Date().toISOString(),
+      urlHost: new URL(url).hostname,
+      urlProtocol: new URL(url).protocol
     });
     
     const fetchStartTime = Date.now();
     const response = await fetch(url, options);
     const fetchDuration = Date.now() - fetchStartTime;
     
+    logger.step(3, 'FETCH COMPLETED', {
+      duration: `${fetchDuration}ms`,
+      timestamp: new Date().toISOString()
+    });
+    
     console.log('\n📡📡📡 FETCH RESPONSE RECEIVED 📡📡📡');
     console.log('═'.repeat(100));
     
     logger.response(response.status, Object.fromEntries(response.headers.entries()));
     
-    logger.info('🎯 FETCH RESPONSE DETAILS', {
+    const allResponseHeaders = Object.fromEntries(response.headers.entries());
+    
+    logger.step(4, 'ANALYZING RESPONSE', {
       status: response.status,
       statusText: response.statusText,
       ok: response.ok,
+      redirected: response.redirected,
+      type: response.type,
+      url: response.url?.substring(0, 150),
       contentType: response.headers.get('content-type'),
       contentLength: response.headers.get('content-length'),
+      contentEncoding: response.headers.get('content-encoding'),
+      transferEncoding: response.headers.get('transfer-encoding'),
       server: response.headers.get('server'),
       cacheControl: response.headers.get('cache-control'),
+      acceptRanges: response.headers.get('accept-ranges'),
+      contentRange: response.headers.get('content-range'),
+      lastModified: response.headers.get('last-modified'),
+      etag: response.headers.get('etag'),
+      connection: response.headers.get('connection'),
       fetchDuration: `${fetchDuration}ms`,
-      url: url.substring(0, 100) + '...',
-      responseHeaders: Object.fromEntries(
-        [...response.headers.entries()].slice(0, 10) // First 10 headers
-      )
+      totalHeadersCount: Object.keys(allResponseHeaders).length,
+      allResponseHeaders: allResponseHeaders
     });
+    
+    logger.memory();
     
     // If response is successful, return it
     if (response.ok) {
-      logger.info('✅ FETCH SUCCESSFUL - RETURNING RESPONSE', {
+      logger.success('FETCH SUCCESSFUL - RETURNING RESPONSE', {
         status: response.status,
         contentType: response.headers.get('content-type'),
-        duration: `${fetchDuration}ms`
+        contentLength: response.headers.get('content-length'),
+        duration: `${fetchDuration}ms`,
+        hasBody: !!response.body,
+        bodyUsed: response.bodyUsed
       });
       return response;
     }
@@ -338,18 +398,46 @@ async function fetchWithHeaderFallback(url, baseOptions, logger, userAgent, sour
     return response;
     
   } catch (error) {
+    console.log('\n💥💥💥 FETCH EXCEPTION CAUGHT 💥💥💥');
+    console.log('═'.repeat(100));
+    
+    logger.error('FETCH EXCEPTION', error, {
+      errorName: error.name,
+      errorMessage: error.message,
+      errorCode: error.code,
+      errorCause: error.cause,
+      errorStack: error.stack?.split('\n').slice(0, 10).join('\n'),
+      url: url.substring(0, 150),
+      retryCount: retryCount,
+      maxRetries: RETRY_CONFIG.maxRetries,
+      willRetry: retryCount < RETRY_CONFIG.maxRetries,
+      isTimeout: error.name === 'AbortError' || error.name === 'TimeoutError',
+      isNetworkError: error.name === 'TypeError' && error.message.includes('fetch'),
+      isDNSError: error.code === 'ENOTFOUND' || error.code === 'EAI_AGAIN',
+      isConnectionRefused: error.code === 'ECONNREFUSED',
+      isConnectionReset: error.code === 'ECONNRESET'
+    });
+    
     // Single retry for network errors
     if (retryCount < RETRY_CONFIG.maxRetries) {
       const delay = RETRY_CONFIG.baseDelay;
       
-      logger.warn('Network error, single retry attempt', {
+      logger.warn('ATTEMPTING RETRY AFTER ERROR', {
         error: error.message,
-        delay
+        errorType: error.name,
+        delay: `${delay}ms`,
+        retryAttempt: retryCount + 1,
+        maxRetries: RETRY_CONFIG.maxRetries
       });
       
       await new Promise(resolve => setTimeout(resolve, delay));
       return fetchWithHeaderFallback(url, baseOptions, logger, userAgent, source, 0, retryCount + 1);
     }
+    
+    logger.error('RETRIES EXHAUSTED - THROWING ERROR', error, {
+      totalRetries: retryCount,
+      maxRetries: RETRY_CONFIG.maxRetries
+    });
     
     // Re-throw the error if retries exhausted
     throw error;
@@ -559,24 +647,42 @@ export async function GET(request) {
   // SUPER VISIBLE REQUEST START
   console.log('\n🚨🚨🚨 STREAM-PROXY REQUEST INCOMING 🚨🚨🚨');
   console.log('═'.repeat(100));
+  console.log(`REQUEST ID: ${requestId}`);
+  console.log(`TIMESTAMP: ${new Date().toISOString()}`);
+  console.log(`CLIENT IP: ${clientIp}`);
+  console.log('═'.repeat(100));
   
   logger.request('GET', request.url, {
     'user-agent': request.headers.get('user-agent'),
     'referer': request.headers.get('referer'),
     'origin': request.headers.get('origin'),
-    'x-forwarded-for': request.headers.get('x-forwarded-for')
+    'x-forwarded-for': request.headers.get('x-forwarded-for'),
+    'range': request.headers.get('range'),
+    'accept': request.headers.get('accept'),
+    'accept-encoding': request.headers.get('accept-encoding')
   });
 
-  logger.info('Stream proxy request started', {
+  logger.step(0, 'REQUEST INITIALIZATION', {
     requestId,
     timestamp: new Date().toISOString(),
     clientIp,
     fullUrl: request.url,
+    urlLength: request.url.length,
     method: request.method,
-    userAgent: request.headers.get('user-agent')?.substring(0, 100) + '...',
+    userAgent: request.headers.get('user-agent')?.substring(0, 150) + (request.headers.get('user-agent')?.length > 150 ? '...' : ''),
     referer: request.headers.get('referer'),
-    origin: request.headers.get('origin')
+    origin: request.headers.get('origin'),
+    hasRangeHeader: !!request.headers.get('range'),
+    rangeHeader: request.headers.get('range'),
+    allRequestHeaders: Object.fromEntries(
+      Array.from(request.headers.entries()).map(([k, v]) => [
+        k, 
+        typeof v === 'string' && v.length > 100 ? v.substring(0, 100) + '...' : v
+      ])
+    )
   });
+  
+  logger.memory();
 
   // Enhanced request validation (Requirement 4.2)
   const requestValidation = validateRequest(request, logger);
@@ -641,15 +747,29 @@ export async function GET(request) {
   }
 
   try {
-    const fetchStartTime = Date.now();
-    logger.info('Fetching stream content', {
-      url: streamUrl.substring(0, 100) + (streamUrl.length > 100 ? '...' : ''),
-      method: 'GET'
+    logger.step(1, 'PREPARING STREAM FETCH', {
+      streamUrl: streamUrl.substring(0, 150) + (streamUrl.length > 150 ? '...' : ''),
+      source: source || 'unknown',
+      urlLength: streamUrl.length,
+      urlHost: new URL(streamUrl).hostname,
+      urlProtocol: new URL(streamUrl).protocol,
+      urlPathname: new URL(streamUrl).pathname.substring(0, 100)
     });
-
+    
+    const fetchStartTime = Date.now();
+    
     // Prepare base fetch options
     const rangeHeader = request.headers.get('range');
     const userAgent = request.headers.get('user-agent');
+    
+    logger.step(2, 'CONFIGURING FETCH OPTIONS', {
+      method: 'GET',
+      hasRangeHeader: !!rangeHeader,
+      rangeHeader: rangeHeader || 'none',
+      userAgent: userAgent?.substring(0, 100) + (userAgent?.length > 100 ? '...' : ''),
+      timeout: CONNECTION_POOL_CONFIG.timeout,
+      keepalive: true
+    });
     
     const baseFetchOptions = {
       method: 'GET',
@@ -659,8 +779,15 @@ export async function GET(request) {
     };
 
     if (rangeHeader) {
-      logger.debug('Range request detected', { range: rangeHeader });
+      logger.debug('Range request detected - partial content requested', { 
+        range: rangeHeader,
+        isVideoSeek: rangeHeader.includes('bytes=')
+      });
     }
+
+    logger.step(3, 'CALLING FETCH WITH HEADER FALLBACK', {
+      timestamp: new Date().toISOString()
+    });
 
     // Use enhanced fetch with header fallback strategies
     const response = await fetchWithHeaderFallback(
@@ -672,26 +799,54 @@ export async function GET(request) {
     );
 
     const fetchDuration = logger.timing('Stream fetch', fetchStartTime);
+    
+    logger.step(4, 'FETCH RETURNED SUCCESSFULLY', {
+      duration: `${fetchDuration}ms`,
+      status: response.status,
+      ok: response.ok
+    });
 
     if (!response.ok) {
-      logger.error('Stream fetch failed', null, {
+      logger.error('STREAM FETCH FAILED - NON-OK STATUS', null, {
         status: response.status,
         statusText: response.statusText,
-        url: streamUrl.substring(0, 100)
+        url: streamUrl.substring(0, 100),
+        contentType: response.headers.get('content-type'),
+        contentLength: response.headers.get('content-length'),
+        allHeaders: Object.fromEntries(response.headers.entries()),
+        isClientError: response.status >= 400 && response.status < 500,
+        isServerError: response.status >= 500,
+        isRedirect: response.status >= 300 && response.status < 400
       });
+      
+      // Try to read error body if available
+      let errorBody = null;
+      try {
+        const errorText = await response.text();
+        errorBody = errorText.substring(0, 500);
+        logger.debug('Error response body', { body: errorBody });
+      } catch (e) {
+        logger.debug('Could not read error response body', { error: e.message });
+      }
+      
       return NextResponse.json({
         success: false,
         error: `Stream fetch failed: ${response.status} ${response.statusText}`,
+        errorBody: errorBody,
         requestId
       }, { status: response.status });
     }
 
-    logger.info('Stream fetch successful', {
+    logger.success('STREAM FETCH SUCCESSFUL', {
       status: response.status,
       contentType: response.headers.get('content-type'),
       contentLength: response.headers.get('content-length'),
       hasRangeSupport: !!response.headers.get('accept-ranges'),
-      fetchDuration
+      acceptRanges: response.headers.get('accept-ranges'),
+      contentRange: response.headers.get('content-range'),
+      fetchDuration: `${fetchDuration}ms`,
+      hasBody: !!response.body,
+      bodyUsed: response.bodyUsed
     });
 
     // Check if this is an M3U8 playlist that needs URL rewriting
@@ -711,17 +866,45 @@ export async function GET(request) {
     // Check if this is a subtitle file
     const isSubtitle = streamUrl.includes('.vtt') || streamUrl.includes('.srt') ||
                       contentType.includes('text/vtt') || contentType.includes('text/plain');
+    
+    logger.step(5, 'CONTENT TYPE DETECTION', {
+      contentType: contentType || 'none',
+      isM3U8: isM3U8,
+      isTSSegment: isTSSegment,
+      isSubtitle: isSubtitle,
+      urlExtension: streamUrl.split('.').pop()?.split('?')[0],
+      detectionMethod: isM3U8 ? 'M3U8' : isTSSegment ? 'TS_SEGMENT' : isSubtitle ? 'SUBTITLE' : 'OTHER',
+      willProcessContent: isM3U8 || isSubtitle,
+      willStreamDirectly: isTSSegment || (!isM3U8 && !isSubtitle)
+    });
 
     if (isM3U8) {
       // Process M3U8 playlist to rewrite URLs
       const m3u8ProcessingStart = Date.now();
-      logger.info('Processing M3U8 playlist', {
+      
+      logger.step(6, 'STARTING M3U8 PROCESSING', {
         originalUrl: streamUrl.substring(0, 100),
-        contentType
+        contentType: contentType,
+        contentLength: response.headers.get('content-length')
       });
 
       try {
+        logger.debug('Reading M3U8 response body as text');
+        const textReadStart = Date.now();
         const m3u8Content = await response.text();
+        const textReadDuration = Date.now() - textReadStart;
+        
+        logger.step(7, 'M3U8 CONTENT READ', {
+          contentLength: m3u8Content.length,
+          readDuration: `${textReadDuration}ms`,
+          lineCount: m3u8Content.split('\n').length,
+          firstLine: m3u8Content.split('\n')[0],
+          hasExtM3U: m3u8Content.includes('#EXTM3U'),
+          hasStreamInf: m3u8Content.includes('#EXT-X-STREAM-INF'),
+          hasTargetDuration: m3u8Content.includes('#EXT-X-TARGETDURATION')
+        });
+        
+        logger.debug('Processing M3U8 playlist URLs');
         const processedM3U8 = await processM3U8Playlist(m3u8Content, streamUrl, request, logger, source);
         
         logger.timing('M3U8 processing', m3u8ProcessingStart);
@@ -737,43 +920,91 @@ export async function GET(request) {
         responseHeaders.set('X-RateLimit-Remaining', rateLimitResult.remaining?.toString() || '0');
         responseHeaders.set('X-RateLimit-Reset', new Date(Date.now() + RATE_LIMIT_CONFIG.windowMs).toISOString());
         
-        logger.info('M3U8 playlist processed successfully', {
+        logger.step(8, 'M3U8 PROCESSING COMPLETE', {
           originalLines: m3u8Content.split('\n').length,
           processedLines: processedM3U8.split('\n').length,
           originalLength: m3u8Content.length,
           processedLength: processedBuffer.length,
+          sizeDifference: processedBuffer.length - m3u8Content.length,
           hasQualityStreams: processedM3U8.includes('EXT-X-STREAM-INF'),
-          rateLimitRemaining: rateLimitResult.remaining
+          hasMediaSequence: processedM3U8.includes('EXT-X-MEDIA-SEQUENCE'),
+          hasEndList: processedM3U8.includes('EXT-X-ENDLIST'),
+          rateLimitRemaining: rateLimitResult.remaining,
+          processingDuration: `${Date.now() - m3u8ProcessingStart}ms`
         });
 
         // Ensure the response is not truncated by using Buffer
         const responseBuffer = Buffer.from(processedM3U8, 'utf-8');
         
-        return new NextResponse(responseBuffer, {
+        logger.step(9, 'CREATING M3U8 RESPONSE', {
+          bufferLength: responseBuffer.length,
+          status: response.status,
+          contentType: responseHeaders.get('content-type'),
+          headerCount: Array.from(responseHeaders.keys()).length
+        });
+        
+        const m3u8Response = new NextResponse(responseBuffer, {
           status: response.status,
           headers: responseHeaders
         });
+        
+        logger.success('M3U8 RESPONSE CREATED SUCCESSFULLY', {
+          totalDuration: `${Date.now() - requestStartTime}ms`,
+          m3u8ProcessingDuration: `${Date.now() - m3u8ProcessingStart}ms`
+        });
+        
+        logger.memory();
+        
+        return m3u8Response;
       } catch (m3u8Error) {
-        logger.error('M3U8 processing failed', m3u8Error);
-        // Fallback to original content
-        const fallbackContent = await response.text();
-        return new NextResponse(fallbackContent, {
-          status: response.status,
-          headers: responseHeaders
+        logger.error('M3U8 PROCESSING FAILED - USING FALLBACK', m3u8Error, {
+          errorType: m3u8Error.name,
+          errorMessage: m3u8Error.message,
+          processingDuration: Date.now() - m3u8ProcessingStart
         });
+        
+        // Fallback to original content
+        logger.warn('Attempting to read original M3U8 content as fallback');
+        try {
+          const fallbackContent = await response.text();
+          logger.info('Fallback M3U8 content read successfully', {
+            contentLength: fallbackContent.length
+          });
+          return new NextResponse(fallbackContent, {
+            status: response.status,
+            headers: responseHeaders
+          });
+        } catch (fallbackError) {
+          logger.error('FALLBACK ALSO FAILED', fallbackError);
+          throw m3u8Error; // Re-throw original error
+        }
       }
     } else if (isSubtitle) {
       // Handle subtitle files with proper content-type
       const subtitleProcessingStart = Date.now();
-      logger.info('Processing subtitle file', {
+      
+      logger.step(6, 'STARTING SUBTITLE PROCESSING', {
         originalUrl: streamUrl.substring(0, 100),
-        contentType,
+        contentType: contentType,
+        contentLength: response.headers.get('content-length'),
         isVTT: streamUrl.includes('.vtt'),
         isSRT: streamUrl.includes('.srt')
       });
 
       try {
+        logger.debug('Reading subtitle response body as text');
+        const textReadStart = Date.now();
         const subtitleContent = await response.text();
+        const textReadDuration = Date.now() - textReadStart;
+        
+        logger.step(7, 'SUBTITLE CONTENT READ', {
+          contentLength: subtitleContent.length,
+          readDuration: `${textReadDuration}ms`,
+          lineCount: subtitleContent.split('\n').length,
+          firstLine: subtitleContent.split('\n')[0]?.substring(0, 100),
+          hasWebVTTHeader: subtitleContent.includes('WEBVTT'),
+          hasCueTimings: subtitleContent.includes('-->')
+        });
         
         // Prepare response headers for subtitle
         const responseHeaders = getResponseHeaders(response, logger, true);
@@ -795,47 +1026,85 @@ export async function GET(request) {
         responseHeaders.set('X-RateLimit-Remaining', rateLimitResult.remaining?.toString() || '0');
         responseHeaders.set('X-RateLimit-Reset', new Date(Date.now() + RATE_LIMIT_CONFIG.windowMs).toISOString());
         
-        logger.info('Subtitle file processed successfully', {
+        logger.step(8, 'SUBTITLE PROCESSING COMPLETE', {
           originalLength: subtitleContent.length,
           processedLength: subtitleBuffer.length,
           contentType: responseHeaders.get('content-type'),
-          processingTime: Date.now() - subtitleProcessingStart,
+          processingTime: `${Date.now() - subtitleProcessingStart}ms`,
           rateLimitRemaining: rateLimitResult.remaining
         });
+        
+        logger.step(9, 'CREATING SUBTITLE RESPONSE', {
+          bufferLength: subtitleBuffer.length,
+          status: response.status,
+          headerCount: Array.from(responseHeaders.keys()).length
+        });
 
-        return new NextResponse(subtitleBuffer, {
+        const subtitleResponse = new NextResponse(subtitleBuffer, {
           status: response.status,
           headers: responseHeaders
         });
+        
+        logger.success('SUBTITLE RESPONSE CREATED SUCCESSFULLY', {
+          totalDuration: `${Date.now() - requestStartTime}ms`,
+          subtitleProcessingDuration: `${Date.now() - subtitleProcessingStart}ms`
+        });
+        
+        logger.memory();
+
+        return subtitleResponse;
       } catch (subtitleError) {
-        logger.error('Subtitle processing failed', subtitleError);
+        logger.error('SUBTITLE PROCESSING FAILED - USING FALLBACK', subtitleError, {
+          errorType: subtitleError.name,
+          errorMessage: subtitleError.message,
+          processingDuration: Date.now() - subtitleProcessingStart
+        });
+        
         // Fallback to original content
+        logger.warn('Streaming original subtitle content as fallback');
         const responseHeaders = getResponseHeaders(response, logger);
-        return new NextResponse(response.body, {
+        
+        const fallbackResponse = new NextResponse(response.body, {
           status: response.status,
           headers: responseHeaders
         });
+        
+        logger.info('Fallback subtitle response created');
+        
+        return fallbackResponse;
       }
     } else if (isTSSegment) {
       // Handle TS segments (including lightningbolt.site with wrong content type)
-      logger.info('Processing TS segment', {
-        originalUrl: streamUrl.substring(0, 100),
-        contentType,
-        hasWrongContentType: contentType.includes('image') && streamUrl.includes('.ts')
+      const tsProcessingStart = Date.now();
+      
+      logger.step(6, 'STARTING TS SEGMENT PROCESSING', {
+        originalUrl: streamUrl.substring(0, 150),
+        contentType: contentType,
+        contentLength: response.headers.get('content-length'),
+        hasWrongContentType: contentType.includes('image') && streamUrl.includes('.ts'),
+        isLightningbolt: streamUrl.includes('lightningbolt'),
+        hasBody: !!response.body,
+        bodyUsed: response.bodyUsed
       });
 
       // Prepare response headers with correct content type for TS segments
       const responseHeaders = getResponseHeaders(response, logger);
       
+      let contentTypeFixed = false;
+      let originalContentType = contentType;
+      
       // Fix content type for TS segments with wrong content type
       if (contentType.includes('image')) {
         responseHeaders.set('content-type', 'video/mp2t');
+        contentTypeFixed = true;
         logger.info('Fixed content type from image to video/mp2t for TS segment');
       } else if (!contentType || contentType.includes('application/octet-stream')) {
         responseHeaders.set('content-type', 'video/mp2t');
-        logger.info('Set content type to video/mp2t for TS segment');
+        contentTypeFixed = true;
+        logger.info('Set content type to video/mp2t for TS segment (was octet-stream)');
       } else if (!contentType || contentType === 'text/plain') {
         responseHeaders.set('content-type', 'video/mp2t');
+        contentTypeFixed = true;
         logger.info('Set content type to video/mp2t for TS segment (was text/plain)');
       }
 
@@ -843,38 +1112,54 @@ export async function GET(request) {
       responseHeaders.set('X-RateLimit-Remaining', rateLimitResult.remaining?.toString() || '0');
       responseHeaders.set('X-RateLimit-Reset', new Date(Date.now() + RATE_LIMIT_CONFIG.windowMs).toISOString());
 
-      logger.info('TS segment processed successfully', {
+      logger.step(7, 'TS SEGMENT HEADERS PREPARED', {
         status: response.status,
-        contentType: responseHeaders.get('content-type'),
-        rateLimitRemaining: rateLimitResult.remaining
+        originalContentType: originalContentType,
+        finalContentType: responseHeaders.get('content-type'),
+        contentTypeFixed: contentTypeFixed,
+        contentLength: responseHeaders.get('content-length'),
+        hasRangeSupport: !!responseHeaders.get('accept-ranges'),
+        rateLimitRemaining: rateLimitResult.remaining,
+        headerCount: Array.from(responseHeaders.keys()).length
       });
 
       // Stream the response directly for TS segments
-      return new NextResponse(response.body, {
+      const tsResponse = new NextResponse(response.body, {
         status: response.status,
         headers: responseHeaders
       });
+      
+      logger.success('TS SEGMENT RESPONSE CREATED SUCCESSFULLY', {
+        totalDuration: `${Date.now() - requestStartTime}ms`,
+        tsProcessingDuration: `${Date.now() - tsProcessingStart}ms`,
+        status: response.status
+      });
+      
+      logger.memory();
+
+      return tsResponse;
     } else {
       // Prepare response headers for non-M3U8 content
+      logger.step(6, 'PREPARING DIRECT STREAM RESPONSE', {
+        contentType: contentType || 'unknown',
+        contentLength: response.headers.get('content-length'),
+        hasBody: !!response.body,
+        bodyUsed: response.bodyUsed
+      });
+      
       const responseHeaders = getResponseHeaders(response, logger);
       
       // Stream the response directly for non-M3U8 content
       const responseStartTime = Date.now();
-      const streamResponse = new NextResponse(response.body, {
-        status: response.status,
-        headers: responseHeaders
-      });
 
       // Add rate limiting headers to response
       responseHeaders.set('X-RateLimit-Remaining', rateLimitResult.remaining?.toString() || '0');
       responseHeaders.set('X-RateLimit-Reset', new Date(Date.now() + RATE_LIMIT_CONFIG.windowMs).toISOString());
 
-      logger.info('Stream proxy completed successfully', {
-        totalDuration: Date.now() - requestStartTime,
-        streamSetupTime: Date.now() - responseStartTime,
+      logger.step(7, 'CREATING STREAM RESPONSE', {
         status: response.status,
-        contentType: contentType || 'unknown',
-        rateLimitRemaining: rateLimitResult.remaining
+        headerCount: Array.from(responseHeaders.keys()).length,
+        hasRateLimitHeaders: responseHeaders.has('X-RateLimit-Remaining')
       });
 
       const finalStreamResponse = new NextResponse(response.body, {
@@ -882,36 +1167,108 @@ export async function GET(request) {
         headers: responseHeaders
       });
 
+      logger.success('STREAM PROXY COMPLETED SUCCESSFULLY', {
+        totalDuration: `${Date.now() - requestStartTime}ms`,
+        streamSetupTime: `${Date.now() - responseStartTime}ms`,
+        status: response.status,
+        contentType: contentType || 'unknown',
+        rateLimitRemaining: rateLimitResult.remaining,
+        finalResponseStatus: finalStreamResponse.status
+      });
+      
+      logger.memory();
+
       return finalStreamResponse;
     }
 
   } catch (error) {
-    logger.error('Stream proxy failed', error, {
-      streamUrl: streamUrl.substring(0, 100),
-      requestDuration: Date.now() - requestStartTime,
-      errorType: error.name
+    console.log('\n💀💀💀 STREAM PROXY FATAL ERROR 💀💀💀');
+    console.log('═'.repeat(100));
+    
+    logger.error('STREAM PROXY FAILED WITH EXCEPTION', error, {
+      streamUrl: streamUrl?.substring(0, 150),
+      source: source,
+      requestDuration: `${Date.now() - requestStartTime}ms`,
+      errorType: error.name,
+      errorMessage: error.message,
+      errorCode: error.code,
+      errorCause: error.cause,
+      errorStack: error.stack?.split('\n').slice(0, 15).join('\n'),
+      isTimeout: error.name === 'AbortError' || error.name === 'TimeoutError',
+      isNetworkError: error.name === 'TypeError' && error.message.includes('fetch'),
+      isDNSError: error.code === 'ENOTFOUND' || error.code === 'EAI_AGAIN',
+      isConnectionRefused: error.code === 'ECONNREFUSED',
+      isConnectionReset: error.code === 'ECONNRESET',
+      isSSLError: error.message?.includes('SSL') || error.message?.includes('certificate'),
+      clientIp: clientIp
     });
 
     // Handle different error types
     let status = 500;
     let errorMessage = 'Stream proxy failed';
+    let errorCategory = 'UNKNOWN';
 
-    if (error.name === 'AbortError') {
+    if (error.name === 'AbortError' || error.name === 'TimeoutError') {
       status = 408;
       errorMessage = 'Stream request timeout';
+      errorCategory = 'TIMEOUT';
+      logger.warn('Request timed out', {
+        timeout: CONNECTION_POOL_CONFIG.timeout,
+        suggestion: 'Stream source may be slow or unresponsive'
+      });
     } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
       status = 502;
       errorMessage = 'Failed to connect to stream source';
+      errorCategory = 'NETWORK';
+      logger.warn('Network connection failed', {
+        suggestion: 'Stream source may be down or unreachable'
+      });
+    } else if (error.code === 'ENOTFOUND' || error.code === 'EAI_AGAIN') {
+      status = 502;
+      errorMessage = 'DNS resolution failed';
+      errorCategory = 'DNS';
+      logger.warn('DNS lookup failed', {
+        suggestion: 'Stream source hostname cannot be resolved'
+      });
+    } else if (error.code === 'ECONNREFUSED') {
+      status = 502;
+      errorMessage = 'Connection refused by stream source';
+      errorCategory = 'CONNECTION_REFUSED';
+      logger.warn('Connection refused', {
+        suggestion: 'Stream source is not accepting connections'
+      });
+    } else if (error.code === 'ECONNRESET') {
+      status = 502;
+      errorMessage = 'Connection reset by stream source';
+      errorCategory = 'CONNECTION_RESET';
+      logger.warn('Connection reset', {
+        suggestion: 'Stream source closed the connection unexpectedly'
+      });
+    } else if (error.message?.includes('SSL') || error.message?.includes('certificate')) {
+      status = 502;
+      errorMessage = 'SSL/TLS error';
+      errorCategory = 'SSL';
+      logger.warn('SSL/TLS error', {
+        suggestion: 'Stream source has certificate issues'
+      });
     }
+
+    logger.memory();
 
     return NextResponse.json({
       success: false,
       error: errorMessage,
+      errorCategory: errorCategory,
       details: error.message,
       requestId,
       timing: {
-        totalDuration: Date.now() - requestStartTime,
+        totalDuration: `${Date.now() - requestStartTime}ms`,
         timestamp: new Date().toISOString()
+      },
+      debug: {
+        errorName: error.name,
+        errorCode: error.code,
+        streamUrl: streamUrl?.substring(0, 100) + '...'
       }
     }, { status });
   }
