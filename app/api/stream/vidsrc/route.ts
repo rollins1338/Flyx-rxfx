@@ -50,11 +50,10 @@ export async function GET(request: NextRequest) {
       );
     }
     
-    // Return success with all URL variants
+    // Return success
     return NextResponse.json({
       success: true,
       url: result.url,
-      urls: result.urls || [result.url],
       method: result.method,
       provider: 'vidsrc'
     });
