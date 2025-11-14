@@ -7,7 +7,6 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { extractCloudStream } from '@/app/lib/services/cloudstream-pure-fetch';
 
 export async function GET(request: NextRequest) {
   try {
@@ -44,18 +43,38 @@ export async function GET(request: NextRequest) {
     // Use the new RCP extraction system
     console.log('Extracting stream:', { tmdbId, type, season, episode });
     
-    // Import the RCP extractor
-    const { extractFromProvider } = await import('@/app/lib/services/rcp/index');
+    // Import the RCP extractors
+    const { twoEmbedExtractor } = await import('@/app/lib/services/rcp/providers/2embed-extractor');
+    const { superembedExtractor } = await import('@/app/lib/services/rcp/providers/superembed-extractor');
     
-    // Try providers in order: vidsrc, 2embed, superembed
-    const providers = ['vidsrc', '2embed', 'superembed'] as const;
-    let result = null;
+    let result: any = null;
     
-    for (const provider of providers) {
-      console.log(`Trying provider: ${provider}`);
+    // Try 2embed first
+    console.log('Trying 2embed...');
+    try {
+      result = await twoEmbedExtractor.extract({
+        tmdbId,
+        type,
+        season,
+        episode,
+      });
+      
+      if (result.success) {
+        console.log('✓ 2embed succeeded!');
+      } else {
+        console.log(`✗ 2embed failed: ${result.error}`);
+        result = null;
+      }
+    } catch (err) {
+      console.log('✗ 2embed error:', err);
+      result = null;
+    }
+    
+    // Try superembed if 2embed failed
+    if (!result) {
+      console.log('Trying superembed...');
       try {
-        result = await extractFromProvider({
-          provider,
+        result = await superembedExtractor.extract({
           tmdbId,
           type,
           season,
@@ -63,13 +82,14 @@ export async function GET(request: NextRequest) {
         });
         
         if (result.success) {
-          console.log(`✓ ${provider} succeeded!`);
-          break;
+          console.log('✓ Superembed succeeded!');
         } else {
-          console.log(`✗ ${provider} failed: ${result.error}`);
+          console.log(`✗ Superembed failed: ${result.error}`);
+          result = null;
         }
       } catch (err) {
-        console.log(`✗ ${provider} error:`, err);
+        console.log('✗ Superembed error:', err);
+        result = null;
       }
     }
     
