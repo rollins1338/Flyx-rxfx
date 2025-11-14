@@ -62,27 +62,25 @@ export class PlaceholderResolver {
 
     // If no placeholders, return original URL
     if (!placeholders || placeholders.length === 0) {
-      logger.debug(this.requestId, 'PlaceholderResolver', 'No placeholders found in URL', {
+      logger.debug(this.requestId, 'No placeholders found in URL', {
         url,
-        duration: Date.now() - startTime,
-      });
+      }, undefined, 'PlaceholderResolver', Date.now() - startTime);
       return [url];
     }
 
-    logger.debug(this.requestId, 'PlaceholderResolver', 'Found placeholders', {
+    logger.debug(this.requestId, 'Found placeholders', {
       url,
       placeholders,
-    });
+    }, undefined, 'PlaceholderResolver');
 
     // Recursively resolve all placeholders
     const resolvedUrls = this.resolveRecursive(url);
 
-    logger.info(this.requestId, 'PlaceholderResolver', 'Resolved placeholders', {
+    logger.info(this.requestId, 'Resolved placeholders', {
       originalUrl: url,
       resolvedCount: resolvedUrls.length,
       primaryUrl: resolvedUrls[0],
-      duration: Date.now() - startTime,
-    });
+    }, undefined, 'PlaceholderResolver', Date.now() - startTime);
 
     return resolvedUrls;
   }
@@ -112,10 +110,10 @@ export class PlaceholderResolver {
 
     if (!replacements || replacements.length === 0) {
       // Unknown placeholder - keep it as is and log warning
-      logger.warn(this.requestId, 'PlaceholderResolver', 'Unknown placeholder', {
+      logger.warn(this.requestId, 'Unknown placeholder', {
         placeholder: firstPlaceholder,
         url,
-      });
+      }, undefined, 'PlaceholderResolver');
 
       // Try to extract the placeholder content and use it as-is
       const fallback = firstPlaceholder.slice(1, -1); // Remove { and }
