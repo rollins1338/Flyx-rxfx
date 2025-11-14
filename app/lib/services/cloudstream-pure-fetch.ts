@@ -10,6 +10,7 @@ interface ExtractionResult {
   url?: string;
   method?: string;
   error?: string;
+  logs?: string[];
 }
 
 /**
@@ -129,25 +130,40 @@ export async function extractCloudStream(
   season?: number,
   episode?: number
 ): Promise<ExtractionResult> {
+  const logs: string[] = [];
+  
   try {
     // Step 1: Fetch VidSrc embed page
     let embedUrl = `https://vidsrc-embed.ru/embed/${type}/${tmdbId}`;
     if (type === 'tv' && season && episode) {
       embedUrl += `/${season}/${episode}`;
     }
-
+    
+    logs.push(`[1] Fetching embed page: ${embedUrl}`);
+    console.log(`[1] Fetching embed page: ${embedUrl}`);
     const embedPage = await fetchPage(embedUrl);
+    logs.push(`[1] ✓ Embed page fetched (${embedPage.length} bytes)`);
+    console.log(`[1] ✓ Embed page fetched (${embedPage.length} bytes)`);
 
     // Step 2: Extract hash
     const hashMatch = embedPage.match(/data-hash=["']([^"']+)["']/);
     if (!hashMatch) {
-      return { success: false, error: 'Hash not found in embed page' };
+      const error = 'Hash not found in embed page';
+      logs.push(`[2] ✗ ${error}`);
+      console.error(`[2] ✗ ${error}`);
+      return { success: false, error, logs };
     }
     const hash = hashMatch[1];
+    logs.push(`[2] ✓ Hash extracted: ${hash}`);
+    console.log(`[2] ✓ Hash extracted: ${hash}`);
 
     // Step 3: Fetch RCP page
     const rcpUrl = `https://cloudnestra.com/rcp/${hash}`;
+    logs.push(`[3] Fetching RCP page: ${rcpUrl}`);
+    console.log(`[3] Fetching RCP page: ${rcpUrl}`);
     const rcpPage = await fetchPage(rcpUrl, embedUrl);
+    logs.push(`[3] ✓ RCP page fetched (${rcpPage.length} bytes)`);
+    console.log(`[3] ✓ RCP page fetched (${rcpPage.length} bytes)`);
 
     // Step 4: Extract player URL
     let playerUrl: string | null = null;
@@ -172,21 +188,35 @@ export async function extractCloudStream(
     }
 
     if (!playerUrl) {
-      return { success: false, error: 'Player URL not found' };
+      const error = 'Player URL not found';
+      logs.push(`[4] ✗ ${error}`);
+      console.error(`[4] ✗ ${error}`);
+      return { success: false, error, logs };
     }
+    logs.push(`[4] ✓ Player URL found: ${playerUrl}`);
+    console.log(`[4] ✓ Player URL found: ${playerUrl}`);
 
     // Step 5: Fetch player page
+    logs.push(`[5] Fetching player page: ${playerUrl}`);
+    console.log(`[5] Fetching player page: ${playerUrl}`);
     const playerPage = await fetchPage(playerUrl, rcpUrl);
+    logs.push(`[5] ✓ Player page fetched (${playerPage.length} bytes)`);
+    console.log(`[5] ✓ Player page fetched (${playerPage.length} bytes)`);
 
     // Step 6: Extract hidden div
     const hiddenDivMatch = playerPage.match(
       /<div[^>]+id="([^"]+)"[^>]*style="display:\s*none;?"[^>]*>([^<]+)<\/div>/i
     );
     if (!hiddenDivMatch) {
-      return { success: false, error: 'Hidden div not found' };
+      const error = 'Hidden div not found';
+      logs.push(`[6] ✗ ${error}`);
+      console.error(`[6] ✗ ${error}`);
+      return { success: false, error, logs };
     }
 
     const encoded = hiddenDivMatch[2];
+    logs.push(`[6] ✓ Hidden div found, encoded length: ${encoded.length}`);
+    console.log(`[6] ✓ Hidden div found, encoded: ${encoded.substring(0, 50)}...`);
 
     // Step 7: Try all decoding methods
     let decoded: string | null = null;
@@ -278,22 +308,37 @@ export async function extractCloudStream(
     });
 
     // Try all methods
+    logs.push(`[7] Trying ${allMethods.length} decoder methods...`);
+    console.log(`[7] Trying ${allMethods.length} decoder methods...`);
+    
     for (const method of allMethods) {
       try {
         const result = method.fn(encoded);
         if (result && (result.includes('http://') || result.includes('https://'))) {
           decoded = result;
           usedDecoder = method.name;
+          logs.push(`[7] ✓ Decoder succeeded: ${method.name}`);
+          console.log(`[7] ✓ Decoder succeeded: ${method.name}`);
+          console.log(`[7] Decoded URL: ${result}`);
           break;
         }
-      } catch {}
+      } catch (err) {
+        // Silent fail, try next method
+      }
     }
 
     if (!decoded) {
-      return { success: false, error: 'All decoders failed' };
+      const error = `All ${allMethods.length} decoders failed`;
+      logs.push(`[7] ✗ ${error}`);
+      console.error(`[7] ✗ ${error}`);
+      console.error(`[7] Encoded data was: ${encoded}`);
+      return { success: false, error, logs };
     }
 
     // Step 8: Resolve CDN placeholders
+    logs.push(`[8] Resolving CDN placeholders...`);
+    console.log(`[8] Resolving CDN placeholders...`);
+    
     const cdnMappings: Record<string, string> = {
       '{v1}': 'shadowlandschronicles.com',
       '{v2}': 'shadowlandschronicles.net',
@@ -310,22 +355,36 @@ export async function extractCloudStream(
       resolved = resolved.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), replacement);
     }
 
+    logs.push(`[8] ✓ Placeholders resolved`);
+    console.log(`[8] ✓ Final URL: ${resolved}`);
+    
     // Step 9: Extract M3U8 URL
     const m3u8Match = resolved.match(/https?:\/\/[^\s"'<>]+\.m3u8[^\s"'<>]*/);
 
     if (!m3u8Match) {
-      return { success: false, error: 'M3U8 URL not found in decoded data' };
+      const error = 'M3U8 URL not found in decoded data';
+      logs.push(`[9] ✗ ${error}`);
+      console.error(`[9] ✗ ${error}`);
+      console.error(`[9] Resolved data was: ${resolved}`);
+      return { success: false, error, logs };
     }
+
+    const finalUrl = m3u8Match[0];
+    logs.push(`[9] ✓ M3U8 URL extracted: ${finalUrl}`);
+    logs.push(`[✓] SUCCESS - Method: ${usedDecoder}`);
+    console.log(`[9] ✓ M3U8 URL extracted: ${finalUrl}`);
+    console.log(`[✓] SUCCESS - Method: ${usedDecoder}`);
 
     return {
       success: true,
-      url: m3u8Match[0],
+      url: finalUrl,
       method: usedDecoder || 'unknown',
+      logs,
     };
   } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    logs.push(`[✗] FATAL ERROR: ${errorMsg}`);
+    console.error(`[✗] FATAL ERROR:`, error);
+    return { success: false, error: errorMsg, logs };
   }
 }

@@ -48,20 +48,32 @@ export async function GET(request: NextRequest) {
 
     if (!result.success) {
       console.error('Extraction failed:', result.error);
+      console.error('Extraction logs:', result.logs);
       return NextResponse.json(
-        { error: result.error || 'Extraction failed' },
+        { 
+          error: result.error || 'Extraction failed',
+          logs: result.logs,
+          debug: {
+            tmdbId,
+            type,
+            season,
+            episode,
+          }
+        },
         { status: 404 }
       );
     }
 
     // Return success
+    console.log('Extraction successful!');
     return NextResponse.json({
       success: true,
       streamUrl: result.url,
       url: result.url,
       method: result.method,
       provider: 'cloudstream',
-      requiresProxy: false, // Direct M3U8 URL
+      requiresProxy: false,
+      logs: result.logs,
     });
 
   } catch (error) {
