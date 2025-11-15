@@ -3,7 +3,7 @@
  * No VM, no Puppeteer - just HTTP requests and Caesar cipher decoding
  */
 
-import * as https from 'https';
+import * as cheerio from 'cheerio';
 
 interface FetchOptions {
   referer?: string;
@@ -11,29 +11,19 @@ interface FetchOptions {
 }
 
 async function fetchPage(url: string, options: FetchOptions = {}): Promise<string> {
-  return new Promise((resolve, reject) => {
-    https.get(
-      url,
-      {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          Referer: options.referer || '',
-          ...options.headers,
-        },
-      },
-      (res) => {
-        let data = '';
-        res.on('data', (chunk) => (data += chunk));
-        res.on('end', () => {
-          if (res.statusCode && res.statusCode >= 400) {
-            reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`));
-          } else {
-            resolve(data);
-          }
-        });
-      }
-    ).on('error', reject);
+  const response = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      Referer: options.referer || '',
+      ...options.headers,
+    },
   });
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+
+  return response.text();
 }
 
 function caesarDecode(str: string, shift: number): string {
@@ -80,13 +70,12 @@ export async function extractVidsrcPro(
     }`;
 
     const embedHtml = await fetchPage(embedUrl);
-    const dataHashMatch = embedHtml.match(/data-hash="([^"]+)"/);
+    const $ = cheerio.load(embedHtml);
+    const dataHash = $('[data-hash]').first().attr('data-hash');
 
-    if (!dataHashMatch) {
+    if (!dataHash) {
       return { success: false, error: 'Data hash not found in embed page' };
     }
-
-    const dataHash = dataHashMatch[1];
 
     // Step 2: Get ProRCP URL from RCP endpoint
     const rcpUrl = `https://cloudnestra.com/rcp/${dataHash}`;
@@ -106,33 +95,18 @@ export async function extractVidsrcPro(
       referer: 'https://vidsrc-embed.ru/',
     });
 
-    // Find div with encoded URL using multiple regex patterns
+    // Find div with encoded URL using cheerio
+    const $$ = cheerio.load(proRcpHtml);
     let encodedUrl: string | null = null;
 
-    // Pattern 1: Simple div with direct content
-    const divRegex1 = /<div[^>]+id="[^"]+"[^>]*>([^<]+)<\/div>/g;
-    let match;
-
-    while ((match = divRegex1.exec(proRcpHtml)) !== null) {
-      const content = match[1].trim();
-      if (content.length > 100 && content.includes('://')) {
+    $$('div[id]').each((_i, elem) => {
+      const content = $$(elem).text().trim();
+      // Look for long content with :// pattern
+      if (content.length > 100 && content.includes('://') && !content.includes('<')) {
         encodedUrl = content;
-        break;
+        return false; // Stop iteration
       }
-    }
-
-    // Pattern 2: Capture everything between div tags that contains ://
-    if (!encodedUrl) {
-      const divRegex2 = /<div[^>]+id="[^"]+"[^>]*>([\s\S]*?)<\/div>/g;
-      while ((match = divRegex2.exec(proRcpHtml)) !== null) {
-        const content = match[1].trim();
-        // Look for URL pattern in the content
-        if (content.length > 100 && content.includes('://') && !content.includes('<')) {
-          encodedUrl = content;
-          break;
-        }
-      }
-    }
+    });
 
     if (!encodedUrl) {
       return { success: false, error: 'Encoded URL not found in ProRCP page' };
