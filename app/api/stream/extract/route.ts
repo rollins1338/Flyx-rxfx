@@ -107,12 +107,13 @@ export async function GET(request: NextRequest) {
     }
     console.log('[EXTRACT] URL decoded:', decodedResult.url.substring(0, 50) + '...');
 
-    // Step 7: Resolve placeholders
-    const resolvedUrl = resolvePlaceholders(decodedResult.url);
-    console.log('[EXTRACT] Placeholders resolved');
+    // Step 7: Resolve placeholders (returns array of URLs)
+    const resolvedUrls = resolvePlaceholders(decodedResult.url);
+    console.log('[EXTRACT] Placeholders resolved, got', resolvedUrls.length, 'URLs');
 
-    // Step 8: Validate M3U8
-    const validation = await validateM3U8Url(resolvedUrl);
+    // Step 8: Validate M3U8 (use first URL)
+    const primaryUrl = resolvedUrls[0];
+    const validation = await validateM3U8Url(primaryUrl);
     if (!validation.isValid) {
       console.error('[EXTRACT] M3U8 validation failed:', validation.error);
       return NextResponse.json({ error: 'Invalid M3U8 URL: ' + validation.error }, { status: 404 });
@@ -120,7 +121,7 @@ export async function GET(request: NextRequest) {
     console.log('[EXTRACT] M3U8 validated successfully');
 
     // Return success with proxied URL
-    const proxiedUrl = `/api/stream-proxy?url=${encodeURIComponent(resolvedUrl)}&referer=${encodeURIComponent('https://vidsrc-embed.ru/')}&origin=${encodeURIComponent('https://vidsrc-embed.ru')}`;
+    const proxiedUrl = `/api/stream-proxy?url=${encodeURIComponent(primaryUrl)}&referer=${encodeURIComponent('https://vidsrc-embed.ru/')}&origin=${encodeURIComponent('https://vidsrc-embed.ru')}`;
     
     return NextResponse.json({
       success: true,
