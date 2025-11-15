@@ -1,7 +1,7 @@
 /**
- * Stream Extract API - Cheerio-Based Extraction
+ * Stream Extract API - Direct RCP Extraction with Cheerio
  * 
- * Uses the proven Cheerio method from VIDSRC-PRO-SUCCESS.md
+ * Uses Cheerio-based extraction with Caesar cipher decoding
  * GET /api/stream/extract?tmdbId=550&type=movie
  * GET /api/stream/extract?tmdbId=1396&type=tv&season=1&episode=1
  */
@@ -63,8 +63,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Cheerio-based extraction (proven method from VIDSRC-PRO-SUCCESS.md)
-    console.log('[EXTRACT] Start - Using Cheerio method');
+    // Cheerio-based RCP extraction
+    console.log('[EXTRACT] Start - Cheerio method');
     
     const embedUrl = `https://vidsrc.xyz/embed/${type}/${tmdbId}${type === 'tv' ? `/${season}/${episode}` : ''}`;
     console.log('[EXTRACT] Embed:', embedUrl);
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
     const $embed = cheerio.load(embedHtml);
     let dataHash = $embed('[data-hash]').first().attr('data-hash');
     
-    // Fallback: search in scripts if not found in attributes
+    // Fallback: search in scripts
     if (!dataHash) {
       const scripts = $embed('script');
       for (let i = 0; i < scripts.length; i++) {
@@ -99,9 +99,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'data-hash not found' }, { status: 404 });
     }
     
-    console.log('[EXTRACT] Hash:', dataHash.substring(0, 50) + '...');
+    console.log('[EXTRACT] Hash found');
     
-    // Step 2: Get RCP page and extract ProRCP iframe src using Cheerio
+    // Step 2: Get RCP page
     const rcpHtml = await fetch(`https://cloudnestra.com/rcp/${dataHash}`, {
       headers: { 
         'Referer': 'https://vidsrc-embed.ru/', 
@@ -110,16 +110,27 @@ export async function GET(request: NextRequest) {
       }
     }).then(r => r.text());
     
-    // Try to extract iframe src from JavaScript
-    const srcMatch = rcpHtml.match(/src:\s*['"]([^'"]+)['"]/);
+    // Extract iframe src
+    let srcMatch = rcpHtml.match(/src:\s*['"]([^'"]+)['"]/);
+    
+    if (!srcMatch) {
+      const $rcp = cheerio.load(rcpHtml);
+      const iframeSrc = $rcp('iframe[src]').first().attr('src');
+      if (iframeSrc && (iframeSrc.includes('/prorcp/') || iframeSrc.includes('/srcrcp/'))) {
+        srcMatch = ['', iframeSrc];
+      }
+    }
+    
     if (!srcMatch) {
       return NextResponse.json({ error: 'ProRCP iframe not found' }, { status: 404 });
     }
     
-    const proRcpUrl = `https://cloudnestra.com${srcMatch[1]}`;
-    console.log('[EXTRACT] ProRCP:', proRcpUrl.substring(0, 80) + '...');
+    const proRcpUrl = srcMatch[1].startsWith('http') 
+      ? srcMatch[1] 
+      : `https://cloudnestra.com${srcMatch[1]}`;
+    console.log('[EXTRACT] ProRCP URL found');
     
-    // Step 3: Get ProRCP page and extract hidden div using Cheerio
+    // Step 3: Get ProRCP page and extract hidden div
     const proRcpHtml = await fetch(proRcpUrl, {
       headers: { 
         'Referer': 'https://vidsrc-embed.ru/', 
@@ -130,7 +141,6 @@ export async function GET(request: NextRequest) {
     
     const $proRcp = cheerio.load(proRcpHtml);
     
-    // Extract hidden div with display:none and substantial content
     let divId = '';
     let encoded = '';
     
@@ -140,11 +150,10 @@ export async function GET(request: NextRequest) {
       const id = $elem.attr('id');
       const content = $elem.html();
       
-      // Look for hidden divs with display:none and content > 500 chars
-      if (style && style.includes('display:none') && id && content && content.length > 500) {
+      if (style && style.includes('display:none') && id && content && content.length > 50) {
         divId = id;
         encoded = content.trim();
-        return false; // Stop iteration
+        return false;
       }
     });
     
@@ -152,29 +161,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Hidden div not found' }, { status: 404 });
     }
     
-    console.log('[EXTRACT] Div ID:', divId);
-    console.log('[EXTRACT] Encoded preview:', encoded.substring(0, 100));
+    console.log('[EXTRACT] Hidden div found, length:', encoded.length);
     
-    // Try base64 decode first (URL-safe)
-    let decoded = '';
-    try {
-      const base64 = encoded.replace(/_/g, '/').replace(/-/g, '+');
-      decoded = Buffer.from(base64, 'base64').toString('utf-8');
-      console.log('[EXTRACT] Base64 decoded:', decoded.substring(0, 100));
-    } catch (e) {
-      // Fallback to Caesar if base64 fails
-      decoded = caesarDecode(encoded, 3);
-      console.log('[EXTRACT] Caesar decoded:', decoded.substring(0, 100));
-    }
-    
+    // Step 4: Decode with Caesar cipher +3
+    const decoded = caesarDecode(encoded, 3);
     const resolved = resolvePlaceholders(decoded).split(' or ')[0];
-    console.log('[EXTRACT] Final URL:', resolved);
     
     if (!resolved.startsWith('http')) {
-      return NextResponse.json({ error: 'Decoded URL invalid: ' + resolved.substring(0, 50) }, { status: 500 });
+      return NextResponse.json({ error: 'Decoded URL invalid' }, { status: 500 });
     }
     
-    console.log('[EXTRACT] Success');
+    console.log('[EXTRACT] Success!');
     
     const proxiedUrl = `/api/stream-proxy?url=${encodeURIComponent(resolved)}&referer=${encodeURIComponent('https://vidsrc-embed.ru/')}&origin=${encodeURIComponent('https://vidsrc-embed.ru')}`;
     
@@ -182,7 +179,7 @@ export async function GET(request: NextRequest) {
       success: true,
       streamUrl: proxiedUrl,
       url: proxiedUrl,
-      provider: 'vidsrc-simple',
+      provider: 'vidsrc-cheerio',
       requiresProxy: true,
     });
 
