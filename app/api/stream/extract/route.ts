@@ -114,7 +114,7 @@ export async function GET(request: NextRequest) {
     // Step 8: Validate M3U8 (use first URL)
     const primaryUrl = resolvedUrls[0];
     const validation = await validateM3U8Url(primaryUrl);
-    if (!validation.isValid) {
+    if (!validation.valid) {
       console.error('[EXTRACT] M3U8 validation failed:', validation.error);
       return NextResponse.json({ error: 'Invalid M3U8 URL: ' + validation.error }, { status: 404 });
     }
