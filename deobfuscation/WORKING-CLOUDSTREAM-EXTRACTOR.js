@@ -92,12 +92,31 @@ async function extractCloudStreamM3U8() {
     // 2. Base64 variants
     allMethods.push({ name: 'Base64', fn: (s) => tryBase64(s) });
     allMethods.push({ name: 'Reverse Base64', fn: (s) => tryReverseBase64(s) });
+    allMethods.push({ name: 'Double Base64', fn: (s) => tryDoubleBase64(s) });
     
     // 3. Hex variants
     allMethods.push({ name: 'Hex', fn: (s) => tryHex(s) });
     allMethods.push({ name: 'Hex (g=8, :=/)', fn: (s) => s.replace(/g/g, '8').replace(/:/g, '/') });
     
-    // 4. Base64 + Caesar combinations
+    // 4. XOR with divId and common keys
+    const xorKeys = [divId, '0', '1', '2', '3', '4', '5', 'key', 'secret', 'pass'];
+    for (const key of xorKeys) {
+      allMethods.push({
+        name: `Hex + XOR(${key})`,
+        fn: (s) => tryHexXor(s, key)
+      });
+    }
+    
+    // 5. Hex + XOR with divId bytes
+    for (let i = 0; i < Math.min(divId.length, 5); i++) {
+      const keyByte = divId.charCodeAt(i);
+      allMethods.push({
+        name: `Hex + XOR(divId[${i}]=${keyByte})`,
+        fn: (s) => tryHexXorByte(s, keyByte)
+      });
+    }
+    
+    // 6. Base64 + Caesar combinations
     for (let shift = -25; shift <= 25; shift++) {
       if (shift === 0) continue;
       allMethods.push({
@@ -106,7 +125,7 @@ async function extractCloudStreamM3U8() {
       });
     }
     
-    // 5. Reverse Base64 + Caesar combinations
+    // 7. Reverse Base64 + Caesar combinations
     for (let shift = -25; shift <= 25; shift++) {
       if (shift === 0) continue;
       allMethods.push({
@@ -115,7 +134,7 @@ async function extractCloudStreamM3U8() {
       });
     }
     
-    // 6. Hex + Caesar combinations
+    // 8. Hex + Caesar combinations
     for (let shift = -25; shift <= 25; shift++) {
       if (shift === 0) continue;
       allMethods.push({
@@ -124,7 +143,38 @@ async function extractCloudStreamM3U8() {
       });
     }
     
-    // 7. ROT13
+    // 9. Hex + XOR + Caesar combinations (for the most complex encryption)
+    for (const key of [divId, '0', '1']) {
+      for (let shift of [3, -3, 1, -1]) {
+        allMethods.push({
+          name: `Hex + XOR(${key}) + Caesar ${shift}`,
+          fn: (s) => {
+            const xored = tryHexXor(s, key);
+            return xored ? caesarShift(xored, shift) : null;
+          }
+        });
+      }
+    }
+    
+    // 10. URL-safe Base64 + XOR with divId (NEW METHOD - Nov 2024)
+    allMethods.push({
+      name: `URL-safe Base64 + XOR(divId)`,
+      fn: (s) => tryUrlSafeBase64Xor(s, divId)
+    });
+    
+    // 11. URL-safe Base64 + XOR + Caesar combinations
+    for (let shift = -25; shift <= 25; shift++) {
+      if (shift === 0) continue;
+      allMethods.push({
+        name: `URL-safe Base64 + XOR(divId) + Caesar ${shift}`,
+        fn: (s) => {
+          const xored = tryUrlSafeBase64Xor(s, divId);
+          return xored ? caesarShift(xored, shift) : null;
+        }
+      });
+    }
+    
+    // 10. ROT13
     allMethods.push({
       name: 'ROT13',
       fn: (s) => s.replace(/[a-zA-Z]/g, c => {
@@ -134,7 +184,7 @@ async function extractCloudStreamM3U8() {
       })
     });
     
-    // 8. Atbash (reverse alphabet)
+    // 11. Atbash (reverse alphabet)
     allMethods.push({
       name: 'Atbash',
       fn: (s) => s.split('').map(c => {
@@ -145,7 +195,20 @@ async function extractCloudStreamM3U8() {
       }).join('')
     });
     
+    // 12. URL decode variants
+    allMethods.push({
+      name: 'URL Decode',
+      fn: (s) => {
+        try {
+          return decodeURIComponent(s);
+        } catch {
+          return null;
+        }
+      }
+    });
+    
     // Try all methods
+    console.log(`Trying ${allMethods.length} decoding methods...`);
     for (const method of allMethods) {
       try {
         const result = method.fn(encoded);
@@ -218,12 +281,19 @@ function tryBase64(str) {
     str.replace(/=+$/, ''),                      // Remove trailing =
     str.replace(/^=+/, '').replace(/=+$/, ''),  // Remove both
     str.replace(/_/g, '/').replace(/-/g, '+'),  // URL-safe
-    str.replace(/^=+/, '').replace(/_/g, '/').replace(/-/g, '+')  // Both
+    str.replace(/^=+/, '').replace(/_/g, '/').replace(/-/g, '+'),  // Both
+    str.replace(/^=+/, '').replace(/-/g, '+').replace(/_/g, '/')  // URL-safe with leading = removed
   ];
   
   for (const variant of variants) {
     try {
-      const decoded = Buffer.from(variant, 'base64').toString('utf8');
+      // Add padding if needed
+      let padded = variant;
+      while (padded.length % 4 !== 0) {
+        padded += '=';
+      }
+      
+      const decoded = Buffer.from(padded, 'base64').toString('utf8');
       if (decoded && decoded.length > 0) return decoded;
     } catch {}
   }
@@ -255,6 +325,100 @@ function tryHex(str) {
     if (decoded.includes('http')) return decoded;
     
     return decoded;
+  } catch {
+    return null;
+  }
+}
+
+function tryDoubleBase64(str) {
+  try {
+    const first = tryBase64(str);
+    if (!first) return null;
+    const second = tryBase64(first);
+    return second;
+  } catch {
+    return null;
+  }
+}
+
+function tryHexXor(str, key) {
+  try {
+    const cleaned = str.replace(/[^0-9a-fA-F]/g, '');
+    if (cleaned.length % 2 !== 0) return null;
+    
+    const hexBytes = Buffer.from(cleaned, 'hex');
+    const keyBytes = Buffer.from(key, 'utf8');
+    const xored = Buffer.alloc(hexBytes.length);
+    
+    for (let i = 0; i < hexBytes.length; i++) {
+      xored[i] = hexBytes[i] ^ keyBytes[i % keyBytes.length];
+    }
+    
+    const result = xored.toString('utf8');
+    // Check if result contains printable characters
+    if (result.match(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]/g)?.length > result.length * 0.3) {
+      return null; // Too many non-printable chars
+    }
+    
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+function tryHexXorByte(str, keyByte) {
+  try {
+    const cleaned = str.replace(/[^0-9a-fA-F]/g, '');
+    if (cleaned.length % 2 !== 0) return null;
+    
+    const hexBytes = Buffer.from(cleaned, 'hex');
+    const xored = Buffer.alloc(hexBytes.length);
+    
+    for (let i = 0; i < hexBytes.length; i++) {
+      xored[i] = hexBytes[i] ^ keyByte;
+    }
+    
+    const result = xored.toString('utf8');
+    // Check if result contains printable characters
+    if (result.match(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]/g)?.length > result.length * 0.3) {
+      return null; // Too many non-printable chars
+    }
+    
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+function tryUrlSafeBase64Xor(str, key) {
+  try {
+    // Remove leading = signs
+    let cleaned = str.replace(/^=+/, '');
+    
+    // Replace URL-safe characters with standard Base64
+    cleaned = cleaned.replace(/-/g, '+').replace(/_/g, '/');
+    
+    // Add padding if needed
+    while (cleaned.length % 4 !== 0) {
+      cleaned += '=';
+    }
+    
+    const base64Decoded = Buffer.from(cleaned, 'base64');
+    const keyBytes = Buffer.from(key, 'utf8');
+    const xored = Buffer.alloc(base64Decoded.length);
+    
+    for (let i = 0; i < base64Decoded.length; i++) {
+      xored[i] = base64Decoded[i] ^ keyBytes[i % keyBytes.length];
+    }
+    
+    const result = xored.toString('utf8');
+    
+    // Check if result contains printable characters
+    if (result.match(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]/g)?.length > result.length * 0.3) {
+      return null; // Too many non-printable chars
+    }
+    
+    return result;
   } catch {
     return null;
   }

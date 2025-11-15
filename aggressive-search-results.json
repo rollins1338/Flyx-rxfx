@@ -1,0 +1,13 @@
+{
+  "getElementByIdMatches": 0,
+  "windowAssignMatches": 0,
+  "elementIdMatches": 0,
+  "evalCount": 1,
+  "functionCount": 0,
+  "decoderMatches": 0,
+  "details": {
+    "getElementById": [],
+    "windowAssign": [],
+    "decoders": []
+  }
+}

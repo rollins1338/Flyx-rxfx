@@ -1,0 +1,44 @@
+{
+  "patterns": {
+    "atobXor": [
+      {
+        "name": "Ar",
+        "code": "function Ar(e){return Uint8Array.from(atob(e),(function(e){return e.charCodeAt(0)}"
+      }
+    ],
+    "reverseString": [
+      {
+        "name": "Ve",
+        "code": "function Ve(e){if(e.startsWith(\"av01.\")){for(var t=e.split(\".\"),r=[\"0\",\"111\",\"01\",\"01\",\"01\",\"0\"],i=t.length;i>4&&i<10;i++)t[i]=r[i-4];return t.join(\".\")}"
+      }
+    ],
+    "pjsdivProcessor": [],
+    "urlSafeBase64": [
+      {
+        "name": "Q",
+        "code": "function Q(e){return Uint8Array.from(e.replace(/^0x/,\"\").replace(/([\\da-fA-F]{2}"
+      },
+      {
+        "name": "ur",
+        "code": "function ur(e,t){if(null!==e.variableList||e.hasVariableRefs){var r=e.variableList;return t.replace(or,(function(t){var i=t.substring(2,t.length-1),n=null==r?void 0:r[i];return void 0===n?(e.playlistParsingError||(e.playlistParsingError=new Error('Missing preceding EXT-X-DEFINE tag for Variable Reference: \"'+i+'\"')),t):n}"
+      },
+      {
+        "name": "Po",
+        "code": "function Po(e,t,r){var i=e;function n(){var t=Io(e);if(null===t)throw new Error(\"Malformed timestamp: \"+i);return e=e.replace(/^[^\\sa-zA-Z-]+/,\"\"),t}"
+      },
+      {
+        "name": "Fo",
+        "code": "function Fo(e,t,r,i,n,a,s){var o,l,u,d=new wo,h=q(new Uint8Array(e)).trim().replace(Oo,\"\\n\").split(\"\\n\"),f=[],c=t?(o=t.baseTime,void 0===(l=t.timescale)&&(l=1),Mn(o,xn,1/l)):0,g=\"00:00.000\",v=0,m=0,p=!0;d.oncue=function(e){var a=r[i],s=r.ccOffset,o=(v-c)/9e4;if(null!=a&&a.new&&(void 0!==m?s=r.ccOffset=a.start:function(e,t,r){var i=e[t],n=e[i.prevCC];if(!n||!n.new&&i.new)return e.ccOffset=e.presentationOffset=i.start,void(i.new=!1);for(;null!=(a=n)&&a.new;){var a;e.ccOffset+=i.start-n.start,i.new=!1,n=e[(i=n).prevCC]}"
+      }
+    ],
+    "bitwiseXor": [
+      {
+        "name": "xs",
+        "code": "function xs(e){for(var t=5381,r=e.length;r;)t=33*t^e.charCodeAt(--r);return(t>>>0).toString()}"
+      }
+    ]
+  },
+  "candidates": [],
+  "sbxDecoders": [],
+  "initCode": []
+}

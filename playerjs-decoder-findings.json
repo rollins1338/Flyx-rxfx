@@ -1,0 +1,7 @@
+{
+  "getElementByIdMatches": [],
+  "windowAssignmentMatches": [],
+  "decoderFunctionCandidates": [
+    "function Ar(e){return Uint8Array.from(atob(e),(function(e){return e.charCodeAt(0)}"
+  ]
+}

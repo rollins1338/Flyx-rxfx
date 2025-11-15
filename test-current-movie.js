@@ -52,6 +52,8 @@ async function test() {
   console.log('[3] DivID:', divId);
   console.log('[3] Encoded length:', encoded.length);
   console.log('[3] First 50:', encoded.substring(0, 50));
+  console.log('[3] FULL ENCODED:');
+  console.log(encoded);
   
   // Detect format
   const isHex = /^[0-9a-f]+$/i.test(encoded);

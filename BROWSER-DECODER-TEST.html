@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head><title>Decoder Test</title></head>
+<body>
+<h1>Decoder Test</h1>
+<div id="result"></div>
+
+<script>
+// Load the encoded hash
+const encodedHash = `J=TgSTGdUzJ0NmYLP0TNRXKaDsZ9XSDQZBUFIULQWOYhRlIUR4GRAHGVJuJYKmAdOqSVBDMWNwAUNjVTB2FgLURZP5ZIPEMWJjD9JVHUUKQtKGHcY2QZUGLOGPBVTkLZEzTALFVVWYM9QkIZEkKpHUNcNONNUjBQMpVpKUCTPCQdGGINFvEVUzQNAvMpGmIeSBS5QSTQJEK9KmUcYaR9YUFVNPUVAzPaDfHNFUZcPwT4UiGdHjBJUEQSOzVVTnJZARZhHTARXMPdVEQdTUVpZkGVVDJZGFJMTTKpLGZSE3Z8SlSZOSO9MESSG5IhYTAbL3KkQnOVOUKNAVOZKvSRZ3ObEwO4KGGWPlDhQkKcYhE9GkYRYVL9JmPcB4OlC3FcZ3NIBmIUJkZNMFWbSGRVTEAaGzMROkRbBrYdBXJSP4UYNkJbFVK1WkMeWwIcKTUdFpBBPHMUXRZpC0ZUP3Z0C0YQWLLdT3FdHxN5UWURMlZFRkPcSXZBLXTYS2JQGnVWZWDFPDUcN1AsSmTVQsMxQ2EQTICFUDGeYwXRKHVeNzYsRUHMZtGlF1NdRSNFS2QTZzOANlDZLqKlPGFaK6ZdUFUVIKUJC3GMVwXsRUDOSMFFSHHZLwREFXPWO2FsPkSSCHYdG0YNCZSFN2ZQDGJFHHJOCGDBSTPQVBXFDUOTUDKZNjEMGyLIKEAWC3VFLUWQIBNFGUBQJBAFBUUQDBAlF0RcQ0OgM0PLGyGRA3FcUuQRS2RYLvE0EHENL2TtMnZLYyHAMHBcHhS9OyCLP6NMSHAcX0LRFHBaAgFII3NbLgRgQTMdSzN0SmFLJyEVJGUdQzTFUWLbTvU0DSHLGBEFVUHQKFOFJ1LQJiFFG1NUJyZBXzNQPnL9M1GYP3TRFlZdBpHhLUROGnL9CVOOYjThTEZREWMFN3JSJySoTEPVLSNJWXZaJwAcVVZMS3LYVEEMMySYLTOMNzYFK0SdG5ItUEJaJVM1X2BbGGVlOXTWVhZRAmTaKLTNLmUVRuJgPkVaLzH1E0BXXoBpPWBZMHBhFFFSI1LZS3BROpJRQkINC1CkZjQVQWKFLGGZULIVMlBUBwChO1PcXWSt`;
+
+const divId = 'xTyBxQyGTA';
+
+// Create the div
+const div = document.createElement('div');
+div.id = divId;
+div.innerHTML = encodedHash;
+div.style.display = 'none';
+document.body.appendChild(div);
+
+console.log('Div created with encoded hash');
+</script>
+
+<!-- Load the obfuscated decoder -->
+<script src="obfuscated-decoder.js"></script>
+
+<script>
+// Check if it decoded
+setTimeout(() => {
+    if (window[divId]) {
+        console.log('SUCCESS! Decoded:', window[divId]);
+        document.getElementById('result').innerHTML = '<h2>Decoded URL:</h2><pre>' + window[divId] + '</pre>';
+    } else {
+        console.log('Failed - variable not created');
+        document.getElementById('result').innerHTML = '<h2>Failed</h2><p>Variable not created</p>';
+    }
+}, 1000);
+</script>
+</body>
+</html>

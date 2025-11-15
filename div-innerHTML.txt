@@ -1,0 +1,30 @@
+
+                
+        
+        <div class="header">
+            <i id="close" class="fa-solid fa-xmark"></i>
+        </div>
+        <div class="content">
+            <div>
+                <input type="radio" id="reportError" name="problem" value="file_error" checked="checked">
+                <label for="reportError">File Error</label><br>
+            </div>
+            <div>
+                <input type="radio" id="reportVideo" name="problem" value="wrong_video">
+                <label for="reportVideo">Wrong Video</label><br>
+            </div>
+            <div>
+                <input type="radio" id="reportAudio" name="problem" value="wrong_audio">
+                <label for="reportAudio">Wrong Audio</label><br>
+            </div>
+            
+            <div>
+                <input id="math" type="hidden" name="math" value="9-4">
+                <p>
+                    9-4 = <input id="solution" type="number" name="solution" min="0" max="9">
+                </p>
+            </div>
+            
+            <button id="sentReport" data-hash="OWM4OTFkMzQzYTZlZTZmMzVjZmUwMzYwZGM0ZWM2MDA6V2todVZEZHlaQzhyYUdaa2NHOXJMelZvV0RKSE1VeFJjVzhyUm14RmNVVk5kSHB6WW0xNkx6QXlVVmRFUkdrME4wTXZTRzV3TWxBck0ybzBaWFV3VG01M1MzbDBUSGRGTjNKcEsyWndSbWc0VFZCS1YyVXJWRlp6UjBGcmVqTkNRM0p1ZFdaS2JHRXlNVmRMTDB0U09Hc3JhRUV3UjJGdVkzQTRWbVp5WWxJNFNXTjFZbXBIUW1OMUwyMUhiMnRuWVd0S2JIQXdhVEpQVGpkRU1uWllUVVZEVFdkck5FbFlObkJCV0VacGJUbHhUbXREYzAxRFMxQnVlR1JFVVZOdVJXTnVkMFZNUTIxQlJuWjViVE5ETlRkd09YaG1iMFpGUjB4WFRIWkdSRlpMYzJGWFZVOW9RMHBXV1dKbFRHRk1lRVF2T0VaM2IxRTVTbmhHYUZsak1FVndSMFI0WTFWVk16bGpPRFpRVnpOaVdHNVNkRFl4Y21KWEwycFphbFJOU3pCTVdESnFiREZHWWpCTWNXWlVVVlZsVEZKVWVHRkdkMnBpTlhvMWRuZ3dPSGRaYnl0T2RuZFVTR2QxWVdWa1kyNUphSHB6ZUVkS2RVWmtSMU13TVdKSFpUSkNWbFI2YVdsT1dHaFZNRXBoVTNadlltcDRlbGd2YTNoRVIwcFZlV05YY1M5clowNTFXbXB2VVZsWk5UazNaa3BzVFdscUsyUklZbkJFVURKclVFdE1ka3BIUlZJclNsaFhPV05PVXpKbU9YTnpiVWxtT0VKdVNUSk1UMEV6TjNaVVZreHdiMGt3VFdGeWNXVk9NbTVvYm1STE56UlBTRlZZVFVNMGVFUnVNazQ0ZERKWFpqVlNObmxqTldWQ2VHTllaRmRKYlhoc2JWWnZSRTlEWWpJNEsxSk9SMlp4T1VVd2MyeEJVREJPV1ZGU05teG9iM0JuTkhWTGFVOUZZa3huT0dabGRrRjZVRGd4U1cxUEsyeG9TakY2YlRJM1RGcHZNMUEyZFZWR1JqRjNWVTVHVmxKc1UxbE1WRlk1WnpKS1YwbHBOVFFyYTBKc0x6RnFWVmMzUjFrd1MySjJOVU5KVlRCQkszb3haVlV6YkV4NlpXaGhjR2N3TTNGRlQwWm1jRUZ0WmpGSFFYUkVkalZyUkVjNVltb3JkQ3MwWkM5cU9YTm5Ra0oxVVRWdFJtRnlRM1ZDYzBWeFMzZEhWbHAxTTFJM01YcE9ZelJXZWk5S2RITnFSVWczVmpsVGN6WmtOelkyUW5NelkxY3djbGxUVlRGT1YzVlZjbVl4VDJ0NVZYSmFiRzFTWm5NME1rTkVURlJCYlZWR2NYaFJjV3hNWWpKdWIycG5TSEpYVURSNmMwOTZUMDF4UkVKbVRXZE1XRU5DVmpnelNsUnRiWE5RTDBkVFNDOUhjak15VGtGQmQyUnZVbmd3T1dsbk1IbHdSMEpXUlUxM1lXTm5LekppVHpOYWEyeEJSamc0UTFWTFlucG5XSFJCYldaUlMySkhkek5ZTTBjMFowTkhaVEYwVFdWU2NXczBUa1JyVDNscmFUWkRaVWg0WTBKWVl6SjZXRFpTZFdKSFUwTnlVVGhrT0VoR1JtRkRiMFJSUVRFMGJFWkhhMEZhVlM5eFoyNHliblE1VTFFcmJUQlRPR0ZxU0Zoc04zRm5Xa0ZzVVdrdllYbHljM2swVlVGVVZrWkRNMmxLUVRNNU9FbHhTbUZRUzFkdWExSTNXSGxWT1V0c01UQnpObGRKZW5wSlRtSkZPR3BCU1c0elRUaFhVRU4yWkdWUmRYbEZjamRzZVc5VU1ISk1URFZpWjJwVFJFUjZielZaVjBSYWVteEpjRVJ0VkZkR2NYaGFhbVJhYjBWMlVqaHFhR1pvZEU1bFRqTlpLMUJxUm5KU1pURjFUbUpYYUVncllXRjVVRWRRUzNwc01WcFljR2xMY2xFdlRGVjRWa1JHY2tOS1J6RXJjV2RsTm5oTlYycEdTMjFJVVZZeE5sSk5TRkZ2VlhsRU1uSllWR2h4YjBGck1tSTJObGRWYkhSR2VVbFNNM05IZGl0blVUMDk-">Sent report</button>
+        </div>
+    

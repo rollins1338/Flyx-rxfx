@@ -1,0 +1,464 @@
+[
+  {
+    "type": "request",
+    "url": "https://vidsrc-embed.ru/embed/movie/550",
+    "method": "GET",
+    "timestamp": 1763162741855
+  },
+  {
+    "type": "response",
+    "url": "https://vidsrc-embed.ru/embed/movie/550",
+    "status": 200,
+    "timestamp": 1763162742690
+  },
+  {
+    "type": "request",
+    "url": "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.12.0-2/css/all.min.css",
+    "method": "GET",
+    "timestamp": 1763162742722
+  },
+  {
+    "type": "request",
+    "url": "https://vidsrc-embed.ru/style.css?t=1710289820",
+    "method": "GET",
+    "timestamp": 1763162742724
+  },
+  {
+    "type": "request",
+    "url": "https://vidsrc-embed.ru/jquery-3.7.1.min.js",
+    "method": "GET",
+    "timestamp": 1763162742725
+  },
+  {
+    "type": "request",
+    "url": "https://cdnjs.cloudflare.com/ajax/libs/blueimp-md5/2.16.0/js/md5.min.js",
+    "method": "GET",
+    "timestamp": 1763162742726
+  },
+  {
+    "type": "request",
+    "url": "https://cdnjs.cloudflare.com/ajax/libs/js-cookie/3.0.5/js.cookie.min.js",
+    "method": "GET",
+    "timestamp": 1763162742726
+  },
+  {
+    "type": "request",
+    "url": "https://cdnjs.cloudflare.com/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.min.js",
+    "method": "GET",
+    "timestamp": 1763162742727
+  },
+  {
+    "type": "request",
+    "url": "https://vidsrc-embed.ru/base64.js?t=1688387834",
+    "method": "GET",
+    "timestamp": 1763162742727
+  },
+  {
+    "type": "request",
+    "url": "https://vidsrc-embed.ru/sources.js?t=1745104089",
+    "method": "GET",
+    "timestamp": 1763162742728
+  },
+  {
+    "type": "request",
+    "url": "https://vidsrc-embed.ru/reporting.js?t=1688387834",
+    "method": "GET",
+    "timestamp": 1763162742729
+  },
+  {
+    "type": "request",
+    "url": "https://cloudnestra.com/asdf.js",
+    "method": "GET",
+    "timestamp": 1763162742730
+  },
+  {
+    "type": "request",
+    "url": "https://vidsrc-embed.ru/sbx.js?t=1754734900",
+    "method": "GET",
+    "timestamp": 1763162742730
+  },
+  {
+    "type": "request",
+    "url": "https://unpkg.com/disable-devtool@0.3.9/disable-devtool.min.js#/misdir.js",
+    "method": "GET",
+    "timestamp": 1763162742736
+  },
+  {
+    "type": "request",
+    "url": "https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015",
+    "method": "GET",
+    "timestamp": 1763162742742
+  },
+  {
+    "type": "request",
+    "url": "https://cloudnestra.com/rcp/ZDYzMjUwYTNlOTI3MjRiMWI1ZWM2MGU5YTJmN2Y5NDA6TDFCVVNWaG5OR2czYUdwbVIwVmlPVFI1ZG1KWFNGbzRPVVpEY0ZOeVNUVklXbHB2V2trNFlUTlRORWN6YTNFMGFtWk1OR00zY1hsb2FuVXJhMWxGUlhCMWRYSXZTRFp4TWtsUVZteHVPWEJ0VUVOU05EZzJjM0JTVHpFdmN6QmlTMjlEZEdGeGRqWjNibGswVjFSeGVYQXJSMmRsZWtaWGRYWnFVMDQzTDBReGVtdHpiVUpPT0d4d2RVdG1NbGN2WW5WMmJWSXplak0xSzJjeFJqVnBTVXA2V0c5T2JDdHZZMFpRYmtGME5IZGFlVkJ1VmpRdlNXRnFjM2cxYkc5SlpWRlNjMHhhZVdWRmFYTmlXR3h4WWs4MGNTdFpUbXhXZDNaTlQxWnNWbFZhVm1kamRVWm9NbXRvTUhob2FTOXpUVEUzVkRocVVFeExaa1JDZUhsSGVrZEVaVmhqYTBsRlJrWkRhekpOY0ZFdloyeEVaRXhHTkdvMWJUUlNabEZEUTJWSldWSkRjM1pIU3pKcFFrMVJRbGh4U2t4QlkyNHdRV3ByVFV4bFlXdFJOVGx0WTJ4eFZHTnJTbmR1VTJsblpYWTFUV05FY1ZKSGJDc3dRaXRVWkZVNFZEaHhVemx5WWtodVJHSTVRVFU0SzA4MGVqUk9jMEp3VUVkaGRYTTNTRWhuY2xwbmMwMXpObU5TUzFCTVNVUk9MekJTUlRneVRGUldLMFZ2TURad1RWSjRjVzQzVDFSdmRXeFpia1l4WkZwUk1sYzJRVmx3V1RsS1pGWkJVelZsVjJoRFVrY3dTV1JVYzBFdlUyaENNVWRKUjJKYVFXeE5kMWsyV0ZSUFpWSXhiVzVWV0RKaE5IQmplREp4VDNwa1YzZ3pOMDF1ZGtWWGRVSkdhM1pQZVdwREt6UXlNbEkwZVd0V2VXTm5hREpFTTBwSFpFNTZNbFpQYkdWTFpTdDVjMlJ2V0hsMVZ6QkJZMHBaT0hwVlVuUk9WVlkxYTJObE9EaFRNa2xSUkN0cVpXcFpZM05RWVV4blVtMVZLMnhvSzI5eVZWVlpRWGcxWm1oR1RqTkVWbXRZVGpaRmFUazRUVlk1VjJkd1dYRjJjQzlJYjBSMWFURkVjbVk1VkdkRE1tTnVZVVZaYW1obFFqWkJTQzlrTTBacE5IZ3JaMnBMZVhWdVZUUkJhR05OT1ZOWVZUWlJaM2cxUjBwcFYwcFpTbmN5VFVFeE1VWmFNRTR6TmpNNWVqaEljVmRYYmxoSFQycHhUa2RtYjBoM01sSlBTWHBYYmtSbk9HMUxXbFZvVTBGamQxcFNjWEJTYVZkcmFuVjFhemt2UlRSUGJXWjJXa05OYVVoeFIxTjNVbFJIUWpKVkswZHNVbXBEU2xVM1NYbG1WbU13UzBaVlRXaEtTRFppVHpOcU1IZDFXVFJPVkVWVEsyeEJibEI2YzNSbEwzbERaalZMZEhJeFVUVk5RVTlRYURoMEwwVnVVVzF2ZWsxeWRqWlllbmR5ZUZkemRYbGFjRGsxWW5ZNFdIUTVWMU5XWVhSUFJESkpkRmhoYjFkd2IyRktWRkpLUldWYU9FeElPRE5uVkhoNVZUaElTRzA1VTFwWllrOWpXRkEyUVU4NGFFRjRXRFIwZUM5SU5VTnplbU01THprcmRUQTRUa1Y0ZUhWRU5XMTVUakkzVjJseGRsSnJhV3hsTjJNd1oxaDJXR0ZVUjBVNGFEVnpMMHQzWTBoUWNsRTROSGRvV21FclVFaE5jSFI0Vm1welNVWXJhazlwY0ZCTE1EQndZbXcwVGpWMGRVUlpTVkk1T1dkQmVHUjJWRlJpY0hKbVFYcFhiVVJ4WVZOeVkzWk9iREZqVXpnMFpYQnVPVU5SWTBrdlZXazJaRU5wZWxsRWRYVjZjM2QzZFRWMk5XWnZSRGxDYUZkdFFXeHZhVmw1VjJOS1dIZFhNekI2TTBacWNEbG1NSFJxTUhvMFFYUXdTRXd6ZVUxcWVIVmFiR3R4U2tkaGVuTnFLemczTVU5bVEyaEZjVXg0U0hGQlVGVkRRMjlFTW1GQ2FFRkhVblF4YWtwR1VUMDk-",
+    "method": "GET",
+    "timestamp": 1763162742759
+  },
+  {
+    "type": "response",
+    "url": "https://vidsrc-embed.ru/style.css?t=1710289820",
+    "status": 200,
+    "timestamp": 1763162742777
+  },
+  {
+    "type": "response",
+    "url": "https://vidsrc-embed.ru/sbx.js?t=1754734900",
+    "status": 200,
+    "timestamp": 1763162742778
+  },
+  {
+    "type": "response",
+    "url": "https://vidsrc-embed.ru/sources.js?t=1745104089",
+    "status": 200,
+    "timestamp": 1763162742780
+  },
+  {
+    "type": "response",
+    "url": "https://vidsrc-embed.ru/base64.js?t=1688387834",
+    "status": 200,
+    "timestamp": 1763162742824
+  },
+  {
+    "type": "response",
+    "url": "https://vidsrc-embed.ru/reporting.js?t=1688387834",
+    "status": 200,
+    "timestamp": 1763162742839
+  },
+  {
+    "type": "response",
+    "url": "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.12.0-2/css/all.min.css",
+    "status": 200,
+    "timestamp": 1763162742843
+  },
+  {
+    "type": "response",
+    "url": "https://cdnjs.cloudflare.com/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.min.js",
+    "status": 200,
+    "timestamp": 1763162742885
+  },
+  {
+    "type": "request",
+    "url": "https://vidsrc-embed.ru/rings.svg",
+    "method": "GET",
+    "timestamp": 1763162742887
+  },
+  {
+    "type": "response",
+    "url": "https://cdnjs.cloudflare.com/ajax/libs/js-cookie/3.0.5/js.cookie.min.js",
+    "status": 200,
+    "timestamp": 1763162742887
+  },
+  {
+    "type": "response",
+    "url": "https://vidsrc-embed.ru/jquery-3.7.1.min.js",
+    "status": 200,
+    "timestamp": 1763162742888
+  },
+  {
+    "type": "response",
+    "url": "https://cdnjs.cloudflare.com/ajax/libs/blueimp-md5/2.16.0/js/md5.min.js",
+    "status": 200,
+    "timestamp": 1763162742902
+  },
+  {
+    "type": "response",
+    "url": "https://unpkg.com/disable-devtool@0.3.9/disable-devtool.min.js#/misdir.js",
+    "status": 200,
+    "timestamp": 1763162742904
+  },
+  {
+    "type": "response",
+    "url": "https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015",
+    "status": 200,
+    "timestamp": 1763162742904
+  },
+  {
+    "type": "response",
+    "url": "https://vidsrc-embed.ru/rings.svg",
+    "status": 200,
+    "timestamp": 1763162742906
+  },
+  {
+    "type": "response",
+    "url": "https://cloudnestra.com/asdf.js",
+    "status": 200,
+    "timestamp": 1763162742908
+  },
+  {
+    "type": "request",
+    "url": "https://s10.histats.com/js15_as.js",
+    "method": "GET",
+    "timestamp": 1763162743067
+  },
+  {
+    "type": "request",
+    "url": "https://vidsrc-embed.ru/f59d610a61063c7ef3ccdc1fd40d2ae6.js?_=1763161316",
+    "method": "GET",
+    "timestamp": 1763162743083
+  },
+  {
+    "type": "request",
+    "url": "data:application/pdf;base64,aG1t",
+    "method": "GET",
+    "timestamp": 1763162743095
+  },
+  {
+    "type": "response",
+    "url": "data:application/pdf;base64,aG1t",
+    "status": 200,
+    "timestamp": 1763162743095
+  },
+  {
+    "type": "request",
+    "url": "chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/pdf_embedder.css",
+    "method": "GET",
+    "timestamp": 1763162743097
+  },
+  {
+    "type": "response",
+    "url": "chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/pdf_embedder.css",
+    "status": 200,
+    "timestamp": 1763162743098
+  },
+  {
+    "type": "request",
+    "url": "chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/index.html",
+    "method": "GET",
+    "timestamp": 1763162743100
+  },
+  {
+    "type": "response",
+    "url": "https://cloudnestra.com/rcp/ZDYzMjUwYTNlOTI3MjRiMWI1ZWM2MGU5YTJmN2Y5NDA6TDFCVVNWaG5OR2czYUdwbVIwVmlPVFI1ZG1KWFNGbzRPVVpEY0ZOeVNUVklXbHB2V2trNFlUTlRORWN6YTNFMGFtWk1OR00zY1hsb2FuVXJhMWxGUlhCMWRYSXZTRFp4TWtsUVZteHVPWEJ0VUVOU05EZzJjM0JTVHpFdmN6QmlTMjlEZEdGeGRqWjNibGswVjFSeGVYQXJSMmRsZWtaWGRYWnFVMDQzTDBReGVtdHpiVUpPT0d4d2RVdG1NbGN2WW5WMmJWSXplak0xSzJjeFJqVnBTVXA2V0c5T2JDdHZZMFpRYmtGME5IZGFlVkJ1VmpRdlNXRnFjM2cxYkc5SlpWRlNjMHhhZVdWRmFYTmlXR3h4WWs4MGNTdFpUbXhXZDNaTlQxWnNWbFZhVm1kamRVWm9NbXRvTUhob2FTOXpUVEUzVkRocVVFeExaa1JDZUhsSGVrZEVaVmhqYTBsRlJrWkRhekpOY0ZFdloyeEVaRXhHTkdvMWJUUlNabEZEUTJWSldWSkRjM1pIU3pKcFFrMVJRbGh4U2t4QlkyNHdRV3ByVFV4bFlXdFJOVGx0WTJ4eFZHTnJTbmR1VTJsblpYWTFUV05FY1ZKSGJDc3dRaXRVWkZVNFZEaHhVemx5WWtodVJHSTVRVFU0SzA4MGVqUk9jMEp3VUVkaGRYTTNTRWhuY2xwbmMwMXpObU5TUzFCTVNVUk9MekJTUlRneVRGUldLMFZ2TURad1RWSjRjVzQzVDFSdmRXeFpia1l4WkZwUk1sYzJRVmx3V1RsS1pGWkJVelZsVjJoRFVrY3dTV1JVYzBFdlUyaENNVWRKUjJKYVFXeE5kMWsyV0ZSUFpWSXhiVzVWV0RKaE5IQmplREp4VDNwa1YzZ3pOMDF1ZGtWWGRVSkdhM1pQZVdwREt6UXlNbEkwZVd0V2VXTm5hREpFTTBwSFpFNTZNbFpQYkdWTFpTdDVjMlJ2V0hsMVZ6QkJZMHBaT0hwVlVuUk9WVlkxYTJObE9EaFRNa2xSUkN0cVpXcFpZM05RWVV4blVtMVZLMnhvSzI5eVZWVlpRWGcxWm1oR1RqTkVWbXRZVGpaRmFUazRUVlk1VjJkd1dYRjJjQzlJYjBSMWFURkVjbVk1VkdkRE1tTnVZVVZaYW1obFFqWkJTQzlrTTBacE5IZ3JaMnBMZVhWdVZUUkJhR05OT1ZOWVZUWlJaM2cxUjBwcFYwcFpTbmN5VFVFeE1VWmFNRTR6TmpNNWVqaEljVmRYYmxoSFQycHhUa2RtYjBoM01sSlBTWHBYYmtSbk9HMUxXbFZvVTBGamQxcFNjWEJTYVZkcmFuVjFhemt2UlRSUGJXWjJXa05OYVVoeFIxTjNVbFJIUWpKVkswZHNVbXBEU2xVM1NYbG1WbU13UzBaVlRXaEtTRFppVHpOcU1IZDFXVFJPVkVWVEsyeEJibEI2YzNSbEwzbERaalZMZEhJeFVUVk5RVTlRYURoMEwwVnVVVzF2ZWsxeWRqWlllbmR5ZUZkemRYbGFjRGsxWW5ZNFdIUTVWMU5XWVhSUFJESkpkRmhoYjFkd2IyRktWRkpLUldWYU9FeElPRE5uVkhoNVZUaElTRzA1VTFwWllrOWpXRkEyUVU4NGFFRjRXRFIwZUM5SU5VTnplbU01THprcmRUQTRUa1Y0ZUhWRU5XMTVUakkzVjJseGRsSnJhV3hsTjJNd1oxaDJXR0ZVUjBVNGFEVnpMMHQzWTBoUWNsRTROSGRvV21FclVFaE5jSFI0Vm1welNVWXJhazlwY0ZCTE1EQndZbXcwVGpWMGRVUlpTVkk1T1dkQmVHUjJWRlJpY0hKbVFYcFhiVVJ4WVZOeVkzWk9iREZqVXpnMFpYQnVPVU5SWTBrdlZXazJaRU5wZWxsRWRYVjZjM2QzZFRWMk5XWnZSRGxDYUZkdFFXeHZhVmw1VjJOS1dIZFhNekI2TTBacWNEbG1NSFJxTUhvMFFYUXdTRXd6ZVUxcWVIVmFiR3R4U2tkaGVuTnFLemczTVU5bVEyaEZjVXg0U0hGQlVGVkRRMjlFTW1GQ2FFRkhVblF4YWtwR1VUMDk-",
+    "status": 200,
+    "timestamp": 1763162743106
+  },
+  {
+    "type": "request",
+    "url": "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.12.0-2/css/all.min.css",
+    "method": "GET",
+    "timestamp": 1763162743169
+  },
+  {
+    "type": "request",
+    "url": "https://cloudnestra.com/style_rcp-e600e6.css?t=1744906951",
+    "method": "GET",
+    "timestamp": 1763162743169
+  },
+  {
+    "type": "request",
+    "url": "https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js",
+    "method": "GET",
+    "timestamp": 1763162743170
+  },
+  {
+    "type": "request",
+    "url": "https://challenges.cloudflare.com/turnstile/v0/api.js",
+    "method": "GET",
+    "timestamp": 1763162743170
+  },
+  {
+    "type": "request",
+    "url": "https://cdnjs.cloudflare.com/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.min.js",
+    "method": "GET",
+    "timestamp": 1763162743170
+  },
+  {
+    "type": "request",
+    "url": "https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015",
+    "method": "GET",
+    "timestamp": 1763162743173
+  },
+  {
+    "type": "response",
+    "url": "https://vidsrc-embed.ru/f59d610a61063c7ef3ccdc1fd40d2ae6.js?_=1763161316",
+    "status": 200,
+    "timestamp": 1763162743176
+  },
+  {
+    "type": "response",
+    "url": "https://s10.histats.com/js15_as.js",
+    "status": 200,
+    "timestamp": 1763162743255
+  },
+  {
+    "type": "request",
+    "url": "https://adexchangeclear.com/script/suurl5.php?r=9573494&chu=%22Not_A%20Brand%22%3Bv%3D99%2C%20%22Chromium%22%3Bv%3D142&chmob=%3F0&chp=Windows&chpv=10.0.0&chuafv=142.0.7444.61&cbur=0.05929420917764272&cbiframe=0&cbWidth=800&cbHeight=600&cbtitle=Fight%20Club%20(1999)&cbpage=https%3A%2F%2Fvidsrc-embed.ru%2Fembed%2Fmovie%2F550&cbref=&cbdescription=&cbkeywords=&cbcdn=rpyztjadsbonh.store&ufp=Win32%2FMozilla%2FNetscape%2Ftrue%2Ffalse%2FGoogle%20Inc.2560x1440360en-US8824%20bits&ts=1763162743212&srs=ab2d964333385647d8bbc9780b3121b5&atv=71.2-b&abtg=1&adbv=3-cdn-js",
+    "method": "GET",
+    "timestamp": 1763162743256
+  },
+  {
+    "type": "request",
+    "url": "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.12.0-2/webfonts/fa-solid-900.woff2",
+    "method": "GET",
+    "timestamp": 1763162743263
+  },
+  {
+    "type": "request",
+    "url": "https://s4.histats.com/stats/0.php?4873540&@f16&@g1&@h1&@i1&@j1763162743238&@k0&@l1&@mFight%20Club%20(1999)&@n0&@o1000&@q0&@r0&@s511&@ten-US&@u2560&@b1:-27930109&@b3:1763162743&@b4:js15_as.js&@b5:-360&@a-_0.2.1&@vhttps%3A%2F%2Fvidsrc-embed.ru%2Fembed%2Fmovie%2F550&@w",
+    "method": "GET",
+    "timestamp": 1763162743486
+  },
+  {
+    "type": "request",
+    "url": "https://s10.histats.com/counters/cc_511.js",
+    "method": "GET",
+    "timestamp": 1763162743487
+  },
+  {
+    "type": "request",
+    "url": "https://usrpubtrk.com/ut/hb.php?cb=0.021842286928601795&v=1",
+    "method": "POST",
+    "timestamp": 1763162743488
+  },
+  {
+    "type": "response",
+    "url": "https://cloudnestra.com/style_rcp-e600e6.css?t=1744906951",
+    "status": 200,
+    "timestamp": 1763162743608
+  },
+  {
+    "type": "response",
+    "url": "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.12.0-2/css/all.min.css",
+    "status": 200,
+    "timestamp": 1763162743608
+  },
+  {
+    "type": "response",
+    "url": "https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js",
+    "status": 200,
+    "timestamp": 1763162743611
+  },
+  {
+    "type": "response",
+    "url": "https://cdnjs.cloudflare.com/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.min.js",
+    "status": 200,
+    "timestamp": 1763162743612
+  },
+  {
+    "type": "request",
+    "url": "https://vidsrc.me/rings.svg",
+    "method": "GET",
+    "timestamp": 1763162743637
+  },
+  {
+    "type": "response",
+    "url": "https://challenges.cloudflare.com/turnstile/v0/api.js",
+    "status": 302,
+    "timestamp": 1763162743721
+  },
+  {
+    "type": "request",
+    "url": "https://challenges.cloudflare.com/turnstile/v0/b/93954b626b88/api.js",
+    "method": "GET",
+    "timestamp": 1763162743722
+  },
+  {
+    "type": "response",
+    "url": "https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015",
+    "status": 200,
+    "timestamp": 1763162743722
+  },
+  {
+    "type": "response",
+    "url": "https://vidsrc.me/rings.svg",
+    "status": 301,
+    "timestamp": 1763162743757
+  },
+  {
+    "type": "request",
+    "url": "https://vidsrcme.ru/rings.svg",
+    "method": "GET",
+    "timestamp": 1763162743757
+  },
+  {
+    "type": "response",
+    "url": "https://challenges.cloudflare.com/turnstile/v0/b/93954b626b88/api.js",
+    "status": 200,
+    "timestamp": 1763162743812
+  },
+  {
+    "type": "request",
+    "url": "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/turnstile/f/ov2/av0/rch/r3ism/0x4AAAAAABNpWSLmOnUi7s0b/auto/fbE/new/normal?lang=auto",
+    "method": "GET",
+    "timestamp": 1763162743822
+  },
+  {
+    "type": "response",
+    "url": "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/turnstile/f/ov2/av0/rch/r3ism/0x4AAAAAABNpWSLmOnUi7s0b/auto/fbE/new/normal?lang=auto",
+    "status": 200,
+    "timestamp": 1763162743845
+  },
+  {
+    "type": "response",
+    "url": "https://vidsrcme.ru/rings.svg",
+    "status": 200,
+    "timestamp": 1763162743857
+  },
+  {
+    "type": "request",
+    "url": "https://cloudnestra.com/cdn-cgi/rum?",
+    "method": "POST",
+    "timestamp": 1763162744009
+  },
+  {
+    "type": "response",
+    "url": "https://cloudnestra.com/cdn-cgi/rum?",
+    "status": 404,
+    "timestamp": 1763162744043
+  },
+  {
+    "type": "response",
+    "url": "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.12.0-2/webfonts/fa-solid-900.woff2",
+    "status": 200,
+    "timestamp": 1763162744069
+  },
+  {
+    "type": "request",
+    "url": "blob:https://challenges.cloudflare.com/62c0e5c1-09e7-47d2-bd70-8b1b8b14c154",
+    "method": "GET",
+    "timestamp": 1763162744072
+  },
+  {
+    "type": "request",
+    "url": "https://usrpubtrk.com/ut/hb.php?cb=0.7170857023925441&v=1",
+    "method": "POST",
+    "timestamp": 1763162744108
+  },
+  {
+    "type": "response",
+    "url": "https://s10.histats.com/counters/cc_511.js",
+    "status": 200,
+    "timestamp": 1763162744109
+  },
+  {
+    "type": "response",
+    "url": "https://adexchangeclear.com/script/suurl5.php?r=9573494&chu=%22Not_A%20Brand%22%3Bv%3D99%2C%20%22Chromium%22%3Bv%3D142&chmob=%3F0&chp=Windows&chpv=10.0.0&chuafv=142.0.7444.61&cbur=0.05929420917764272&cbiframe=0&cbWidth=800&cbHeight=600&cbtitle=Fight%20Club%20(1999)&cbpage=https%3A%2F%2Fvidsrc-embed.ru%2Fembed%2Fmovie%2F550&cbref=&cbdescription=&cbkeywords=&cbcdn=rpyztjadsbonh.store&ufp=Win32%2FMozilla%2FNetscape%2Ftrue%2Ffalse%2FGoogle%20Inc.2560x1440360en-US8824%20bits&ts=1763162743212&srs=ab2d964333385647d8bbc9780b3121b5&atv=71.2-b&abtg=1&adbv=3-cdn-js",
+    "status": 200,
+    "timestamp": 1763162744111
+  },
+  {
+    "type": "response",
+    "url": "https://s4.histats.com/stats/0.php?4873540&@f16&@g1&@h1&@i1&@j1763162743238&@k0&@l1&@mFight%20Club%20(1999)&@n0&@o1000&@q0&@r0&@s511&@ten-US&@u2560&@b1:-27930109&@b3:1763162743&@b4:js15_as.js&@b5:-360&@a-_0.2.1&@vhttps%3A%2F%2Fvidsrc-embed.ru%2Fembed%2Fmovie%2F550&@w",
+    "status": 200,
+    "timestamp": 1763162744111
+  },
+  {
+    "type": "response",
+    "url": "https://usrpubtrk.com/ut/hb.php?cb=0.021842286928601795&v=1",
+    "status": 204,
+    "timestamp": 1763162744112
+  },
+  {
+    "type": "request",
+    "url": "https://vidsrc-embed.ru/cdn-cgi/rum?",
+    "method": "POST",
+    "timestamp": 1763162744368
+  },
+  {
+    "type": "request",
+    "url": "https://usrpubtrk.com/ut/hb.php?cb=0.742131240654205&v=1",
+    "method": "POST",
+    "timestamp": 1763162744369
+  }
+]

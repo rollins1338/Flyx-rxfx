@@ -1,0 +1,39 @@
+{
+  "urlSafeBase64": {
+    "success": true,
+    "output": "",
+    "length": 0,
+    "hasHttp": false,
+    "hasM3u8": false
+  },
+  "standardBase64": {
+    "success": true,
+    "output": "",
+    "hasHttp": false,
+    "hasM3u8": false
+  },
+  "urlSafeReversed": {
+    "success": true,
+    "output": "",
+    "hasHttp": false,
+    "hasM3u8": false
+  },
+  "urlSafeXor": {
+    "success": true,
+    "output": "",
+    "hasHttp": false,
+    "hasM3u8": false
+  },
+  "doubleBase64": {
+    "success": true,
+    "output": "",
+    "hasHttp": false,
+    "hasM3u8": false
+  },
+  "caesar3": {
+    "success": true,
+    "output": "R=FjXWGgCcS0YpMOK0VQIADdEvG9HVLOXEGISXNTPEYEWcKBKGAYAZXgIlRoHoJUSuTCFqGZYHUIHZYfYxYoZ1PUDoNIJXIeUGUQSWRVHOICCZYUB5QBXHSdNIUYUHFeAHT9GpVQFCBsBpZhTzKYYX",
+    "hasHttp": false,
+    "hasM3u8": false
+  }
+}

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Standalone Decoder Test</title>
+</head>
+<body>
+    <h1>Decoder Test</h1>
+    <div id="log"></div>
+    
+    <!-- The encoded div from the actual page -->
+    <div id="xTyBxQyGTA" style="display:none;"></div>
+    
+    <script>
+        // Read the encoded hash from file
+        fetch('encoded-hash.txt')
+            .then(r => r.text())
+            .then(encoded => {
+                document.getElementById('xTyBxQyGTA').textContent = encoded;
+                console.log('Encoded hash loaded:', encoded.substring(0, 100));
+                
+                // Now load PlayerJS
+                const script = document.createElement('script');
+                script.src = 'pjs_main_drv_cast.js';
+                script.onload = () => {
+                    console.log('PlayerJS loaded');
+                    
+                    // Check if variable was created
+                    setTimeout(() => {
+                        if (window.xTyBxQyGTA) {
+                            console.log('SUCCESS! Variable created:', window.xTyBxQyGTA);
+                            document.getElementById('log').innerHTML = 
+                                '<h2>Decoded URL:</h2><pre>' + window.xTyBxQyGTA + '</pre>';
+                        } else {
+                            console.log('Variable not created automatically');
+                        }
+                    }, 2000);
+                };
+                document.head.appendChild(script);
+            });
+    </script>
+</body>
+</html>

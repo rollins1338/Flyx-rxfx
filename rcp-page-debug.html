@@ -30,39 +30,115 @@
     }
 </style>
 </head>
-<body data-i="30144839"  >
+<body data-i="137523"  >
     
     
-        <div id="pop_asdf" style="position:absolute; width:100%; height:100%; z-index:2147483650; pointer-events: none;"></div>
+        <!--<div id="pop_asdf" style="position:absolute; width:100%; height:100%; z-index:2147483650; pointer-events: none;"></div>-->
         
     <!--<div id="loading_overlay"></div>-->
-    <div id="the_frame">
-        
-    </div>
-    
-    
-    <div class="cf-turnstile" data-sitekey="0x4AAAAAABNpWSLmOnUi7s0b" data-callback="cftCallback"></div>
+    <div id="the_frame" style="background-image: none;">
+                <div id="pl_but_background" style="background-image: url('//image.tmdb.org/t/p/w780/5TiwfWEaPSwD20uwXjCTUqpQX70.jpg');">
+            <div id="iframe_title">
+                Fight Club (1999)            </div>
+            <i id="pl_but" class="fas fa-play"></i>
+        </div>
+            </div>
     
     <div id="hidden" style="display:hidden;"></div>
     
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.min.js" integrity="sha256-1A78rJEdiWTzco6qdn3igTBv9VupN3Q1ozZNTR4WE/Y=" crossorigin="anonymous"></script>
+    <script src="/base64.js?t="></script>
     
+    <script src="/sbx.js?t=1751380596"></script>
+
     
     <script>
     
-    
-    
-    function cftCallback(token){
-        $.post("/rcp_verify", {token: token}, function(result){
-            if(result.length == 1){
-                window.location.reload();
+    /*
+    $(document).ready(function(){
+        
+        
+        if($.cookie('pop_asdf')){
+            $("#pop_asdf").addClass("hidden");
+        }
+        
+        $("#pop_asdf").click(function(){
+            if(!$.cookie('pop_asdf')){
+                if($.cookie('pop_asdf_tmp') >= 3){
+                    var date = new Date();
+                    date.setTime(date.getTime() + (10800 * 1000));
+                    $.cookie('pop_asdf', 1, { expires: date });
+                    $("#pop_asdf").addClass("hidden");
+                }else{
+                    var cookie_value = 1;
+                    if($.cookie('pop_asdf_tmp'))
+                        cookie_value = $.cookie('pop_asdf_tmp');
+                        
+                    cookie_value++;
+                    
+                    $.cookie('pop_asdf_tmp', cookie_value);
+                    $(this).addClass("hidden");
+                    setTimeout(function(){
+                        $("#pop_asdf").removeClass("hidden");
+                    }, 59000);
+                }
             }
         });
+    });
+    */
+    
+        
+    $("#pl_but_background , #pl_but").click(function(){
+        loadIframe();
+    });
+    
+        
+    function loadIframe(data = 1){
+        if(data == 1){
+            $("#the_frame").removeAttr("style");
+            $("#the_frame").html("");
+            $('<iframe>', {
+               id: 'player_iframe',
+               src: '/prorcp/NzcxNmM1MmE4ZmFjYTM3MDEwMmZjMmJhMzRmYWEzYjU6UTFWR2F6SnpkRVo0V1ZOcFlYUkhXR2g1Tm5NNVRraEJaV2h4Y0RONU4wZFJhV2RTTW1aU2RtczRZbVl5TjI1NVRrdGpVbTlUZFVKVlZuRjROVlJXZUhGSlJ6TjNNWG8xZVRsME5GTjNiMWswVUZOdVVuTlNWa1kwVGxwVlZUUlpTbVJLYmxaS2JUTm9WakJxZW5wMk5XRm5iRTVqUWs1dGIwZG5WakZpY2tjd1dHZEZVRWQ2VEVocU5ESjJjMUJFV0cxM09HZ3hhMnRtWTNOaVR6ZzVPRVpEYlZCRU56WXJiV040VUdKRlVscGplVTVJTkhWSk1rSlhXbkZoV21wTU0xQnVPVzVrY21SeFpFUklOVkZ3WlZkM2RrRjNRWFF5TjBGdE9WTlVRVXh6Ykd0NlVHeFNlRWgzZW1GalQxTTBjV2RzWTBrelVVTmFaMlpMVTJGVE5sVk1SMjF6VEd4SGVtd3JjMG9yYjFGdVIzRnlaMWhUYlZCME9WZDROM05MUkVkSVZrOU1kRkpDUWxGM1FrY3JkRTU0TldkalNXODVkVk51VXpOMVNqRk5LMFZyTlZoMFlUa3ZjWFEwTjFOMWJqVnZVWHBxY2xweUswWk1VWEZCY25neWRFSlFhek5QT0ZwbGVGWjJMMHRuVkcxVFNsSk1RVWxTVG1zeVpEWmhZVlk1V2tFNVJHWmtTRTFJYUZJNGJUTktaMWN2VDNobWJuWjRSRVJYUlhaNVZuUkVkalZUU0ZsTlZVMTRObk0zU21Wd2ExUjZaWHB6T0c5MmIzUndOUzh3V1ZGWWFEVkdiRUppUms5VVUyNW1abFUwZEZsRllTdDZXakkwU0ZwbWNFeHRUSFpQZUZRM1Z6bGpNMFI2UjFCdWNWVnpkSGxLWlhFeWIxWnFSazUzYkhwRmJFSlphV1YxYVdwdFRISkthSGRKUjNjemMwcHBhMWt5WkhwWU4ydFNTazUzVWpaeksyd3dVbFJ1UlU1dGIyc3ZLMlJOYkdJMEsxQTVaMHhYVkdnclpFUmtjM1JrVFd4UFRXbGtVV3hGY0dkc00ybHJaSGxpUVROa2IzUjNUekpKT0haT1EyZG5lbmwxUkRsc1kwbGFVV042U2pWUFVtdEhVME0zTlZkSGMzRmtha3hMVnpWVWRsbHljelJEZUdwcmJYUlVMeXMwZEZsWVIwTnlNRTVYT1hWalUwRnZSVEo0V25SaU9ITnpPRE5ZZGpCME4wZHZlSHAzWlhkaVNrWnhZM2RZTVUxNWJVSkZORmhxUmtOYU4xVTNORVp6WTA5Q1JFTnJjMjlXY3pRdlFqUkZhekozYjFwak9VTktMMlJoTnpKR01tVkxOSGhFTTJWMUwwOUpjbEF3VFRBNVkwSXdaekoyVFRCNVNVaDBOMnRHU1RsMlJreFJjMDl4TkdkdlZFRXJXbE42VkhNNFpGVjBaMll6YWpWclprVlhWMHQxVEdKMGVEZHViVGt6WlVNeUsxQTNWRUV6T1RNcmNsUjRVRWsxVDBodk5sTmlWbmxqTjJ4S1ozRXhUQzlaSzNSQ01URkZjakEyTURsbVVESnNaak53ZFVGVFFtUlNla1JGTmxKTlVTdEtLMFpsUlVrMGVXb3lSR05VT1ZOeU4zTnRSSFE0T0VZckwwZFBlVEpFVENzelZEZDZXbG94U1ZKblFrWmpTV1ZCVmpSTVpuTmFOVGh4VTBaVVVFNUZaWFpDT0d3eFJ6UkxjV0ZPWWxoRlozQlRjbTl6TVhKeVptdElWME5zVTBjelEwbGFSbE14WVZGek5HZDZOV3A1V25aRFZWUnpVbE0yWVZWcVVtVnNjalZIWVZNMlMyTXhZbnBOUlROM1RVZG5lakpSZERodE9XRXZjbFJaY1ROTmVXbHBNVmR3VTFGTVdXcE9SalJ4UWtGM1Z6RnljMkZJYm1aaGExVmhRMHBETDJodFMySnBhV1JrT1daWGJUWlBWVlZRV21FMGNqY3lOVlJuYW5OYU5tNU5XVWswSzNaRGVHcDJjRFZaVkZGRWJreFZNeTl4VVVkWWNXaDJWVzBySzNSeVEzRmFPRFo2TVZoc1FUMDk-',
+               frameborder: 0,
+               scrolling: 'no',
+               allowfullscreen: 'yes',
+               allow: "autoplay",
+               style: 'height: 100%; width: 100%;'
+            }).appendTo('#the_frame');
+            $("#player_iframe").on("load", function () {
+                $("#the_frame").attr("style","background-image: none;");
+            });
+        }
     }
     
+    // pm redirector
+    window.addEventListener('message', message => {
+        if (message.source == window) {
+            return; // Skip message in this event listener
+        }
+        
+        var the_iframe = document.getElementById('player_iframe');
+        
+        if(message.source == window.parent){
+            the_iframe.contentWindow.postMessage(message.data,'*');
+        }else{
+            window.parent.postMessage(message.data , '*');
+        }
+        
+        
+        
+    });
+        
+        
+        
     </script>
+    
+    
+    
+    
+    
     
    
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon='{"version":"2024.11.0","token":"164a84f147c94870b0901f3bf4bd8a15","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>

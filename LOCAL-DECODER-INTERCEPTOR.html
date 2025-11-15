@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PRO.RCP Decoder Interceptor</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #00ff00;
+        }
+        #log {
+            white-space: pre-wrap;
+            background: #000;
+            padding: 15px;
+            border: 1px solid #00ff00;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .success { color: #00ff00; }
+        .info { color: #00aaff; }
+        .warning { color: #ffaa00; }
+        .error { color: #ff0000; }
+        button {
+            background: #00ff00;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            font-family: monospace;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #00aa00;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 PRO.RCP Decoder Interceptor</h1>
+    <p>This page will intercept and log the decoding process</p>
+    
+    <button onclick="startInterception()">Start Interception</button>
+    <button onclick="clearLog()">Clear Log</button>
+    <button onclick="copyResults()">Copy Results</button>
+    
+    <div id="log"></div>
+
+    <script>
+        const logDiv = document.getElementById('log');
+        const results = {
+            encodedHash: null,
+            decodedUrl: null,
+            divId: null,
+            atobCalls: [],
+            transformations: []
+        };
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+            const line = `[${timestamp}] ${message}\n`;
+            const span = document.createElement('span');
+            span.className = type;
+            span.textContent = line;
+            logDiv.appendChild(span);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function clearLog() {
+            logDiv.innerHTML = '';
+        }
+
+        function copyResults() {
+            const text = JSON.stringify(results, null, 2);
+            navigator.clipboard.writeText(text);
+            log('✅ Results copied to clipboard!', 'success');
+        }
+
+        function installHooks() {
+            log('🔧 Installing hooks...', 'info');
+
+            // Hook atob
+            const originalAtob = window.atob;
+            window.atob = function(input) {
+                const output = originalAtob.call(this, input);
+                
+                const record = {
+                    input: input.substring(0, 200),
+                    output: output.substring(0, 200),
+                    inputLength: input.length,
+                    outputLength: output.length,
+                    timestamp: Date.now()
+                };
+                
+                results.atobCalls.push(record);
+                
+                log(`🔍 atob() called`, 'info');
+                log(`   Input (${input.length} chars): ${input.substring(0, 80)}`, 'info');
+                log(`   Output (${output.length} chars): ${output.substring(0, 80)}`, 'info');
+                
+                // Check if this is the m3u8 URL
+                if (output.includes('.m3u8') || output.includes('http')) {
+                    log('🎯🎯🎯 FOUND M3U8 URL IN ATOB OUTPUT!', 'success');
+                    log(`   Full URL: ${output}`, 'success');
+                    results.decodedUrl = output;
+                }
+                
+                return output;
+            };
+
+            // Hook String.prototype.replace
+            const originalReplace = String.prototype.replace;
+            String.prototype.replace = function(search, replacement) {
+                const result = originalReplace.call(this, search, replacement);
+                
+                if (this.length > 100) {
+                    const record = {
+                        operation: 'replace',
+                        inputLength: this.length,
+                        outputLength: result.length,
+                        search: search.toString(),
+                        replacement: replacement.toString(),
+                        timestamp: Date.now()
+                    };
+                    results.transformations.push(record);
+                    
+                    if (search.toString().includes('-') || search.toString().includes('_')) {
+                        log(`🔍 URL-safe base64 replace detected`, 'info');
+                    }
+                }
+                
+                return result;
+            };
+
+            // Hook getElementById
+            const originalGetElementById = document.getElementById;
+            document.getElementById = function(id) {
+                const el = originalGetElementById.call(document, id);
+                
+                if (el && el.textContent && el.textContent.length > 1000) {
+                    log(`🔍 getElementById("${id}") - Large content (${el.textContent.length} chars)`, 'info');
+                    log(`   First 100: ${el.textContent.substring(0, 100)}`, 'info');
+                    
+                    if (id.startsWith('pjsdiv') || el.style.display === 'none') {
+                        log(`⭐ This looks like the encoded hash div!`, 'warning');
+                        results.encodedHash = el.textContent;
+                        results.divId = id;
+                    }
+                }
+                
+                return el;
+            };
+
+            // Hook window property access
+            const windowProxy = new Proxy(window, {
+                set(target, property, value) {
+                    if (typeof value === 'string' && value.length > 100) {
+                        log(`🔍 window["${property}"] = "${value.substring(0, 80)}..."`, 'info');
+                        
+                        if (value.includes('.m3u8') || value.includes('http')) {
+                            log(`🎯 M3U8 URL assigned to window.${property}!`, 'success');
+                            results.decodedUrl = value;
+                        }
+                    }
+                    return Reflect.set(target, property, value);
+                }
+            });
+
+            log('✅ All hooks installed!', 'success');
+        }
+
+        function loadPlayerPage() {
+            log('📥 Loading player page HTML...', 'info');
+            
+            // Create iframe to load the saved player page
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = 'player-page.html';
+            
+            iframe.onload = function() {
+                log('✅ Player page loaded in iframe', 'success');
+                log('⏳ Waiting for decoder to execute...', 'info');
+                
+                // Give it time to execute
+                setTimeout(() => {
+                    log('\n📊 FINAL RESULTS:', 'success');
+                    log(`Encoded Hash: ${results.encodedHash ? 'Found' : 'Not found'}`, results.encodedHash ? 'success' : 'error');
+                    log(`Decoded URL: ${results.decodedUrl ? 'Found' : 'Not found'}`, results.decodedUrl ? 'success' : 'error');
+                    log(`Div ID: ${results.divId || 'Not found'}`, results.divId ? 'success' : 'error');
+                    log(`atob calls: ${results.atobCalls.length}`, 'info');
+                    log(`Transformations: ${results.transformations.length}`, 'info');
+                    
+                    if (results.decodedUrl) {
+                        log(`\n🎯 SUCCESS! Decoded URL:`, 'success');
+                        log(results.decodedUrl, 'success');
+                    }
+                }, 5000);
+            };
+            
+            document.body.appendChild(iframe);
+        }
+
+        function startInterception() {
+            clearLog();
+            log('🎯 Starting decoder interception...', 'success');
+            installHooks();
+            loadPlayerPage();
+        }
+
+        // Auto-start
+        log('Ready! Click "Start Interception" to begin.', 'info');
+    </script>
+</body>
+</html>

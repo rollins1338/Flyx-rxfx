@@ -1,13 +1,13 @@
 /**
- * Stream Extract API - CloudStream Pure Fetch Extraction
+ * Stream Extract API - VidSrc Pro Pure Fetch Extraction
  * 
- * Pure fetch-based extraction using the working CloudStream method
+ * Pure fetch-based extraction using VidSrc Pro (no VM, no Puppeteer)
  * GET /api/stream/extract?tmdbId=550&type=movie
  * GET /api/stream/extract?tmdbId=1396&type=tv&season=1&episode=1
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { extractCloudStream } from '@/app/lib/services/cloudstream-pure-fetch';
+import { extractVidsrcPro } from '@/app/lib/services/vidsrc-pro-pure-fetch';
 
 export async function GET(request: NextRequest) {
   try {
@@ -41,18 +41,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Extract stream using CloudStream
+    // Extract stream using VidSrc Pro
     console.log('Extracting stream:', { tmdbId, type, season, episode });
-    const result = await extractCloudStream(tmdbId, type, season, episode);
+    const result = await extractVidsrcPro(tmdbId, type, season, episode);
     console.log('Extraction result:', result);
 
     if (!result.success) {
       console.error('Extraction failed:', result.error);
-      console.error('Extraction logs:', result.logs);
       return NextResponse.json(
         { 
           error: result.error || 'Extraction failed',
-          logs: result.logs,
           debug: {
             tmdbId,
             type,
@@ -70,10 +68,8 @@ export async function GET(request: NextRequest) {
       success: true,
       streamUrl: result.url,
       url: result.url,
-      method: result.method,
-      provider: 'cloudstream',
+      provider: 'vidsrc-pro',
       requiresProxy: false,
-      logs: result.logs,
     });
 
   } catch (error) {
