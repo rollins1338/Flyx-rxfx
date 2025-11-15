@@ -91,8 +91,18 @@ export async function GET(request: NextRequest) {
     const divMatch = proRcpHtml.match(/<div[^>]+id=["'][^"']*["'][^>]*>([^<]{100,})<\/div>/);
     if (!divMatch) return NextResponse.json({ error: 'No div' }, { status: 404 });
     
-    const decoded = caesarDecode(divMatch[1].trim(), 3);
+    const encoded = divMatch[1].trim();
+    console.log('[EXTRACT] Encoded preview:', encoded.substring(0, 100));
+    
+    const decoded = caesarDecode(encoded, 3);
+    console.log('[EXTRACT] Decoded preview:', decoded.substring(0, 100));
+    
     const resolved = resolvePlaceholders(decoded).split(' or ')[0];
+    console.log('[EXTRACT] Final URL:', resolved);
+    
+    if (!resolved.startsWith('http')) {
+      return NextResponse.json({ error: 'Decoded URL invalid: ' + resolved.substring(0, 50) }, { status: 500 });
+    }
     
     console.log('[EXTRACT] Success');
     
