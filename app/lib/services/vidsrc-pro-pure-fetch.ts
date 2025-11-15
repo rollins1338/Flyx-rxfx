@@ -33,17 +33,36 @@ function extractDataHash(html: string): string | null {
 }
 
 function extractEncodedUrl(html: string): string | null {
-  const { document } = parseHTML(html);
-  const divs = Array.from(document.querySelectorAll('div[id]'));
+  try {
+    // Try linkedom first
+    const { document } = parseHTML(html);
+    const divs = Array.from(document.querySelectorAll('div[id]'));
+    
+    for (const div of divs) {
+      const content = div.textContent?.trim() || '';
+      // Look for long content with :// pattern (encoded URL)
+      if (content.length > 100 && content.includes('://') && !content.includes('<')) {
+        console.log('Found encoded URL via linkedom:', content.substring(0, 50) + '...');
+        return content;
+      }
+    }
+  } catch (e) {
+    console.log('Linkedom parsing failed, trying regex fallback');
+  }
   
-  for (const div of divs) {
-    const content = div.textContent?.trim() || '';
-    // Look for long content with :// pattern (encoded URL)
-    if (content.length > 100 && content.includes('://') && !content.includes('<')) {
+  // Fallback to regex if linkedom fails
+  const divRegex = /<div[^>]+id=["'][^"']*["'][^>]*>([^<]+)<\/div>/g;
+  let match;
+  
+  while ((match = divRegex.exec(html)) !== null) {
+    const content = match[1].trim();
+    if (content.length > 100 && content.includes('://')) {
+      console.log('Found encoded URL via regex:', content.substring(0, 50) + '...');
       return content;
     }
   }
   
+  console.log('No encoded URL found in HTML');
   return null;
 }
 
@@ -90,36 +109,45 @@ export async function extractVidsrcPro(
       type === 'tv' ? `/${season}/${episode}` : ''
     }`;
 
+    console.log('Step 1: Fetching embed page:', embedUrl);
     const embedHtml = await fetchPage(embedUrl);
     const dataHash = extractDataHash(embedHtml);
 
     if (!dataHash) {
+      console.log('Failed to extract data hash from embed page');
       return { success: false, error: 'Data hash not found in embed page' };
     }
+    console.log('Found data hash:', dataHash);
 
     // Step 2: Get ProRCP URL from RCP endpoint
     const rcpUrl = `https://cloudnestra.com/rcp/${dataHash}`;
+    console.log('Step 2: Fetching RCP page:', rcpUrl);
     const rcpHtml = await fetchPage(rcpUrl, {
       referer: 'https://vidsrc-embed.ru/',
     });
 
     const iframeSrcMatch = rcpHtml.match(/src:\s*['"]([^'"]+)['"]/);
     if (!iframeSrcMatch) {
+      console.log('Failed to find iframe src in RCP page');
       return { success: false, error: 'ProRCP iframe not found' };
     }
 
     const proRcpUrl = `https://cloudnestra.com${iframeSrcMatch[1]}`;
+    console.log('Step 3: Fetching ProRCP page:', proRcpUrl);
 
     // Step 3: Get ProRCP page and extract encoded URL from div
     const proRcpHtml = await fetchPage(proRcpUrl, {
       referer: 'https://vidsrc-embed.ru/',
     });
 
+    console.log('ProRCP HTML length:', proRcpHtml.length);
     const encodedUrl = extractEncodedUrl(proRcpHtml);
 
     if (!encodedUrl) {
+      console.log('Failed to extract encoded URL from ProRCP page');
       return { success: false, error: 'Encoded URL not found in ProRCP page' };
     }
+    console.log('Found encoded URL, length:', encodedUrl.length);
 
     // Step 4: Decode with Caesar cipher (shift +3 for letters only)
     // eqqmp:// -> https://
