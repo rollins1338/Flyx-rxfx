@@ -100,8 +100,8 @@ export async function GET(request: NextRequest) {
     console.log('[EXTRACT] Encoded URL extracted, length:', hiddenDiv.encoded.length);
 
     // Step 6: Decode the URL
-    const decodedResult = tryAllDecoders(hiddenDiv.encoded);
-    if (!decodedResult.success || !decodedResult.url) {
+    const decodedResult = await tryAllDecoders(hiddenDiv.encoded, hiddenDiv.divId, requestId);
+    if (!decodedResult || !decodedResult.url) {
       console.error('[EXTRACT] Failed to decode URL');
       return NextResponse.json({ error: 'Failed to decode URL' }, { status: 404 });
     }
