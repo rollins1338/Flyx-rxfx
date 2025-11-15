@@ -16,7 +16,7 @@ const nextConfig = {
   // Optimizations for Bun runtime
   experimental: {
     optimizePackageImports: ['framer-motion', 'lucide-react', 'recharts'],
-    serverComponentsExternalPackages: ['cheerio', 'jsdom', 'undici'],
+    serverComponentsExternalPackages: ['linkedom'],
   },
   // Performance optimizations
   compiler: {

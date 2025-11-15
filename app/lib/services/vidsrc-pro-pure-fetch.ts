@@ -1,7 +1,9 @@
 /**
  * VidSrc Pro - Pure Fetch Extractor
- * No VM, no Puppeteer, no Cheerio - just HTTP requests and Caesar cipher decoding
+ * No VM, no Puppeteer - just HTTP requests, linkedom, and Caesar cipher decoding
  */
+
+import { parseHTML } from 'linkedom';
 
 interface FetchOptions {
   referer?: string;
@@ -25,18 +27,17 @@ async function fetchPage(url: string, options: FetchOptions = {}): Promise<strin
 }
 
 function extractDataHash(html: string): string | null {
-  // Match data-hash attribute: data-hash="..."
-  const match = html.match(/data-hash=["']([^"']+)["']/);
-  return match ? match[1] : null;
+  const { document } = parseHTML(html);
+  const element = document.querySelector('[data-hash]');
+  return element?.getAttribute('data-hash') || null;
 }
 
 function extractEncodedUrl(html: string): string | null {
-  // Find divs with id and extract long content with ://
-  const divRegex = /<div[^>]+id=["'][^"']*["'][^>]*>(.*?)<\/div>/g;
-  let match;
+  const { document } = parseHTML(html);
+  const divs = document.querySelectorAll('div[id]');
   
-  while ((match = divRegex.exec(html)) !== null) {
-    const content = match[1].trim();
+  for (const div of divs) {
+    const content = div.textContent?.trim() || '';
     // Look for long content with :// pattern (encoded URL)
     if (content.length > 100 && content.includes('://') && !content.includes('<')) {
       return content;
