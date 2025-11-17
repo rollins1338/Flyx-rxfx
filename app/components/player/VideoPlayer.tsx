@@ -669,7 +669,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
   return (
     <div 
       ref={containerRef}
-      className={styles.playerContainer}
+      className={`${styles.playerContainer} ${!showControls && isPlaying ? styles.hideCursor : ''}`}
       onMouseMove={resetControlsTimeout}
       onMouseLeave={() => isPlaying && setShowControls(false)}
       onClick={togglePlay}
