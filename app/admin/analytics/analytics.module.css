@@ -1,0 +1,217 @@
+.container {
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.timeRangeSelector {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.timeRangeSelector button {
+  padding: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0.5rem;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.timeRangeSelector button:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.timeRangeSelector button.active {
+  background: #e50914;
+  border-color: #e50914;
+}
+
+.loading {
+  text-align: center;
+  padding: 4rem;
+  color: #999;
+  font-size: 1.2rem;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.statCard {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.statCard h3 {
+  font-size: 0.875rem;
+  color: #999;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.statValue {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #fff;
+  margin: 0;
+}
+
+.breakdownSection {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.breakdown {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+}
+
+.breakdown h3 {
+  font-size: 1.125rem;
+  color: #fff;
+  margin-bottom: 1rem;
+}
+
+.breakdownList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.breakdownItem {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 0.5rem;
+  color: #ccc;
+}
+
+.breakdownItem span:first-child {
+  text-transform: capitalize;
+}
+
+.breakdownItem span:last-child {
+  color: #999;
+  font-size: 0.875rem;
+}
+
+.sessionsSection {
+  margin-top: 2rem;
+}
+
+.sessionsSection h2 {
+  font-size: 1.5rem;
+  color: #fff;
+  margin-bottom: 1rem;
+}
+
+.tableContainer {
+  overflow-x: auto;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.75rem;
+}
+
+.sessionsTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.sessionsTable thead {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sessionsTable th {
+  padding: 1rem;
+  text-align: left;
+  font-size: 0.875rem;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.sessionsTable td {
+  padding: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  color: #ccc;
+}
+
+.sessionsTable tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.contentInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.contentInfo strong {
+  color: #fff;
+}
+
+.contentInfo small {
+  color: #999;
+  font-size: 0.75rem;
+}
+
+.completed {
+  color: #4ade80 !important;
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 1rem;
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .statsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .breakdownSection {
+    grid-template-columns: 1fr;
+  }
+
+  .tableContainer {
+    overflow-x: scroll;
+  }
+
+  .sessionsTable {
+    min-width: 800px;
+  }
+}

@@ -25,6 +25,7 @@ export interface PageViewEvent {
 export interface WatchEvent {
   contentId: string;
   contentType: 'movie' | 'tv';
+  contentTitle?: string;
   action: 'start' | 'pause' | 'resume' | 'complete' | 'progress';
   currentTime: number;
   duration: number;
@@ -140,6 +141,143 @@ class AnalyticsService {
         lastWatched: Date.now(),
         completed: event.action === 'complete',
       });
+    }
+    
+    // Track detailed watch session
+    this.updateWatchSession(event);
+  }
+
+  /**
+   * Update watch session with detailed tracking
+   */
+  private updateWatchSession(event: WatchEvent): void {
+    if (!this.userSession) return;
+
+    const sessionKey = `watch_session_${event.contentId}_${event.seasonNumber || 0}_${event.episodeNumber || 0}`;
+    
+    // Get or create watch session data
+    let sessionData = this.getSessionData(sessionKey);
+    
+    if (!sessionData) {
+      sessionData = {
+        id: `ws_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        startedAt: Date.now(),
+        totalWatchTime: 0,
+        pauseCount: 0,
+        seekCount: 0,
+        lastUpdateTime: Date.now(),
+        lastPosition: 0,
+      };
+    }
+
+    // Update session data based on action
+    const now = Date.now();
+    const timeSinceLastUpdate = (now - sessionData.lastUpdateTime) / 1000;
+    
+    switch (event.action) {
+      case 'start':
+        sessionData.startedAt = now;
+        sessionData.lastPosition = event.currentTime;
+        break;
+        
+      case 'pause':
+        sessionData.pauseCount++;
+        if (timeSinceLastUpdate < 5) { // Only count watch time if reasonable
+          sessionData.totalWatchTime += timeSinceLastUpdate;
+        }
+        sessionData.lastPosition = event.currentTime;
+        break;
+        
+      case 'resume':
+        sessionData.lastPosition = event.currentTime;
+        break;
+        
+      case 'progress':
+        // Track seek events (position jumped significantly)
+        if (Math.abs(event.currentTime - sessionData.lastPosition) > 5) {
+          sessionData.seekCount++;
+        } else if (timeSinceLastUpdate < 5) {
+          sessionData.totalWatchTime += timeSinceLastUpdate;
+        }
+        sessionData.lastPosition = event.currentTime;
+        break;
+        
+      case 'complete':
+        if (timeSinceLastUpdate < 5) {
+          sessionData.totalWatchTime += timeSinceLastUpdate;
+        }
+        sessionData.lastPosition = event.currentTime;
+        sessionData.endedAt = now;
+        break;
+    }
+
+    sessionData.lastUpdateTime = now;
+    this.setSessionData(sessionKey, sessionData);
+
+    // Send session update to server periodically or on complete
+    if (event.action === 'complete' || sessionData.totalWatchTime % 30 < 1) {
+      this.syncWatchSession(event, sessionData);
+    }
+  }
+
+  /**
+   * Sync watch session to server
+   */
+  private async syncWatchSession(event: WatchEvent, sessionData: any): Promise<void> {
+    try {
+      const completionPercentage = event.duration > 0 
+        ? Math.round((event.currentTime / event.duration) * 100) 
+        : 0;
+
+      await fetch('/api/analytics/watch-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: sessionData.id,
+          sessionId: this.userSession?.sessionId,
+          userId: this.userSession?.userId,
+          contentId: event.contentId,
+          contentType: event.contentType,
+          contentTitle: event.contentTitle,
+          seasonNumber: event.seasonNumber,
+          episodeNumber: event.episodeNumber,
+          startedAt: sessionData.startedAt,
+          endedAt: sessionData.endedAt,
+          totalWatchTime: Math.round(sessionData.totalWatchTime),
+          lastPosition: Math.round(event.currentTime),
+          duration: Math.round(event.duration),
+          completionPercentage,
+          quality: event.quality,
+          isCompleted: event.action === 'complete' || completionPercentage >= 90,
+          pauseCount: sessionData.pauseCount,
+          seekCount: sessionData.seekCount,
+        }),
+      });
+    } catch (error) {
+      console.error('Failed to sync watch session:', error);
+    }
+  }
+
+  /**
+   * Get session storage data
+   */
+  private getSessionData(key: string): any {
+    try {
+      const data = sessionStorage.getItem(key);
+      return data ? JSON.parse(data) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Set session storage data
+   */
+  private setSessionData(key: string, data: any): void {
+    try {
+      sessionStorage.setItem(key, JSON.stringify(data));
+    } catch (error) {
+      console.error('Failed to save session data:', error);
     }
   }
 

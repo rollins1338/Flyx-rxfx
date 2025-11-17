@@ -34,6 +34,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
   } = useWatchProgress({
     contentId: tmdbId,
     contentType,
+    contentTitle: title,
     seasonNumber: season,
     episodeNumber: episode,
     onProgress: (_time, _duration) => {
@@ -296,7 +297,10 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
           action_type: 'play',
           contentId: tmdbId,
           contentType: mediaType,
+          contentTitle: title,
           currentTime: video.currentTime,
+          seasonNumber: season,
+          episodeNumber: episode,
         },
       });
     };

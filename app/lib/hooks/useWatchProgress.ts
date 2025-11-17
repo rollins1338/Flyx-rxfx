@@ -9,6 +9,7 @@ import { useAnalytics } from '@/components/analytics/AnalyticsProvider';
 interface WatchProgressOptions {
   contentId?: string;
   contentType?: 'movie' | 'episode';
+  contentTitle?: string;
   seasonNumber?: number;
   episodeNumber?: number;
   onProgress?: (time: number, duration: number) => void;
@@ -23,7 +24,8 @@ const COMPLETION_THRESHOLD = 0.9; // Consider 90% as completed
 export function useWatchProgress(options: WatchProgressOptions) {
   const { 
     contentId, 
-    contentType, 
+    contentType,
+    contentTitle,
     seasonNumber, 
     episodeNumber, 
     onProgress, 
@@ -74,6 +76,7 @@ export function useWatchProgress(options: WatchProgressOptions) {
     trackWatchEvent({
       contentId,
       contentType: mappedContentType,
+      contentTitle,
       action: 'start',
       currentTime,
       duration,
@@ -82,10 +85,11 @@ export function useWatchProgress(options: WatchProgressOptions) {
     });
     
     trackContentEngagement(contentId, mappedContentType, 'watch_start', {
+      contentTitle,
       seasonNumber,
       episodeNumber,
     });
-  }, [contentId, contentType, seasonNumber, episodeNumber, trackWatchEvent, trackContentEngagement]);
+  }, [contentId, contentType, contentTitle, seasonNumber, episodeNumber, trackWatchEvent, trackContentEngagement]);
 
   // Track watch pause
   const handleWatchPause = useCallback((currentTime: number, duration: number) => {
@@ -96,13 +100,14 @@ export function useWatchProgress(options: WatchProgressOptions) {
     trackWatchEvent({
       contentId,
       contentType: mappedContentType,
+      contentTitle,
       action: 'pause',
       currentTime,
       duration,
       seasonNumber,
       episodeNumber,
     });
-  }, [contentId, contentType, seasonNumber, episodeNumber, trackWatchEvent]);
+  }, [contentId, contentType, contentTitle, seasonNumber, episodeNumber, trackWatchEvent]);
 
   // Track watch resume
   const handleWatchResume = useCallback((currentTime: number, duration: number) => {
@@ -113,13 +118,14 @@ export function useWatchProgress(options: WatchProgressOptions) {
     trackWatchEvent({
       contentId,
       contentType: mappedContentType,
+      contentTitle,
       action: 'resume',
       currentTime,
       duration,
       seasonNumber,
       episodeNumber,
     });
-  }, [contentId, contentType, seasonNumber, episodeNumber, trackWatchEvent]);
+  }, [contentId, contentType, contentTitle, seasonNumber, episodeNumber, trackWatchEvent]);
 
   // Handle progress updates
   const handleProgress = useCallback((currentTime: number, duration: number) => {
@@ -142,6 +148,7 @@ export function useWatchProgress(options: WatchProgressOptions) {
       trackWatchEvent({
         contentId,
         contentType: mappedContentType,
+        contentTitle,
         action: 'complete',
         currentTime,
         duration,
@@ -166,6 +173,7 @@ export function useWatchProgress(options: WatchProgressOptions) {
       trackWatchEvent({
         contentId,
         contentType: mappedContentType,
+        contentTitle,
         action: 'progress',
         currentTime,
         duration,
@@ -217,6 +225,7 @@ export function useWatchProgress(options: WatchProgressOptions) {
     trackWatchEvent({
       contentId,
       contentType: mappedContentType,
+      contentTitle,
       action: 'complete',
       currentTime,
       duration,

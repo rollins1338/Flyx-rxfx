@@ -212,6 +212,31 @@ class DatabaseConnection {
         avg_session_duration REAL DEFAULT 0,
         top_content TEXT,
         updated_at BIGINT
+      )`,
+      
+      // Watch sessions table - detailed tracking
+      `CREATE TABLE IF NOT EXISTS watch_sessions (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        content_id TEXT NOT NULL,
+        content_type TEXT NOT NULL,
+        content_title TEXT,
+        season_number INTEGER,
+        episode_number INTEGER,
+        started_at BIGINT NOT NULL,
+        ended_at BIGINT,
+        total_watch_time INTEGER DEFAULT 0,
+        last_position INTEGER DEFAULT 0,
+        duration INTEGER DEFAULT 0,
+        completion_percentage REAL DEFAULT 0,
+        quality TEXT,
+        device_type TEXT,
+        is_completed BOOLEAN DEFAULT FALSE,
+        pause_count INTEGER DEFAULT 0,
+        seek_count INTEGER DEFAULT 0,
+        created_at BIGINT,
+        updated_at BIGINT
       )`
     ];
 
@@ -222,7 +247,11 @@ class DatabaseConnection {
       'CREATE INDEX IF NOT EXISTS idx_analytics_event_type ON analytics_events(event_type)',
       'CREATE INDEX IF NOT EXISTS idx_content_stats_type ON content_stats(content_type)',
       'CREATE INDEX IF NOT EXISTS idx_content_stats_views ON content_stats(view_count DESC)',
-      'CREATE INDEX IF NOT EXISTS idx_admin_username ON admin_users(username)'
+      'CREATE INDEX IF NOT EXISTS idx_admin_username ON admin_users(username)',
+      'CREATE INDEX IF NOT EXISTS idx_watch_sessions_user ON watch_sessions(user_id)',
+      'CREATE INDEX IF NOT EXISTS idx_watch_sessions_content ON watch_sessions(content_id)',
+      'CREATE INDEX IF NOT EXISTS idx_watch_sessions_started ON watch_sessions(started_at DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_watch_sessions_session ON watch_sessions(session_id)'
     ];
 
     for (const table of tables) {
@@ -297,6 +326,31 @@ class DatabaseConnection {
         avg_session_duration REAL DEFAULT 0,
         top_content TEXT,
         updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+      )`,
+      
+      // Watch sessions table - detailed tracking
+      `CREATE TABLE IF NOT EXISTS watch_sessions (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        content_id TEXT NOT NULL,
+        content_type TEXT NOT NULL,
+        content_title TEXT,
+        season_number INTEGER,
+        episode_number INTEGER,
+        started_at INTEGER NOT NULL,
+        ended_at INTEGER,
+        total_watch_time INTEGER DEFAULT 0,
+        last_position INTEGER DEFAULT 0,
+        duration INTEGER DEFAULT 0,
+        completion_percentage REAL DEFAULT 0,
+        quality TEXT,
+        device_type TEXT,
+        is_completed INTEGER DEFAULT 0,
+        pause_count INTEGER DEFAULT 0,
+        seek_count INTEGER DEFAULT 0,
+        created_at INTEGER DEFAULT (strftime('%s', 'now')),
+        updated_at INTEGER DEFAULT (strftime('%s', 'now'))
       )`
     ];
 
@@ -307,7 +361,11 @@ class DatabaseConnection {
       'CREATE INDEX IF NOT EXISTS idx_analytics_event_type ON analytics_events(event_type)',
       'CREATE INDEX IF NOT EXISTS idx_content_stats_type ON content_stats(content_type)',
       'CREATE INDEX IF NOT EXISTS idx_content_stats_views ON content_stats(view_count DESC)',
-      'CREATE INDEX IF NOT EXISTS idx_admin_username ON admin_users(username)'
+      'CREATE INDEX IF NOT EXISTS idx_admin_username ON admin_users(username)',
+      'CREATE INDEX IF NOT EXISTS idx_watch_sessions_user ON watch_sessions(user_id)',
+      'CREATE INDEX IF NOT EXISTS idx_watch_sessions_content ON watch_sessions(content_id)',
+      'CREATE INDEX IF NOT EXISTS idx_watch_sessions_started ON watch_sessions(started_at DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_watch_sessions_session ON watch_sessions(session_id)'
     ];
 
     for (const table of tables) {
@@ -412,6 +470,129 @@ class DatabaseConnection {
         avgSessionDuration: 0 // Calculate separately if needed
       };
     }
+  }
+
+  async upsertWatchSession(session: {
+    id: string;
+    sessionId: string;
+    userId: string;
+    contentId: string;
+    contentType: string;
+    contentTitle?: string;
+    seasonNumber?: number;
+    episodeNumber?: number;
+    startedAt: number;
+    endedAt?: number;
+    totalWatchTime: number;
+    lastPosition: number;
+    duration: number;
+    completionPercentage: number;
+    quality?: string;
+    deviceType?: string;
+    isCompleted: boolean;
+    pauseCount: number;
+    seekCount: number;
+  }): Promise<void> {
+    const adapter = this.getAdapter();
+    const now = Date.now();
+    
+    if (this.isNeon) {
+      await adapter.execute(`
+        INSERT INTO watch_sessions (
+          id, session_id, user_id, content_id, content_type, content_title,
+          season_number, episode_number, started_at, ended_at, total_watch_time,
+          last_position, duration, completion_percentage, quality, device_type,
+          is_completed, pause_count, seek_count, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+        ON CONFLICT(id) DO UPDATE SET
+          ended_at = $22,
+          total_watch_time = $23,
+          last_position = $24,
+          completion_percentage = $25,
+          is_completed = $26,
+          pause_count = $27,
+          seek_count = $28,
+          updated_at = $29
+      `, [
+        session.id, session.sessionId, session.userId, session.contentId, session.contentType,
+        session.contentTitle || null, session.seasonNumber || null, session.episodeNumber || null,
+        session.startedAt, session.endedAt || null, session.totalWatchTime, session.lastPosition,
+        session.duration, session.completionPercentage, session.quality || null, session.deviceType || null,
+        session.isCompleted, session.pauseCount, session.seekCount, now, now,
+        // Update values
+        session.endedAt || null, session.totalWatchTime, session.lastPosition,
+        session.completionPercentage, session.isCompleted, session.pauseCount, session.seekCount, now
+      ]);
+    } else {
+      await adapter.execute(`
+        INSERT INTO watch_sessions (
+          id, session_id, user_id, content_id, content_type, content_title,
+          season_number, episode_number, started_at, ended_at, total_watch_time,
+          last_position, duration, completion_percentage, quality, device_type,
+          is_completed, pause_count, seek_count, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          ended_at = ?,
+          total_watch_time = ?,
+          last_position = ?,
+          completion_percentage = ?,
+          is_completed = ?,
+          pause_count = ?,
+          seek_count = ?,
+          updated_at = ?
+      `, [
+        session.id, session.sessionId, session.userId, session.contentId, session.contentType,
+        session.contentTitle || null, session.seasonNumber || null, session.episodeNumber || null,
+        session.startedAt, session.endedAt || null, session.totalWatchTime, session.lastPosition,
+        session.duration, session.completionPercentage, session.quality || null, session.deviceType || null,
+        session.isCompleted ? 1 : 0, session.pauseCount, session.seekCount, now, now,
+        // Update values
+        session.endedAt || null, session.totalWatchTime, session.lastPosition,
+        session.completionPercentage, session.isCompleted ? 1 : 0, session.pauseCount, session.seekCount, now
+      ]);
+    }
+  }
+
+  async getWatchSessions(filters?: {
+    userId?: string;
+    contentId?: string;
+    startDate?: number;
+    endDate?: number;
+    limit?: number;
+  }): Promise<any[]> {
+    const adapter = this.getAdapter();
+    let query = 'SELECT * FROM watch_sessions WHERE 1=1';
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (filters?.userId) {
+      query += this.isNeon ? ` AND user_id = $${paramIndex++}` : ' AND user_id = ?';
+      params.push(filters.userId);
+    }
+
+    if (filters?.contentId) {
+      query += this.isNeon ? ` AND content_id = $${paramIndex++}` : ' AND content_id = ?';
+      params.push(filters.contentId);
+    }
+
+    if (filters?.startDate) {
+      query += this.isNeon ? ` AND started_at >= $${paramIndex++}` : ' AND started_at >= ?';
+      params.push(filters.startDate);
+    }
+
+    if (filters?.endDate) {
+      query += this.isNeon ? ` AND started_at <= $${paramIndex++}` : ' AND started_at <= ?';
+      params.push(filters.endDate);
+    }
+
+    query += ' ORDER BY started_at DESC';
+
+    if (filters?.limit) {
+      query += this.isNeon ? ` LIMIT $${paramIndex++}` : ' LIMIT ?';
+      params.push(filters.limit);
+    }
+
+    return await adapter.query(query, params);
   }
 
   close(): void {

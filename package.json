@@ -12,6 +12,7 @@
     "test:watch": "bun test --watch",
     "type-check": "tsc --noEmit",
     "check-env": "node scripts/check-env.js",
+    "verify-env": "node scripts/verify-env.js",
     "db:init": "bun run server/db/init.ts",
     "db:migrate": "bun run server/db/manage.ts migrate",
     "db:status": "bun run server/db/manage.ts status",
