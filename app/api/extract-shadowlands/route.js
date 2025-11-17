@@ -752,7 +752,7 @@ export async function GET(request) {
       const selfHostedResult = await Promise.race([
         extractVidsrcSelfHosted(tmdbId, contentType, season ? parseInt(season) : undefined, episode ? parseInt(episode) : undefined),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Self-hosted extraction timeout after 30 seconds')), 30000)
+          setTimeout(() => reject(new Error('Self-hosted extraction timeout after 30 seconds')), 30000))
       ]);
       
       if (selfHostedResult.success) {
