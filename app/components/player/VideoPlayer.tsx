@@ -634,25 +634,36 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
     }
   };
 
-  const loadSubtitle = (subtitleUrl: string | null) => {
+  const loadSubtitle = (subtitle: any | null) => {
     if (!videoRef.current) return;
     
     // Remove existing subtitle tracks
     const tracks = videoRef.current.querySelectorAll('track');
     tracks.forEach(track => track.remove());
     
-    if (subtitleUrl) {
+    if (subtitle) {
+      // Proxy the subtitle URL through our API
+      const proxiedUrl = `/api/subtitle-proxy?url=${encodeURIComponent(subtitle.url)}`;
+      
       const track = document.createElement('track');
       track.kind = 'subtitles';
-      track.label = 'Subtitles';
-      track.srclang = 'en';
-      track.src = subtitleUrl;
+      track.label = subtitle.language || 'Subtitles';
+      track.srclang = subtitle.iso639 || 'en';
+      track.src = proxiedUrl;
       track.default = true;
       videoRef.current.appendChild(track);
-      videoRef.current.textTracks[0].mode = 'showing';
+      
+      // Ensure track is visible
+      if (videoRef.current.textTracks && videoRef.current.textTracks.length > 0) {
+        videoRef.current.textTracks[0].mode = 'showing';
+      }
+      
+      console.log('[VideoPlayer] Loaded subtitle:', subtitle.language);
+      setCurrentSubtitle(subtitle.id);
+    } else {
+      setCurrentSubtitle(null);
     }
     
-    setCurrentSubtitle(subtitleUrl);
     setShowSubtitles(false);
   };
 
@@ -663,7 +674,6 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
       
       const params = new URLSearchParams({
         imdbId,
-        languageId: 'eng',
       });
       
       if (mediaType === 'tv' && season && episode) {
@@ -1041,8 +1051,8 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
                         {availableSubtitles.map((subtitle, index) => (
                           <button
                             key={index}
-                            className={`${styles.settingsOption} ${currentSubtitle === subtitle.url ? styles.active : ''}`}
-                            onClick={() => loadSubtitle(subtitle.url)}
+                            className={`${styles.settingsOption} ${currentSubtitle === subtitle.id ? styles.active : ''}`}
+                            onClick={() => loadSubtitle(subtitle)}
                             title={`${subtitle.language} - ${subtitle.fileName || 'Subtitle'}`}
                           >
                             {subtitle.language}
