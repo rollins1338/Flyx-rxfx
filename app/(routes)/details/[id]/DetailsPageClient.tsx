@@ -72,14 +72,16 @@ export default function DetailsPageClient({
   const handleWatchNow = () => {
     if (!content) return;
     
+    const title = encodeURIComponent(content.title || content.name || 'Unknown');
+    
     if (content.mediaType === 'movie') {
-      router.push(`/watch/${content.id}?type=movie`);
+      router.push(`/watch/${content.id}?type=movie&title=${title}`);
     } else {
       // For TV shows, watch first episode of selected season
       const episode = seasonData?.episodes[0];
       if (episode) {
         router.push(
-          `/watch/${content.id}?type=tv&season=${selectedSeason}&episode=${episode.episodeNumber}`
+          `/watch/${content.id}?type=tv&season=${selectedSeason}&episode=${episode.episodeNumber}&title=${title}`
         );
       }
     }
@@ -87,8 +89,9 @@ export default function DetailsPageClient({
 
   const handleEpisodeSelect = (episodeNumber: number) => {
     if (!content) return;
+    const title = encodeURIComponent(content.title || content.name || 'Unknown');
     router.push(
-      `/watch/${content.id}?type=tv&season=${selectedSeason}&episode=${episodeNumber}`
+      `/watch/${content.id}?type=tv&season=${selectedSeason}&episode=${episodeNumber}&title=${title}`
     );
   };
 

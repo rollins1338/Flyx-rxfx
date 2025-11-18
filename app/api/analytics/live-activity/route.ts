@@ -38,21 +38,44 @@ export async function POST(request: NextRequest) {
     const deviceType = userAgent.includes('Mobile') ? 'mobile' : 
                       userAgent.includes('Tablet') ? 'tablet' : 'desktop';
 
-    // Get location from headers (Vercel provides these)
-    const country = request.headers.get('x-vercel-ip-country') || 
-                   request.headers.get('cf-ipcountry') || 
-                   data.country || 
-                   'Unknown';
+    // Get location from headers (Vercel/Cloudflare provides these)
+    let country = request.headers.get('x-vercel-ip-country') || 
+                  request.headers.get('cf-ipcountry') || 
+                  data.country || 
+                  null;
     
-    const city = request.headers.get('x-vercel-ip-city') || '';
-    const region = request.headers.get('x-vercel-ip-country-region') || '';
+    let city = request.headers.get('x-vercel-ip-city') || '';
+    let region = request.headers.get('x-vercel-ip-country-region') || '';
+    
+    // Decode URL-encoded values (Vercel encodes city names)
+    if (city) {
+      try {
+        city = decodeURIComponent(city);
+      } catch (e) {
+        console.warn('[Live Activity] Failed to decode city:', city);
+      }
+    }
+    
+    if (region) {
+      try {
+        region = decodeURIComponent(region);
+      } catch (e) {
+        console.warn('[Live Activity] Failed to decode region:', region);
+      }
+    }
     
     // Format location string
-    const location = city && region 
-      ? `${city}, ${region}, ${country}`
-      : region 
-      ? `${region}, ${country}`
-      : country;
+    let location: string;
+    if (city && region && country) {
+      location = `${city}, ${region}, ${country}`;
+    } else if (region && country) {
+      location = `${region}, ${country}`;
+    } else if (country) {
+      location = country;
+    } else {
+      // Fallback: Try to get from IP (in production Vercel should provide this)
+      location = process.env.NODE_ENV === 'development' ? 'Local' : 'Unknown';
+    }
 
     console.log('[Live Activity] Location:', location, 'Device:', deviceType);
 

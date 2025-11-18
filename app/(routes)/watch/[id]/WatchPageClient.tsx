@@ -27,6 +27,10 @@ function WatchContent() {
   const mediaType = searchParams.get('type') as 'movie' | 'tv';
   const season = searchParams.get('season');
   const episode = searchParams.get('episode');
+  const titleParam = searchParams.get('title') || searchParams.get('name');
+  
+  // Decode title if it exists
+  const title = titleParam ? decodeURIComponent(titleParam) : 'Loading...';
   
   const seasonId = season ? parseInt(season) : undefined;
   const episodeId = episode ? parseInt(episode) : undefined;
@@ -75,6 +79,7 @@ function WatchContent() {
           mediaType={mediaType}
           season={seasonId}
           episode={episodeId}
+          title={title}
         />
       </div>
     </div>

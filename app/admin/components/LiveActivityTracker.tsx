@@ -414,14 +414,28 @@ export default function LiveActivityTracker() {
                   </div>
                 </div>
 
-                {activity.content_title && (
+                {activity.activity_type === 'watching' && activity.content_title ? (
                   <div style={{ marginBottom: '1rem' }}>
-                    <div style={{ color: '#f8fafc', fontSize: '1.125rem', fontWeight: '600', marginBottom: '0.25rem' }}>
+                    <div style={{ 
+                      color: '#f8fafc', 
+                      fontSize: '1.125rem', 
+                      fontWeight: '600', 
+                      marginBottom: '0.25rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem'
+                    }}>
+                      <span>🎬</span>
                       {activity.content_title}
                     </div>
                     {activity.season_number && activity.episode_number && (
-                      <div style={{ color: '#94a3b8', fontSize: '0.875rem', marginBottom: '0.75rem' }}>
-                        S{activity.season_number}E{activity.episode_number}
+                      <div style={{ 
+                        color: '#94a3b8', 
+                        fontSize: '0.875rem', 
+                        marginBottom: '0.75rem',
+                        fontWeight: '500'
+                      }}>
+                        Season {activity.season_number}, Episode {activity.episode_number}
                       </div>
                     )}
                     {activity.current_position !== undefined && activity.duration && (
@@ -447,7 +461,17 @@ export default function LiveActivityTracker() {
                       </div>
                     )}
                   </div>
-                )}
+                ) : activity.activity_type === 'browsing' ? (
+                  <div style={{ marginBottom: '1rem' }}>
+                    <div style={{ 
+                      color: '#94a3b8', 
+                      fontSize: '0.875rem',
+                      fontStyle: 'italic'
+                    }}>
+                      Browsing the site...
+                    </div>
+                  </div>
+                ) : null}
 
                 <div style={{
                   display: 'flex',
