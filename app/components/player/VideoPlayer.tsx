@@ -66,7 +66,6 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
   const [isBuffering, setIsBuffering] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showSubtitles, setShowSubtitles] = useState(false);
-  const [subtitles, setSubtitles] = useState<any[]>([]);
   const [currentSubtitle, setCurrentSubtitle] = useState<string | null>(null);
   const [showResumePrompt, setShowResumePrompt] = useState(false);
   const [savedProgress, setSavedProgress] = useState<number>(0);
@@ -975,15 +974,9 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
                     >
                       Off
                     </button>
-                    {subtitles.map((sub, index) => (
-                      <button
-                        key={index}
-                        className={`${styles.settingsOption} ${currentSubtitle === sub.url ? styles.active : ''}`}
-                        onClick={() => loadSubtitle(sub.url)}
-                      >
-                        {sub.language || 'English'}
-                      </button>
-                    ))}
+                    <div style={{ padding: '0.75rem 1rem', color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.875rem', fontStyle: 'italic' }}>
+                      No subtitles available
+                    </div>
                   </div>
                 </div>
               )}
