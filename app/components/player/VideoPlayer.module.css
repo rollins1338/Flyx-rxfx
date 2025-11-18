@@ -447,6 +447,30 @@
   margin-bottom: 0;
 }
 
+.sourcesList {
+  max-height: 300px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.sourcesList::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sourcesList::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+.sourcesList::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.sourcesList::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
 .settingsLabel {
   color: rgba(255, 255, 255, 0.6);
   font-size: 0.75rem;

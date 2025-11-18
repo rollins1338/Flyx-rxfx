@@ -999,15 +999,17 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
                   <div className={styles.settingsMenu} onClick={(e) => e.stopPropagation()}>
                     <div className={styles.settingsSection}>
                       <div className={styles.settingsLabel}>Video Sources</div>
-                      {availableSources.map((source, index) => (
-                        <button
-                          key={index}
-                          className={`${styles.settingsOption} ${currentSourceIndex === index ? styles.active : ''}`}
-                          onClick={() => changeSource(index)}
-                        >
-                          {source.title || source.quality}
-                        </button>
-                      ))}
+                      <div className={styles.sourcesList}>
+                        {availableSources.map((source, index) => (
+                          <button
+                            key={index}
+                            className={`${styles.settingsOption} ${currentSourceIndex === index ? styles.active : ''}`}
+                            onClick={() => changeSource(index)}
+                          >
+                            {source.title || source.quality}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 )}
