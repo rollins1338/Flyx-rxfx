@@ -447,7 +447,7 @@ async function updateContentStats(event: { content_id?: string; content_type?: s
     const db = getDB();
     const adapter = db.getAdapter();
     
-    const watchTime = event.watch_time || 0;
+    const watchTime = Math.round(event.watch_time || 0);
     const now = Date.now();
 
     // Use different SQL syntax based on database type
