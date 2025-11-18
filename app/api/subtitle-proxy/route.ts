@@ -59,9 +59,11 @@ export async function GET(request: NextRequest) {
 
     let content: string;
     
-    // Handle gzip compression
-    const contentEncoding = response.headers.get('content-encoding');
-    if (contentEncoding === 'gzip') {
+    // Check if URL ends with .gz or if content-encoding is gzip
+    const isGzipped = url.endsWith('.gz') || response.headers.get('content-encoding') === 'gzip';
+    
+    if (isGzipped) {
+      console.log('[SUBTITLE-PROXY] Decompressing gzip content');
       const buffer = await response.arrayBuffer();
       const decompressed = await gunzip(Buffer.from(buffer));
       content = decompressed.toString('utf-8');
