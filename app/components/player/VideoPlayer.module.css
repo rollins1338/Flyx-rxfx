@@ -31,6 +31,21 @@
   z-index: 10;
 }
 
+.loadingHint {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.875rem;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 .spinner {
   width: 60px;
   height: 60px;
@@ -66,6 +81,36 @@
   color: rgba(255, 255, 255, 0.8);
   font-size: 1.1rem;
   line-height: 1.6;
+  margin-bottom: 1.5rem;
+}
+
+.errorActions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.retryButton {
+  padding: 0.75rem 1.5rem;
+  background: #e50914;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.retryButton:hover {
+  background: #f40612;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(229, 9, 20, 0.4);
+}
+
+.retryButton:active {
+  transform: translateY(0);
 }
 
 /* Controls */

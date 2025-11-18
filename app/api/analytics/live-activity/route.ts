@@ -13,7 +13,15 @@ export async function POST(request: NextRequest) {
   try {
     const data = await request.json();
 
+    console.log('[Live Activity] Received heartbeat:', {
+      userId: data.userId?.substring(0, 8),
+      sessionId: data.sessionId?.substring(0, 8),
+      activityType: data.activityType,
+      contentId: data.contentId,
+    });
+
     if (!data.userId || !data.sessionId || !data.activityType) {
+      console.error('[Live Activity] Missing required fields:', data);
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -30,6 +38,24 @@ export async function POST(request: NextRequest) {
     const deviceType = userAgent.includes('Mobile') ? 'mobile' : 
                       userAgent.includes('Tablet') ? 'tablet' : 'desktop';
 
+    // Get location from headers (Vercel provides these)
+    const country = request.headers.get('x-vercel-ip-country') || 
+                   request.headers.get('cf-ipcountry') || 
+                   data.country || 
+                   'Unknown';
+    
+    const city = request.headers.get('x-vercel-ip-city') || '';
+    const region = request.headers.get('x-vercel-ip-country-region') || '';
+    
+    // Format location string
+    const location = city && region 
+      ? `${city}, ${region}, ${country}`
+      : region 
+      ? `${region}, ${country}`
+      : country;
+
+    console.log('[Live Activity] Location:', location, 'Device:', deviceType);
+
     await db.upsertLiveActivity({
       id: activityId,
       userId: data.userId,
@@ -44,8 +70,10 @@ export async function POST(request: NextRequest) {
       duration: data.duration,
       quality: data.quality,
       deviceType,
-      country: data.country,
+      country: location,
     });
+
+    console.log('[Live Activity] Activity saved:', activityId);
 
     return NextResponse.json({ success: true, activityId });
   } catch (error) {
@@ -63,14 +91,21 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const maxAge = parseInt(searchParams.get('maxAge') || '5');
 
+    console.log('[Live Activity] Fetching activities, maxAge:', maxAge);
+
     await initializeDB();
     const db = getDB();
 
     // Get live activities
     const activities = await db.getLiveActivities(maxAge);
 
+    console.log('[Live Activity] Found', activities.length, 'active users');
+
     // Clean up stale activities
-    await db.cleanupStaleActivities(maxAge * 2);
+    const cleaned = await db.cleanupStaleActivities(maxAge * 2);
+    if (cleaned > 0) {
+      console.log('[Live Activity] Cleaned up', cleaned, 'stale activities');
+    }
 
     // Calculate summary stats
     const stats = {

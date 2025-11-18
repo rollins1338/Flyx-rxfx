@@ -8,20 +8,59 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { extract2EmbedStreams } from '@/app/lib/services/2embed-extractor';
+import { performanceMonitor } from '@/app/lib/utils/performance-monitor';
 
 // Node.js runtime (default) - required for fetch
 
-// Simple in-memory cache - now stores multiple quality sources
-const cache = new Map<string, { sources: any[]; timestamp: number }>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+// Enhanced in-memory cache with LRU eviction
+const cache = new Map<string, { sources: any[]; timestamp: number; hits: number }>();
+const CACHE_TTL = 15 * 60 * 1000; // 15 minutes (increased for better performance)
+const MAX_CACHE_SIZE = 500; // Maximum cache entries
+
+// IMDB ID cache - separate cache for IMDB lookups
+const imdbCache = new Map<string, { imdbId: string; timestamp: number }>();
+const IMDB_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
 // Request deduplication - prevent duplicate concurrent requests
 const pendingRequests = new Map<string, Promise<any>>();
 
+// Cache management - LRU eviction
+function evictOldestCacheEntry() {
+  if (cache.size < MAX_CACHE_SIZE) return;
+  
+  let oldestKey = '';
+  let oldestTime = Date.now();
+  let lowestHits = Infinity;
+  
+  // Find least recently used with lowest hits
+  const entries = Array.from(cache.entries());
+  for (const [key, value] of entries) {
+    if (value.timestamp < oldestTime || (value.timestamp === oldestTime && value.hits < lowestHits)) {
+      oldestTime = value.timestamp;
+      lowestHits = value.hits;
+      oldestKey = key;
+    }
+  }
+  
+  if (oldestKey) {
+    cache.delete(oldestKey);
+    console.log(`[CACHE] Evicted: ${oldestKey}`);
+  }
+}
+
 /**
- * Get IMDB ID from TMDB
+ * Get IMDB ID from TMDB with caching
  */
 async function getImdbId(tmdbId: string, type: 'movie' | 'tv'): Promise<string | null> {
+  const cacheKey = `${tmdbId}-${type}`;
+  
+  // Check IMDB cache
+  const cached = imdbCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < IMDB_CACHE_TTL) {
+    console.log('[IMDB] Cache hit');
+    return cached.imdbId;
+  }
+  
   try {
     const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY;
     if (!apiKey) {
@@ -29,14 +68,32 @@ async function getImdbId(tmdbId: string, type: 'movie' | 'tv'): Promise<string |
     }
 
     const url = `https://api.themoviedb.org/3/${type}/${tmdbId}/external_ids?api_key=${apiKey}`;
-    const response = await fetch(url);
+    
+    // Use fetch with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+    
+    const response = await fetch(url, { 
+      signal: controller.signal,
+      // Add caching headers
+      next: { revalidate: 86400 } // Cache for 24 hours
+    });
+    
+    clearTimeout(timeoutId);
     
     if (!response.ok) {
       throw new Error(`TMDB API error: ${response.status}`);
     }
 
     const data = await response.json();
-    return data.imdb_id || null;
+    const imdbId = data.imdb_id || null;
+    
+    // Cache the result
+    if (imdbId) {
+      imdbCache.set(cacheKey, { imdbId, timestamp: Date.now() });
+    }
+    
+    return imdbId;
   } catch (error) {
     console.error('[EXTRACT] Failed to get IMDB ID:', error);
     return null;
@@ -116,13 +173,19 @@ export async function GET(request: NextRequest) {
     }
 
     console.log('[EXTRACT] Request:', { tmdbId, type, season, episode });
+    performanceMonitor.start('stream-extraction');
 
     // Check cache
     const cacheKey = `${tmdbId}-${type}-${season || ''}-${episode || ''}`;
     const cached = cache.get(cacheKey);
     
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-      console.log('[EXTRACT] Cache hit');
+      console.log(`[EXTRACT] Cache hit (${cached.hits} hits)`);
+      
+      // Update cache stats
+      cached.hits++;
+      cached.timestamp = Date.now(); // Refresh timestamp on access
+      
       const executionTime = Date.now() - startTime;
       
       // Return multiple quality sources
@@ -145,6 +208,7 @@ export async function GET(request: NextRequest) {
         requiresProxy: true,
         requiresSegmentProxy: true,
         cached: true,
+        cacheHits: cached.hits,
         executionTime
       });
     }
@@ -189,13 +253,23 @@ export async function GET(request: NextRequest) {
       // Remove from pending requests
       pendingRequests.delete(cacheKey);
 
-      // Cache result
+      // Evict old entries if cache is full
+      evictOldestCacheEntry();
+
+      // Cache result with initial hit count
       cache.set(cacheKey, {
         sources,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        hits: 1
       });
 
       const executionTime = Date.now() - startTime;
+      performanceMonitor.end('stream-extraction', { 
+        tmdbId, 
+        type, 
+        sources: sources.length,
+        cached: false 
+      });
       console.log(`[EXTRACT] Success in ${executionTime}ms - ${sources.length} qualities`);
 
       // Return proxied URLs

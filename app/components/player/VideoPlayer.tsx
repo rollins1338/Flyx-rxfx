@@ -98,7 +98,11 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
         }
 
         console.log('[VideoPlayer] Fetching stream:', `/api/stream/extract?${params}`);
-        const response = await fetch(`/api/stream/extract?${params}`);
+        
+        // Use fetch with priority hint for faster loading
+        const response = await fetch(`/api/stream/extract?${params}`, {
+          priority: 'high' as RequestPriority,
+        });
         const data = await response.json();
 
         console.log('[VideoPlayer] Stream response:', {
@@ -172,6 +176,24 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
           enableWorker: true,
           lowLatencyMode: true,
           backBufferLength: 90,
+          // Performance optimizations
+          maxBufferLength: 30, // Reduced from default 30s
+          maxMaxBufferLength: 60, // Max buffer
+          maxBufferSize: 60 * 1000 * 1000, // 60 MB
+          maxBufferHole: 0.5, // Jump small gaps
+          highBufferWatchdogPeriod: 2, // Check buffer health
+          nudgeOffset: 0.1, // Fine-tune playback
+          nudgeMaxRetry: 3,
+          // Faster initial loading
+          manifestLoadingTimeOut: 10000,
+          manifestLoadingMaxRetry: 2,
+          manifestLoadingRetryDelay: 500,
+          levelLoadingTimeOut: 10000,
+          levelLoadingMaxRetry: 2,
+          fragLoadingTimeOut: 20000,
+          fragLoadingMaxRetry: 3,
+          // Start with lower quality for faster initial load
+          startLevel: -1, // Auto-select
           // For proxied streams, ensure we use the proxy for all requests
           xhrSetup: (xhr, url) => {
             console.log('[VideoPlayer] HLS.js XHR request:', url);
@@ -196,12 +218,34 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
           if (data.fatal) {
             switch (data.type) {
               case Hls.ErrorTypes.NETWORK_ERROR:
-                console.error('Network error, trying to recover...');
+                console.error('Network error, trying to recover...', data);
                 
-                // Check if this might be an expired stream (404, 403, etc.)
+                // Check if we have alternative sources to try
+                const nextSourceIndex = currentSourceIndex + 1;
+                if (nextSourceIndex < availableSources.length) {
+                  console.log(`Trying alternative source ${nextSourceIndex + 1}/${availableSources.length}`);
+                  setError(`Source failed, trying alternative source...`);
+                  
+                  // Save current time before switching
+                  const savedTime = videoRef.current?.currentTime || 0;
+                  
+                  // Switch to next source
+                  setTimeout(() => {
+                    changeSource(nextSourceIndex);
+                    
+                    // Restore playback position
+                    if (videoRef.current && savedTime > 0) {
+                      videoRef.current.currentTime = savedTime;
+                    }
+                  }, 1000);
+                  
+                  return;
+                }
+                
+                // No more sources, check if stream is expired
                 if (streamRetryManager.isStreamExpired(data)) {
-                  console.log('Stream appears to be expired, attempting re-extraction...');
-                  setError('Stream expired, getting fresh URL...');
+                  console.log('All sources failed, attempting re-extraction...');
+                  setError('All sources failed, getting fresh URLs...');
                   
                   try {
                     const freshData = await streamRetryManager.retryStreamExtraction(
@@ -218,16 +262,21 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
                     );
                     
                     if (freshData?.sources && freshData.sources.length > 0) {
+                      console.log('Got fresh sources, reloading...');
+                      setAvailableSources(freshData.sources);
+                      setCurrentSourceIndex(0);
                       setStreamUrl(freshData.sources[0].url);
                       setError(null);
                     } else {
-                      setError('Failed to get fresh stream URL');
+                      setError('Failed to get fresh stream URLs');
                     }
                   } catch (retryError) {
                     console.error('Stream retry failed:', retryError);
-                    setError('Stream unavailable, please try again later');
+                    setError('All sources unavailable, please try again later');
                   }
                 } else {
+                  // Try to recover
+                  console.log('Attempting HLS recovery...');
                   hls.startLoad();
                 }
                 break;
@@ -655,6 +704,72 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
   };
 
   if (error) {
+    const handleRetry = () => {
+      setError(null);
+      setIsLoading(true);
+      fetchedRef.current = false;
+      
+      // Trigger re-fetch
+      const fetchStream = async () => {
+        try {
+          const params = new URLSearchParams({
+            tmdbId,
+            type: mediaType,
+          });
+          
+          if (mediaType === 'tv' && season && episode) {
+            params.append('season', season.toString());
+            params.append('episode', episode.toString());
+          }
+
+          const response = await fetch(`/api/stream/extract?${params}`);
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.message || data.error || 'Failed to load stream');
+          }
+
+          let sources = [];
+          
+          if (data.sources && Array.isArray(data.sources) && data.sources.length > 0) {
+            sources = data.sources;
+          } else if (data.data?.sources && Array.isArray(data.data.sources) && data.data.sources.length > 0) {
+            sources = data.data.sources;
+          } else if (data.url || data.streamUrl) {
+            sources = [{
+              quality: 'auto',
+              url: data.url || data.streamUrl
+            }];
+          }
+
+          if (sources.length > 0) {
+            setAvailableSources(sources);
+            setCurrentSourceIndex(0);
+            setStreamUrl(sources[0].url);
+            setError(null);
+          } else {
+            throw new Error('No stream sources available');
+          }
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Failed to load video');
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      fetchStream();
+    };
+
+    const handleTryNextSource = () => {
+      const nextIndex = currentSourceIndex + 1;
+      if (nextIndex < availableSources.length) {
+        setError(null);
+        changeSource(nextIndex);
+      } else {
+        handleRetry();
+      }
+    };
+
     return (
       <div className={styles.error}>
         <div className={styles.errorContent}>
@@ -665,6 +780,16 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
           </svg>
           <h3>Unable to load video</h3>
           <p>{error}</p>
+          <div className={styles.errorActions}>
+            {currentSourceIndex + 1 < availableSources.length && (
+              <button onClick={handleTryNextSource} className={styles.retryButton}>
+                Try Alternative Source ({currentSourceIndex + 2}/{availableSources.length})
+              </button>
+            )}
+            <button onClick={handleRetry} className={styles.retryButton}>
+              Retry
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -682,6 +807,11 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
         <div className={styles.loading}>
           <div className={styles.spinner} />
           <p>{isLoading ? 'Loading video...' : 'Buffering...'}</p>
+          {isLoading && (
+            <div className={styles.loadingHint}>
+              <small>Extracting best quality source...</small>
+            </div>
+          )}
         </div>
       )}
 

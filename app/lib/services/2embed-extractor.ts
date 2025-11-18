@@ -24,9 +24,9 @@ interface ExtractionResult {
 }
 
 /**
- * Fetch with proper headers
+ * Fetch with proper headers and timeout
  */
-async function fetchWithHeaders(url: string, referer?: string): Promise<string> {
+async function fetchWithHeaders(url: string, referer?: string, timeoutMs: number = 10000): Promise<string> {
   const headers: HeadersInit = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -36,13 +36,30 @@ async function fetchWithHeaders(url: string, referer?: string): Promise<string> 
     headers['Referer'] = referer;
   }
 
-  const response = await fetch(url, { headers });
-  
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
-  }
+  // Add timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-  return response.text();
+  try {
+    const response = await fetch(url, { 
+      headers,
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    return response.text();
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Request timeout after ${timeoutMs}ms`);
+    }
+    throw error;
+  }
 }
 
 /**

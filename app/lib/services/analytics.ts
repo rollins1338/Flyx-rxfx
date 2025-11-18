@@ -66,6 +66,15 @@ class AnalyticsService {
   } | null = null;
 
   /**
+   * Check if current page should be tracked
+   */
+  private shouldTrackPage(): boolean {
+    const path = window.location.pathname;
+    // Exclude admin pages from live activity tracking
+    return !path.startsWith('/admin');
+  }
+
+  /**
    * Initialize analytics service
    */
   initialize(): void {
@@ -80,8 +89,12 @@ class AnalyticsService {
     // Set up periodic flush
     this.scheduleFlush();
     
-    // Start live activity heartbeat
-    this.startLiveActivityHeartbeat();
+    // Start live activity heartbeat only for non-admin pages
+    if (this.shouldTrackPage()) {
+      this.startLiveActivityHeartbeat();
+    } else {
+      console.log('[Analytics] Skipping live activity for admin page');
+    }
     
     // Track page visibility changes
     document.addEventListener('visibilitychange', () => {
@@ -449,7 +462,12 @@ class AnalyticsService {
    * Start live activity heartbeat
    */
   private startLiveActivityHeartbeat(): void {
-    if (this.liveActivityInterval) return;
+    if (this.liveActivityInterval) {
+      console.log('[Analytics] Live activity already started');
+      return;
+    }
+
+    console.log('[Analytics] Starting live activity heartbeat');
 
     // Send initial heartbeat
     this.currentActivity = { type: 'browsing' };
@@ -486,10 +504,19 @@ class AnalyticsService {
    * Send live activity heartbeat
    */
   private async sendLiveActivityHeartbeat(): Promise<void> {
-    if (!this.userSession || !this.currentActivity) return;
+    if (!this.userSession || !this.currentActivity) {
+      console.warn('[Analytics] Cannot send heartbeat - missing session or activity');
+      return;
+    }
+
+    console.log('[Analytics] Sending live activity heartbeat:', {
+      userId: this.userSession.userId.substring(0, 8),
+      type: this.currentActivity.type,
+      contentId: this.currentActivity.contentId,
+    });
 
     try {
-      await fetch('/api/analytics/live-activity', {
+      const response = await fetch('/api/analytics/live-activity', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -506,8 +533,14 @@ class AnalyticsService {
           quality: this.currentActivity.quality,
         }),
       });
+
+      if (!response.ok) {
+        console.error('[Analytics] Heartbeat failed:', response.status, await response.text());
+      } else {
+        console.log('[Analytics] Heartbeat sent successfully');
+      }
     } catch (error) {
-      console.error('Failed to send live activity heartbeat:', error);
+      console.error('[Analytics] Failed to send live activity heartbeat:', error);
     }
   }
 }
