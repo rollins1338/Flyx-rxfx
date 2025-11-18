@@ -23,6 +23,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
   const containerRef = useRef<HTMLDivElement>(null);
   const fetchedRef = useRef(false);
   const subtitlesFetchedRef = useRef(false);
+  const subtitlesAutoLoadedRef = useRef(false);
   
   // Analytics and progress tracking
   const { trackContentEngagement, trackInteraction } = useAnalytics();
@@ -82,6 +83,9 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
 
   // Fetch stream URL
   useEffect(() => {
+    // Reset subtitle auto-load flag for new video
+    subtitlesAutoLoadedRef.current = false;
+    
     // Prevent duplicate fetches in StrictMode
     if (fetchedRef.current) {
       console.log('[VideoPlayer] Skipping duplicate fetch (already fetched)');
@@ -787,6 +791,12 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
   // Apply saved subtitle preferences after subtitles are loaded
   useEffect(() => {
     if (availableSubtitles.length === 0) return;
+    
+    // Don't auto-load if we've already done it for this video
+    if (subtitlesAutoLoadedRef.current) {
+      console.log('[VideoPlayer] Subtitles already auto-loaded, skipping');
+      return;
+    }
 
     const preferences = getSubtitlePreferences();
     console.log('[VideoPlayer] Applying saved subtitle preferences:', preferences);
@@ -798,16 +808,20 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
       );
 
       if (preferredSubtitle) {
-        console.log('[VideoPlayer] Loading preferred subtitle:', preferredSubtitle.language);
+        console.log('[VideoPlayer] Auto-loading preferred subtitle:', preferredSubtitle.language);
         loadSubtitle(preferredSubtitle);
+        subtitlesAutoLoadedRef.current = true;
       } else {
         // If preferred language not available, load first available (English if available)
         const englishSubtitle = availableSubtitles.find(sub => sub.langCode === 'eng');
         if (englishSubtitle) {
-          console.log('[VideoPlayer] Preferred language not found, loading English');
+          console.log('[VideoPlayer] Preferred language not found, auto-loading English');
           loadSubtitle(englishSubtitle);
+          subtitlesAutoLoadedRef.current = true;
         }
       }
+    } else {
+      console.log('[VideoPlayer] Subtitles disabled in preferences, not auto-loading');
     }
   }, [availableSubtitles]);
 
