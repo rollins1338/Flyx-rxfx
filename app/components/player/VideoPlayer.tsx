@@ -67,6 +67,8 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
   const [showSettings, setShowSettings] = useState(false);
   const [showSubtitles, setShowSubtitles] = useState(false);
   const [currentSubtitle, setCurrentSubtitle] = useState<string | null>(null);
+  const [availableSubtitles, setAvailableSubtitles] = useState<any[]>([]);
+  const [subtitlesLoading, setSubtitlesLoading] = useState(false);
   const [showResumePrompt, setShowResumePrompt] = useState(false);
   const [savedProgress, setSavedProgress] = useState<number>(0);
   const [showVolumeIndicator, setShowVolumeIndicator] = useState(false);
@@ -315,6 +317,29 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
       });
     }
   }, [streamUrl]);
+
+  // Fetch subtitles when content changes
+  useEffect(() => {
+    // Get IMDB ID from TMDB
+    const getImdbId = async () => {
+      try {
+        const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY;
+        if (!apiKey) return;
+
+        const url = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}/external_ids?api_key=${apiKey}`;
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.imdb_id) {
+          await fetchSubtitles(data.imdb_id);
+        }
+      } catch (err) {
+        console.error('[VideoPlayer] Failed to get IMDB ID:', err);
+      }
+    };
+
+    getImdbId();
+  }, [tmdbId, mediaType, season, episode]);
 
   // Video event handlers
   useEffect(() => {
@@ -629,6 +654,39 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
     
     setCurrentSubtitle(subtitleUrl);
     setShowSubtitles(false);
+  };
+
+  const fetchSubtitles = async (imdbId: string) => {
+    try {
+      setSubtitlesLoading(true);
+      console.log('[VideoPlayer] Fetching subtitles for IMDB ID:', imdbId);
+      
+      const params = new URLSearchParams({
+        imdbId,
+        languageId: 'eng',
+      });
+      
+      if (mediaType === 'tv' && season && episode) {
+        params.append('season', season.toString());
+        params.append('episode', episode.toString());
+      }
+      
+      const response = await fetch(`/api/subtitles?${params}`);
+      const data = await response.json();
+      
+      if (data.success && data.subtitles && Array.isArray(data.subtitles)) {
+        console.log('[VideoPlayer] Found subtitles:', data.subtitles.length);
+        setAvailableSubtitles(data.subtitles);
+      } else {
+        console.log('[VideoPlayer] No subtitles found');
+        setAvailableSubtitles([]);
+      }
+    } catch (err) {
+      console.error('[VideoPlayer] Subtitle fetch error:', err);
+      setAvailableSubtitles([]);
+    } finally {
+      setSubtitlesLoading(false);
+    }
   };
 
   const changeSource = (sourceIndex: number) => {
@@ -974,9 +1032,28 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
                     >
                       Off
                     </button>
-                    <div style={{ padding: '0.75rem 1rem', color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.875rem', fontStyle: 'italic' }}>
-                      No subtitles available
-                    </div>
+                    {subtitlesLoading ? (
+                      <div style={{ padding: '0.75rem 1rem', color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.875rem', fontStyle: 'italic' }}>
+                        Loading subtitles...
+                      </div>
+                    ) : availableSubtitles.length > 0 ? (
+                      <div className={styles.sourcesList}>
+                        {availableSubtitles.map((subtitle, index) => (
+                          <button
+                            key={index}
+                            className={`${styles.settingsOption} ${currentSubtitle === subtitle.url ? styles.active : ''}`}
+                            onClick={() => loadSubtitle(subtitle.url)}
+                            title={`${subtitle.language} - ${subtitle.fileName || 'Subtitle'}`}
+                          >
+                            {subtitle.language}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ padding: '0.75rem 1rem', color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.875rem', fontStyle: 'italic' }}>
+                        No subtitles available
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
