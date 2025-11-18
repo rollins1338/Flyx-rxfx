@@ -35,7 +35,8 @@ export function useWatchProgress(options: WatchProgressOptions) {
   const { 
     trackWatchEvent, 
     getWatchProgress, 
-    trackContentEngagement 
+    trackContentEngagement,
+    updateActivity 
   } = useAnalytics();
   
   const lastSaveTimeRef = useRef<number>(0);
@@ -89,7 +90,19 @@ export function useWatchProgress(options: WatchProgressOptions) {
       seasonNumber,
       episodeNumber,
     });
-  }, [contentId, contentType, contentTitle, seasonNumber, episodeNumber, trackWatchEvent, trackContentEngagement]);
+
+    // Update live activity
+    updateActivity({
+      type: 'watching',
+      contentId,
+      contentTitle,
+      contentType: mappedContentType,
+      seasonNumber,
+      episodeNumber,
+      currentPosition: Math.round(currentTime),
+      duration: Math.round(duration),
+    });
+  }, [contentId, contentType, contentTitle, seasonNumber, episodeNumber, trackWatchEvent, trackContentEngagement, updateActivity]);
 
   // Track watch pause
   const handleWatchPause = useCallback((currentTime: number, duration: number) => {
@@ -179,6 +192,18 @@ export function useWatchProgress(options: WatchProgressOptions) {
         duration,
         seasonNumber,
         episodeNumber,
+      });
+      
+      // Update live activity with current position
+      updateActivity({
+        type: 'watching',
+        contentId,
+        contentTitle,
+        contentType: mappedContentType,
+        seasonNumber,
+        episodeNumber,
+        currentPosition: Math.round(currentTime),
+        duration: Math.round(duration),
       });
       
       lastSaveTimeRef.current = Date.now();

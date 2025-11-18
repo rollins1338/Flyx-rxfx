@@ -237,6 +237,58 @@ class DatabaseConnection {
         seek_count INTEGER DEFAULT 0,
         created_at BIGINT,
         updated_at BIGINT
+      )`,
+      
+      // User activity tracking
+      `CREATE TABLE IF NOT EXISTS user_activity (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        first_seen BIGINT NOT NULL,
+        last_seen BIGINT NOT NULL,
+        total_sessions INTEGER DEFAULT 1,
+        total_watch_time INTEGER DEFAULT 0,
+        device_type TEXT,
+        user_agent TEXT,
+        country TEXT,
+        created_at BIGINT,
+        updated_at BIGINT
+      )`,
+      
+      // Daily user metrics
+      `CREATE TABLE IF NOT EXISTS daily_user_metrics (
+        date TEXT PRIMARY KEY,
+        daily_active_users INTEGER DEFAULT 0,
+        new_users INTEGER DEFAULT 0,
+        returning_users INTEGER DEFAULT 0,
+        total_sessions INTEGER DEFAULT 0,
+        total_watch_time INTEGER DEFAULT 0,
+        avg_session_duration REAL DEFAULT 0,
+        unique_content_views INTEGER DEFAULT 0,
+        updated_at BIGINT
+      )`,
+      
+      // Live activity tracking
+      `CREATE TABLE IF NOT EXISTS live_activity (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        activity_type TEXT NOT NULL,
+        content_id TEXT,
+        content_title TEXT,
+        content_type TEXT,
+        season_number INTEGER,
+        episode_number INTEGER,
+        current_position INTEGER DEFAULT 0,
+        duration INTEGER DEFAULT 0,
+        quality TEXT,
+        device_type TEXT,
+        country TEXT,
+        started_at BIGINT NOT NULL,
+        last_heartbeat BIGINT NOT NULL,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at BIGINT,
+        updated_at BIGINT
       )`
     ];
 
@@ -251,7 +303,15 @@ class DatabaseConnection {
       'CREATE INDEX IF NOT EXISTS idx_watch_sessions_user ON watch_sessions(user_id)',
       'CREATE INDEX IF NOT EXISTS idx_watch_sessions_content ON watch_sessions(content_id)',
       'CREATE INDEX IF NOT EXISTS idx_watch_sessions_started ON watch_sessions(started_at DESC)',
-      'CREATE INDEX IF NOT EXISTS idx_watch_sessions_session ON watch_sessions(session_id)'
+      'CREATE INDEX IF NOT EXISTS idx_watch_sessions_session ON watch_sessions(session_id)',
+      'CREATE INDEX IF NOT EXISTS idx_user_activity_user ON user_activity(user_id)',
+      'CREATE INDEX IF NOT EXISTS idx_user_activity_first_seen ON user_activity(first_seen)',
+      'CREATE INDEX IF NOT EXISTS idx_user_activity_last_seen ON user_activity(last_seen DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_daily_metrics_date ON daily_user_metrics(date DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_live_activity_user ON live_activity(user_id)',
+      'CREATE INDEX IF NOT EXISTS idx_live_activity_session ON live_activity(session_id)',
+      'CREATE INDEX IF NOT EXISTS idx_live_activity_heartbeat ON live_activity(last_heartbeat DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_live_activity_active ON live_activity(is_active, last_heartbeat DESC)'
     ];
 
     for (const table of tables) {
@@ -351,6 +411,58 @@ class DatabaseConnection {
         seek_count INTEGER DEFAULT 0,
         created_at INTEGER DEFAULT (strftime('%s', 'now')),
         updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+      )`,
+      
+      // User activity tracking
+      `CREATE TABLE IF NOT EXISTS user_activity (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        first_seen INTEGER NOT NULL,
+        last_seen INTEGER NOT NULL,
+        total_sessions INTEGER DEFAULT 1,
+        total_watch_time INTEGER DEFAULT 0,
+        device_type TEXT,
+        user_agent TEXT,
+        country TEXT,
+        created_at INTEGER DEFAULT (strftime('%s', 'now')),
+        updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+      )`,
+      
+      // Daily user metrics
+      `CREATE TABLE IF NOT EXISTS daily_user_metrics (
+        date TEXT PRIMARY KEY,
+        daily_active_users INTEGER DEFAULT 0,
+        new_users INTEGER DEFAULT 0,
+        returning_users INTEGER DEFAULT 0,
+        total_sessions INTEGER DEFAULT 0,
+        total_watch_time INTEGER DEFAULT 0,
+        avg_session_duration REAL DEFAULT 0,
+        unique_content_views INTEGER DEFAULT 0,
+        updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+      )`,
+      
+      // Live activity tracking
+      `CREATE TABLE IF NOT EXISTS live_activity (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        activity_type TEXT NOT NULL,
+        content_id TEXT,
+        content_title TEXT,
+        content_type TEXT,
+        season_number INTEGER,
+        episode_number INTEGER,
+        current_position INTEGER DEFAULT 0,
+        duration INTEGER DEFAULT 0,
+        quality TEXT,
+        device_type TEXT,
+        country TEXT,
+        started_at INTEGER NOT NULL,
+        last_heartbeat INTEGER NOT NULL,
+        is_active INTEGER DEFAULT 1,
+        created_at INTEGER DEFAULT (strftime('%s', 'now')),
+        updated_at INTEGER DEFAULT (strftime('%s', 'now'))
       )`
     ];
 
@@ -365,7 +477,15 @@ class DatabaseConnection {
       'CREATE INDEX IF NOT EXISTS idx_watch_sessions_user ON watch_sessions(user_id)',
       'CREATE INDEX IF NOT EXISTS idx_watch_sessions_content ON watch_sessions(content_id)',
       'CREATE INDEX IF NOT EXISTS idx_watch_sessions_started ON watch_sessions(started_at DESC)',
-      'CREATE INDEX IF NOT EXISTS idx_watch_sessions_session ON watch_sessions(session_id)'
+      'CREATE INDEX IF NOT EXISTS idx_watch_sessions_session ON watch_sessions(session_id)',
+      'CREATE INDEX IF NOT EXISTS idx_user_activity_user ON user_activity(user_id)',
+      'CREATE INDEX IF NOT EXISTS idx_user_activity_first_seen ON user_activity(first_seen)',
+      'CREATE INDEX IF NOT EXISTS idx_user_activity_last_seen ON user_activity(last_seen DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_daily_metrics_date ON daily_user_metrics(date DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_live_activity_user ON live_activity(user_id)',
+      'CREATE INDEX IF NOT EXISTS idx_live_activity_session ON live_activity(session_id)',
+      'CREATE INDEX IF NOT EXISTS idx_live_activity_heartbeat ON live_activity(last_heartbeat DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_live_activity_active ON live_activity(is_active, last_heartbeat DESC)'
     ];
 
     for (const table of tables) {
@@ -593,6 +713,330 @@ class DatabaseConnection {
     }
 
     return await adapter.query(query, params);
+  }
+
+  async upsertUserActivity(activity: {
+    userId: string;
+    sessionId: string;
+    deviceType?: string;
+    userAgent?: string;
+    country?: string;
+    watchTime?: number;
+  }): Promise<void> {
+    const adapter = this.getAdapter();
+    const now = Date.now();
+    const id = `ua_${activity.userId}_${activity.sessionId}`;
+
+    if (this.isNeon) {
+      await adapter.execute(`
+        INSERT INTO user_activity (
+          id, user_id, session_id, first_seen, last_seen, total_sessions,
+          total_watch_time, device_type, user_agent, country, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, 1, $6, $7, $8, $9, $10, $11)
+        ON CONFLICT(id) DO UPDATE SET
+          last_seen = $12,
+          total_sessions = user_activity.total_sessions + 1,
+          total_watch_time = user_activity.total_watch_time + $13,
+          updated_at = $14
+      `, [
+        id, activity.userId, activity.sessionId, now, now, activity.watchTime || 0,
+        activity.deviceType || null, activity.userAgent || null, activity.country || null,
+        now, now,
+        // Update values
+        now, activity.watchTime || 0, now
+      ]);
+    } else {
+      await adapter.execute(`
+        INSERT INTO user_activity (
+          id, user_id, session_id, first_seen, last_seen, total_sessions,
+          total_watch_time, device_type, user_agent, country, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          last_seen = ?,
+          total_sessions = total_sessions + 1,
+          total_watch_time = total_watch_time + ?,
+          updated_at = ?
+      `, [
+        id, activity.userId, activity.sessionId, now, now, activity.watchTime || 0,
+        activity.deviceType || null, activity.userAgent || null, activity.country || null,
+        now, now,
+        // Update values
+        now, activity.watchTime || 0, now
+      ]);
+    }
+  }
+
+  async getUserMetrics(timeRange: { start: number; end: number }): Promise<{
+    dau: number;
+    wau: number;
+    mau: number;
+    newUsers: number;
+    returningUsers: number;
+    totalSessions: number;
+    avgSessionDuration: number;
+  }> {
+    const adapter = this.getAdapter();
+    const { start, end } = timeRange;
+
+    // Calculate DAU (users active in last 24 hours)
+    const dauQuery = this.isNeon
+      ? 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= $1'
+      : 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= ?';
+    const dauResult = await adapter.query(dauQuery, [end - 24 * 60 * 60 * 1000]);
+    const dau = dauResult[0]?.count || 0;
+
+    // Calculate WAU (users active in last 7 days)
+    const wauQuery = this.isNeon
+      ? 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= $1'
+      : 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= ?';
+    const wauResult = await adapter.query(wauQuery, [end - 7 * 24 * 60 * 60 * 1000]);
+    const wau = wauResult[0]?.count || 0;
+
+    // Calculate MAU (users active in last 30 days)
+    const mauQuery = this.isNeon
+      ? 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= $1'
+      : 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= ?';
+    const mauResult = await adapter.query(mauQuery, [end - 30 * 24 * 60 * 60 * 1000]);
+    const mau = mauResult[0]?.count || 0;
+
+    // Calculate new users (first seen in time range)
+    const newUsersQuery = this.isNeon
+      ? 'SELECT COUNT(*) as count FROM user_activity WHERE first_seen BETWEEN $1 AND $2'
+      : 'SELECT COUNT(*) as count FROM user_activity WHERE first_seen BETWEEN ? AND ?';
+    const newUsersResult = await adapter.query(newUsersQuery, [start, end]);
+    const newUsers = newUsersResult[0]?.count || 0;
+
+    // Calculate returning users (first seen before range, active in range)
+    const returningQuery = this.isNeon
+      ? 'SELECT COUNT(*) as count FROM user_activity WHERE first_seen < $1 AND last_seen BETWEEN $2 AND $3'
+      : 'SELECT COUNT(*) as count FROM user_activity WHERE first_seen < ? AND last_seen BETWEEN ? AND ?';
+    const returningResult = await adapter.query(returningQuery, [start, start, end]);
+    const returningUsers = returningResult[0]?.count || 0;
+
+    // Calculate total sessions in range
+    const sessionsQuery = this.isNeon
+      ? 'SELECT COUNT(*) as count, COALESCE(SUM(total_watch_time), 0) as total_time FROM watch_sessions WHERE started_at BETWEEN $1 AND $2'
+      : 'SELECT COUNT(*) as count, COALESCE(SUM(total_watch_time), 0) as total_time FROM watch_sessions WHERE started_at BETWEEN ? AND ?';
+    const sessionsResult = await adapter.query(sessionsQuery, [start, end]);
+    const totalSessions = sessionsResult[0]?.count || 0;
+    const totalTime = sessionsResult[0]?.total_time || 0;
+    const avgSessionDuration = totalSessions > 0 ? Math.round(totalTime / totalSessions) : 0;
+
+    return {
+      dau,
+      wau,
+      mau,
+      newUsers,
+      returningUsers,
+      totalSessions,
+      avgSessionDuration,
+    };
+  }
+
+  async getDailyMetrics(days: number = 30): Promise<any[]> {
+    const adapter = this.getAdapter();
+    const query = this.isNeon
+      ? 'SELECT * FROM daily_user_metrics ORDER BY date DESC LIMIT $1'
+      : 'SELECT * FROM daily_user_metrics ORDER BY date DESC LIMIT ?';
+    return await adapter.query(query, [days]);
+  }
+
+  async upsertLiveActivity(activity: {
+    id: string;
+    userId: string;
+    sessionId: string;
+    activityType: string;
+    contentId?: string;
+    contentTitle?: string;
+    contentType?: string;
+    seasonNumber?: number;
+    episodeNumber?: number;
+    currentPosition?: number;
+    duration?: number;
+    quality?: string;
+    deviceType?: string;
+    country?: string;
+  }): Promise<void> {
+    const adapter = this.getAdapter();
+    const now = Date.now();
+
+    if (this.isNeon) {
+      await adapter.execute(`
+        INSERT INTO live_activity (
+          id, user_id, session_id, activity_type, content_id, content_title,
+          content_type, season_number, episode_number, current_position, duration,
+          quality, device_type, country, started_at, last_heartbeat, is_active,
+          created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, TRUE, $17, $18)
+        ON CONFLICT(id) DO UPDATE SET
+          activity_type = $19,
+          content_id = $20,
+          content_title = $21,
+          current_position = $22,
+          duration = $23,
+          quality = $24,
+          last_heartbeat = $25,
+          is_active = TRUE,
+          updated_at = $26
+      `, [
+        activity.id, activity.userId, activity.sessionId, activity.activityType,
+        activity.contentId || null, activity.contentTitle || null, activity.contentType || null,
+        activity.seasonNumber || null, activity.episodeNumber || null,
+        activity.currentPosition || 0, activity.duration || 0, activity.quality || null,
+        activity.deviceType || null, activity.country || null, now, now, now, now,
+        // Update values
+        activity.activityType, activity.contentId || null, activity.contentTitle || null,
+        activity.currentPosition || 0, activity.duration || 0, activity.quality || null,
+        now, now
+      ]);
+    } else {
+      await adapter.execute(`
+        INSERT INTO live_activity (
+          id, user_id, session_id, activity_type, content_id, content_title,
+          content_type, season_number, episode_number, current_position, duration,
+          quality, device_type, country, started_at, last_heartbeat, is_active,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          activity_type = ?,
+          content_id = ?,
+          content_title = ?,
+          current_position = ?,
+          duration = ?,
+          quality = ?,
+          last_heartbeat = ?,
+          is_active = 1,
+          updated_at = ?
+      `, [
+        activity.id, activity.userId, activity.sessionId, activity.activityType,
+        activity.contentId || null, activity.contentTitle || null, activity.contentType || null,
+        activity.seasonNumber || null, activity.episodeNumber || null,
+        activity.currentPosition || 0, activity.duration || 0, activity.quality || null,
+        activity.deviceType || null, activity.country || null, now, now, now, now,
+        // Update values
+        activity.activityType, activity.contentId || null, activity.contentTitle || null,
+        activity.currentPosition || 0, activity.duration || 0, activity.quality || null,
+        now, now
+      ]);
+    }
+  }
+
+  async getLiveActivities(maxAgeMinutes: number = 5): Promise<any[]> {
+    const adapter = this.getAdapter();
+    const cutoffTime = Date.now() - (maxAgeMinutes * 60 * 1000);
+
+    const query = this.isNeon
+      ? 'SELECT * FROM live_activity WHERE is_active = TRUE AND last_heartbeat >= $1 ORDER BY last_heartbeat DESC'
+      : 'SELECT * FROM live_activity WHERE is_active = 1 AND last_heartbeat >= ? ORDER BY last_heartbeat DESC';
+
+    return await adapter.query(query, [cutoffTime]);
+  }
+
+  async deactivateLiveActivity(id: string): Promise<void> {
+    const adapter = this.getAdapter();
+    const now = Date.now();
+
+    if (this.isNeon) {
+      await adapter.execute(
+        'UPDATE live_activity SET is_active = FALSE, updated_at = $1 WHERE id = $2',
+        [now, id]
+      );
+    } else {
+      await adapter.execute(
+        'UPDATE live_activity SET is_active = 0, updated_at = ? WHERE id = ?',
+        [now, id]
+      );
+    }
+  }
+
+  async cleanupStaleActivities(maxAgeMinutes: number = 10): Promise<number> {
+    const adapter = this.getAdapter();
+    const cutoffTime = Date.now() - (maxAgeMinutes * 60 * 1000);
+    const now = Date.now();
+
+    if (this.isNeon) {
+      const result = await adapter.execute(
+        'UPDATE live_activity SET is_active = FALSE, updated_at = $1 WHERE is_active = TRUE AND last_heartbeat < $2',
+        [now, cutoffTime]
+      );
+      return result.rowCount || 0;
+    } else {
+      const result = await adapter.execute(
+        'UPDATE live_activity SET is_active = 0, updated_at = ? WHERE is_active = 1 AND last_heartbeat < ?',
+        [now, cutoffTime]
+      );
+      return result.changes || 0;
+    }
+  }
+
+  async updateDailyMetrics(date: string): Promise<void> {
+    const adapter = this.getAdapter();
+    const now = Date.now();
+    
+    // Parse date to get timestamp range
+    const dateObj = new Date(date);
+    const startOfDay = dateObj.setHours(0, 0, 0, 0);
+    const endOfDay = dateObj.setHours(23, 59, 59, 999);
+
+    // Get metrics for the day
+    const metrics = await this.getUserMetrics({ start: startOfDay, end: endOfDay });
+
+    // Count unique content views
+    const contentQuery = this.isNeon
+      ? 'SELECT COUNT(DISTINCT content_id) as count FROM watch_sessions WHERE started_at BETWEEN $1 AND $2'
+      : 'SELECT COUNT(DISTINCT content_id) as count FROM watch_sessions WHERE started_at BETWEEN ? AND ?';
+    const contentResult = await adapter.query(contentQuery, [startOfDay, endOfDay]);
+    const uniqueContentViews = contentResult[0]?.count || 0;
+
+    if (this.isNeon) {
+      await adapter.execute(`
+        INSERT INTO daily_user_metrics (
+          date, daily_active_users, new_users, returning_users, total_sessions,
+          total_watch_time, avg_session_duration, unique_content_views, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ON CONFLICT(date) DO UPDATE SET
+          daily_active_users = $10,
+          new_users = $11,
+          returning_users = $12,
+          total_sessions = $13,
+          total_watch_time = $14,
+          avg_session_duration = $15,
+          unique_content_views = $16,
+          updated_at = $17
+      `, [
+        date, metrics.dau, metrics.newUsers, metrics.returningUsers, metrics.totalSessions,
+        metrics.totalSessions * metrics.avgSessionDuration, metrics.avgSessionDuration,
+        uniqueContentViews, now,
+        // Update values
+        metrics.dau, metrics.newUsers, metrics.returningUsers, metrics.totalSessions,
+        metrics.totalSessions * metrics.avgSessionDuration, metrics.avgSessionDuration,
+        uniqueContentViews, now
+      ]);
+    } else {
+      await adapter.execute(`
+        INSERT INTO daily_user_metrics (
+          date, daily_active_users, new_users, returning_users, total_sessions,
+          total_watch_time, avg_session_duration, unique_content_views, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(date) DO UPDATE SET
+          daily_active_users = ?,
+          new_users = ?,
+          returning_users = ?,
+          total_sessions = ?,
+          total_watch_time = ?,
+          avg_session_duration = ?,
+          unique_content_views = ?,
+          updated_at = ?
+      `, [
+        date, metrics.dau, metrics.newUsers, metrics.returningUsers, metrics.totalSessions,
+        metrics.totalSessions * metrics.avgSessionDuration, metrics.avgSessionDuration,
+        uniqueContentViews, now,
+        // Update values
+        metrics.dau, metrics.newUsers, metrics.returningUsers, metrics.totalSessions,
+        metrics.totalSessions * metrics.avgSessionDuration, metrics.avgSessionDuration,
+        uniqueContentViews, now
+      ]);
+    }
   }
 
   close(): void {

@@ -290,8 +290,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 6: Update content statistics
-    console.log(`[${requestId}] Step 6: Updating content statistics`);
+    // Step 6: Track user activity
+    console.log(`[${requestId}] Step 6: Tracking user activity`);
+    
+    try {
+      // Extract unique user IDs from events
+      const uniqueUsers = new Set(events.map(e => e.userId));
+      
+      for (const userId of uniqueUsers) {
+        await db.upsertUserActivity({
+          userId,
+          sessionId,
+          deviceType: userAgent.includes('Mobile') ? 'mobile' : 'desktop',
+          userAgent: userAgent.substring(0, 200),
+          country: location.country,
+        });
+      }
+      console.log(`[${requestId}] User activity tracked for ${uniqueUsers.size} users`);
+    } catch (activityError) {
+      console.error(`[${requestId}] Failed to track user activity`, activityError);
+      // Don't fail the request for activity tracking errors
+    }
+
+    // Step 7: Update content statistics
+    console.log(`[${requestId}] Step 7: Updating content statistics`);
     
     try {
       for (let i = 0; i < events.length; i++) {
@@ -324,8 +346,8 @@ export async function POST(request: NextRequest) {
       // Don't fail the request for stats errors, just log them
     }
 
-    // Step 7: Prepare response
-    console.log(`[${requestId}] Step 7: Preparing response`);
+    // Step 8: Prepare response
+    console.log(`[${requestId}] Step 8: Preparing response`);
     
     const response = NextResponse.json({ 
       success: true, 

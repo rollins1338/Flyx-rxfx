@@ -36,6 +36,19 @@ interface AnalyticsContextType {
   // Watch progress management
   getWatchProgress: (contentId: string) => any;
   getViewingHistory: () => any[];
+  
+  // Live activity
+  updateActivity: (activity: {
+    type: 'browsing' | 'watching';
+    contentId?: string;
+    contentTitle?: string;
+    contentType?: string;
+    seasonNumber?: number;
+    episodeNumber?: number;
+    currentPosition?: number;
+    duration?: number;
+    quality?: string;
+  }) => void;
 }
 
 const AnalyticsContext = createContext<AnalyticsContextType | null>(null);
@@ -139,6 +152,20 @@ export default function AnalyticsProvider({ children }: AnalyticsProviderProps) 
     return userTrackingService.getViewingHistory();
   }, []);
 
+  const updateActivity = useCallback((activity: {
+    type: 'browsing' | 'watching';
+    contentId?: string;
+    contentTitle?: string;
+    contentType?: string;
+    seasonNumber?: number;
+    episodeNumber?: number;
+    currentPosition?: number;
+    duration?: number;
+    quality?: string;
+  }) => {
+    analyticsService.updateActivity(activity);
+  }, []);
+
   const value = {
     trackEvent,
     trackPageView,
@@ -154,6 +181,7 @@ export default function AnalyticsProvider({ children }: AnalyticsProviderProps) 
     clearUserData,
     getWatchProgress,
     getViewingHistory,
+    updateActivity,
   };
 
   return (

@@ -52,6 +52,18 @@ class AnalyticsService {
   private eventQueue: AnalyticsEvent[] = [];
   private flushTimeout: NodeJS.Timeout | null = null;
   private isInitialized = false;
+  private liveActivityInterval: NodeJS.Timeout | null = null;
+  private currentActivity: {
+    type: string;
+    contentId?: string;
+    contentTitle?: string;
+    contentType?: string;
+    seasonNumber?: number;
+    episodeNumber?: number;
+    currentPosition?: number;
+    duration?: number;
+    quality?: string;
+  } | null = null;
 
   /**
    * Initialize analytics service
@@ -68,16 +80,23 @@ class AnalyticsService {
     // Set up periodic flush
     this.scheduleFlush();
     
+    // Start live activity heartbeat
+    this.startLiveActivityHeartbeat();
+    
     // Track page visibility changes
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
         this.flushEvents();
+        this.stopLiveActivity();
+      } else {
+        this.startLiveActivityHeartbeat();
       }
     });
     
     // Track before page unload
     window.addEventListener('beforeunload', () => {
       this.flushEvents();
+      this.stopLiveActivity();
     });
   }
 
@@ -406,6 +425,90 @@ class AnalyticsService {
     userTrackingService.clearUserData();
     this.track('user_data_cleared');
     this.flushEvents();
+  }
+
+  /**
+   * Update current activity
+   */
+  updateActivity(activity: {
+    type: 'browsing' | 'watching';
+    contentId?: string;
+    contentTitle?: string;
+    contentType?: string;
+    seasonNumber?: number;
+    episodeNumber?: number;
+    currentPosition?: number;
+    duration?: number;
+    quality?: string;
+  }): void {
+    this.currentActivity = activity;
+    this.sendLiveActivityHeartbeat();
+  }
+
+  /**
+   * Start live activity heartbeat
+   */
+  private startLiveActivityHeartbeat(): void {
+    if (this.liveActivityInterval) return;
+
+    // Send initial heartbeat
+    this.currentActivity = { type: 'browsing' };
+    this.sendLiveActivityHeartbeat();
+
+    // Send heartbeat every 30 seconds
+    this.liveActivityInterval = setInterval(() => {
+      this.sendLiveActivityHeartbeat();
+    }, 30000);
+  }
+
+  /**
+   * Stop live activity
+   */
+  private stopLiveActivity(): void {
+    if (this.liveActivityInterval) {
+      clearInterval(this.liveActivityInterval);
+      this.liveActivityInterval = null;
+    }
+
+    // Deactivate current activity
+    if (this.userSession) {
+      const activityId = `live_${this.userSession.userId}_${this.userSession.sessionId}`;
+      fetch(`/api/analytics/live-activity?id=${activityId}`, {
+        method: 'DELETE',
+        keepalive: true,
+      }).catch(() => {
+        // Ignore errors on page unload
+      });
+    }
+  }
+
+  /**
+   * Send live activity heartbeat
+   */
+  private async sendLiveActivityHeartbeat(): Promise<void> {
+    if (!this.userSession || !this.currentActivity) return;
+
+    try {
+      await fetch('/api/analytics/live-activity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: this.userSession.userId,
+          sessionId: this.userSession.sessionId,
+          activityType: this.currentActivity.type,
+          contentId: this.currentActivity.contentId,
+          contentTitle: this.currentActivity.contentTitle,
+          contentType: this.currentActivity.contentType,
+          seasonNumber: this.currentActivity.seasonNumber,
+          episodeNumber: this.currentActivity.episodeNumber,
+          currentPosition: this.currentActivity.currentPosition,
+          duration: this.currentActivity.duration,
+          quality: this.currentActivity.quality,
+        }),
+      });
+    } catch (error) {
+      console.error('Failed to send live activity heartbeat:', error);
+    }
   }
 }
 
