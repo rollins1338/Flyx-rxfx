@@ -1020,9 +1020,21 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title 
       </div>
 
       {/* Title overlay */}
-      {title && (showControls || !isPlaying) && (
+      {title && title !== 'Loading...' && (showControls || !isPlaying) && (
         <div className={styles.titleOverlay}>
-          <h2>{title}</h2>
+          <div className={styles.titleContent}>
+            <h2>{title}</h2>
+            {mediaType === 'tv' && season && episode && (
+              <div className={styles.episodeInfo}>
+                Season {season} • Episode {episode}
+              </div>
+            )}
+            {isPlaying && duration > 0 && (
+              <div className={styles.progressInfo}>
+                {formatTime(currentTime)} / {formatTime(duration)}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
