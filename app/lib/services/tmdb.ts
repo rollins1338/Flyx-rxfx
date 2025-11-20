@@ -30,7 +30,25 @@ function getAPIKey(): string {
 /**
  * Transform TMDB movie/TV response to MediaItem
  */
-function transformToMediaItem(item: any, mediaType: 'movie' | 'tv'): MediaItem {
+function transformToMediaItem(item: any, mediaType: 'movie' | 'tv' | 'person'): MediaItem {
+  if (mediaType === 'person') {
+    return {
+      id: item.id.toString(),
+      title: item.name,
+      name: item.name,
+      overview: item.biography || '',
+      posterPath: item.profile_path ? `${TMDB_IMAGE_BASE_URL}/w500${item.profile_path}` : '',
+      poster_path: item.profile_path,
+      profile_path: item.profile_path,
+      mediaType: 'person',
+      rating: item.popularity || 0,
+      vote_average: 0,
+      voteCount: 0,
+      vote_count: 0,
+      known_for: item.known_for ? item.known_for.map((k: any) => transformToMediaItem(k, k.media_type)) : [],
+    };
+  }
+
   return {
     id: item.id.toString(),
     title: mediaType === 'movie' ? item.title : item.name,
@@ -85,12 +103,24 @@ function transformToEpisode(episode: any): Episode {
  * Transform search result
  */
 function transformToSearchResult(item: any): SearchResult {
-  const mediaType = item.media_type === 'movie' ? 'movie' : 'tv';
+  const mediaType = item.media_type || 'movie';
+
+  if (mediaType === 'person') {
+    return {
+      id: item.id.toString(),
+      title: item.name,
+      posterPath: item.profile_path ? `${TMDB_IMAGE_BASE_URL}/w500${item.profile_path}` : '',
+      mediaType: 'person',
+      releaseDate: '',
+      rating: item.popularity || 0,
+    };
+  }
+
   return {
     id: item.id.toString(),
     title: mediaType === 'movie' ? item.title : item.name,
     posterPath: item.poster_path ? `${TMDB_IMAGE_BASE_URL}/w500${item.poster_path}` : '',
-    mediaType,
+    mediaType: mediaType === 'movie' ? 'movie' : 'tv',
     releaseDate: mediaType === 'movie' ? item.release_date : item.first_air_date,
     rating: item.vote_average || 0,
   };
@@ -106,7 +136,7 @@ async function tmdbRequest<T>(
 ): Promise<APIResponse<T>> {
   const apiKey = getAPIKey();
   const url = new URL(`${TMDB_BASE_URL}${endpoint}`);
-  
+
   // Add API key and params
   url.searchParams.append('api_key', apiKey);
   Object.entries(params).forEach(([key, value]) => {
@@ -183,11 +213,12 @@ export const tmdbService = {
    */
   async getTrending(
     mediaType: 'movie' | 'tv' | 'all' = 'all',
-    timeWindow: 'day' | 'week' = 'week'
+    timeWindow: 'day' | 'week' = 'week',
+    page: number = 1
   ): Promise<MediaItem[]> {
     const response = await tmdbRequest<any>(
       `/trending/${mediaType}/${timeWindow}`,
-      {},
+      { page },
       { cacheTTL: CACHE_DURATIONS.trending }
     );
 
@@ -219,7 +250,7 @@ export const tmdbService = {
     }
 
     return response.data.results
-      .filter((item: any) => item.media_type === 'movie' || item.media_type === 'tv')
+      .filter((item: any) => item.media_type === 'movie' || item.media_type === 'tv' || item.media_type === 'person')
       .map(transformToSearchResult);
   },
 
@@ -229,7 +260,7 @@ export const tmdbService = {
   async searchMoviesByGenre(genreId: number, page: number = 1, primaryGenreOnly: boolean = false): Promise<MediaItem[]> {
     const response = await tmdbRequest<any>(
       '/discover/movie',
-      { 
+      {
         with_genres: genreId,
         page,
         sort_by: 'popularity.desc'
@@ -242,7 +273,7 @@ export const tmdbService = {
     }
 
     let rawResults = response.data.results;
-    
+
     // If primaryGenreOnly is true, filter to only include items where the requested genre is the first genre
     if (primaryGenreOnly) {
       rawResults = rawResults.filter((item: any) => {
@@ -251,7 +282,7 @@ export const tmdbService = {
         return genreIds.length > 0 && genreIds[0] === genreId;
       });
     }
-    
+
     return rawResults.map((item: any) => transformToMediaItem(item, 'movie'));
   },
 
@@ -261,7 +292,7 @@ export const tmdbService = {
   async searchTVByGenre(genreId: number, page: number = 1, primaryGenreOnly: boolean = false): Promise<MediaItem[]> {
     const response = await tmdbRequest<any>(
       '/discover/tv',
-      { 
+      {
         with_genres: genreId,
         page,
         sort_by: 'popularity.desc'
@@ -274,7 +305,7 @@ export const tmdbService = {
     }
 
     let rawResults = response.data.results;
-    
+
     // If primaryGenreOnly is true, filter to only include items where the requested genre is the first genre
     if (primaryGenreOnly) {
       rawResults = rawResults.filter((item: any) => {
@@ -283,227 +314,164 @@ export const tmdbService = {
         return genreIds.length > 0 && genreIds[0] === genreId;
       });
     }
-    
+
     return rawResults.map((item: any) => transformToMediaItem(item, 'tv'));
   },
 
   /**
    * Enhanced search with category support
    */
+  /**
+   * Enhanced search with category support
+   */
   async searchByCategory(category: string, contentType: 'all' | 'movie' | 'tv' = 'all', page: number = 1): Promise<MediaItem[]> {
     const categoryMappings: Record<string, { movieGenre?: number; tvGenre?: number; searchQuery?: string }> = {
-      'action': { movieGenre: 28, tvGenre: 10759 }, // Action for movies, Action & Adventure for TV
-      'comedy': { movieGenre: 35, tvGenre: 35 }, // Comedy for both
-      'horror': { movieGenre: 27, searchQuery: 'horror' }, // Horror movies only, use search for TV horror shows
-      'romance': { movieGenre: 10749, searchQuery: 'romance' }, // Romance movies, search for TV romance
-      'sci-fi': { movieGenre: 878, tvGenre: 10765 }, // Science Fiction for movies, Sci-Fi & Fantasy for TV
-      'drama': { movieGenre: 18, tvGenre: 18 }, // Drama for both
-      'documentary': { movieGenre: 99, tvGenre: 99 }, // Documentary for both
-      'anime': { movieGenre: 16, tvGenre: 16, searchQuery: 'anime' }, // Animation genre for both + anime search
+      'action': { movieGenre: 28, tvGenre: 10759 },
+      'comedy': { movieGenre: 35, tvGenre: 35 },
+      'horror': { movieGenre: 27, tvGenre: 10765 }, // Use Sci-Fi & Fantasy (includes supernatural) or just search for TV
+      'romance': { movieGenre: 10749, tvGenre: 10766 }, // Soap for TV often has romance, but no direct mapping. 
+      'sci-fi': { movieGenre: 878, tvGenre: 10765 },
+      'drama': { movieGenre: 18, tvGenre: 18 },
+      'documentary': { movieGenre: 99, tvGenre: 99 },
+      'anime': { movieGenre: 16, tvGenre: 16 }, // Animation, will filter by language 'ja'
       'marvel': { searchQuery: 'Marvel' },
       'dc': { searchQuery: 'DC Comics' },
-      'thriller': { movieGenre: 53, searchQuery: 'thriller' }, // Thriller movies, search for TV thrillers
-      'crime': { movieGenre: 80, tvGenre: 80 }, // Crime for both
-      'family': { movieGenre: 10751, tvGenre: 10751 }, // Family for both
-      'fantasy': { movieGenre: 14, tvGenre: 10765 }, // Fantasy for movies, Sci-Fi & Fantasy for TV
-      'mystery': { movieGenre: 9648, tvGenre: 9648 }, // Mystery for both
-      'war': { movieGenre: 10752, tvGenre: 10768 }, // War for movies, War & Politics for TV
-      'western': { movieGenre: 37, tvGenre: 37 } // Western for both
+      'thriller': { movieGenre: 53, tvGenre: 80 }, // Crime often overlaps with Thriller for TV
+      'crime': { movieGenre: 80, tvGenre: 80 },
+      'family': { movieGenre: 10751, tvGenre: 10751 },
+      'fantasy': { movieGenre: 14, tvGenre: 10765 },
+      'mystery': { movieGenre: 9648, tvGenre: 9648 },
+      'war': { movieGenre: 10752, tvGenre: 10768 },
+      'western': { movieGenre: 37, tvGenre: 37 }
     };
 
     const mapping = categoryMappings[category.toLowerCase()];
+
+    // Special handling for Anime
+    if (category.toLowerCase() === 'anime') {
+      const promises: Promise<APIResponse<any>>[] = [];
+
+      if (contentType === 'all' || contentType === 'movie') {
+        promises.push(tmdbRequest('/discover/movie', {
+          with_genres: 16,
+          with_original_language: 'ja',
+          sort_by: 'popularity.desc',
+          page
+        }, { cacheTTL: CACHE_DURATIONS.trending }));
+      }
+
+      if (contentType === 'all' || contentType === 'tv') {
+        promises.push(tmdbRequest('/discover/tv', {
+          with_genres: 16,
+          with_original_language: 'ja',
+          sort_by: 'popularity.desc',
+          page
+        }, { cacheTTL: CACHE_DURATIONS.trending }));
+      }
+
+      const responses = await Promise.all(promises);
+      const results = responses
+        .flatMap(r => r.data?.results || [])
+        .map((item: any) => transformToMediaItem(item, item.title ? 'movie' : 'tv'));
+
+      return results.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0)).slice(0, 20);
+    }
+
     if (!mapping) {
       // Fallback to regular search
       const searchResults = await this.search(category, page);
       return searchResults.map(item => ({
-        id: item.id,
-        title: item.title,
+        ...item,
         name: item.title,
-        overview: '', // SearchResult doesn't have overview
+        overview: '',
         poster_path: item.posterPath?.replace(`${TMDB_IMAGE_BASE_URL}/w500`, '') || '',
         posterPath: item.posterPath || '',
         release_date: item.releaseDate,
-        releaseDate: item.releaseDate,
+        first_air_date: item.releaseDate,
         vote_average: item.rating,
-        rating: item.rating,
-        mediaType: item.mediaType || 'movie',
-        genres: [],
         vote_count: 0,
-        voteCount: 0
-      }));
+        genres: [],
+        genre_ids: []
+      } as MediaItem));
     }
 
-    let results: MediaItem[] = [];
-
-    // Handle special search queries (Marvel, DC, anime, etc.)
-    if (mapping.searchQuery) {
+    // If we have a search query and NO genre mapping, use search
+    if (mapping.searchQuery && !mapping.movieGenre && !mapping.tvGenre) {
       const searchResults = await this.search(mapping.searchQuery, page);
-      
-      // Convert SearchResult[] to MediaItem[]
-      let filteredResults: MediaItem[] = searchResults.map(item => ({
-        id: item.id,
-        title: item.title,
+      return searchResults.map(item => ({
+        ...item,
         name: item.title,
-        overview: '', // SearchResult doesn't have overview, will be empty
+        overview: '',
         poster_path: item.posterPath?.replace(`${TMDB_IMAGE_BASE_URL}/w500`, '') || '',
         posterPath: item.posterPath || '',
         release_date: item.releaseDate,
-        releaseDate: item.releaseDate,
+        first_air_date: item.releaseDate,
         vote_average: item.rating,
-        rating: item.rating,
-        mediaType: item.mediaType,
-        genres: [],
         vote_count: 0,
-        voteCount: 0
-      }));
-      
-      // For anime, also get by genre to ensure we get animated content
-      if (category.toLowerCase() === 'anime') {
-        const genrePromises: Promise<MediaItem[]>[] = [];
-        
-        if (contentType === 'all' || contentType === 'movie') {
-          genrePromises.push(this.searchMoviesByGenre(16, page)); // Animation genre
-        }
-        if (contentType === 'all' || contentType === 'tv') {
-          genrePromises.push(this.searchTVByGenre(16, page)); // Animation genre
-        }
-        
-        const genreResults = await Promise.all(genrePromises);
-        const combinedResults = [...filteredResults, ...genreResults.flat()];
-        
-        // Remove duplicates and filter for anime-related content
-        const uniqueResults = combinedResults.filter((item, index, self) => 
-          self.findIndex(i => i.id === item.id) === index
-        );
-        
-        filteredResults = uniqueResults.filter(item => {
-          const title = (item.title || item.name || '').toLowerCase();
-          const overview = (item.overview || '').toLowerCase();
-          return title.includes('anime') || 
-                 overview.includes('anime') || 
-                 overview.includes('animation') ||
-                 title.includes('dragon ball') ||
-                 title.includes('naruto') ||
-                 title.includes('one piece') ||
-                 title.includes('attack on titan') ||
-                 overview.includes('japanese');
-        });
-      }
-      
-      return filteredResults;
+        genres: [],
+        genre_ids: []
+      } as MediaItem));
     }
 
-    // Handle genre-based discovery
-    if (contentType === 'all') {
-      // Get both movies and TV shows
-      const promises: Promise<MediaItem[]>[] = [];
-      
+    // Genre-based fetching
+    const promises: Promise<MediaItem[]>[] = [];
+
+    if (contentType === 'all' || contentType === 'movie') {
       if (mapping.movieGenre) {
-        // Use primary genre filtering for comedy, romance, and horror to get more relevant results
-        const usePrimaryGenre = ['comedy', 'romance', 'horror'].includes(category.toLowerCase());
-        promises.push(this.searchMoviesByGenre(mapping.movieGenre, page, usePrimaryGenre));
-      }
-      
-      if (mapping.tvGenre) {
-        // Use primary genre filtering for comedy, romance, and horror to get more relevant results
-        const usePrimaryGenre = ['comedy', 'romance', 'horror'].includes(category.toLowerCase());
-        promises.push(this.searchTVByGenre(mapping.tvGenre, page, usePrimaryGenre));
-      }
-      
-      // If no TV genre but we have a search query, search for TV shows
-      if (!mapping.tvGenre && mapping.searchQuery) {
-        const searchResults = await this.search(`${mapping.searchQuery} tv show`, page);
-        const tvResults: MediaItem[] = searchResults
-          .filter(item => item.mediaType === 'tv')
+        promises.push(this.searchMoviesByGenre(mapping.movieGenre, page));
+      } else if (mapping.searchQuery) {
+        // Fallback to search if no genre but has query
+        const searchResults = await this.search(`${mapping.searchQuery} movie`, page);
+        promises.push(Promise.resolve(searchResults
+          .filter(i => i.mediaType === 'movie')
           .map(item => ({
-            id: item.id,
-            title: item.title,
+            ...item,
             name: item.title,
             overview: '',
             poster_path: item.posterPath?.replace(`${TMDB_IMAGE_BASE_URL}/w500`, '') || '',
             posterPath: item.posterPath || '',
             release_date: item.releaseDate,
-            releaseDate: item.releaseDate,
             first_air_date: item.releaseDate,
             vote_average: item.rating,
-            rating: item.rating,
-            mediaType: 'tv' as const,
-            genres: [],
             vote_count: 0,
-            voteCount: 0
-          }));
-        promises.push(Promise.resolve(tvResults));
+            genres: [],
+            genre_ids: []
+          } as MediaItem))));
       }
-
-      const allResults = await Promise.all(promises);
-      results = allResults.flat();
-      
-      // Remove duplicates based on ID
-      const uniqueResults = results.filter((item, index, self) => 
-        self.findIndex(i => i.id === item.id) === index
-      );
-      
-      // Sort by popularity score (rating * log of vote count for better distribution)
-      uniqueResults.sort((a, b) => {
-        const scoreA = (a.vote_average || a.rating || 0) * Math.log((a.vote_count || a.voteCount || 1) + 1);
-        const scoreB = (b.vote_average || b.rating || 0) * Math.log((b.vote_count || b.voteCount || 1) + 1);
-        return scoreB - scoreA;
-      });
-      
-      results = uniqueResults;
-      
-    } else if (contentType === 'movie' && mapping.movieGenre) {
-      const usePrimaryGenre = ['comedy', 'romance', 'horror'].includes(category.toLowerCase());
-      results = await this.searchMoviesByGenre(mapping.movieGenre, page, usePrimaryGenre);
-    } else if (contentType === 'tv' && mapping.tvGenre) {
-      const usePrimaryGenre = ['comedy', 'romance', 'horror'].includes(category.toLowerCase());
-      results = await this.searchTVByGenre(mapping.tvGenre, page, usePrimaryGenre);
-    } else if (contentType === 'tv' && !mapping.tvGenre && mapping.searchQuery) {
-      // Search for TV shows when no TV genre is available
-      const searchResults = await this.search(`${mapping.searchQuery} tv show`, page);
-      results = searchResults
-        .filter(item => item.mediaType === 'tv')
-        .map(item => ({
-          id: item.id,
-          title: item.title,
-          name: item.title,
-          overview: '',
-          poster_path: item.posterPath?.replace(`${TMDB_IMAGE_BASE_URL}/w500`, '') || '',
-          posterPath: item.posterPath || '',
-          release_date: item.releaseDate,
-          releaseDate: item.releaseDate,
-          first_air_date: item.releaseDate,
-          vote_average: item.rating,
-          rating: item.rating,
-          mediaType: 'tv' as const,
-          genres: [],
-          vote_count: 0,
-          voteCount: 0
-        }));
-    } else if (contentType === 'movie' && !mapping.movieGenre && mapping.searchQuery) {
-      // Search for movies when no movie genre is available
-      const searchResults = await this.search(`${mapping.searchQuery} movie`, page);
-      results = searchResults
-        .filter(item => item.mediaType === 'movie')
-        .map(item => ({
-          id: item.id,
-          title: item.title,
-          name: item.title,
-          overview: '',
-          poster_path: item.posterPath?.replace(`${TMDB_IMAGE_BASE_URL}/w500`, '') || '',
-          posterPath: item.posterPath || '',
-          release_date: item.releaseDate,
-          releaseDate: item.releaseDate,
-          vote_average: item.rating,
-          rating: item.rating,
-          mediaType: 'movie' as const,
-          genres: [],
-          vote_count: 0,
-          voteCount: 0
-        }));
     }
 
-    return results.slice(0, 20); // Limit to 20 results
+    if (contentType === 'all' || contentType === 'tv') {
+      if (mapping.tvGenre) {
+        promises.push(this.searchTVByGenre(mapping.tvGenre, page));
+      } else if (mapping.searchQuery) {
+        // Fallback to search if no genre but has query
+        const searchResults = await this.search(`${mapping.searchQuery} tv show`, page);
+        promises.push(Promise.resolve(searchResults
+          .filter(i => i.mediaType === 'tv')
+          .map(item => ({
+            ...item,
+            name: item.title,
+            overview: '',
+            poster_path: item.posterPath?.replace(`${TMDB_IMAGE_BASE_URL}/w500`, '') || '',
+            posterPath: item.posterPath || '',
+            release_date: item.releaseDate,
+            first_air_date: item.releaseDate,
+            vote_average: item.rating,
+            vote_count: 0,
+            genres: [],
+            genre_ids: []
+          } as MediaItem))));
+      }
+    }
+
+    const results = (await Promise.all(promises)).flat();
+
+    // Remove duplicates
+    const uniqueResults = results.filter((item, index, self) =>
+      self.findIndex(i => i.id === item.id) === index
+    );
+
+    return uniqueResults.slice(0, 20);
   },
 
   /**

@@ -16,6 +16,12 @@ interface HomePageClientProps {
   popularMovies: MediaItem[];
   popularTV: MediaItem[];
   topRated: MediaItem[];
+  actionMovies: MediaItem[];
+  comedyMovies: MediaItem[];
+  horrorMovies: MediaItem[];
+  sciFiTV: MediaItem[];
+  anime: MediaItem[];
+  documentaries: MediaItem[];
   error: string | null;
 }
 
@@ -30,19 +36,25 @@ export default function HomePageClient({
   popularMovies,
   popularTV,
   topRated,
+  actionMovies,
+  comedyMovies,
+  horrorMovies,
+  sciFiTV,
+  anime,
+  documentaries,
   error,
 }: HomePageClientProps) {
   const router = useRouter();
   const { trackEvent, trackPageView } = useAnalytics();
-  
+
   // State management
   const [currentHeroIndex, setCurrentHeroIndex] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [scrollY, setScrollY] = useState(0);
-  
+
   // Refs
   const searchRef = useRef<HTMLInputElement>(null);
-  
+
   // Hero carousel content
   const heroItems = [heroContent, ...trendingToday.slice(0, 4)].filter(Boolean) as MediaItem[];
 
@@ -69,11 +81,11 @@ export default function HomePageClient({
   // Hero carousel auto-rotation
   useEffect(() => {
     if (heroItems.length <= 1) return;
-    
+
     const interval = setInterval(() => {
       setCurrentHeroIndex((prev) => (prev + 1) % heroItems.length);
     }, 8000);
-    
+
     return () => clearInterval(interval);
   }, [heroItems.length]);
 
@@ -145,7 +157,7 @@ export default function HomePageClient({
 
         {/* Immersive Hero Section */}
         {currentHero && (
-          <section className="relative h-screen overflow-hidden">
+          <section className="relative h-[85vh] overflow-hidden">
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentHeroIndex}
@@ -156,18 +168,18 @@ export default function HomePageClient({
                 className="absolute inset-0"
               >
                 {/* Background Image with Parallax */}
-                <div 
+                <div
                   className="absolute inset-0 bg-cover bg-center"
                   style={{
                     backgroundImage: `url(https://image.tmdb.org/t/p/original${currentHero.backdrop_path || currentHero.backdropPath || ''})`,
                     transform: `translateY(${scrollY * 0.5}px)`,
                   }}
                 />
-                
+
                 {/* Gradient Overlays */}
                 <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/30" />
-                
+
                 {/* Animated Particles */}
                 <div className="absolute inset-0">
                   {[...Array(20)].map((_, i) => (
@@ -216,17 +228,17 @@ export default function HomePageClient({
                           </div>
                           <div className="flex items-center gap-2 text-yellow-400">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                             </svg>
                             <span className="text-white text-sm font-medium">
                               {(currentHero.vote_average || currentHero.rating || 0).toFixed(1)} / 10
                             </span>
                           </div>
                         </div>
-                        
+
                         {/* Animated Title Marquee */}
                         <div className="relative overflow-hidden mb-4">
-                          <motion.h1 
+                          <motion.h1
                             key={currentHeroIndex}
                             initial={{ x: '100%' }}
                             animate={{ x: 0 }}
@@ -273,11 +285,11 @@ export default function HomePageClient({
                         className="px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-full text-lg shadow-2xl hover:shadow-purple-500/25 transition-all duration-300 flex items-center justify-center gap-3"
                       >
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M8 5v14l11-7z"/>
+                          <path d="M8 5v14l11-7z" />
                         </svg>
                         Watch Now
                       </motion.button>
-                      
+
                       <motion.button
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
@@ -285,9 +297,9 @@ export default function HomePageClient({
                         className="px-8 py-4 bg-white/10 backdrop-blur-md text-white font-semibold rounded-full text-lg border border-white/20 hover:bg-white/20 transition-all duration-300 flex items-center justify-center gap-3"
                       >
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <circle cx="12" cy="12" r="10"/>
-                          <path d="M12 16v-4"/>
-                          <path d="M12 8h.01"/>
+                          <circle cx="12" cy="12" r="10" />
+                          <path d="M12 16v-4" />
+                          <path d="M12 8h.01" />
                         </svg>
                         More Info
                       </motion.button>
@@ -302,7 +314,7 @@ export default function HomePageClient({
                     >
                       <span className="flex items-center gap-2">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                         </svg>
                         {(currentHero.vote_average || currentHero.rating || 0).toFixed(1)}
                       </span>
@@ -325,7 +337,7 @@ export default function HomePageClient({
                     className="w-20 h-20 bg-gradient-to-r from-white/10 to-white/5 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:from-white/20 hover:to-white/10 transition-all duration-300 border border-white/30 shadow-2xl"
                   >
                     <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+                      <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
                     </svg>
                   </motion.button>
                   <motion.button
@@ -335,7 +347,7 @@ export default function HomePageClient({
                     className="w-20 h-20 bg-gradient-to-r from-white/10 to-white/5 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:from-white/20 hover:to-white/10 transition-all duration-300 border border-white/30 shadow-2xl"
                   >
                     <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+                      <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
                     </svg>
                   </motion.button>
                 </div>
@@ -348,9 +360,8 @@ export default function HomePageClient({
                     <button
                       key={index}
                       onClick={() => setCurrentHeroIndex(index)}
-                      className={`w-3 h-3 rounded-full transition-all duration-300 ${
-                        index === currentHeroIndex ? 'bg-white w-12' : 'bg-white/40'
-                      }`}
+                      className={`w-3 h-3 rounded-full transition-all duration-300 ${index === currentHeroIndex ? 'bg-white w-12' : 'bg-white/40'
+                        }`}
                     />
                   ))}
                 </div>
@@ -366,8 +377,8 @@ export default function HomePageClient({
               <div className="flex flex-col items-center gap-2">
                 <span className="text-sm font-medium">Scroll to explore</span>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 5v14"/>
-                  <path d="M19 12l-7 7-7-7"/>
+                  <path d="M12 5v14" />
+                  <path d="M19 12l-7 7-7-7" />
                 </svg>
               </div>
             </motion.div>
@@ -395,24 +406,24 @@ export default function HomePageClient({
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleSearch(searchQuery)}
-                    onFocus={() => {}}
-                    onBlur={() => {}}
+                    onFocus={() => { }}
+                    onBlur={() => { }}
                     placeholder="Search movies, TV shows, actors..."
                     className="w-full px-6 py-4 pl-14 bg-white/10 backdrop-blur-md border border-white/20 rounded-full text-white placeholder-gray-400 text-lg focus:outline-none focus:border-purple-500 transition-all duration-300"
                   />
-                  <svg 
-                    className="absolute left-5 top-1/2 transform -translate-y-1/2 text-gray-400" 
-                    width="22" 
-                    height="22" 
-                    viewBox="0 0 24 24" 
-                    fill="none" 
-                    stroke="currentColor" 
+                  <svg
+                    className="absolute left-5 top-1/2 transform -translate-y-1/2 text-gray-400"
+                    width="22"
+                    height="22"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
                     strokeWidth="2.5"
-                    strokeLinecap="round" 
+                    strokeLinecap="round"
                     strokeLinejoin="round"
                   >
-                    <circle cx="11" cy="11" r="8"/>
-                    <path d="M21 21l-4.35-4.35"/>
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="M21 21l-4.35-4.35" />
                   </svg>
                   {searchQuery && (
                     <button
@@ -426,43 +437,62 @@ export default function HomePageClient({
               </motion.div>
             </div>
           </section>
-          {/* Trending Today */}
-          {trendingToday.length > 0 && (
+
+          {/* Content Sections */}
+          <div className="space-y-12 mb-20">
             <ContentSection
-              title="Trending Today"
+              title="Trending Now"
               items={trendingToday}
               onItemClick={(item) => handleContentClick(item, 'trending_today')}
             />
-          )}
-
-          {/* Popular Movies */}
-          {popularMovies.length > 0 && (
             <ContentSection
-              title="Popular Movies"
+              title="Blockbuster Movies"
               items={popularMovies}
               onItemClick={(item) => handleContentClick(item, 'popular_movies')}
             />
-          )}
-
-          {/* Popular TV Shows */}
-          {popularTV.length > 0 && (
             <ContentSection
-              title="Popular TV Shows"
+              title="Binge-Worthy TV"
               items={popularTV}
               onItemClick={(item) => handleContentClick(item, 'popular_tv')}
             />
-          )}
-
-          {/* Top Rated */}
-          {topRated.length > 0 && (
             <ContentSection
-              title="Top Rated"
+              title="Critically Acclaimed"
               items={topRated}
               onItemClick={(item) => handleContentClick(item, 'top_rated')}
             />
-          )}
+            <ContentSection
+              title="High-Octane Action"
+              items={actionMovies}
+              onItemClick={(item) => handleContentClick(item, 'action_movies')}
+            />
+            <ContentSection
+              title="Laugh Out Loud"
+              items={comedyMovies}
+              onItemClick={(item) => handleContentClick(item, 'comedy_movies')}
+            />
+            <ContentSection
+              title="Sci-Fi & Fantasy Worlds"
+              items={sciFiTV}
+              onItemClick={(item) => handleContentClick(item, 'scifi_tv')}
+            />
+            <ContentSection
+              title="Chills & Thrills"
+              items={horrorMovies}
+              onItemClick={(item) => handleContentClick(item, 'horror_movies')}
+            />
+            <ContentSection
+              title="Anime Hits"
+              items={anime}
+              onItemClick={(item) => handleContentClick(item, 'anime')}
+            />
+            <ContentSection
+              title="Real Stories"
+              items={documentaries}
+              onItemClick={(item) => handleContentClick(item, 'documentaries')}
+            />
+          </div>
 
-          {/* Genre Explorer */}
+          {/* Explore by Genre */}
           <section className="py-20 px-6">
             <div className="container mx-auto">
               <motion.div
@@ -476,34 +506,34 @@ export default function HomePageClient({
                 </h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                   {[
-                    { 
-                      name: 'Action', 
-                      gradient: 'from-red-500 to-orange-500', 
+                    {
+                      name: 'Action',
+                      gradient: 'from-red-500 to-orange-500',
                       icon: '⚡'
                     },
-                    { 
-                      name: 'Comedy', 
-                      gradient: 'from-yellow-400 to-pink-500', 
+                    {
+                      name: 'Comedy',
+                      gradient: 'from-yellow-400 to-pink-500',
                       icon: '😂'
                     },
-                    { 
-                      name: 'Drama', 
-                      gradient: 'from-purple-500 to-blue-500', 
+                    {
+                      name: 'Drama',
+                      gradient: 'from-purple-500 to-blue-500',
                       icon: '🎭'
                     },
-                    { 
-                      name: 'Horror', 
-                      gradient: 'from-gray-800 to-red-900', 
+                    {
+                      name: 'Horror',
+                      gradient: 'from-gray-800 to-red-900',
                       icon: '👻'
                     },
-                    { 
-                      name: 'Sci-Fi', 
-                      gradient: 'from-cyan-500 to-blue-600', 
+                    {
+                      name: 'Sci-Fi',
+                      gradient: 'from-cyan-500 to-blue-600',
                       icon: '🚀'
                     },
-                    { 
-                      name: 'Romance', 
-                      gradient: 'from-pink-500 to-rose-500', 
+                    {
+                      name: 'Romance',
+                      gradient: 'from-pink-500 to-rose-500',
                       icon: '💕'
                     },
                   ].map((genre, index) => (
@@ -556,11 +586,11 @@ export default function HomePageClient({
                   {
                     icon: (
                       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M9 12l2 2 4-4"/>
-                        <path d="M21 12c-1 0-3-1-3-3s2-3 3-3 3 1 3 3-2 3-3 3"/>
-                        <path d="M3 12c1 0 3-1 3-3s-2-3-3-3-3 1-3 3 2 3 3 3"/>
-                        <path d="M13 12h3"/>
-                        <path d="M8 12H5"/>
+                        <path d="M9 12l2 2 4-4" />
+                        <path d="M21 12c-1 0-3-1-3-3s2-3 3-3 3 1 3 3-2 3-3 3" />
+                        <path d="M3 12c1 0 3-1 3-3s-2-3-3-3-3 1-3 3 2 3 3 3" />
+                        <path d="M13 12h3" />
+                        <path d="M8 12H5" />
                       </svg>
                     ),
                     title: 'AI-Powered Recommendations',
@@ -569,7 +599,7 @@ export default function HomePageClient({
                   {
                     icon: (
                       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
                       </svg>
                     ),
                     title: 'Lightning Fast Streaming',
@@ -578,9 +608,9 @@ export default function HomePageClient({
                   {
                     icon: (
                       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-                        <line x1="8" y1="21" x2="16" y2="21"/>
-                        <line x1="12" y1="17" x2="12" y2="21"/>
+                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                        <line x1="8" y1="21" x2="16" y2="21" />
+                        <line x1="12" y1="17" x2="12" y2="21" />
                       </svg>
                     ),
                     title: '4K Ultra HD Quality',
@@ -589,10 +619,10 @@ export default function HomePageClient({
                   {
                     icon: (
                       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                        <rect x="7" y="8" width="10" height="8" rx="1" ry="1"/>
-                        <path d="M7 16h10"/>
-                        <path d="M12 8v8"/>
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                        <rect x="7" y="8" width="10" height="8" rx="1" ry="1" />
+                        <path d="M7 16h10" />
+                        <path d="M12 8v8" />
                       </svg>
                     ),
                     title: 'Multi-Device Sync',
@@ -601,9 +631,9 @@ export default function HomePageClient({
                   {
                     icon: (
                       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M18 6L6 18"/>
-                        <path d="M6 6l12 12"/>
-                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M18 6L6 18" />
+                        <path d="M6 6l12 12" />
+                        <circle cx="12" cy="12" r="10" />
                       </svg>
                     ),
                     title: 'No Ads, No Interruptions',
@@ -612,7 +642,7 @@ export default function HomePageClient({
                   {
                     icon: (
                       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                       </svg>
                     ),
                     title: 'Secure & Private',
@@ -664,7 +694,7 @@ export default function HomePageClient({
                     className="px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-full text-lg shadow-2xl hover:shadow-purple-500/25 transition-all duration-300 flex items-center gap-3"
                   >
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
                     </svg>
                     Start Exploring
                   </motion.button>
@@ -678,9 +708,9 @@ export default function HomePageClient({
                     className="px-8 py-4 bg-white/10 backdrop-blur-md text-white font-semibold rounded-full text-lg border border-white/20 hover:bg-white/20 transition-all duration-300 flex items-center gap-3"
                   >
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M2 3h6l2 13h7l4-8H9"/>
-                      <circle cx="9" cy="20" r="1"/>
-                      <circle cx="20" cy="20" r="1"/>
+                      <path d="M2 3h6l2 13h7l4-8H9" />
+                      <circle cx="9" cy="20" r="1" />
+                      <circle cx="20" cy="20" r="1" />
                     </svg>
                     Browse Content
                   </motion.button>
@@ -697,20 +727,20 @@ export default function HomePageClient({
 }
 
 // Content Section Component
-function ContentSection({ 
-  title, 
-  items, 
-  onItemClick 
-}: { 
-  title: string; 
-  items: MediaItem[]; 
+function ContentSection({
+  title,
+  items,
+  onItemClick
+}: {
+  title: string;
+  items: MediaItem[];
   onItemClick: (item: MediaItem) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const scroll = (direction: 'left' | 'right') => {
     if (scrollRef.current) {
-      const scrollAmount = 320;
+      const scrollAmount = 600;
       scrollRef.current.scrollBy({
         left: direction === 'left' ? -scrollAmount : scrollAmount,
         behavior: 'smooth'
@@ -731,29 +761,44 @@ function ContentSection({
             <h2 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3">
               {title.includes('Trending') && (
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-orange-500">
-                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
                 </svg>
               )}
-              {title.includes('Popular Movies') && (
+              {title.includes('Blockbuster') && (
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-purple-500">
-                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-                  <line x1="8" y1="21" x2="16" y2="21"/>
-                  <line x1="12" y1="17" x2="12" y2="21"/>
+                  <path d="M19.82 2H4.18C2.97 2 2 2.97 2 4.18v15.64C2 21.03 2.97 22 4.18 22h15.64c1.21 0 2.18-.97 2.18-2.18V4.18C22 2.97 21.03 2 19.82 2zM7 16l5-5 5 5H7z" />
                 </svg>
               )}
-              {title.includes('Popular TV') && (
+              {title.includes('TV') && (
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-blue-500">
-                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-                  <line x1="8" y1="21" x2="16" y2="21"/>
-                  <line x1="12" y1="17" x2="12" y2="21"/>
+                  <rect x="2" y="7" width="20" height="15" rx="2" ry="2" />
+                  <polyline points="17 2 12 7 7 2" />
                 </svg>
               )}
-              {title.includes('Top Rated') && (
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" className="text-yellow-500">
-                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+              {title.includes('Acclaimed') && (
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-yellow-500">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                 </svg>
               )}
-              <span>{title.replace(/^[^\s]+\s/, '')}</span>
+              {title.includes('Action') && (
+                <span className="text-3xl">⚡</span>
+              )}
+              {title.includes('Laugh') && (
+                <span className="text-3xl">😂</span>
+              )}
+              {title.includes('Sci-Fi') && (
+                <span className="text-3xl">🚀</span>
+              )}
+              {title.includes('Chills') && (
+                <span className="text-3xl">👻</span>
+              )}
+              {title.includes('Anime') && (
+                <span className="text-3xl">🎌</span>
+              )}
+              {title.includes('Real') && (
+                <span className="text-3xl">🌍</span>
+              )}
+              <span>{title}</span>
             </h2>
             <div className="flex gap-4">
               <motion.button
@@ -763,7 +808,7 @@ function ContentSection({
                 className="w-20 h-20 bg-gradient-to-r from-purple-600/20 to-pink-600/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:from-purple-600/30 hover:to-pink-600/30 transition-all duration-300 border border-white/20 shadow-xl"
               >
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+                  <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
                 </svg>
               </motion.button>
               <motion.button
@@ -773,13 +818,13 @@ function ContentSection({
                 className="w-20 h-20 bg-gradient-to-r from-purple-600/20 to-pink-600/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:from-purple-600/30 hover:to-pink-600/30 transition-all duration-300 border border-white/20 shadow-xl"
               >
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+                  <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
                 </svg>
               </motion.button>
             </div>
           </div>
 
-          <div 
+          <div
             ref={scrollRef}
             className="flex gap-6 overflow-x-auto scrollbar-hide pb-8 pt-4 px-2"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
@@ -792,9 +837,9 @@ function ContentSection({
                 viewport={{ once: true }}
                 transition={{ delay: index * 0.05 }}
                 onClick={() => onItemClick(item)}
-                className="flex-shrink-0 w-72 cursor-pointer group p-2"
+                className="flex-shrink-0 w-56 md:w-64 cursor-pointer group p-2"
               >
-                <motion.div 
+                <motion.div
                   whileHover={{ scale: 1.05, y: -8 }}
                   transition={{ duration: 0.3, ease: "easeOut" }}
                   className="relative rounded-xl bg-gray-800 shadow-2xl overflow-hidden"
@@ -803,20 +848,20 @@ function ContentSection({
                     <img
                       src={`https://image.tmdb.org/t/p/w500${item.poster_path || item.posterPath || ''}`}
                       alt={item.title || item.name || 'Content'}
-                      className="w-full h-96 object-cover group-hover:scale-110 transition-transform duration-500"
+                      className="w-full h-80 md:h-96 object-cover group-hover:scale-110 transition-transform duration-500"
                       loading="lazy"
                     />
                   </div>
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  
+
                   {/* Play Button Overlay */}
                   <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
-                    <motion.div 
+                    <motion.div
                       whileHover={{ scale: 1.1 }}
                       className="w-20 h-20 bg-gradient-to-r from-purple-600/80 to-pink-600/80 backdrop-blur-md rounded-full flex items-center justify-center shadow-2xl border border-white/20"
                     >
                       <svg width="28" height="28" viewBox="0 0 24 24" fill="white" strokeWidth="0">
-                        <path d="M8 5v14l11-7z"/>
+                        <path d="M8 5v14l11-7z" />
                       </svg>
                     </motion.div>
                   </div>
@@ -824,7 +869,7 @@ function ContentSection({
                   {/* Rating Badge */}
                   <div className="absolute top-4 right-4 px-3 py-2 bg-gradient-to-r from-yellow-500/90 to-orange-500/90 backdrop-blur-md rounded-full text-white text-sm font-bold flex items-center gap-2 shadow-lg border border-white/20">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                     </svg>
                     {(item.vote_average || item.rating || 0).toFixed(1)}
                   </div>

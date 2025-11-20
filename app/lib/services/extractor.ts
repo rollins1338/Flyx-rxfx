@@ -30,9 +30,11 @@ function transformToVideoData(data: any): VideoData {
         url: source.url || source.file,
         quality: source.quality || 'auto',
         type: source.type || 'hls',
+        title: source.title, // Preserve original source name
+        language: source.language, // Preserve language detection
       });
     });
-  } 
+  }
   // Single source format (backward compatibility)
   else if (data.url || data.streamUrl) {
     sources.push({
@@ -69,7 +71,7 @@ async function extractorRequest<T>(
   config: RequestConfig = {}
 ): Promise<APIResponse<T>> {
   const baseURL = getExtractorURL();
-  
+
   console.log('Extractor request started', { params, baseURL });
 
   // Check cache if enabled
@@ -93,7 +95,7 @@ async function extractorRequest<T>(
       queryParams.append(key, value.toString());
     }
   });
-  
+
   const url = `${baseURL}?${queryParams.toString()}`;
   console.log('Making HTTP request to extractor', { url });
 
@@ -154,19 +156,19 @@ export const extractorService = {
    */
   async extractMovie(tmdbId: string): Promise<VideoData> {
     console.log('ExtractorService.extractMovie called', { tmdbId });
-    
+
     const response = await extractorRequest<any>(
       { tmdbId, type: 'movie' },
-      { 
+      {
         cacheTTL: CACHE_DURATIONS.streams,
         timeout: 45000,
       }
     );
 
-    console.log('ExtractorService.extractMovie response', { 
-      hasError: !!response.error, 
+    console.log('ExtractorService.extractMovie response', {
+      hasError: !!response.error,
       hasData: !!response.data,
-      cached: response.cached 
+      cached: response.cached
     });
 
     if (response.error || !response.data) {
@@ -180,11 +182,11 @@ export const extractorService = {
     }
 
     const videoData = transformToVideoData(response.data);
-    console.log('ExtractorService.extractMovie completed', { 
+    console.log('ExtractorService.extractMovie completed', {
       sourcesCount: videoData.sources.length,
-      subtitlesCount: videoData.subtitles.length 
+      subtitlesCount: videoData.subtitles.length
     });
-    
+
     return videoData;
   },
 
@@ -197,19 +199,19 @@ export const extractorService = {
     episode: number
   ): Promise<VideoData> {
     console.log('ExtractorService.extractEpisode called', { tmdbId, season, episode });
-    
+
     const response = await extractorRequest<any>(
       { tmdbId, type: 'tv', season, episode },
-      { 
+      {
         cacheTTL: CACHE_DURATIONS.streams,
         timeout: 45000,
       }
     );
 
-    console.log('ExtractorService.extractEpisode response', { 
-      hasError: !!response.error, 
+    console.log('ExtractorService.extractEpisode response', {
+      hasError: !!response.error,
       hasData: !!response.data,
-      cached: response.cached 
+      cached: response.cached
     });
 
     if (response.error || !response.data) {
@@ -223,11 +225,11 @@ export const extractorService = {
     }
 
     const videoData = transformToVideoData(response.data);
-    console.log('ExtractorService.extractEpisode completed', { 
+    console.log('ExtractorService.extractEpisode completed', {
       sourcesCount: videoData.sources.length,
-      subtitlesCount: videoData.subtitles.length 
+      subtitlesCount: videoData.subtitles.length
     });
-    
+
     return videoData;
   },
 
@@ -241,7 +243,7 @@ export const extractorService = {
     episode?: number
   ): Promise<VideoData> {
     console.log('ExtractorService.extract called', { tmdbId, mediaType, season, episode });
-    
+
     if (mediaType === 'movie') {
       console.log('Extracting movie stream');
       return this.extractMovie(tmdbId);

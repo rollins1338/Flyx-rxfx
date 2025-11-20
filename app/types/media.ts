@@ -18,12 +18,16 @@ export interface MediaItem {
   first_air_date?: string;
   vote_average?: number;
   vote_count?: number;
-  mediaType?: 'movie' | 'tv';
-  media_type?: 'movie' | 'tv';
+  popularity?: number;
+  mediaType?: 'movie' | 'tv' | 'person';
+  media_type?: 'movie' | 'tv' | 'person';
   genres?: Genre[];
   genre_ids?: number[];
   runtime?: number;
   seasons?: Season[];
+  // Person specific
+  profile_path?: string;
+  known_for?: MediaItem[];
   // Legacy support for backward compatibility
   posterPath?: string;
   backdropPath?: string;
@@ -53,7 +57,7 @@ export interface SearchResult {
   id: string;
   title: string;
   posterPath: string;
-  mediaType: 'movie' | 'tv';
+  mediaType: 'movie' | 'tv' | 'person';
   releaseDate: string;
   rating: number;
 }
@@ -62,6 +66,8 @@ export interface StreamSource {
   url: string;
   quality: 'auto' | '1080p' | '720p' | '480p' | '360p';
   type: 'hls' | 'mp4';
+  title?: string;
+  language?: string;
   metadata?: {
     extractedAt?: number;
     source?: string;

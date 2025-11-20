@@ -1,6 +1,23 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAdmin } from '../context/AdminContext';
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  Legend
+} from 'recharts';
+import GeographicHeatmap from './GeographicHeatmap';
 
 interface DailyMetric {
   date: string;
@@ -9,29 +26,94 @@ interface DailyMetric {
   sessions: number;
 }
 
+interface AdvancedMetrics {
+  uniqueViewers: number;
+  avgSessionDuration: number;
+  bounceRate: number;
+}
+
+interface PeakHour {
+  hour: number;
+  count: number;
+}
+
+interface DeviceStat {
+  deviceType: string;
+  count: number;
+  [key: string]: any;
+}
+
+interface GeoStat {
+  country: string;
+  count: number;
+}
+
 export default function AnalyticsCharts() {
+  const { dateRange, setIsLoading } = useAdmin();
   const [metrics, setMetrics] = useState<DailyMetric[]>([]);
+  const [advanced, setAdvanced] = useState<AdvancedMetrics | null>(null);
+  const [peakHours, setPeakHours] = useState<PeakHour[]>([]);
+  const [devices, setDevices] = useState<DeviceStat[]>([]);
+  const [geographic, setGeographic] = useState<GeoStat[]>([]);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState('week');
 
   useEffect(() => {
     fetchMetrics();
-  }, [period]);
+  }, [dateRange]);
 
   const fetchMetrics = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/admin/analytics?period=${period}`);
-      
+      setIsLoading(true);
+      const params = new URLSearchParams();
+
+      if (dateRange.startDate && dateRange.endDate) {
+        params.append('startDate', dateRange.startDate.toISOString());
+        params.append('endDate', dateRange.endDate.toISOString());
+      } else {
+        params.append('period', dateRange.period);
+      }
+
+      const response = await fetch(`/api/admin/analytics?${params}`);
+
       if (response.ok) {
         const data = await response.json();
         setMetrics(data.data.dailyMetrics || []);
+        setAdvanced(data.data.advancedMetrics || null);
+        setPeakHours(data.data.peakHours || []);
+        setDevices(data.data.deviceBreakdown || []);
+        setGeographic(data.data.geographic || []);
       }
     } catch (err) {
       console.error('Failed to fetch metrics:', err);
     } finally {
       setLoading(false);
+      setIsLoading(false);
     }
+  };
+
+  const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#0088FE', '#00C49F'];
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div style={{
+          background: 'rgba(15, 23, 42, 0.9)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          padding: '12px',
+          borderRadius: '8px',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)'
+        }}>
+          <p style={{ color: '#e2e8f0', margin: '0 0 8px 0', fontWeight: '600' }}>{label}</p>
+          {payload.map((entry: any, index: number) => (
+            <p key={index} style={{ color: entry.color, margin: '4px 0', fontSize: '13px' }}>
+              {entry.name}: {entry.value.toLocaleString()}
+            </p>
+          ))}
+        </div>
+      );
+    }
+    return null;
   };
 
   if (loading) {
@@ -49,240 +131,195 @@ export default function AnalyticsCharts() {
     );
   }
 
-  const maxViews = Math.max(...metrics.map(m => m.views), 1);
-  const maxWatchTime = Math.max(...metrics.map(m => m.watchTime), 1);
-
   return (
     <div>
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '32px'
-      }}>
-        <select
-          value={period}
-          onChange={(e) => setPeriod(e.target.value)}
-          style={{
-            padding: '12px 16px',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            borderRadius: '12px',
-            background: 'rgba(255, 255, 255, 0.05)',
-            color: '#e2e8f0',
-            fontSize: '14px',
-            fontWeight: '500',
-            backdropFilter: 'blur(10px)',
-            cursor: 'pointer',
-            outline: 'none'
-          }}
-        >
-          <option value="week" style={{ background: '#1a1a2e', color: '#e2e8f0' }}>Last 7 Days</option>
-          <option value="month" style={{ background: '#1a1a2e', color: '#e2e8f0' }}>Last 30 Days</option>
-        </select>
-      </div>
-
-      {metrics.length === 0 ? (
-        <div style={{
-          background: 'rgba(255, 255, 255, 0.05)',
-          padding: '60px',
-          borderRadius: '16px',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          textAlign: 'center',
-          backdropFilter: 'blur(20px)'
-        }}>
-          <div style={{ 
-            width: '64px',
-            height: '64px',
-            marginBottom: '16px',
-            margin: '0 auto 16px auto',
-            background: 'linear-gradient(135deg, #7877c6 0%, #ff77c6 100%)',
-            borderRadius: '16px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 8px 32px rgba(120, 119, 198, 0.4)'
-          }}>
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M3 3V21H21" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M9 9L12 6L16 10L20 6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </div>
-          <h3 style={{ color: '#f8fafc', marginBottom: '8px' }}>No Analytics Data Yet</h3>
-          <p style={{ color: '#94a3b8', margin: 0 }}>
-            Start using your video player to see analytics data here.
-          </p>
-        </div>
-      ) : (
+      {/* Advanced Metrics Cards */}
+      {advanced && (
         <div style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: '24px'
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '24px',
+          marginBottom: '32px'
         }}>
-          <ChartCard
-            title="Daily Views"
-            data={metrics}
-            dataKey="views"
-            max={maxViews}
-            color="#7877c6"
-            gradient="linear-gradient(135deg, #7877c6 0%, #9333ea 100%)"
+          <MetricCard
+            title="Unique Viewers"
+            value={advanced.uniqueViewers.toLocaleString()}
+            icon={
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            }
+            color="#3b82f6"
           />
-          <ChartCard
-            title="Daily Watch Time (minutes)"
-            data={metrics}
-            dataKey="watchTime"
-            max={maxWatchTime}
+          <MetricCard
+            title="Avg. Session Duration"
+            value={`${advanced.avgSessionDuration}m`}
+            icon={
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+            }
             color="#10b981"
-            gradient="linear-gradient(135deg, #10b981 0%, #059669 100%)"
+          />
+          <MetricCard
+            title="Bounce Rate"
+            value={`${advanced.bounceRate}%`}
+            icon={
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="23 4 23 10 17 10" />
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+              </svg>
+            }
+            color="#f59e0b"
           />
         </div>
       )}
+
+      {/* Charts Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px', marginBottom: '24px' }}>
+        {/* Views Over Time */}
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.05)',
+          padding: '24px',
+          borderRadius: '16px',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          backdropFilter: 'blur(20px)',
+          height: '400px'
+        }}>
+          <h3 style={{ color: '#f8fafc', marginBottom: '20px', fontSize: '18px' }}>Views & Watch Time</h3>
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={metrics}>
+              <defs>
+                <linearGradient id="colorViews" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8} />
+                  <stop offset="95%" stopColor="#8884d8" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="colorWatchTime" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#82ca9d" stopOpacity={0.8} />
+                  <stop offset="95%" stopColor="#82ca9d" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+              <XAxis
+                dataKey="date"
+                stroke="#94a3b8"
+                tickFormatter={(str) => new Date(str).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+              />
+              <YAxis yAxisId="left" stroke="#8884d8" />
+              <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" />
+              <Tooltip content={<CustomTooltip />} />
+              <Legend />
+              <Area yAxisId="left" type="monotone" dataKey="views" stroke="#8884d8" fillOpacity={1} fill="url(#colorViews)" name="Views" />
+              <Area yAxisId="right" type="monotone" dataKey="watchTime" stroke="#82ca9d" fillOpacity={1} fill="url(#colorWatchTime)" name="Watch Time (m)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Device Breakdown */}
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.05)',
+          padding: '24px',
+          borderRadius: '16px',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          backdropFilter: 'blur(20px)',
+          height: '400px'
+        }}>
+          <h3 style={{ color: '#f8fafc', marginBottom: '20px', fontSize: '18px' }}>Device Breakdown</h3>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={devices}
+                cx="50%"
+                cy="50%"
+                innerRadius={60}
+                outerRadius={100}
+                fill="#8884d8"
+                paddingAngle={5}
+                dataKey="count"
+                nameKey="deviceType"
+              >
+                {devices.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip content={<CustomTooltip />} />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
+        {/* Peak Hours */}
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.05)',
+          padding: '24px',
+          borderRadius: '16px',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          backdropFilter: 'blur(20px)',
+          height: '350px'
+        }}>
+          <h3 style={{ color: '#f8fafc', marginBottom: '20px', fontSize: '18px' }}>Peak Viewing Hours</h3>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={peakHours}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+              <XAxis dataKey="hour" stroke="#94a3b8" tickFormatter={(hour) => `${hour}:00`} />
+              <YAxis stroke="#94a3b8" />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar dataKey="count" fill="#8884d8" name="Views" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Geographic Heatmap */}
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.05)',
+          padding: '24px',
+          borderRadius: '16px',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          backdropFilter: 'blur(20px)',
+          height: '350px',
+          overflow: 'hidden'
+        }}>
+          <h3 style={{ color: '#f8fafc', marginBottom: '20px', fontSize: '18px' }}>Geographic Distribution</h3>
+          <GeographicHeatmap data={geographic} />
+        </div>
+      </div>
     </div>
   );
 }
 
-function ChartCard({ 
-  title, 
-  data, 
-  dataKey, 
-  max, 
-  color,
-  gradient 
-}: { 
-  title: string; 
-  data: DailyMetric[]; 
-  dataKey: keyof DailyMetric; 
-  max: number;
-  color: string;
-  gradient: string;
-}) {
+function MetricCard({ title, value, icon, color }: { title: string, value: string, icon: React.ReactNode, color: string }) {
   return (
     <div style={{
       background: 'rgba(255, 255, 255, 0.05)',
-      padding: '28px',
+      padding: '24px',
       borderRadius: '16px',
       border: '1px solid rgba(255, 255, 255, 0.1)',
       backdropFilter: 'blur(20px)',
-      position: 'relative',
-      overflow: 'hidden'
+      display: 'flex',
+      alignItems: 'center',
+      gap: '16px'
     }}>
-      {/* Gradient accent */}
       <div style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        height: '3px',
-        background: gradient
-      }}></div>
-
-      <h3 style={{ 
-        margin: '0 0 24px 0', 
-        color: '#f8fafc',
-        fontSize: '18px',
-        fontWeight: '600',
-        letterSpacing: '-0.5px'
-      }}>
-        {title}
-      </h3>
-      
-      <div style={{
+        width: '48px',
+        height: '48px',
+        borderRadius: '12px',
+        background: `${color}20`,
+        color: color,
         display: 'flex',
-        alignItems: 'end',
-        gap: '6px',
-        height: '220px',
-        padding: '10px 0',
-        position: 'relative'
+        alignItems: 'center',
+        justifyContent: 'center'
       }}>
-        {/* Grid lines */}
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: '30px',
-          background: `
-            linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px),
-            linear-gradient(to top, rgba(255,255,255,0.05) 1px, transparent 1px)
-          `,
-          backgroundSize: '20px 20px'
-        }}></div>
-
-        {data.map((metric) => {
-          const value = metric[dataKey] as number;
-          const height = max > 0 ? (value / max) * 100 : 0;
-          
-          return (
-            <div
-              key={metric.date}
-              style={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                height: '100%',
-                position: 'relative',
-                zIndex: 1
-              }}
-            >
-              <div
-                style={{
-                  width: '100%',
-                  height: `${height}%`,
-                  background: gradient,
-                  borderRadius: '4px 4px 0 0',
-                  minHeight: value > 0 ? '3px' : '0',
-                  position: 'relative',
-                  marginBottom: 'auto',
-                  boxShadow: value > 0 ? `0 0 10px ${color}40` : 'none',
-                  transition: 'all 0.3s ease',
-                  cursor: 'pointer'
-                }}
-                title={`${new Date(metric.date).toLocaleDateString()}: ${value}`}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'scaleY(1.05)';
-                  e.currentTarget.style.boxShadow = `0 0 15px ${color}60`;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'scaleY(1)';
-                  e.currentTarget.style.boxShadow = value > 0 ? `0 0 10px ${color}40` : 'none';
-                }}
-              >
-                {value > 0 && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '-24px',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    fontSize: '11px',
-                    color: '#e2e8f0',
-                    whiteSpace: 'nowrap',
-                    background: 'rgba(0, 0, 0, 0.7)',
-                    padding: '2px 6px',
-                    borderRadius: '4px',
-                    fontWeight: '500'
-                  }}>
-                    {value}
-                  </div>
-                )}
-              </div>
-              
-              <div style={{
-                fontSize: '11px',
-                color: '#94a3b8',
-                marginTop: '12px',
-                transform: 'rotate(-45deg)',
-                transformOrigin: 'center',
-                whiteSpace: 'nowrap',
-                fontWeight: '500'
-              }}>
-                {new Date(metric.date).toLocaleDateString('en-US', { 
-                  month: 'short', 
-                  day: 'numeric' 
-                })}
-              </div>
-            </div>
-          );
-        })}
+        {icon}
+      </div>
+      <div>
+        <div style={{ color: '#94a3b8', fontSize: '14px', marginBottom: '4px' }}>{title}</div>
+        <div style={{ color: '#f8fafc', fontSize: '24px', fontWeight: '600' }}>{value}</div>
       </div>
     </div>
   );

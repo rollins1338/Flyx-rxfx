@@ -27,11 +27,11 @@ const pendingRequests = new Map<string, Promise<any>>();
 // Cache management - LRU eviction
 function evictOldestCacheEntry() {
   if (cache.size < MAX_CACHE_SIZE) return;
-  
+
   let oldestKey = '';
   let oldestTime = Date.now();
   let lowestHits = Infinity;
-  
+
   // Find least recently used with lowest hits
   const entries = Array.from(cache.entries());
   for (const [key, value] of entries) {
@@ -41,7 +41,7 @@ function evictOldestCacheEntry() {
       oldestKey = key;
     }
   }
-  
+
   if (oldestKey) {
     cache.delete(oldestKey);
     console.log(`[CACHE] Evicted: ${oldestKey}`);
@@ -53,14 +53,14 @@ function evictOldestCacheEntry() {
  */
 async function getImdbId(tmdbId: string, type: 'movie' | 'tv'): Promise<string | null> {
   const cacheKey = `${tmdbId}-${type}`;
-  
+
   // Check IMDB cache
   const cached = imdbCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < IMDB_CACHE_TTL) {
     console.log('[IMDB] Cache hit');
     return cached.imdbId;
   }
-  
+
   try {
     const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY;
     if (!apiKey) {
@@ -68,31 +68,31 @@ async function getImdbId(tmdbId: string, type: 'movie' | 'tv'): Promise<string |
     }
 
     const url = `https://api.themoviedb.org/3/${type}/${tmdbId}/external_ids?api_key=${apiKey}`;
-    
+
     // Use fetch with timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-    
-    const response = await fetch(url, { 
+
+    const response = await fetch(url, {
       signal: controller.signal,
       // Add caching headers
       next: { revalidate: 86400 } // Cache for 24 hours
     });
-    
+
     clearTimeout(timeoutId);
-    
+
     if (!response.ok) {
       throw new Error(`TMDB API error: ${response.status}`);
     }
 
     const data = await response.json();
     const imdbId = data.imdb_id || null;
-    
+
     // Cache the result
     if (imdbId) {
       imdbCache.set(cacheKey, { imdbId, timestamp: Date.now() });
     }
-    
+
     return imdbId;
   } catch (error) {
     console.error('[EXTRACT] Failed to get IMDB ID:', error);
@@ -126,6 +126,10 @@ async function extractWith2Embed(
   }
 
   console.log(`[EXTRACT] Successfully extracted ${result.sources.length} quality options`);
+  console.log('[EXTRACT] Source URLs:');
+  result.sources.forEach((s, i) => {
+    console.log(`  [${i + 1}] ${s.url}`);
+  });
   return result.sources;
 }
 
@@ -143,7 +147,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const searchParams = request.nextUrl.searchParams;
-    
+
     // Parse parameters
     const tmdbId = searchParams.get('tmdbId') || '';
     const type = searchParams.get('type') as 'movie' | 'tv';
@@ -178,16 +182,16 @@ export async function GET(request: NextRequest) {
     // Check cache
     const cacheKey = `${tmdbId}-${type}-${season || ''}-${episode || ''}`;
     const cached = cache.get(cacheKey);
-    
+
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
       console.log(`[EXTRACT] Cache hit (${cached.hits} hits)`);
-      
+
       // Update cache stats
       cached.hits++;
       cached.timestamp = Date.now(); // Refresh timestamp on access
-      
+
       const executionTime = Date.now() - startTime;
-      
+
       // Return multiple quality sources
       const sources = cached.sources.map((source: any) => ({
         quality: source.quality,
@@ -198,7 +202,7 @@ export async function GET(request: NextRequest) {
         type: source.type,
         requiresSegmentProxy: source.requiresSegmentProxy
       }));
-      
+
       return NextResponse.json({
         success: true,
         sources,
@@ -218,7 +222,7 @@ export async function GET(request: NextRequest) {
     if (pendingRequests.has(cacheKey)) {
       console.log('[EXTRACT] Waiting for existing request to complete...');
       const sources = await pendingRequests.get(cacheKey)!;
-      
+
       const executionTime = Date.now() - startTime;
       const proxiedSources = sources.map((source: any) => ({
         quality: source.quality,
@@ -229,7 +233,7 @@ export async function GET(request: NextRequest) {
         type: source.type,
         requiresSegmentProxy: source.requiresSegmentProxy
       }));
-      
+
       return NextResponse.json({
         success: true,
         sources: proxiedSources,
@@ -251,7 +255,7 @@ export async function GET(request: NextRequest) {
     try {
       // Extract using 2Embed method
       const sources = await extractionPromise;
-      
+
       // Remove from pending requests
       pendingRequests.delete(cacheKey);
 
@@ -266,11 +270,11 @@ export async function GET(request: NextRequest) {
       });
 
       const executionTime = Date.now() - startTime;
-      performanceMonitor.end('stream-extraction', { 
-        tmdbId, 
-        type, 
+      performanceMonitor.end('stream-extraction', {
+        tmdbId,
+        type,
         sources: sources.length,
-        cached: false 
+        cached: false
       });
       console.log(`[EXTRACT] Success in ${executionTime}ms - ${sources.length} qualities`);
 
@@ -284,7 +288,7 @@ export async function GET(request: NextRequest) {
         type: source.type,
         requiresSegmentProxy: source.requiresSegmentProxy
       }));
-      
+
       return NextResponse.json({
         success: true,
         sources: proxiedSources,
@@ -307,14 +311,14 @@ export async function GET(request: NextRequest) {
     const executionTime = Date.now() - startTime;
     console.error('[EXTRACT] ERROR:', error);
     console.error('[EXTRACT] Stack:', error instanceof Error ? error.stack : 'No stack');
-    
+
     const errorMessage = error instanceof Error ? error.message : String(error);
     const isCloudflareBlock = errorMessage.includes('Cloudflare') || errorMessage.includes('anti-bot') || errorMessage.includes('unavailable');
     const isDecoderFailed = errorMessage.includes('decoder') || errorMessage.includes('decoding');
     const isAllProvidersFailed = errorMessage.includes('All providers failed');
-    
+
     return NextResponse.json(
-      { 
+      {
         error: isDecoderFailed ? 'Stream extraction temporarily unavailable' : isAllProvidersFailed ? 'No streams available' : isCloudflareBlock ? 'Stream source temporarily unavailable' : 'Failed to extract stream',
         details: errorMessage,
         suggestion: isDecoderFailed ? 'The stream provider has updated their protection. This will be fixed soon. Please try a different title for now.' : isAllProvidersFailed ? 'This content may not be available from any provider at the moment.' : isCloudflareBlock ? 'The stream provider is currently blocking automated requests. Please try again in a few minutes.' : 'Please try again or select a different title.',
