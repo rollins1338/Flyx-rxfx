@@ -27,7 +27,7 @@ interface ExtractionResult {
 /**
  * Fetch with proper headers and timeout
  */
-async function fetchWithHeaders(url: string, referer?: string, timeoutMs: number = 10000): Promise<string> {
+async function fetchWithHeaders(url: string, referer?: string, timeoutMs: number = 15000): Promise<string> {
   const headers: HeadersInit = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -42,13 +42,13 @@ async function fetchWithHeaders(url: string, referer?: string, timeoutMs: number
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(url, { 
+    const response = await fetch(url, {
       headers,
       signal: controller.signal
     });
-    
+
     clearTimeout(timeoutId);
-    
+
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
@@ -69,7 +69,7 @@ async function fetchWithHeaders(url: string, referer?: string, timeoutMs: number
 function extractQualityOptions(html: string): QualityOption[] {
   const qualityRegex = /go\('([^']+)'\)/g;
   const qualityMatches = Array.from(html.matchAll(qualityRegex));
-  
+
   const qualities: Record<string, QualityOption[]> = {
     '2160p': [],
     '1080p': [],
@@ -81,30 +81,30 @@ function extractQualityOptions(html: string): QualityOption[] {
 
   for (const match of qualityMatches) {
     const url = match[1];
-    
+
     // Extract title from URL - this is the cleaned source name
     const titleMatch = url.match(/tit=([^&]+)/);
     let title = titleMatch ? decodeURIComponent(titleMatch[1].replace(/\+/g, ' ')) : '';
-    
+
     // Clean up title - remove common junk patterns
     title = title
       .replace(/\s*\(.*?\)\s*/g, '') // Remove parenthetical content
       .replace(/\s*\[.*?\]\s*/g, '') // Remove bracket content
       .replace(/\s+/g, ' ') // Normalize spaces
       .trim();
-    
+
     // If title is empty after cleaning, use a generic name
     if (!title) {
       title = 'Source';
     }
-    
+
     const urlLower = url.toLowerCase();
     const titleLower = title.toLowerCase();
-    
+
     // Try to detect quality from URL or title
     let quality = 'other';
     if (urlLower.includes('2160p') || urlLower.includes('4k') || urlLower.includes('uhd') ||
-        titleLower.includes('2160p') || titleLower.includes('4k') || titleLower.includes('uhd')) {
+      titleLower.includes('2160p') || titleLower.includes('4k') || titleLower.includes('uhd')) {
       quality = '2160p';
     } else if (urlLower.includes('1080p') || titleLower.includes('1080p')) {
       quality = '1080p';
@@ -115,7 +115,7 @@ function extractQualityOptions(html: string): QualityOption[] {
     } else if (urlLower.includes('360p') || titleLower.includes('360p')) {
       quality = '360p';
     }
-    
+
     // Always use the cleaned title as the display name
     // The quality is used for sorting/grouping, but title is what users see
     qualities[quality].push({ quality: title, url, title });
@@ -123,10 +123,10 @@ function extractQualityOptions(html: string): QualityOption[] {
 
   // Return ALL sources, sorted by quality (highest first)
   const allSources: QualityOption[] = [];
-  
+
   // Add in quality order: 2160p, 1080p, 720p, 480p, 360p, other
   const qualityOrder = ['2160p', '1080p', '720p', '480p', '360p', 'other'];
-  
+
   for (const quality of qualityOrder) {
     if (qualities[quality].length > 0) {
       allSources.push(...qualities[quality]);
@@ -142,7 +142,7 @@ function extractQualityOptions(html: string): QualityOption[] {
 function decodeJWPlayer(html: string): Record<string, string> | null {
   const evalStart = html.indexOf("eval(function(p,a,c,k,e,d)");
   if (evalStart === -1) return null;
-  
+
   let depth = 0;
   let evalEnd = -1;
   for (let i = evalStart + 4; i < html.length; i++) {
@@ -155,11 +155,11 @@ function decodeJWPlayer(html: string): Record<string, string> | null {
       }
     }
   }
-  
+
   const evalStr = html.substring(evalStart, evalEnd + 1);
   const argsMatch = evalStr.match(/\}\('(.+)',(\d+),(\d+),'(.+)'\.split\('\|'\)\)\)$/);
   if (!argsMatch) return null;
-  
+
   const [, packed, radix, count, dictionaryStr] = argsMatch;
   const dictionary = dictionaryStr.split('|');
 
@@ -192,30 +192,30 @@ async function extractStreamFromQuality(
     // Step 1: Fetch /swp/ page
     const swpUrl = `https://player4u.xyz${qualityOption.url}`;
     const swpHtml = await fetchWithHeaders(swpUrl, player4uUrl);
-    
+
     // Step 2: Extract iframe src
     const iframeMatch = swpHtml.match(/<iframe[^>]+src=["']([^"']+)["']/i);
     if (!iframeMatch) return null;
-    
+
     const iframeId = iframeMatch[1];
     const yesmoviesUrl = `https://yesmovies.baby/e/${iframeId}`;
-    
+
     // Step 3: Fetch yesmovies.baby page
     const yesmoviesHtml = await fetchWithHeaders(yesmoviesUrl, swpUrl);
-    
+
     // Step 4: Decode JWPlayer config
     const sources = decodeJWPlayer(yesmoviesHtml);
     if (!sources) return null;
-    
+
     // Prefer hls3 (.txt) > hls2 > hls4
     const streamUrl = sources.hls3 || sources.hls2 || sources.hls4;
     if (!streamUrl) return null;
-    
+
     // Handle relative URLs
-    const finalUrl = streamUrl.startsWith('http') 
-      ? streamUrl 
+    const finalUrl = streamUrl.startsWith('http')
+      ? streamUrl
       : `https://yesmovies.baby${streamUrl}`;
-    
+
     return {
       quality: qualityOption.quality,
       title: qualityOption.title,
@@ -243,14 +243,14 @@ export async function extract2EmbedStreams(
     const embedUrl = season !== undefined && episode !== undefined
       ? `https://www.2embed.cc/embedtv/${imdbId}&s=${season}&e=${episode}`
       : `https://www.2embed.cc/embed/${imdbId}`;
-    
+
     const embedHtml = await fetchWithHeaders(embedUrl);
-    
+
     // Step 2: Extract player4u URL from myDropdown
     const serverRegex = /onclick="go\('([^']+)'\)"/g;
     const serverMatches = Array.from(embedHtml.matchAll(serverRegex));
     const player4uUrl = serverMatches.find(m => m[1].includes('player4u'))?.[1];
-    
+
     if (!player4uUrl) {
       return {
         success: false,
@@ -258,13 +258,13 @@ export async function extract2EmbedStreams(
         error: 'No player4u URL found'
       };
     }
-    
+
     // Step 3: Fetch player4u page
     const player4uHtml = await fetchWithHeaders(player4uUrl, embedUrl);
-    
+
     // Step 4: Extract quality options
     const qualityOptions = extractQualityOptions(player4uHtml);
-    
+
     if (qualityOptions.length === 0) {
       return {
         success: false,
@@ -272,15 +272,15 @@ export async function extract2EmbedStreams(
         error: 'No quality options found'
       };
     }
-    
+
     // Step 5: Extract streams for each quality (parallel)
-    const streamPromises = qualityOptions.map(opt => 
+    const streamPromises = qualityOptions.map(opt =>
       extractStreamFromQuality(opt, player4uUrl)
     );
-    
+
     const streams = await Promise.all(streamPromises);
     const validStreams = streams.filter((s): s is StreamSource => s !== null);
-    
+
     if (validStreams.length === 0) {
       return {
         success: false,
@@ -288,7 +288,7 @@ export async function extract2EmbedStreams(
         error: 'Failed to extract any streams'
       };
     }
-    
+
     return {
       success: true,
       sources: validStreams

@@ -1,4 +1,4 @@
-import { tmdbService } from '../services/tmdb';
+
 
 interface TitleCacheEntry {
     title: string;
@@ -17,7 +17,7 @@ class ContentTitleCache {
         // Check cache first
         const cached = this.cache.get(`${contentType}-${contentId}`);
         if (cached && Date.now() - cached.timestamp < this.TTL) {
-            return this.formatTitle(cached.title, cached.year, contentType);
+            return this.formatTitle(cached.title, cached.year);
         }
 
         // Fetch from TMDB
@@ -29,7 +29,7 @@ class ContentTitleCache {
                     year: details.year,
                     timestamp: Date.now()
                 });
-                return this.formatTitle(details.title, details.year, contentType);
+                return this.formatTitle(details.title, details.year);
             }
         } catch (error) {
             console.error(`Failed to fetch title for ${contentType} ${contentId}:`, error);
@@ -82,7 +82,7 @@ class ContentTitleCache {
         }
     }
 
-    private formatTitle(title: string, year?: number, contentType?: string): string {
+    private formatTitle(title: string, year?: number): string {
         if (year) {
             return `${title} (${year})`;
         }
@@ -94,11 +94,11 @@ class ContentTitleCache {
      */
     clearExpired(): void {
         const now = Date.now();
-        for (const [key, entry] of this.cache.entries()) {
+        this.cache.forEach((entry, key) => {
             if (now - entry.timestamp >= this.TTL) {
                 this.cache.delete(key);
             }
-        }
+        });
     }
 
     /**
