@@ -237,90 +237,77 @@ export default function AnalyticsCharts() {
                 cy="50%"
                 innerRadius={60}
                 outerRadius={100}
-                fill="#8884d8"
-                paddingAngle={5}
-                dataKey="count"
-                nameKey="deviceType"
-              >
-                {devices.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip content={<CustomTooltip />} />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
         </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
-        {/* Peak Hours */}
-        <div style={{
-          background: 'rgba(255, 255, 255, 0.05)',
-          padding: '24px',
-          borderRadius: '16px',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          backdropFilter: 'blur(20px)',
-          height: '350px'
-        }}>
-          <h3 style={{ color: '#f8fafc', marginBottom: '20px', fontSize: '18px' }}>Peak Viewing Hours</h3>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={peakHours}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-              <XAxis dataKey="hour" stroke="#94a3b8" tickFormatter={(hour) => `${hour}:00`} />
-              <YAxis stroke="#94a3b8" />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="count" fill="#8884d8" name="Views" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
         </div>
 
-        {/* Geographic Heatmap */}
-        <div style={{
-          background: 'rgba(255, 255, 255, 0.05)',
-          padding: '24px',
-          borderRadius: '16px',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          backdropFilter: 'blur(20px)',
-          height: '350px',
-          overflow: 'hidden'
-        }}>
-          <h3 style={{ color: '#f8fafc', marginBottom: '20px', fontSize: '18px' }}>Geographic Distribution</h3>
-          <GeographicHeatmap data={geographic} />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
+          {/* Peak Hours */}
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.05)',
+            padding: '24px',
+            borderRadius: '16px',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            backdropFilter: 'blur(20px)',
+            height: '350px'
+          }}>
+            <h3 style={{ color: '#f8fafc', marginBottom: '20px', fontSize: '18px' }}>Peak Viewing Hours</h3>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={peakHours}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                <XAxis dataKey="hour" stroke="#94a3b8" tickFormatter={(hour) => `${hour}:00`} />
+                <YAxis stroke="#94a3b8" />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="count" fill="#8884d8" name="Views" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Geographic Heatmap */}
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.05)',
+            padding: '24px',
+            borderRadius: '16px',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            backdropFilter: 'blur(20px)',
+            height: '350px',
+            overflow: 'hidden'
+          }}>
+            <h3 style={{ color: '#f8fafc', marginBottom: '20px', fontSize: '18px' }}>Geographic Distribution</h3>
+            <GeographicHeatmap data={geographic} />
+          </div>
         </div>
       </div>
-    </div>
-  );
+      );
 }
 
-function MetricCard({ title, value, icon, color }: { title: string, value: string, icon: React.ReactNode, color: string }) {
+      function MetricCard({title, value, icon, color}: {title: string, value: string, icon: React.ReactNode, color: string }) {
   return (
-    <div style={{
-      background: 'rgba(255, 255, 255, 0.05)',
-      padding: '24px',
-      borderRadius: '16px',
-      border: '1px solid rgba(255, 255, 255, 0.1)',
-      backdropFilter: 'blur(20px)',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '16px'
-    }}>
       <div style={{
-        width: '48px',
-        height: '48px',
-        borderRadius: '12px',
-        background: `${color}20`,
-        color: color,
+        background: 'rgba(255, 255, 255, 0.05)',
+        padding: '24px',
+        borderRadius: '16px',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        backdropFilter: 'blur(20px)',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center'
+        gap: '16px'
       }}>
-        {icon}
+        <div style={{
+          width: '48px',
+          height: '48px',
+          borderRadius: '12px',
+          background: `${color}20`,
+          color: color,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          {icon}
+        </div>
+        <div>
+          <div style={{ color: '#94a3b8', fontSize: '14px', marginBottom: '4px' }}>{title}</div>
+          <div style={{ color: '#f8fafc', fontSize: '24px', fontWeight: '600' }}>{value}</div>
+        </div>
       </div>
-      <div>
-        <div style={{ color: '#94a3b8', fontSize: '14px', marginBottom: '4px' }}>{title}</div>
-        <div style={{ color: '#f8fafc', fontSize: '24px', fontWeight: '600' }}>{value}</div>
-      </div>
-    </div>
-  );
+      );
 }
