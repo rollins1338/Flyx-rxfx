@@ -83,8 +83,10 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
   const [showResumePrompt, setShowResumePrompt] = useState(false);
   const [savedProgress, setSavedProgress] = useState<number>(0);
   const [showVolumeIndicator, setShowVolumeIndicator] = useState(false);
+  const [showVolumeIndicator, setShowVolumeIndicator] = useState(false);
   const [showNextEpisodeButton, setShowNextEpisodeButton] = useState(false);
   const [provider, setProvider] = useState('2embed');
+  const [showServerMenu, setShowServerMenu] = useState(false);
 
   const controlsTimeoutRef = useRef<NodeJS.Timeout>();
   const lastFetchedKey = useRef('');
@@ -1388,42 +1390,23 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
               )}
             </div>
 
-            {/* Settings Button (Sources & Provider) */}
-            <div className={styles.settingsContainer}>
-              <button onClick={(e) => {
-                e.stopPropagation();
-                setShowSettings(!showSettings);
-                setShowSubtitles(false);
-              }} className={styles.btn} title="Settings">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
-                </svg>
-              </button>
+            {/* Settings Button (Quality Only) */}
+            {availableSources.length > 1 && (
+              <div className={styles.settingsContainer}>
+                <button onClick={(e) => {
+                  e.stopPropagation();
+                  setShowSettings(!showSettings);
+                  setShowSubtitles(false);
+                  setShowServerMenu(false);
+                }} className={styles.btn} title="Quality">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
+                  </svg>
+                </button>
 
-              {showSettings && (
-                <div className={styles.settingsMenu} onClick={(e) => e.stopPropagation()}>
-                  {/* Provider Section */}
-                  <div className={styles.settingsSection}>
-                    <div className={styles.settingsLabel}>Provider</div>
-                    <div className={styles.sourcesList}>
-                      <button
-                        className={`${styles.settingsOption} ${provider === '2embed' ? styles.active : ''}`}
-                        onClick={() => setProvider('2embed')}
-                      >
-                        Server 1 (Default)
-                      </button>
-                      <button
-                        className={`${styles.settingsOption} ${provider === 'moviesapi' ? styles.active : ''}`}
-                        onClick={() => setProvider('moviesapi')}
-                      >
-                        Server 2 (Backup)
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Quality Section (only if sources > 1) */}
-                  {availableSources.length > 1 && (
-                    <div className={styles.settingsSection} style={{ borderTop: '1px solid rgba(255,255,255,0.1)', marginTop: '0.5rem', paddingTop: '0.5rem' }}>
+                {showSettings && (
+                  <div className={styles.settingsMenu} onClick={(e) => e.stopPropagation()}>
+                    <div className={styles.settingsSection}>
                       <div className={styles.settingsLabel}>Quality</div>
                       <div className={styles.sourcesList}>
                         {availableSources.map((source, index) => (
@@ -1437,10 +1420,10 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                         ))}
                       </div>
                     </div>
-                  )}
-                </div>
-              )}
-            </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className={styles.btn}>
               {isFullscreen ? (
@@ -1456,6 +1439,107 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
           </div>
         </div>
       </div>
+
+      {/* Server Selection (Cloud Icon) */}
+      {(showControls || !isPlaying) && (
+        <div style={{
+          position: 'absolute',
+          top: '2rem',
+          right: '2rem',
+          zIndex: 20,
+        }}>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowServerMenu(!showServerMenu);
+              setShowSettings(false);
+              setShowSubtitles(false);
+            }}
+            className={styles.btn}
+            style={{
+              background: 'rgba(0,0,0,0.5)',
+              backdropFilter: 'blur(4px)',
+              padding: '0.75rem',
+              borderRadius: '50%'
+            }}
+            title="Servers"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17.5 19c0-3.037-2.463-5.5-5.5-5.5S6.5 15.963 6.5 19" />
+              <path d="M17.5 19c2.485 0 4.5-2.015 4.5-4.5S19.985 10 17.5 10c-.163 0-.322.01-.48.028C16.54 6.608 13.567 4 10 4 5.582 4 2 7.582 2 12c0 3.657 2.475 6.72 5.91 7.68" />
+            </svg>
+          </button>
+
+          {showServerMenu && (
+            <div className={styles.settingsMenu} style={{ top: '100%', right: 0, bottom: 'auto', marginTop: '0.5rem' }} onClick={(e) => e.stopPropagation()}>
+              <div className={styles.settingsSection}>
+                <div className={styles.settingsLabel}>Servers</div>
+                <div className={styles.sourcesList}>
+                  {/* Server 1 */}
+                  <div style={{ marginBottom: '0.5rem' }}>
+                    <button
+                      className={`${styles.settingsOption} ${provider === '2embed' ? styles.active : ''}`}
+                      onClick={() => {
+                        if (provider !== '2embed') setProvider('2embed');
+                      }}
+                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                    >
+                      <span>Server 1 (Default)</span>
+                      {provider === '2embed' && <span style={{ fontSize: '0.8em', opacity: 0.7 }}>Active</span>}
+                    </button>
+
+                    {/* Sources for Server 1 */}
+                    {provider === '2embed' && availableSources.length > 0 && (
+                      <div style={{ paddingLeft: '1rem', marginTop: '0.25rem', borderLeft: '2px solid rgba(255,255,255,0.1)' }}>
+                        {availableSources.map((source, index) => (
+                          <button
+                            key={index}
+                            className={`${styles.settingsOption} ${currentSourceIndex === index ? styles.active : ''}`}
+                            onClick={() => changeSource(index)}
+                            style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
+                          >
+                            {source.title || source.quality}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Server 2 */}
+                  <div>
+                    <button
+                      className={`${styles.settingsOption} ${provider === 'moviesapi' ? styles.active : ''}`}
+                      onClick={() => {
+                        if (provider !== 'moviesapi') setProvider('moviesapi');
+                      }}
+                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                    >
+                      <span>Server 2 (Backup)</span>
+                      {provider === 'moviesapi' && <span style={{ fontSize: '0.8em', opacity: 0.7 }}>Active</span>}
+                    </button>
+
+                    {/* Sources for Server 2 */}
+                    {provider === 'moviesapi' && availableSources.length > 0 && (
+                      <div style={{ paddingLeft: '1rem', marginTop: '0.25rem', borderLeft: '2px solid rgba(255,255,255,0.1)' }}>
+                        {availableSources.map((source, index) => (
+                          <button
+                            key={index}
+                            className={`${styles.settingsOption} ${currentSourceIndex === index ? styles.active : ''}`}
+                            onClick={() => changeSource(index)}
+                            style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
+                          >
+                            {source.title || source.quality}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Title overlay */}
       {title && title.trim() && title !== 'Loading...' && title !== 'Unknown' && (showControls || !isPlaying) && (
