@@ -57,6 +57,9 @@ function encrypt(text: string, password: string) {
 async function fetchUrl(url: string, options: RequestInit = {}): Promise<{ data: string; headers: Headers; statusCode: number }> {
     const defaultHeaders = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Connection': 'keep-alive',
         ...options.headers
     };
 
@@ -89,6 +92,8 @@ export async function extractMoviesApiStreams(
         // Step 1: Fetch Main Page
         const mainPage = await fetchUrl(url, { headers: { 'Referer': 'https://moviesapi.club/' } });
         const html = mainPage.data;
+        console.log(`[MoviesApi] Fetched main page. Length: ${html.length}`);
+        console.log(`[MoviesApi] HTML Preview: ${html.substring(0, 500)}`);
 
         // Step 2: Find Iframe
         const iframeMatch = html.match(/<iframe[^>]+src=["']([^"']+)["']/);
