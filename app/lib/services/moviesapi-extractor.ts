@@ -149,66 +149,86 @@ export async function extractMoviesApiStreams(
             const ENCRYPTION_KEY = "moviesapi-secure-encryption-key-2024-v1";
             const PLAYER_API_KEY = "moviesapi-player-auth-key-2024-secure";
 
-            // Construct Payload
-            // Using "sflix2" as source, srv "0" (Apollo)
-            const payloadObj: any = {
-                source: "sflix2",
-                type: type,
-                id: tmdbId,
-                srv: "0"
-            };
+            const allSources: StreamSource[] = [];
+            const seenUrls = new Set<string>();
 
-            if (type === 'tv' && season && episode) {
-                payloadObj.season = season;
-                payloadObj.episode = episode;
-            }
+            // Iterate through servers 0-3 to get multiple sources
+            // This mimics the behavior of finding all available servers
+            const serverPromises = [0, 1, 2, 3].map(async (srvId) => {
+                try {
+                    // Construct Payload
+                    const payloadObj: any = {
+                        source: "sflix2",
+                        type: type,
+                        id: tmdbId,
+                        srv: srvId.toString()
+                    };
 
-            const encryptedPayload = encrypt(JSON.stringify(payloadObj), ENCRYPTION_KEY);
+                    if (type === 'tv' && season && episode) {
+                        payloadObj.season = season;
+                        payloadObj.episode = episode;
+                    }
 
-            // Call API
-            const apiRes = await fetchUrl(`${SCRAPIFY_URL}/v1/fetch`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-player-key': PLAYER_API_KEY,
-                    'Referer': iframeSrc
-                },
-                body: JSON.stringify({ payload: encryptedPayload })
+                    const encryptedPayload = encrypt(JSON.stringify(payloadObj), ENCRYPTION_KEY);
+
+                    // Call API
+                    const apiRes = await fetchUrl(`${SCRAPIFY_URL}/v1/fetch`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-player-key': PLAYER_API_KEY,
+                            'Referer': iframeSrc
+                        },
+                        body: JSON.stringify({ payload: encryptedPayload })
+                    });
+
+                    if (apiRes.statusCode !== 200) {
+                        return;
+                    }
+
+                    const apiData = JSON.parse(apiRes.data);
+                    let videoUrl;
+
+                    if (apiData.sources && apiData.sources.length > 0) {
+                        videoUrl = apiData.sources[0].url;
+                    } else if (apiData.url) {
+                        videoUrl = apiData.url;
+                    } else {
+                        return;
+                    }
+
+                    // Apply proxy if needed (for sflix2/Apollo)
+                    if (payloadObj.source === "sflix2") {
+                        const noProtocol = videoUrl.replace(/^https?:\/\//, '');
+                        videoUrl = `https://ax.1hd.su/${noProtocol}`;
+                    }
+
+                    if (!seenUrls.has(videoUrl)) {
+                        seenUrls.add(videoUrl);
+                        allSources.push({
+                            quality: `Server ${srvId + 1}`, // Label as Server 1, 2, 3...
+                            url: videoUrl,
+                            type: 'hls',
+                            referer: 'https://ww2.moviesapi.to/',
+                            requiresSegmentProxy: true
+                        });
+                    }
+                } catch (e) {
+                    // Ignore errors for individual servers
+                }
             });
 
-            if (apiRes.statusCode !== 200) {
-                throw new Error(`API returned ${apiRes.statusCode}: ${apiRes.data}`);
+            await Promise.all(serverPromises);
+
+            console.log(`[MoviesApi] Found ${allSources.length} sources.`);
+
+            if (allSources.length === 0) {
+                throw new Error("No sources found on any server.");
             }
-
-            const apiData = JSON.parse(apiRes.data);
-            let videoUrl;
-
-            if (apiData.sources && apiData.sources.length > 0) {
-                videoUrl = apiData.sources[0].url;
-            } else if (apiData.url) {
-                videoUrl = apiData.url;
-            } else {
-                throw new Error("No URL found in API response.");
-            }
-
-            // Apply proxy if needed (for sflix2/Apollo)
-            if (payloadObj.source === "sflix2") {
-                console.log("[MoviesApi] Applying proxy for sflix2...");
-                const noProtocol = videoUrl.replace(/^https?:\/\//, '');
-                videoUrl = `https://ax.1hd.su/${noProtocol}`;
-            }
-
-            console.log("[MoviesApi] Extracted URL from API:", videoUrl);
 
             return {
                 success: true,
-                sources: [{
-                    quality: 'auto',
-                    url: videoUrl,
-                    type: 'hls',
-                    referer: 'https://ww2.moviesapi.to/',
-                    requiresSegmentProxy: true
-                }]
+                sources: allSources
             };
 
         } else {
