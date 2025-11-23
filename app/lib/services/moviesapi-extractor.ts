@@ -79,6 +79,7 @@ export async function extractMoviesApiStreams(
     season?: number,
     episode?: number
 ): Promise<ExtractionResult> {
+    // Define url for logging/fallback purposes
     let url;
     if (type === 'movie') {
         url = `https://moviesapi.club/movie/${tmdbId}`;
@@ -91,30 +92,17 @@ export async function extractMoviesApiStreams(
     try {
         let iframeSrc;
 
-        if (type === 'tv' && season && episode) {
-            // Optimization: Construct TV iframe URL directly to avoid Cloudflare on main page
-            iframeSrc = `https://ww2.moviesapi.to/tv/${tmdbId}/${season}/${episode}`;
-            console.log(`[MoviesApi] Constructed TV iframe URL: ${iframeSrc}`);
+        // Optimization: Construct iframe URL directly to avoid Cloudflare on main page
+        // Both movies and TV shows seem to work on ww2.moviesapi.to
+        if (type === 'movie') {
+            iframeSrc = `https://ww2.moviesapi.to/movie/${tmdbId}`;
         } else {
-            // For movies, we still need to fetch the main page to get the Vidora ID
-            const mainPage = await fetchUrl(url, { headers: { 'Referer': 'https://moviesapi.club/' } });
-            const html = mainPage.data;
-            console.log(`[MoviesApi] Fetched main page. Length: ${html.length}`);
-
-            const iframeMatch = html.match(/<iframe[^>]+src=["']([^"']+)["']/);
-            if (!iframeMatch) {
-                // If blocked by Cloudflare, log it but don't crash immediately if we can't do anything
-                if (html.includes('Just a moment')) {
-                    throw new Error("Blocked by Cloudflare on main page");
-                }
-                throw new Error("No iframe found on main page.");
-            }
-            iframeSrc = iframeMatch[1];
-            console.log(`[MoviesApi] Found iframe: ${iframeSrc}`);
+            iframeSrc = `https://ww2.moviesapi.to/tv/${tmdbId}/${season}/${episode}`;
         }
+        console.log(`[MoviesApi] Constructed iframe URL: ${iframeSrc}`);
 
         if (iframeSrc.includes('vidora.stream')) {
-            // Vidora Method
+            // Vidora Method (Legacy/Fallback if we ever go back to main page fetching)
             console.log("[MoviesApi] Using Vidora method...");
             const iframePage = await fetchUrl(iframeSrc, { headers: { 'Referer': url } });
             const iframeHtml = iframePage.data;
@@ -128,31 +116,7 @@ export async function extractMoviesApiStreams(
             const scriptContentEnd = iframeHtml.indexOf(endMarker, scriptContentStart);
             const scriptCode = iframeHtml.substring(scriptContentStart, scriptContentEnd).trim();
 
-            // Unpack the script
-            // We need to be careful with eval in a server environment. 
-            // However, this is a specific packed script format.
-            // Ideally, we should use a proper unpacker, but for now we'll use a safe eval approach or regex if possible.
-            // The packed script is standard Dean Edwards packer.
-            // Since we can't easily import a unpacker library without installing it, we will use a simple regex extraction if possible,
-            // or rely on the fact that the `file:` property is what we need.
-
-            // Let's try to extract the packed string and decode it manually if possible, or use a limited eval.
-            // Given the constraints and the previous successful script using eval, we will use a safer approach if possible.
-            // But for now, to replicate the success, we might need to simulate the unpacking.
-
-            // The previous script used `eval(unpackExpression)`. 
-            // In this environment, we can try to use a simple unpacker implementation or regex.
-            // However, the `file:"..."` part is inside the unpacked code.
-
-            // Let's use a simple regex to find the `file:` in the *packed* code? Unlikely.
-            // We will use a minimal unpacker function.
-
             const unpackExpression = scriptCode.replace(/^eval/, '');
-
-            // SAFE EVAL ALTERNATIVE:
-            // We can't use `eval` directly in Next.js edge/serverless sometimes, but in Node runtime it's allowed.
-            // The previous script ran in Node.
-            // We will use `eval` here but wrapped in a try-catch and only on this specific string.
 
             let unpackedCode = '';
             try {
