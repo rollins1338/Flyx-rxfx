@@ -849,10 +849,293 @@
 }
 
 .resumeButtonPrimary {
+  gap: 0.75rem;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 20;
+  animation: slideInRight 0.5s ease-out;
+}
+
+.nextEpisodeButton:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  background: #fff;
+}
+
+.nextEpisodeButton:active {
+  transform: translateY(-2px);
+}
+
+.nextEpisodeLabel {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: #666;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.nextEpisodeTitle {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(50px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .volumeContainer {
+    display: none;
+  }
+
+  .volumeIndicator {
+    right: 1rem;
+    padding: 1rem;
+  }
+
+  .volumeIndicatorBar {
+    height: 80px;
+  }
+
+  .time {
+    font-size: 0.8rem;
+  }
+
+  .titleOverlay {
+    padding: 1rem;
+    padding-left: 1rem;
+    padding-top: 4rem;
+  }
+
+  .titleOverlay h2 {
+    font-size: 1.25rem;
+  }
+
+  .episodeInfo {
+    font-size: 0.875rem;
+  }
+
+  .progressInfo {
+    font-size: 0.8rem;
+  }
+
+  .controls {
+    padding: 3rem 1rem 1rem;
+  }
+
+  .btn {
+    padding: 0.4rem;
+  }
+
+  .btn svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .centerPlayButton {
+    width: 80px;
+    height: 80px;
+  }
+
+  .centerPlayButton svg {
+    width: 60px;
+    height: 60px;
+  }
+
+  .nextEpisodeButton {
+    bottom: 80px;
+    right: 1rem;
+    padding: 0.6rem 1rem;
+  }
+
+  .nextEpisodeLabel {
+    display: none;
+  }
+}
+
+/* Fullscreen adjustments */
+.playerContainer:fullscreen {
+  cursor: auto;
+}
+
+.playerContainer:fullscreen.hideCursor {
+  cursor: none;
+}
+
+.playerContainer:fullscreen .controls {
+  padding: 5rem 3rem 2rem;
+}
+
+.playerContainer:fullscreen .titleOverlay {
+  padding: 3rem;
+}
+
+/* Ensure subtitles are visible in fullscreen */
+.playerContainer:fullscreen video::cue {
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  font-size: 1.2em;
+}
+
+/* Resume prompt */
+.resumePrompt {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 100;
+  backdrop-filter: blur(4px);
+}
+
+.resumePromptContent {
+  background: rgba(30, 30, 30, 0.95);
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 400px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.resumePromptContent h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: white;
+}
+
+.resumePromptContent p {
+  margin: 0 0 1.5rem 0;
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.resumePromptButtons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+}
+
+.resumeButton {
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: white;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.resumeButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.resumeButtonPrimary {
   background: #e50914;
   border-color: #e50914;
 }
 
 .resumeButtonPrimary:hover {
   background: #f40612;
+}
+
+/* Dialog Overlay */
+.dialogOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 200;
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.2s ease;
+}
+
+.dialog {
+  background: rgba(30, 30, 30, 0.95);
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 400px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  animation: scaleUp 0.2s ease;
+}
+
+.dialog h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: white;
+}
+
+.dialog p {
+  margin: 0 0 1.5rem 0;
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.5;
+}
+
+.dialogButtons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+}
+
+.cancelButton,
+.confirmButton {
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.cancelButton {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.cancelButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.confirmButton {
+  background: #e50914;
+  border: 1px solid #e50914;
+  color: white;
+}
+
+.confirmButton:hover {
+  background: #f40612;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(229, 9, 20, 0.4);
+}
+
+@keyframes scaleUp {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
