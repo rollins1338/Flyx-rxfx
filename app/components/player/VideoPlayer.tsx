@@ -83,7 +83,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
   const [showResumePrompt, setShowResumePrompt] = useState(false);
   const [savedProgress, setSavedProgress] = useState<number>(0);
   const [showVolumeIndicator, setShowVolumeIndicator] = useState(false);
-  const [showVolumeIndicator, setShowVolumeIndicator] = useState(false);
+
   const [showNextEpisodeButton, setShowNextEpisodeButton] = useState(false);
   const [provider, setProvider] = useState('2embed');
   const [showServerMenu, setShowServerMenu] = useState(false);
