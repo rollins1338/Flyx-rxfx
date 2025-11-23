@@ -170,13 +170,23 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
           let finalUrl = initialSource.url;
 
           if (initialSource.requiresSegmentProxy) {
-            console.log('[VideoPlayer] Source requires proxy, rewriting URL...');
-            const proxyParams = new URLSearchParams({
-              url: initialSource.url,
-              source: provider === 'moviesapi' ? 'moviesapi' : '2embed',
-              referer: initialSource.referer || ''
-            });
-            finalUrl = `/api/stream-proxy?${proxyParams.toString()}`;
+            // Check if the URL is already proxied to avoid double-proxying
+            const isAlreadyProxied = finalUrl.includes('/api/stream-proxy');
+
+            if (!isAlreadyProxied) {
+              console.log('[VideoPlayer] Source requires proxy, rewriting URL...');
+              // Use directUrl if available to ensure we're proxying the raw URL
+              const targetUrl = initialSource.directUrl || initialSource.url;
+
+              const proxyParams = new URLSearchParams({
+                url: targetUrl,
+                source: provider === 'moviesapi' ? 'moviesapi' : '2embed',
+                referer: initialSource.referer || ''
+              });
+              finalUrl = `/api/stream-proxy?${proxyParams.toString()}`;
+            } else {
+              console.log('[VideoPlayer] Source already proxied, using as is');
+            }
           }
 
           setStreamUrl(finalUrl);
@@ -920,13 +930,23 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     // Check if proxy is needed
     let finalUrl = newSource.url;
     if (newSource.requiresSegmentProxy) {
-      console.log('[VideoPlayer] Source requires proxy, rewriting URL...');
-      const proxyParams = new URLSearchParams({
-        url: newSource.url,
-        source: provider === 'moviesapi' ? 'moviesapi' : '2embed',
-        referer: newSource.referer || ''
-      });
-      finalUrl = `/api/stream-proxy?${proxyParams.toString()}`;
+      // Check if the URL is already proxied to avoid double-proxying
+      const isAlreadyProxied = finalUrl.includes('/api/stream-proxy');
+
+      if (!isAlreadyProxied) {
+        console.log('[VideoPlayer] Source requires proxy, rewriting URL...');
+        // Use directUrl if available to ensure we're proxying the raw URL
+        const targetUrl = newSource.directUrl || newSource.url;
+
+        const proxyParams = new URLSearchParams({
+          url: targetUrl,
+          source: provider === 'moviesapi' ? 'moviesapi' : '2embed',
+          referer: newSource.referer || ''
+        });
+        finalUrl = `/api/stream-proxy?${proxyParams.toString()}`;
+      } else {
+        console.log('[VideoPlayer] Source already proxied, using as is');
+      }
     }
 
     setStreamUrl(finalUrl);
