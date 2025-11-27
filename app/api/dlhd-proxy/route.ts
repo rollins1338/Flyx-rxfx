@@ -12,9 +12,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-// Use edge runtime - different IP ranges that may not be blocked
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 30;
 
 const PLAYER_DOMAINS = ['epicplayplay.cfd', 'daddyhd.com'];
 
@@ -85,25 +85,11 @@ function invalidateKeyCache(channelId: string): void {
   }
 }
 
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
-
-function arrayBufferToHex(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
 function cacheKey(channelId: string, keyBuffer: ArrayBuffer, keyUrl: string, playerDomain: string): CachedKey {
   const cached: CachedKey = {
     keyBuffer,
-    keyBase64: arrayBufferToBase64(keyBuffer),
-    keyHex: arrayBufferToHex(keyBuffer),
+    keyBase64: Buffer.from(keyBuffer).toString('base64'),
+    keyHex: Buffer.from(keyBuffer).toString('hex'),
     keyUrl,
     fetchedAt: Date.now(),
     playerDomain,
@@ -175,6 +161,41 @@ function constructM3U8Url(serverKey: string, channelKey: string): string {
 }
 
 
+// CORS proxy services to try when direct fetch fails
+const CORS_PROXIES = [
+  (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+];
+
+async function fetchWithProxy(url: string): Promise<Response> {
+  // Try direct fetch first
+  try {
+    const response = await fetchWithHeaders(url);
+    if (response.ok) return response;
+    console.log(`[DLHD] Direct fetch failed: ${response.status}, trying proxies...`);
+  } catch (err) {
+    console.log(`[DLHD] Direct fetch error, trying proxies...`);
+  }
+
+  // Try each CORS proxy
+  for (const proxyFn of CORS_PROXIES) {
+    const proxyUrl = proxyFn(url);
+    try {
+      console.log(`[DLHD] Trying proxy: ${proxyUrl.substring(0, 50)}...`);
+      const response = await fetch(proxyUrl, { cache: 'no-store' });
+      if (response.ok) {
+        console.log(`[DLHD] Proxy succeeded`);
+        return response;
+      }
+    } catch {
+      // Continue to next proxy
+    }
+  }
+
+  throw new Error('All fetch attempts failed (direct + proxies)');
+}
+
 async function fetchM3U8(channelId: string): Promise<{ content: string; m3u8Url: string; playerDomain: string }> {
   // Check M3U8 cache first
   const cachedM3U8 = getCachedM3U8(channelId);
@@ -188,15 +209,9 @@ async function fetchM3U8(channelId: string): Promise<{ content: string; m3u8Url:
   
   console.log(`[DLHD] Fetching M3U8: ${m3u8Url}`);
   
-  // NOTE: M3U8 fetch works WITHOUT Referer/Origin headers
-  // The CDN may reject requests with non-whitelisted origins
-  const response = await fetchWithHeaders(m3u8Url);
-
-  console.log(`[DLHD] M3U8 response: ${response.status}`);
-
-  if (!response.ok) throw new Error(`Failed to fetch M3U8: HTTP ${response.status}`);
-
+  const response = await fetchWithProxy(m3u8Url);
   const content = await response.text();
+  
   console.log(`[DLHD] M3U8 content length: ${content.length}, valid: ${content.includes('#EXTM3U')}`);
   
   if (!content.includes('#EXTM3U') && !content.includes('#EXT-X-')) {
@@ -209,30 +224,39 @@ async function fetchM3U8(channelId: string): Promise<{ content: string; m3u8Url:
   return { content, m3u8Url, playerDomain };
 }
 
-async function fetchKey(keyUrl: string, playerDomain: string, retries = 3): Promise<ArrayBuffer> {
-  for (let attempt = 0; attempt < retries; attempt++) {
-    try {
-      const response = await fetchWithHeaders(keyUrl, {
-        'Referer': `https://${playerDomain}/`,
-        'Origin': `https://${playerDomain}`,
-      });
-
-      if (response.status === 418 && attempt < retries - 1) {
-        await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
-        continue;
-      }
-
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
+async function fetchKey(keyUrl: string, playerDomain: string): Promise<ArrayBuffer> {
+  // Try direct fetch first
+  try {
+    const response = await fetchWithHeaders(keyUrl, {
+      'Referer': `https://${playerDomain}/`,
+      'Origin': `https://${playerDomain}`,
+    });
+    if (response.ok) {
       const buffer = await response.arrayBuffer();
-      if (buffer.byteLength !== 16) throw new Error(`Invalid key length: ${buffer.byteLength}`);
-      return buffer;
-    } catch (err) {
-      if (attempt === retries - 1) throw err;
-      await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+      if (buffer.byteLength === 16) return buffer;
+    }
+    console.log(`[DLHD] Direct key fetch failed: ${response.status}, trying proxies...`);
+  } catch {
+    console.log(`[DLHD] Direct key fetch error, trying proxies...`);
+  }
+
+  // Try CORS proxies
+  for (const proxyFn of CORS_PROXIES) {
+    try {
+      const response = await fetch(proxyFn(keyUrl), { cache: 'no-store' });
+      if (response.ok) {
+        const buffer = await response.arrayBuffer();
+        if (buffer.byteLength === 16) {
+          console.log(`[DLHD] Key proxy succeeded`);
+          return buffer;
+        }
+      }
+    } catch {
+      // Continue to next proxy
     }
   }
-  throw new Error('Key fetch failed after retries');
+
+  throw new Error('Key fetch failed (direct + proxies)');
 }
 
 
