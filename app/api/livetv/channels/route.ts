@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import channelData from '@/data/dlhd-channels.json';
+import channelData from '@/app/data/dlhd-channels.json';
 
 export const runtime = 'nodejs';
 export const revalidate = 300;
