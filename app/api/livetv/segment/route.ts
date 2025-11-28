@@ -1,16 +1,18 @@
 /**
  * Live TV Segment Proxy
  * 
- * Proxies video segments from DLHD CDN with proper headers.
+ * Proxies video segments from DLHD CDN through RPI proxy.
+ * This is needed because the CDN blocks direct browser requests.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
+export const maxDuration = 30;
 
-const DLHD_CONFIG = {
-  segmentReferer: 'https://zekonew.giokko.ru/',
-};
+// RPI proxy for fetching segments
+const RPI_PROXY_URL = process.env.RPI_PROXY_URL;
+const RPI_PROXY_KEY = process.env.RPI_PROXY_KEY;
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,17 +27,30 @@ export async function GET(request: NextRequest) {
     }
 
     const decodedUrl = decodeURIComponent(url);
-
-    const response = await fetch(decodedUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Referer': DLHD_CONFIG.segmentReferer,
-        'Origin': 'https://zekonew.giokko.ru',
-        'Accept': '*/*',
-      },
-    });
+    
+    // Use RPI proxy if available, otherwise direct fetch
+    let response: Response;
+    
+    if (RPI_PROXY_URL && RPI_PROXY_KEY) {
+      const proxyUrl = `${RPI_PROXY_URL}/proxy?url=${encodeURIComponent(decodedUrl)}`;
+      response = await fetch(proxyUrl, {
+        headers: { 'X-API-Key': RPI_PROXY_KEY },
+        cache: 'no-store',
+      });
+    } else {
+      // Fallback to direct fetch (may not work due to CDN blocks)
+      response = await fetch(decodedUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Referer': 'https://epicplayplay.cfd/',
+          'Origin': 'https://epicplayplay.cfd',
+          'Accept': '*/*',
+        },
+      });
+    }
 
     if (!response.ok) {
+      console.error(`[Segment] Upstream error: ${response.status} for ${decodedUrl.substring(0, 80)}`);
       return NextResponse.json(
         { error: `Upstream error: ${response.status}` },
         { status: response.status }
@@ -51,7 +66,8 @@ export async function GET(request: NextRequest) {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, OPTIONS',
         'Access-Control-Allow-Headers': 'Range, Content-Type',
-        'Cache-Control': 'public, max-age=300',
+        // Cache segments for 5 minutes - they don't change
+        'Cache-Control': 'public, max-age=300, s-maxage=300',
         'Content-Length': arrayBuffer.byteLength.toString(),
       },
     });

@@ -278,7 +278,7 @@ function parseM3U8(content: string): { keyUrl: string | null; iv: string | null 
   return { keyUrl: keyMatch?.[1] || null, iv: ivMatch?.[1] || null };
 }
 
-function generateProxiedM3U8(originalM3U8: string, keyBase64: string): string {
+function generateProxiedM3U8(originalM3U8: string, keyBase64: string, baseUrl: string, proxySegments: boolean): string {
   const keyDataUri = `data:application/octet-stream;base64,${keyBase64}`;
   let modified = originalM3U8.replace(/URI="[^"]+"/, `URI="${keyDataUri}"`);
   
@@ -291,6 +291,17 @@ function generateProxiedM3U8(originalM3U8: string, keyBase64: string): string {
       return `#EXT-X-TARGETDURATION:${newDuration}`;
     }
   );
+  
+  // Proxy segment URLs through our segment proxy to avoid CDN blocks
+  if (proxySegments) {
+    // Replace segment URLs (lines that end with .ts or .css and start with http)
+    modified = modified.replace(
+      /^(https?:\/\/[^\s]+\.(ts|css))$/gm,
+      (segmentUrl) => {
+        return `${baseUrl}/segment?url=${encodeURIComponent(segmentUrl)}`;
+      }
+    );
+  }
   
   return modified;
 }
@@ -356,10 +367,12 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Generate M3U8 with embedded key (segments point directly to CDN)
+    // Generate M3U8 with embedded key and proxied segments
+    // Segments go through /api/livetv/segment to avoid CDN blocks
+    const segmentProxyBase = `${request.nextUrl.origin}/api/livetv`;
     let proxiedM3U8: string;
     if (keyBase64 && keyUrl) {
-      proxiedM3U8 = generateProxiedM3U8(m3u8Content, keyBase64);
+      proxiedM3U8 = generateProxiedM3U8(m3u8Content, keyBase64, segmentProxyBase, true);
     } else if (keyUrl) {
       // Fallback: proxy the key URL
       const proxiedKeyUrl = `${baseProxyUrl}/key?url=${encodeURIComponent(keyUrl)}`;

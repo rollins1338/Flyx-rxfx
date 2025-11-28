@@ -24,10 +24,10 @@ const { URL } = require('url');
 const PORT = process.env.PORT || 3001;
 const API_KEY = process.env.API_KEY || 'change-this-secret-key';
 
-// Rate limiting - generous limits for live streaming
-// Each stream needs ~8-15 requests/min for M3U8 + occasional key fetches
+// Rate limiting - very generous limits for live streaming with segment proxying
+// Each stream needs ~15-30 segments/min + M3U8 refreshes
 const rateLimiter = new Map();
-const RATE_LIMIT = 300; // requests per minute (supports ~20 concurrent streams)
+const RATE_LIMIT = 1000; // requests per minute (supports multiple concurrent streams with segments)
 const RATE_WINDOW = 60000; // 1 minute
 
 function checkRateLimit(ip) {
@@ -53,24 +53,34 @@ setInterval(() => {
   }
 }, 300000);
 
-// Response cache for M3U8 files - reduces upstream requests dramatically
+// Response cache - reduces upstream requests dramatically
 const responseCache = new Map();
 const M3U8_CACHE_TTL = 15000; // 15 seconds for M3U8 files
 const KEY_CACHE_TTL = 3600000; // 1 hour for encryption keys
+const SEGMENT_CACHE_TTL = 300000; // 5 minutes for video segments (they don't change)
+
+function getCacheTTL(url) {
+  if (url.includes('.key') || url.includes('key.php')) return KEY_CACHE_TTL;
+  if (url.includes('.ts') || url.endsWith('.css')) return SEGMENT_CACHE_TTL; // .css is used for segments
+  return M3U8_CACHE_TTL;
+}
 
 function getCachedResponse(url) {
   const cached = responseCache.get(url);
   if (!cached) return null;
   
   const age = Date.now() - cached.timestamp;
-  const ttl = url.includes('.key') || url.includes('key.php') ? KEY_CACHE_TTL : M3U8_CACHE_TTL;
+  const ttl = getCacheTTL(url);
   
   if (age > ttl) {
     responseCache.delete(url);
     return null;
   }
   
-  console.log(`[Cache HIT] ${url.substring(0, 60)}... (age: ${Math.round(age/1000)}s)`);
+  // Don't log segment cache hits to reduce noise
+  if (!url.includes('.ts') && !url.endsWith('.css')) {
+    console.log(`[Cache HIT] ${url.substring(0, 60)}... (age: ${Math.round(age/1000)}s)`);
+  }
   return cached;
 }
 
@@ -80,17 +90,25 @@ function cacheResponse(url, data, contentType) {
     contentType,
     timestamp: Date.now()
   });
-  console.log(`[Cache SET] ${url.substring(0, 60)}...`);
+  // Don't log segment caches to reduce noise
+  if (!url.includes('.ts') && !url.endsWith('.css')) {
+    console.log(`[Cache SET] ${url.substring(0, 60)}...`);
+  }
 }
 
 // Clean up old cache entries every minute
 setInterval(() => {
   const now = Date.now();
+  let cleaned = 0;
   for (const [url, cached] of responseCache.entries()) {
-    const ttl = url.includes('.key') || url.includes('key.php') ? KEY_CACHE_TTL : M3U8_CACHE_TTL;
+    const ttl = getCacheTTL(url);
     if (now - cached.timestamp > ttl) {
       responseCache.delete(url);
+      cleaned++;
     }
+  }
+  if (cleaned > 0) {
+    console.log(`[Cache] Cleaned ${cleaned} expired entries, ${responseCache.size} remaining`);
   }
 }, 60000);
 
