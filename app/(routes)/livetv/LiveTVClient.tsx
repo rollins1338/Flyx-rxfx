@@ -1,10 +1,42 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Navigation } from '@/components/layout/Navigation';
 import { Footer } from '@/components/layout/Footer';
 import { useAnalytics } from '@/components/analytics/AnalyticsProvider';
 import styles from './LiveTV.module.css';
+
+/**
+ * Check if an event is currently live based on its start time.
+ * Events are considered live if they started within the last 3 hours.
+ */
+function isEventCurrentlyLive(dataTime: string, serverIsLive: boolean): boolean {
+  // If server already says it's live, trust that
+  if (serverIsLive) return true;
+  
+  if (!dataTime) return false;
+  
+  try {
+    let eventTime: Date;
+    
+    if (/^\d+$/.test(dataTime)) {
+      // Unix timestamp (seconds)
+      eventTime = new Date(parseInt(dataTime) * 1000);
+    } else {
+      // Parse as date string - assume UK timezone (GMT)
+      eventTime = new Date(dataTime + ' GMT');
+    }
+    
+    const now = new Date();
+    const diffMs = now.getTime() - eventTime.getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+    
+    // Event is live if it started between 0 and 3 hours ago
+    return diffHours >= 0 && diffHours <= 3;
+  } catch {
+    return false;
+  }
+}
 
 // Types
 interface Channel {
@@ -177,10 +209,26 @@ export default function LiveTVClient() {
     return acc;
   }, [] as (typeof sportFilters[0] & { uniqueId: string })[]);
 
-  // Get all events flat for easier display
-  const allEvents = schedule.flatMap(cat => 
-    cat.events.map(event => ({ ...event, categoryIcon: cat.icon, categoryName: cat.name }))
-  );
+  // Update live status every minute by forcing a re-render
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Get all events flat for easier display, recalculating live status client-side
+  const allEvents = useMemo(() => {
+    return schedule.flatMap(cat => 
+      cat.events.map(event => ({
+        ...event,
+        categoryIcon: cat.icon,
+        categoryName: cat.name,
+        // Recalculate live status based on current time
+        isLive: isEventCurrentlyLive(event.dataTime, event.isLive),
+      }))
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schedule, tick]); // tick forces recalculation every minute
 
   const filteredEvents = showLiveOnly ? allEvents.filter(e => e.isLive) : allEvents;
   const liveEvents = allEvents.filter(e => e.isLive);

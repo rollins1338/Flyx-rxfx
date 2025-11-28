@@ -44,6 +44,40 @@ function getIcon(name: string): string {
   return '📺';
 }
 
+/**
+ * Check if an event is currently live based on its start time.
+ * Events are considered live if they started within the last 3 hours.
+ * (Most sports events last 1.5-3 hours)
+ */
+function isEventLive(dataTime: string, htmlIndicatesLive: boolean): boolean {
+  // If HTML already says it's live, trust that
+  if (htmlIndicatesLive) return true;
+  
+  if (!dataTime) return false;
+  
+  try {
+    // dataTime format is typically "YYYY-MM-DD HH:MM" or unix timestamp
+    let eventTime: Date;
+    
+    if (/^\d+$/.test(dataTime)) {
+      // Unix timestamp (seconds)
+      eventTime = new Date(parseInt(dataTime) * 1000);
+    } else {
+      // Parse as date string - assume UK timezone
+      eventTime = new Date(dataTime + ' GMT');
+    }
+    
+    const now = new Date();
+    const diffMs = now.getTime() - eventTime.getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+    
+    // Event is live if it started between 0 and 3 hours ago
+    return diffHours >= 0 && diffHours <= 3;
+  } catch {
+    return false;
+  }
+}
+
 function parseEvents(html: string): SportEvent[] {
   const events: SportEvent[] = [];
   const eventRegex = /<div[^>]*class="[^"]*schedule__event[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/gi;
@@ -62,8 +96,11 @@ function parseEvents(html: string): SportEvent[] {
     const titleMatch = eventHtml.match(/class="[^"]*schedule__eventTitle[^"]*"[^>]*>([^<]*)</i);
     const title = titleMatch ? titleMatch[1].trim() : '';
     
-    // Check if live
-    const isLive = /is-live|>live</i.test(eventHtml);
+    // Check if live from HTML
+    const htmlIndicatesLive = /is-live|>live</i.test(eventHtml);
+    
+    // Determine if event is live based on time or HTML indicator
+    const isLive = isEventLive(dataTime, htmlIndicatesLive);
     
     // Extract channels
     const channels: { name: string; channelId: string; href: string }[] = [];
