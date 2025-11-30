@@ -139,25 +139,76 @@ export default function AdminGeographicPage() {
       <div style={{
         marginBottom: '32px',
         paddingBottom: '20px',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
+        borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '16px',
       }}>
-        <h2 style={{
-          margin: 0,
-          color: '#f8fafc',
-          fontSize: '24px',
-          fontWeight: '600',
-          letterSpacing: '-0.5px'
+        <div>
+          <h2 style={{
+            margin: 0,
+            color: '#f8fafc',
+            fontSize: '24px',
+            fontWeight: '600',
+            letterSpacing: '-0.5px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+          }}>
+            <span style={{
+              width: '40px',
+              height: '40px',
+              background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '20px',
+            }}>🌍</span>
+            Geographic Analytics
+          </h2>
+          <p style={{
+            margin: '8px 0 0 0',
+            color: '#94a3b8',
+            fontSize: '14px'
+          }}>
+            Real-time viewer distribution across the globe
+          </p>
+        </div>
+        <div style={{
+          display: 'flex',
+          gap: '12px',
+          alignItems: 'center',
         }}>
-          Geographic Analytics
-        </h2>
-        <p style={{
-          margin: '8px 0 0 0',
-          color: '#94a3b8',
-          fontSize: '16px'
-        }}>
-          Analyze viewer distribution across regions and countries
-        </p>
+          <div style={{
+            background: 'rgba(34, 197, 94, 0.1)',
+            border: '1px solid rgba(34, 197, 94, 0.3)',
+            borderRadius: '20px',
+            padding: '6px 14px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}>
+            <div style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              background: '#22c55e',
+              animation: 'pulse 2s ease-in-out infinite',
+            }} />
+            <span style={{ color: '#22c55e', fontSize: '13px', fontWeight: '500' }}>Live Data</span>
+          </div>
+        </div>
       </div>
+      
+      <style jsx>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+      `}</style>
 
       {/* Metrics Cards */}
       {metrics && (
@@ -168,43 +219,88 @@ export default function AdminGeographicPage() {
           marginBottom: '24px'
         }}>
           <div style={{
-            background: 'rgba(255, 255, 255, 0.03)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            borderRadius: '12px',
-            padding: '20px'
+            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.05))',
+            border: '1px solid rgba(99, 102, 241, 0.2)',
+            borderRadius: '16px',
+            padding: '20px',
+            position: 'relative',
+            overflow: 'hidden',
           }}>
-            <div style={{ color: '#94a3b8', fontSize: '13px', marginBottom: '8px' }}>🌍 Countries Reached</div>
-            <div style={{ fontSize: '28px', fontWeight: '700', color: '#f8fafc' }}>{metrics.totalCountries}</div>
+            <div style={{
+              position: 'absolute',
+              top: '-20px',
+              right: '-20px',
+              width: '80px',
+              height: '80px',
+              background: 'radial-gradient(circle, rgba(99, 102, 241, 0.2) 0%, transparent 70%)',
+              borderRadius: '50%',
+            }} />
+            <div style={{ color: '#a5b4fc', fontSize: '12px', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}>Countries</div>
+            <div style={{ fontSize: '32px', fontWeight: '700', color: '#f8fafc' }}>{metrics.totalCountries}</div>
+            <div style={{ color: '#64748b', fontSize: '13px', marginTop: '4px' }}>Unique locations</div>
           </div>
           <div style={{
-            background: 'rgba(255, 255, 255, 0.03)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            borderRadius: '12px',
-            padding: '20px'
+            background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.1), rgba(236, 72, 153, 0.05))',
+            border: '1px solid rgba(168, 85, 247, 0.2)',
+            borderRadius: '16px',
+            padding: '20px',
+            position: 'relative',
+            overflow: 'hidden',
           }}>
-            <div style={{ color: '#94a3b8', fontSize: '13px', marginBottom: '8px' }}>🏆 Top Country</div>
-            <div style={{ fontSize: '28px', fontWeight: '700', color: '#f8fafc' }}>{getCountryName(metrics.topCountry)}</div>
-            <div style={{ color: '#7877c6', fontSize: '14px' }}>{metrics.topCountryPercentage}% of viewers</div>
+            <div style={{
+              position: 'absolute',
+              top: '-20px',
+              right: '-20px',
+              width: '80px',
+              height: '80px',
+              background: 'radial-gradient(circle, rgba(168, 85, 247, 0.2) 0%, transparent 70%)',
+              borderRadius: '50%',
+            }} />
+            <div style={{ color: '#c4b5fd', fontSize: '12px', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}>Top Country</div>
+            <div style={{ fontSize: '24px', fontWeight: '700', color: '#f8fafc' }}>{getCountryName(metrics.topCountry)}</div>
+            <div style={{ color: '#a855f7', fontSize: '14px', fontWeight: '600', marginTop: '4px' }}>{metrics.topCountryPercentage}% of viewers</div>
           </div>
           <div style={{
-            background: 'rgba(255, 255, 255, 0.03)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            borderRadius: '12px',
-            padding: '20px'
+            background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(16, 185, 129, 0.05))',
+            border: '1px solid rgba(34, 197, 94, 0.2)',
+            borderRadius: '16px',
+            padding: '20px',
+            position: 'relative',
+            overflow: 'hidden',
           }}>
-            <div style={{ color: '#94a3b8', fontSize: '13px', marginBottom: '8px' }}>🌐 International</div>
-            <div style={{ fontSize: '28px', fontWeight: '700', color: '#f8fafc' }}>{metrics.internationalPercentage}%</div>
-            <div style={{ color: '#64748b', fontSize: '14px' }}>Outside top country</div>
+            <div style={{
+              position: 'absolute',
+              top: '-20px',
+              right: '-20px',
+              width: '80px',
+              height: '80px',
+              background: 'radial-gradient(circle, rgba(34, 197, 94, 0.2) 0%, transparent 70%)',
+              borderRadius: '50%',
+            }} />
+            <div style={{ color: '#86efac', fontSize: '12px', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}>International</div>
+            <div style={{ fontSize: '32px', fontWeight: '700', color: '#f8fafc' }}>{metrics.internationalPercentage}%</div>
+            <div style={{ color: '#64748b', fontSize: '13px', marginTop: '4px' }}>Global reach</div>
           </div>
           <div style={{
-            background: 'rgba(255, 255, 255, 0.03)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            borderRadius: '12px',
-            padding: '20px'
+            background: 'linear-gradient(135deg, rgba(251, 146, 60, 0.1), rgba(245, 158, 11, 0.05))',
+            border: '1px solid rgba(251, 146, 60, 0.2)',
+            borderRadius: '16px',
+            padding: '20px',
+            position: 'relative',
+            overflow: 'hidden',
           }}>
-            <div style={{ color: '#94a3b8', fontSize: '13px', marginBottom: '8px' }}>📊 Regions</div>
-            <div style={{ fontSize: '28px', fontWeight: '700', color: '#f8fafc' }}>{metrics.regionBreakdown.length}</div>
-            <div style={{ color: '#64748b', fontSize: '14px' }}>Active regions</div>
+            <div style={{
+              position: 'absolute',
+              top: '-20px',
+              right: '-20px',
+              width: '80px',
+              height: '80px',
+              background: 'radial-gradient(circle, rgba(251, 146, 60, 0.2) 0%, transparent 70%)',
+              borderRadius: '50%',
+            }} />
+            <div style={{ color: '#fdba74', fontSize: '12px', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}>Regions</div>
+            <div style={{ fontSize: '32px', fontWeight: '700', color: '#f8fafc' }}>{metrics.regionBreakdown.length}</div>
+            <div style={{ color: '#64748b', fontSize: '13px', marginTop: '4px' }}>Active zones</div>
           </div>
         </div>
       )}
@@ -213,35 +309,50 @@ export default function AdminGeographicPage() {
       <div style={{
         display: 'flex',
         gap: '8px',
-        marginBottom: '20px'
+        marginBottom: '20px',
+        background: 'rgba(255, 255, 255, 0.02)',
+        padding: '6px',
+        borderRadius: '12px',
+        border: '1px solid rgba(255, 255, 255, 0.06)',
+        width: 'fit-content',
       }}>
         <button
           onClick={() => setViewMode('list')}
           style={{
-            padding: '8px 16px',
-            background: viewMode === 'list' ? 'rgba(120, 119, 198, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-            border: `1px solid ${viewMode === 'list' ? '#7877c6' : 'rgba(255, 255, 255, 0.1)'}`,
+            padding: '10px 20px',
+            background: viewMode === 'list' ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'transparent',
+            border: 'none',
             borderRadius: '8px',
-            color: viewMode === 'list' ? '#7877c6' : '#94a3b8',
+            color: viewMode === 'list' ? '#fff' : '#94a3b8',
             cursor: 'pointer',
-            fontSize: '14px'
+            fontSize: '14px',
+            fontWeight: '500',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
           }}
         >
-          📋 Country List
+          🗺️ World Map
         </button>
         <button
           onClick={() => setViewMode('regions')}
           style={{
-            padding: '8px 16px',
-            background: viewMode === 'regions' ? 'rgba(120, 119, 198, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-            border: `1px solid ${viewMode === 'regions' ? '#7877c6' : 'rgba(255, 255, 255, 0.1)'}`,
+            padding: '10px 20px',
+            background: viewMode === 'regions' ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'transparent',
+            border: 'none',
             borderRadius: '8px',
-            color: viewMode === 'regions' ? '#7877c6' : '#94a3b8',
+            color: viewMode === 'regions' ? '#fff' : '#94a3b8',
             cursor: 'pointer',
-            fontSize: '14px'
+            fontSize: '14px',
+            fontWeight: '500',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
           }}
         >
-          🗺️ By Region
+          📊 By Region
         </button>
       </div>
 
@@ -250,52 +361,141 @@ export default function AdminGeographicPage() {
         <GeographicHeatmap data={geographic} />
       ) : (
         <div style={{
-          background: 'rgba(255, 255, 255, 0.05)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          borderRadius: '16px',
-          padding: '24px'
+          background: 'linear-gradient(135deg, rgba(10, 10, 20, 0.98), rgba(15, 15, 30, 0.95))',
+          border: '1px solid rgba(99, 102, 241, 0.2)',
+          borderRadius: '20px',
+          overflow: 'hidden',
         }}>
-          <h3 style={{ margin: '0 0 20px 0', color: '#f8fafc', fontSize: '18px' }}>Regional Distribution</h3>
-          {metrics?.regionBreakdown && metrics.regionBreakdown.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {metrics.regionBreakdown.map((region) => {
-                const total = metrics.regionBreakdown.reduce((sum, r) => sum + r.count, 0);
-                const percentage = total > 0 ? (region.count / total) * 100 : 0;
-                return (
-                  <div key={region.region} style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '16px'
-                  }}>
-                    <div style={{ width: '140px', color: '#f8fafc', fontWeight: '500' }}>{region.region}</div>
-                    <div style={{ flex: 1, height: '24px', background: 'rgba(255,255,255,0.1)', borderRadius: '12px', overflow: 'hidden' }}>
+          <div style={{
+            padding: '20px 24px',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}>
+            <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '18px', fontWeight: '600' }}>
+              📊 Regional Distribution
+            </h3>
+            <span style={{ color: '#64748b', fontSize: '13px' }}>
+              {metrics?.regionBreakdown.length || 0} active regions
+            </span>
+          </div>
+          
+          <div style={{ padding: '24px' }}>
+            {metrics?.regionBreakdown && metrics.regionBreakdown.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {metrics.regionBreakdown.map((region, index) => {
+                  const total = metrics.regionBreakdown.reduce((sum, r) => sum + r.count, 0);
+                  const percentage = total > 0 ? (region.count / total) * 100 : 0;
+                  const colors = [
+                    'linear-gradient(90deg, #6366f1, #8b5cf6)',
+                    'linear-gradient(90deg, #a855f7, #d946ef)',
+                    'linear-gradient(90deg, #ec4899, #f43f5e)',
+                    'linear-gradient(90deg, #f97316, #eab308)',
+                    'linear-gradient(90deg, #22c55e, #10b981)',
+                    'linear-gradient(90deg, #06b6d4, #3b82f6)',
+                  ];
+                  const color = colors[index % colors.length];
+                  
+                  return (
+                    <div key={region.region} style={{
+                      background: 'rgba(255, 255, 255, 0.02)',
+                      border: '1px solid rgba(255, 255, 255, 0.06)',
+                      borderRadius: '12px',
+                      padding: '16px 20px',
+                      transition: 'all 0.2s ease',
+                    }}>
                       <div style={{
-                        height: '100%',
-                        width: `${percentage}%`,
-                        background: 'linear-gradient(90deg, #7877c6, #ff77c6)',
-                        borderRadius: '12px',
-                        transition: 'width 0.3s'
-                      }} />
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: '12px',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <span style={{
+                            width: '32px',
+                            height: '32px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            background: 'rgba(99, 102, 241, 0.1)',
+                            borderRadius: '8px',
+                            fontSize: '16px',
+                          }}>
+                            {getRegionEmoji(region.region)}
+                          </span>
+                          <span style={{ color: '#f8fafc', fontWeight: '600', fontSize: '15px' }}>{region.region}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                          <span style={{ color: '#f8fafc', fontWeight: '700', fontSize: '18px' }}>
+                            {region.count.toLocaleString()}
+                          </span>
+                          <span style={{
+                            background: 'rgba(99, 102, 241, 0.1)',
+                            padding: '4px 10px',
+                            borderRadius: '12px',
+                            color: '#a5b4fc',
+                            fontSize: '13px',
+                            fontWeight: '600',
+                          }}>
+                            {Math.round(percentage)}%
+                          </span>
+                        </div>
+                      </div>
+                      <div style={{
+                        height: '8px',
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        borderRadius: '4px',
+                        overflow: 'hidden',
+                      }}>
+                        <div style={{
+                          height: '100%',
+                          width: `${percentage}%`,
+                          background: color,
+                          borderRadius: '4px',
+                          transition: 'width 0.5s ease',
+                          boxShadow: '0 0 10px rgba(99, 102, 241, 0.3)',
+                        }} />
+                      </div>
                     </div>
-                    <div style={{ width: '80px', textAlign: 'right', color: '#f8fafc', fontWeight: '600' }}>
-                      {region.count}
-                    </div>
-                    <div style={{ width: '50px', textAlign: 'right', color: '#64748b', fontSize: '14px' }}>
-                      {Math.round(percentage)}%
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
-              <div style={{ fontSize: '48px', marginBottom: '16px' }}>🗺️</div>
-              <p style={{ margin: 0 }}>No regional data available yet</p>
-              <p style={{ margin: '8px 0 0 0', fontSize: '14px' }}>Geographic data will appear as users watch content</p>
-            </div>
-          )}
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '60px 40px', color: '#64748b' }}>
+                <div style={{
+                  width: '80px',
+                  height: '80px',
+                  margin: '0 auto 24px auto',
+                  background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 0 40px rgba(99, 102, 241, 0.4)',
+                }}>
+                  <span style={{ fontSize: '36px' }}>🗺️</span>
+                </div>
+                <h4 style={{ color: '#f8fafc', margin: '0 0 8px 0' }}>No Regional Data Yet</h4>
+                <p style={{ margin: 0, fontSize: '14px' }}>Geographic data will appear as users watch content</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
   );
+}
+
+function getRegionEmoji(region: string): string {
+  const emojis: Record<string, string> = {
+    'North America': '🌎',
+    'Europe': '🌍',
+    'Asia Pacific': '🌏',
+    'Latin America': '🌎',
+    'Middle East': '🏜️',
+    'Africa': '🌍',
+    'Other': '🌐',
+  };
+  return emojis[region] || '🌐';
 }
