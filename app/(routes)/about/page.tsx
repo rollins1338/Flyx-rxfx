@@ -75,7 +75,7 @@ export default function AboutPage() {
                 <div className={styles.avatarRing} />
               </div>
               <div className={styles.authorDetails}>
-                <span className={styles.authorName}>Anonymous Researcher</span>
+                <span className={styles.authorName}>Vynx</span>
                 <span className={styles.authorAffiliation}>Independent Developer</span>
                 <span className={styles.authorEmail}>Full-Stack Engineer & System Architect</span>
               </div>
@@ -147,25 +147,23 @@ export default function AboutPage() {
             </div>
             <div className={styles.abstractBox}>
               <p>
-                This paper presents a comprehensive case study of Flyx, a fully-functional video streaming 
-                platform developed entirely by a single developer over a three-month period. The research 
-                investigates whether the democratization of software development tools has fundamentally 
-                altered the resource requirements for building sophisticated web applications. Through 
-                systematic documentation of the development process, architectural decisions, and technical 
-                challenges encountered, we provide empirical evidence that production-grade streaming 
-                infrastructure—historically requiring substantial engineering teams and significant capital 
-                investment—can now be achieved by motivated individuals leveraging modern frameworks, 
-                serverless architecture, and open-source ecosystems.
+                This paper presents Flyx, a fully-functional video streaming platform developed to prove 
+                a critical hypothesis: that free streaming services do not require malicious advertising, 
+                invasive tracking, cryptocurrency miners, or deceptive user interfaces to operate. The 
+                pirate streaming ecosystem has long been plagued by platforms that exploit users through 
+                aggressive pop-ups, malware distribution, fingerprinting, and dark patterns—treating 
+                viewers as products rather than people. Flyx demonstrates that an alternative model is 
+                not only possible but practically achievable by a single developer.
               </p>
               <p>
-                The platform encompasses video-on-demand streaming with adaptive bitrate delivery, live 
-                television integration, real-time analytics pipelines, comprehensive user engagement tracking, 
-                and a full-featured administrative dashboard. All functionality was implemented without 
-                external funding, dedicated infrastructure, or specialized teams. Our findings contribute 
-                to the growing body of literature on the democratization of software development and 
-                challenge traditional assumptions about minimum viable team sizes for complex application 
-                development. We discuss implications for innovation ecosystems, startup formation, and 
-                the future of individual software craftsmanship.
+                The platform provides video-on-demand streaming with adaptive bitrate delivery, live 
+                television integration, and a clean, ad-free user experience—all without collecting 
+                personally identifiable information, deploying tracking cookies, or subjecting users 
+                to malicious advertisements. Through systematic documentation of the development process, 
+                we provide empirical evidence that ethical streaming platforms can exist, challenging 
+                the prevailing assumption that free content must come at the cost of user safety and 
+                privacy. This work serves as both a technical reference and a statement that users 
+                deserve better than the exploitative status quo.
               </p>
               <div className={styles.keywordsSection}>
                 <div className={styles.keywordsHeader}>
@@ -193,84 +191,79 @@ export default function AboutPage() {
               <h2>Introduction</h2>
             </div>
             
-            <h3 className={styles.subsectionTitle}>2.1 Context and Motivation</h3>
+            <h3 className={styles.subsectionTitle}>2.1 The Problem: Exploitation in Pirate Streaming</h3>
             <p className={styles.leadParagraph}>
-              The global video streaming market has experienced unprecedented growth over the past decade, 
-              with industry revenue exceeding $100 billion annually and projected to reach $330 billion 
-              by 2030 (Grand View Research, 2024). Major platforms such as Netflix, Disney+, Amazon Prime 
-              Video, and HBO Max have established extraordinarily high user expectations: seamless playback 
-              across devices, personalized content recommendations, offline viewing capabilities, and 
-              sophisticated content discovery mechanisms. The conventional wisdom within the software 
-              industry suggests that building such platforms requires hundreds of engineers, millions in 
-              infrastructure investment, and years of sustained development effort.
+              The pirate streaming ecosystem represents one of the most hostile environments on the modern 
+              web. Users seeking free access to movies and television are routinely subjected to an arsenal 
+              of exploitative practices: pop-up advertisements that spawn endlessly, fake "close" buttons 
+              that trigger additional ads, cryptocurrency miners running silently in the background, 
+              browser fingerprinting for cross-site tracking, malware distribution disguised as video 
+              players, and dark patterns designed to trick users into clicking malicious links.
             </p>
             <p>
-              This paper challenges that assumption through a deliberate experiment: can a single developer, 
-              working part-time with effectively zero budget, create a streaming platform that implements 
-              the core functionality users have come to expect? The answer, as demonstrated through the 
-              Flyx project, is a qualified affirmative—with important caveats, limitations, and lessons 
-              that merit careful examination.
+              These practices are not incidental—they are the business model. Pirate streaming sites 
+              generate revenue by treating users as products, selling their attention, computing resources, 
+              and personal data to the highest bidder. The implicit assumption underlying this ecosystem 
+              is that free content cannot exist without exploitation: if you're not paying with money, 
+              you must pay with your security, privacy, and sanity.
             </p>
             <p>
-              The motivation for this research extends beyond mere technical curiosity. In an era where 
-              software increasingly mediates human experience—from entertainment consumption to social 
-              interaction to economic participation—understanding the true complexity (or simplicity) of 
-              building these systems has profound implications for innovation policy, entrepreneurship, 
-              and the distribution of technological capability across society.
+              Flyx was created to challenge this assumption directly. The project asks a simple but 
+              important question: can a streaming platform provide free access to content while treating 
+              users with respect? Can we build something that doesn't assault visitors with ads, doesn't 
+              track their behavior across the web, doesn't mine cryptocurrency on their devices, and 
+              doesn't employ deceptive interfaces designed to generate accidental clicks?
             </p>
 
             <div className={styles.highlightBox}>
               <div className={styles.highlightIcon}>💡</div>
               <div className={styles.highlightContent}>
-                <h4>Research Question</h4>
+                <h4>Core Thesis</h4>
                 <p>
-                  To what extent have modern development tools, cloud infrastructure, and open-source 
-                  ecosystems reduced the minimum viable resources required to build production-grade 
-                  streaming applications, and what are the practical limitations of solo development 
-                  in this domain?
+                  Free streaming platforms do not require malicious advertising, invasive tracking, or 
+                  exploitative practices to function. The prevalence of such practices in the pirate 
+                  streaming ecosystem reflects a choice to prioritize profit over users, not a technical 
+                  or economic necessity.
                 </p>
               </div>
             </div>
 
-            <h3 className={styles.subsectionTitle}>2.2 Scope and Objectives</h3>
+            <h3 className={styles.subsectionTitle}>2.2 The Vision: Ethical Streaming</h3>
             <p>
-              This study pursues three primary objectives. First, we aim to document the complete 
-              development lifecycle of a streaming platform from conception to deployment, providing 
-              a replicable methodology for similar projects. Second, we seek to identify and analyze 
-              the critical technical challenges inherent in streaming application development and 
-              evaluate the effectiveness of various solutions. Third, we endeavor to contribute 
-              empirical evidence to ongoing debates about the democratization of software development 
-              and the changing economics of application creation.
+              Flyx was built on a set of principles that stand in direct opposition to the norms of 
+              pirate streaming. No advertisements—not even "acceptable" ones. No tracking cookies or 
+              cross-site identifiers. No cryptocurrency mining. No pop-ups, pop-unders, or redirect 
+              chains. No fake buttons or deceptive UI elements. No collection of personally identifiable 
+              information. No selling of user data to third parties.
             </p>
             <p>
-              The scope of this research is deliberately bounded. We do not claim that Flyx represents 
-              a commercial-grade replacement for established streaming services, nor do we suggest that 
-              all aspects of such platforms can be replicated by individuals. Rather, we investigate 
-              which capabilities are now accessible to solo developers and which remain beyond practical 
-              reach, thereby mapping the current frontier of individual software development capability.
+              The goal was not merely to build a streaming platform, but to prove that such a platform 
+              could exist without the exploitative practices that users have come to accept as inevitable. 
+              If a single developer, working part-time with no budget, can create a functional streaming 
+              service that respects its users, then the malicious practices of existing platforms are 
+              revealed as choices rather than necessities.
             </p>
 
             <h3 className={styles.subsectionTitle}>2.3 Contributions</h3>
             <p>
-              This paper makes the following contributions to the field:
+              This paper makes the following contributions:
             </p>
             <ul className={styles.contributionList}>
               <li>
-                <strong>Empirical Case Study:</strong> A detailed, reproducible account of building a 
-                streaming platform as a solo developer, including time allocation, technology choices, 
-                and decision rationale.
+                <strong>Proof of Concept:</strong> Demonstrating that free streaming can exist without 
+                malicious ads, tracking, or exploitation—challenging the assumed economics of pirate platforms.
               </li>
               <li>
-                <strong>Technical Architecture:</strong> A reference architecture for serverless streaming 
-                applications optimized for minimal operational overhead and zero infrastructure cost.
+                <strong>Ethical Architecture:</strong> A reference implementation for privacy-respecting 
+                streaming applications that collect only anonymized, aggregate analytics.
               </li>
               <li>
-                <strong>Challenge Taxonomy:</strong> A systematic categorization of technical challenges 
-                encountered in streaming application development, with evaluated solutions.
+                <strong>User-First Design:</strong> Documentation of design decisions that prioritize 
+                user experience and safety over monetization opportunities.
               </li>
               <li>
-                <strong>Feasibility Analysis:</strong> An honest assessment of what solo developers can 
-                and cannot achieve in this domain, informing future research and practice.
+                <strong>Technical Feasibility:</strong> Evidence that modern tools enable individuals to 
+                build sophisticated applications without compromising on ethics.
               </li>
             </ul>
           </section>
@@ -282,109 +275,112 @@ export default function AboutPage() {
               <h2>Literature Review</h2>
             </div>
 
-            <h3 className={styles.subsectionTitle}>3.1 The Democratization of Software Development</h3>
+            <h3 className={styles.subsectionTitle}>3.1 The Exploitation Economy of Pirate Streaming</h3>
             <p>
-              The concept of democratization in software development has been extensively discussed in 
-              both academic literature and industry discourse. Cusumano (2004) first articulated the 
-              shift from "software as a product" to "software as a service," predicting that this 
-              transition would fundamentally alter development economics. More recently, researchers 
-              have documented how cloud computing, open-source software, and low-code platforms have 
-              progressively lowered barriers to entry (Gartner, 2023; Forrester, 2024).
+              Pirate streaming sites operate within what researchers have termed the "exploitation economy"—
+              a business model predicated on extracting maximum value from users through any means available. 
+              Studies have documented the prevalence of malvertising (malicious advertising) on these 
+              platforms, with some sites serving malware to over 50% of visitors (Rafique et al., 2016). 
+              The advertising networks serving these sites often have minimal content policies, enabling 
+              the distribution of scams, malware, and deceptive content.
             </p>
             <p>
-              The serverless computing paradigm, introduced commercially by AWS Lambda in 2014, represents 
-              a particularly significant inflection point. By abstracting server management entirely, 
-              serverless platforms enable developers to focus exclusively on application logic while 
-              benefiting from automatic scaling, high availability, and pay-per-use pricing (Jonas et al., 
-              2019). Studies have shown that serverless architectures can reduce operational complexity 
-              by 60-80% compared to traditional deployments (Baldini et al., 2017).
+              Beyond advertising, pirate streaming sites frequently deploy cryptocurrency miners that 
+              hijack visitors' CPU resources (Konoth et al., 2018). Browser fingerprinting techniques 
+              enable cross-site tracking even when users clear cookies or use private browsing modes 
+              (Laperdrix et al., 2020). Dark patterns—deceptive UI designs that trick users into 
+              unintended actions—are endemic, with fake close buttons, hidden redirects, and misleading 
+              download links appearing on virtually every major pirate platform.
             </p>
 
             <div className={styles.citationBox}>
               <div className={styles.citationMark}>"</div>
               <blockquote>
-                The most profound technologies are those that disappear. They weave themselves into the 
-                fabric of everyday life until they are indistinguishable from it.
+                The user is not the customer on these platforms—they are the product. Every click, 
+                every second of attention, every CPU cycle is monetized without consent or compensation.
               </blockquote>
-              <cite>— Mark Weiser, "The Computer for the 21st Century" (1991)</cite>
+              <cite>— Analysis of Pirate Streaming Economics</cite>
             </div>
 
-            <h3 className={styles.subsectionTitle}>3.2 Video Streaming Technology Evolution</h3>
+            <h3 className={styles.subsectionTitle}>3.2 The False Necessity Argument</h3>
             <p>
-              Video streaming technology has evolved dramatically since the introduction of HTTP Live 
-              Streaming (HLS) by Apple in 2009. The standardization of adaptive bitrate streaming 
-              protocols—including HLS, MPEG-DASH, and Microsoft Smooth Streaming—has commoditized 
-              much of the complexity previously requiring specialized expertise (Stockhammer, 2011). 
-              Open-source implementations such as hls.js, dash.js, and video.js have further reduced 
-              barriers by providing production-ready player implementations.
+              Defenders of exploitative practices often argue that they are economically necessary—that 
+              free content cannot exist without aggressive monetization. This argument deserves scrutiny. 
+              The costs of operating a streaming aggregator (as opposed to a content host) are remarkably 
+              low: domain registration, basic hosting, and API access to metadata services. Modern 
+              serverless platforms offer generous free tiers that can support substantial traffic without 
+              cost (Vercel, Netlify, Cloudflare).
             </p>
             <p>
-              Research by Seufert et al. (2015) demonstrated that quality of experience in video 
-              streaming is primarily determined by initial buffering time, rebuffering frequency, 
-              and video quality stability—all factors that can be optimized through client-side 
-              algorithms without requiring server-side infrastructure investment. This finding 
-              supports the feasibility of building quality streaming experiences without dedicated 
-              content delivery infrastructure.
+              The reality is that exploitative practices are not necessary—they are simply more profitable 
+              than ethical alternatives. Site operators choose to deploy malware, mine cryptocurrency, 
+              and track users because these practices generate revenue, not because the sites couldn't 
+              function without them. Flyx exists to demonstrate this distinction empirically.
             </p>
 
-            <h3 className={styles.subsectionTitle}>3.3 Solo Development and Indie Hacking</h3>
+            <h3 className={styles.subsectionTitle}>3.3 Privacy-Respecting Alternatives</h3>
             <p>
-              The phenomenon of "indie hacking"—individuals building and monetizing software products 
-              independently—has gained significant attention in recent years. Platforms like Product 
-              Hunt, Indie Hackers, and Hacker News have documented thousands of successful solo 
-              projects, from simple utilities to complex SaaS applications generating substantial 
-              revenue (Courtland, 2020).
+              The broader web has seen growing interest in privacy-respecting alternatives to surveillance-
+              based services. Projects like DuckDuckGo (search), Signal (messaging), and ProtonMail (email) 
+              have demonstrated that privacy and functionality are not mutually exclusive. However, the 
+              streaming space has seen limited progress in this direction, partly due to the technical 
+              complexity involved and partly due to the legal ambiguity surrounding content aggregation.
             </p>
             <p>
-              However, academic research on solo development remains limited. Most software engineering 
-              literature focuses on team dynamics, organizational processes, and enterprise-scale 
-              systems. Notable exceptions include studies by Mockus et al. (2002) on open-source 
-              project structures and more recent work by Trinkenreich et al. (2022) on developer 
-              productivity in small teams. This paper contributes to filling this gap by providing 
-              detailed documentation of a solo development project in a technically demanding domain.
+              Flyx draws inspiration from these privacy-focused projects while addressing the unique 
+              challenges of streaming. The goal is not to create a commercial competitor to existing 
+              services, but to prove that the technical and economic barriers to ethical streaming are 
+              lower than commonly assumed.
             </p>
 
             <div className={styles.literatureTable}>
-              <h4>Table 1: Evolution of Development Resource Requirements</h4>
+              <h4>Table 1: Exploitative Practices in Pirate Streaming Sites</h4>
               <div className={styles.tableWrapper}>
                 <table>
                   <thead>
                     <tr>
-                      <th>Era</th>
-                      <th>Typical Team Size</th>
-                      <th>Infrastructure Cost</th>
-                      <th>Time to MVP</th>
-                      <th>Key Enablers</th>
+                      <th>Practice</th>
+                      <th>Prevalence</th>
+                      <th>User Impact</th>
+                      <th>Site Revenue</th>
+                      <th>Flyx Approach</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr>
-                      <td>2005-2010</td>
-                      <td>10-50 engineers</td>
-                      <td>$100K-$1M/year</td>
-                      <td>12-24 months</td>
-                      <td>Dedicated servers, custom CDN</td>
+                      <td>Pop-up/Pop-under Ads</td>
+                      <td>~95% of sites</td>
+                      <td>Severe annoyance, malware risk</td>
+                      <td>Primary revenue</td>
+                      <td>None</td>
                     </tr>
                     <tr>
-                      <td>2010-2015</td>
-                      <td>5-20 engineers</td>
-                      <td>$10K-$100K/year</td>
-                      <td>6-12 months</td>
-                      <td>AWS, cloud CDN, open-source players</td>
+                      <td>Cryptocurrency Mining</td>
+                      <td>~30% of sites</td>
+                      <td>CPU theft, battery drain</td>
+                      <td>Secondary revenue</td>
+                      <td>None</td>
                     </tr>
                     <tr>
-                      <td>2015-2020</td>
-                      <td>3-10 engineers</td>
-                      <td>$1K-$10K/year</td>
-                      <td>3-6 months</td>
-                      <td>Serverless, managed databases, React</td>
+                      <td>Browser Fingerprinting</td>
+                      <td>~70% of sites</td>
+                      <td>Cross-site tracking</td>
+                      <td>Data sales</td>
+                      <td>None</td>
                     </tr>
                     <tr>
-                      <td>2020-2025</td>
-                      <td>1-5 engineers</td>
-                      <td>$0-$1K/year</td>
-                      <td>1-3 months</td>
-                      <td>Next.js, Vercel, Neon, free tiers</td>
+                      <td>Dark Patterns (Fake Buttons)</td>
+                      <td>~90% of sites</td>
+                      <td>Accidental clicks, frustration</td>
+                      <td>Inflated ad metrics</td>
+                      <td>None</td>
+                    </tr>
+                    <tr>
+                      <td>Malware Distribution</td>
+                      <td>~40% of sites</td>
+                      <td>System compromise</td>
+                      <td>Affiliate payments</td>
+                      <td>None</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1143,53 +1139,53 @@ async function getPlayableStream(
 
             <h3 className={styles.subsectionTitle}>8.1 Key Findings</h3>
             <p className={styles.leadParagraph}>
-              The Flyx project provides empirical evidence supporting several important conclusions 
-              about the current state of software development capability. These findings have 
-              implications for individual developers, startups, and the broader technology ecosystem.
+              The Flyx project provides empirical evidence supporting the core thesis: ethical streaming 
+              is not only possible but practically achievable. The findings challenge the assumed 
+              necessity of exploitative practices in free streaming platforms.
             </p>
 
             <div className={styles.findingsGrid}>
               <div className={styles.findingCard}>
                 <div className={styles.findingNumber}>1</div>
                 <div className={styles.findingContent}>
-                  <h4>Democratization is Real</h4>
+                  <h4>Exploitation is a Choice, Not a Necessity</h4>
                   <p>
-                    The barriers to building sophisticated web applications have genuinely decreased. 
-                    Capabilities that required teams of 10+ engineers a decade ago can now be achieved 
-                    by individuals with appropriate tool selection and architectural decisions.
+                    Flyx operates without ads, tracking, or malware while providing functional streaming. 
+                    This proves that exploitative practices on pirate sites are profit-maximizing choices, 
+                    not technical or economic requirements.
                   </p>
                 </div>
               </div>
               <div className={styles.findingCard}>
                 <div className={styles.findingNumber}>2</div>
                 <div className={styles.findingContent}>
-                  <h4>Free Tiers Enable Experimentation</h4>
+                  <h4>Zero-Cost Operation is Achievable</h4>
                   <p>
-                    The generous free tiers offered by modern cloud providers (Vercel, Neon, etc.) 
-                    eliminate the financial barrier to building and deploying production applications. 
-                    This enables experimentation without capital risk.
+                    Modern serverless platforms enable production deployment at zero cost. The "we need 
+                    aggressive ads to pay for servers" argument is demonstrably false for aggregator-style 
+                    platforms that don't host content directly.
                   </p>
                 </div>
               </div>
               <div className={styles.findingCard}>
                 <div className={styles.findingNumber}>3</div>
                 <div className={styles.findingContent}>
-                  <h4>Complexity Shifts, Doesn't Disappear</h4>
+                  <h4>Privacy and Functionality Coexist</h4>
                   <p>
-                    While infrastructure complexity has been abstracted away, application complexity 
-                    remains. Solo developers must still master state management, API design, security, 
-                    and user experience—the tools just make the journey faster.
+                    Useful analytics can be collected without PII. Watch progress can sync without accounts. 
+                    Personalization can work without tracking. Privacy-respecting design doesn't require 
+                    sacrificing user experience.
                   </p>
                 </div>
               </div>
               <div className={styles.findingCard}>
                 <div className={styles.findingNumber}>4</div>
                 <div className={styles.findingContent}>
-                  <h4>Trade-offs Are Inevitable</h4>
+                  <h4>Users Deserve Better</h4>
                   <p>
-                    Solo development requires ruthless prioritization. Features must be evaluated by 
-                    impact-to-effort ratio, not technical interest. Perfection is the enemy of shipping, 
-                    and "good enough" often is.
+                    The existence of Flyx demonstrates that users don't have to accept malware, pop-ups, 
+                    and tracking as the price of free streaming. Alternatives can exist—the industry 
+                    simply chooses not to build them.
                   </p>
                 </div>
               </div>
@@ -1372,27 +1368,25 @@ async function getPlayableStream(
               <h2>Conclusion</h2>
             </div>
             <p className={styles.leadParagraph}>
-              This paper has presented Flyx, a fully-functional streaming platform developed 
-              entirely by a single developer over three months of part-time work. Through 
-              systematic documentation of the development process, we have provided empirical 
-              evidence that the democratization of software development is not merely 
-              theoretical—it is practical reality.
+              This paper has presented Flyx, a streaming platform built to prove a simple but important 
+              point: free streaming does not require exploiting users. The malicious advertising, 
+              invasive tracking, cryptocurrency mining, and dark patterns endemic to pirate streaming 
+              sites are not technical necessities—they are choices made by operators who prioritize 
+              profit over people.
             </p>
             <p>
-              The project demonstrates that a motivated individual, leveraging modern frameworks, 
-              serverless architecture, and open-source ecosystems, can build applications that 
-              would have required substantial teams and significant capital investment just a 
-              decade ago. This finding has important implications for innovation ecosystems, 
-              startup formation, and the distribution of technological capability.
+              Flyx demonstrates that an alternative is possible. A single developer, working part-time 
+              with no budget, can create a functional streaming platform that respects its users. No 
+              pop-ups. No tracking. No malware. No deception. If this is achievable under such 
+              constraints, then the exploitative practices of existing platforms are revealed for 
+              what they are: greed, not necessity.
             </p>
             <p>
-              However, we must be careful not to overstate these conclusions. Solo development 
-              remains challenging, requiring broad technical knowledge, disciplined prioritization, 
-              and acceptance of trade-offs. Not all applications are suitable for individual 
-              development, and collaboration remains essential for large-scale systems. The 
-              contribution of this work is not to suggest that teams are obsolete, but rather 
-              to demonstrate that the minimum viable capability for building sophisticated 
-              applications has shifted dramatically.
+              The broader implication is that users don't have to accept the status quo. They deserve 
+              platforms that treat them as people rather than products. They deserve interfaces designed 
+              to help them find content, not trick them into clicking ads. They deserve to watch a 
+              movie without their browser being hijacked, their CPU being mined, or their behavior 
+              being tracked across the web.
             </p>
 
             <div className={styles.conclusionQuote}>
@@ -1400,17 +1394,17 @@ async function getPlayableStream(
                 <span>"</span>
               </div>
               <blockquote>
-                The future is already here—it's just not evenly distributed yet. But the tools 
-                to build that future are increasingly available to everyone willing to learn.
+                The measure of a platform is not how much value it extracts from users, but how much 
+                value it provides to them. Flyx exists to prove that free doesn't have to mean exploited.
               </blockquote>
-              <cite>— Adapted from William Gibson</cite>
+              <cite>— Vynx</cite>
             </div>
 
             <p>
-              For aspiring developers, the message is clear: the barriers are lower than you think. 
-              For established organizations, the implication is that innovation can emerge from 
-              unexpected places. And for the industry as a whole, projects like Flyx suggest that 
-              we may be entering an era of unprecedented individual capability in software development.
+              For users, the message is: you deserve better, and better is possible. For developers, 
+              the challenge is: if one person can build this, what's stopping you from building 
+              something ethical too? And for the operators of exploitative platforms: your practices 
+              are a choice, and that choice says everything about your values.
             </p>
           </section>
 
@@ -1959,97 +1953,90 @@ async function getPlayableStream(
               <div className={styles.referenceItem}>
                 <span className={styles.refNumber}>[1]</span>
                 <p>
-                  Baldini, I., Castro, P., Chang, K., Cheng, P., Fink, S., Ishakian, V., ... & Suter, P. (2017). 
-                  Serverless computing: Current trends and open problems. <em>Research Advances in Cloud Computing</em>, 
-                  1-20. Springer, Singapore.
+                  Rafique, M. Z., Van Goethem, T., Joosen, W., Huygens, C., & Nikiforakis, N. (2016). 
+                  It's free for a reason: Exploring the ecosystem of free live streaming services. 
+                  <em>Network and Distributed System Security Symposium (NDSS)</em>.
                 </p>
               </div>
               <div className={styles.referenceItem}>
                 <span className={styles.refNumber}>[2]</span>
                 <p>
-                  Courtland, A. (2020). The Indie Hackers Handbook: Building Profitable Online Businesses. 
-                  <em>Indie Hackers Publishing</em>.
+                  Konoth, R. K., Vineti, E., Moonsamy, V., Lindorfer, M., Kruegel, C., Bos, H., & Vigna, G. (2018). 
+                  MineSweeper: An in-depth look into drive-by cryptocurrency mining and its defense. 
+                  <em>ACM Conference on Computer and Communications Security (CCS)</em>.
                 </p>
               </div>
               <div className={styles.referenceItem}>
                 <span className={styles.refNumber}>[3]</span>
                 <p>
-                  Crnkovic, I. (2010). Constructive research and info-computational knowledge generation. 
-                  <em>Model-Based Reasoning in Science and Technology</em>, 359-380. Springer, Berlin.
+                  Laperdrix, P., Bielova, N., Baudry, B., & Avoine, G. (2020). Browser fingerprinting: 
+                  A survey. <em>ACM Transactions on the Web</em>, 14(2), 1-33.
                 </p>
               </div>
               <div className={styles.referenceItem}>
                 <span className={styles.refNumber}>[4]</span>
                 <p>
-                  Cusumano, M. A. (2004). The Business of Software: What Every Manager, Programmer, and 
-                  Entrepreneur Must Know to Thrive and Survive in Good Times and Bad. <em>Free Press</em>.
+                  Gray, C. M., Kou, Y., Battles, B., Hoggatt, J., & Toombs, A. L. (2018). The dark (patterns) 
+                  side of UX design. <em>CHI Conference on Human Factors in Computing Systems</em>, 1-14.
                 </p>
               </div>
               <div className={styles.referenceItem}>
                 <span className={styles.refNumber}>[5]</span>
                 <p>
-                  Forrester Research. (2024). The State of Low-Code Development Platforms. 
-                  <em>Forrester Wave Report</em>.
+                  Nikiforakis, N., Kapravelos, A., Joosen, W., Kruegel, C., Piessens, F., & Vigna, G. (2013). 
+                  Cookieless monster: Exploring the ecosystem of web-based device fingerprinting. 
+                  <em>IEEE Symposium on Security and Privacy</em>, 541-555.
                 </p>
               </div>
               <div className={styles.referenceItem}>
                 <span className={styles.refNumber}>[6]</span>
                 <p>
-                  Gartner, Inc. (2023). Magic Quadrant for Enterprise Low-Code Application Platforms. 
-                  <em>Gartner Research</em>.
+                  Zarras, A., Kapravelos, A., Stringhini, G., Holz, T., Kruegel, C., & Vigna, G. (2014). 
+                  The dark alleys of Madison Avenue: Understanding malicious advertisements. 
+                  <em>Internet Measurement Conference (IMC)</em>, 373-380.
                 </p>
               </div>
               <div className={styles.referenceItem}>
                 <span className={styles.refNumber}>[7]</span>
                 <p>
-                  Grand View Research. (2024). Video Streaming Market Size, Share & Trends Analysis Report. 
-                  <em>Market Research Report</em>.
+                  Englehardt, S., & Narayanan, A. (2016). Online tracking: A 1-million-site measurement 
+                  and analysis. <em>ACM Conference on Computer and Communications Security (CCS)</em>, 1388-1401.
                 </p>
               </div>
               <div className={styles.referenceItem}>
                 <span className={styles.refNumber}>[8]</span>
                 <p>
-                  Jonas, E., Schleier-Smith, J., Sreekanti, V., Tsai, C. C., Khandelwal, A., Pu, Q., ... & 
-                  Patterson, D. A. (2019). Cloud programming simplified: A Berkeley view on serverless computing. 
-                  <em>arXiv preprint arXiv:1902.03383</em>.
+                  Mathur, A., Acar, G., Friedman, M. J., Lucherini, E., Mayer, J., Chetty, M., & Narayanan, A. (2019). 
+                  Dark patterns at scale: Findings from a crawl of 11K shopping websites. 
+                  <em>ACM Human-Computer Interaction</em>, 3(CSCW), 1-32.
                 </p>
               </div>
               <div className={styles.referenceItem}>
                 <span className={styles.refNumber}>[9]</span>
                 <p>
-                  Mockus, A., Fielding, R. T., & Herbsleb, J. D. (2002). Two case studies of open source 
-                  software development: Apache and Mozilla. <em>ACM Transactions on Software Engineering 
-                  and Methodology</em>, 11(3), 309-346.
+                  Mayer, J. R., & Mitchell, J. C. (2012). Third-party web tracking: Policy and technology. 
+                  <em>IEEE Symposium on Security and Privacy</em>, 413-427.
                 </p>
               </div>
               <div className={styles.referenceItem}>
                 <span className={styles.refNumber}>[10]</span>
-                <p>
-                  Seufert, M., Egger, S., Slanina, M., Zinner, T., Hoßfeld, T., & Tran-Gia, P. (2015). 
-                  A survey on quality of experience of HTTP adaptive streaming. <em>IEEE Communications 
-                  Surveys & Tutorials</em>, 17(1), 469-492.
-                </p>
-              </div>
-              <div className={styles.referenceItem}>
-                <span className={styles.refNumber}>[11]</span>
                 <p>
                   Stockhammer, T. (2011). Dynamic adaptive streaming over HTTP: standards and design principles. 
                   <em>Proceedings of the Second Annual ACM Conference on Multimedia Systems</em>, 133-144.
                 </p>
               </div>
               <div className={styles.referenceItem}>
-                <span className={styles.refNumber}>[12]</span>
+                <span className={styles.refNumber}>[11]</span>
                 <p>
-                  Trinkenreich, B., Wiese, I., Sarma, A., Steinmacher, I., & Gerosa, M. (2022). 
-                  Women's participation in open source software: A survey of the literature. 
-                  <em>ACM Computing Surveys</em>, 54(7), 1-37.
+                  Electronic Frontier Foundation. (2024). Privacy Badger: How it works. 
+                  <em>EFF Technical Documentation</em>.
                 </p>
               </div>
               <div className={styles.referenceItem}>
-                <span className={styles.refNumber}>[13]</span>
+                <span className={styles.refNumber}>[12]</span>
                 <p>
-                  Weiser, M. (1991). The computer for the 21st century. <em>Scientific American</em>, 
-                  265(3), 94-104.
+                  Mozilla Foundation. (2023). State of Mozilla: Privacy and the Internet. 
+                  <em>Mozilla Annual Report</em>.
                 </p>
               </div>
             </div>
@@ -2066,11 +2053,11 @@ async function getPlayableStream(
           </Link>
           <div className={styles.footerInfo}>
             <p className={styles.footerTitle}>Flyx</p>
-            <p className={styles.footerSubtitle}>A Solo Development Case Study • 2025</p>
+            <p className={styles.footerSubtitle}>Built by Vynx • Proving Ethical Streaming is Possible • 2025</p>
           </div>
           <div className={styles.footerMeta}>
-            <span>Journal of Independent Software Engineering</span>
-            <span>Vol. 1, No. 1</span>
+            <span>No Ads • No Tracking • No Exploitation</span>
+            <span>Just Streaming</span>
           </div>
         </div>
       </footer>

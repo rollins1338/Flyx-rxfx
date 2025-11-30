@@ -249,13 +249,28 @@
 
 .tocContainer {
   position: sticky;
-  top: 40px;
-  background: linear-gradient(135deg, rgba(15, 15, 25, 0.9), rgba(10, 10, 18, 0.95));
+  top: 24px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  background: linear-gradient(135deg, rgba(15, 15, 25, 0.95), rgba(10, 10, 18, 0.98));
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 20px;
   padding: 24px;
   backdrop-filter: blur(10px);
   transition: transform 0.3s ease;
+}
+
+.tocContainer::-webkit-scrollbar {
+  width: 4px;
+}
+
+.tocContainer::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tocContainer::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.3);
+  border-radius: 2px;
 }
 
 .tocHeader {
