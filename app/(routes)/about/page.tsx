@@ -5,16 +5,23 @@ import Link from 'next/link';
 import './about.css';
 
 const sections = [
-  { id: 'intro', title: 'The Mission' },
-  { id: 'problem', title: 'The Problem' },
+  { id: 'abstract', title: 'Abstract' },
+  { id: 'introduction', title: 'Introduction' },
+  { id: 'literature', title: 'Literature Review' },
+  { id: 'methodology', title: 'Methodology' },
+  { id: 'architecture', title: 'System Architecture' },
   { id: 'heist', title: 'The Heist' },
-  { id: 'tech', title: 'The Tech' },
-  { id: 'proof', title: 'The Proof' },
-  { id: 'conclusion', title: 'The Point' },
+  { id: 'implementation', title: 'Implementation' },
+  { id: 'results', title: 'Results & Analysis' },
+  { id: 'discussion', title: 'Discussion' },
+  { id: 'future', title: 'Future Work' },
+  { id: 'conclusion', title: 'Conclusion' },
+  { id: 'legal', title: 'Legal Framework' },
+  { id: 'references', title: 'References' },
 ];
 
 export default function AboutPage() {
-  const [activeSection, setActiveSection] = useState('intro');
+  const [activeSection, setActiveSection] = useState('abstract');
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
@@ -23,7 +30,6 @@ export default function AboutPage() {
       const docHeight = document.documentElement.scrollHeight - window.innerHeight;
       setProgress((scrollTop / docHeight) * 100);
 
-      // Find which section is currently in view
       for (const section of sections) {
         const el = document.getElementById(section.id);
         if (el) {
@@ -42,32 +48,39 @@ export default function AboutPage() {
 
   return (
     <div className="about-page">
-      {/* Progress bar */}
       <div className="progress-bar" style={{ width: `${progress}%` }} />
 
-      {/* Header */}
       <header className="about-header">
-        <h1>Building Flyx: Stealing from Thieves</h1>
+        <div className="journal-badge">Journal of Questionable Software Engineering • Vol. 1, Issue 1 • November 2025</div>
+        <h1>Flyx: An Empirical Study in Stealing from Thieves While Maintaining Moral Superiority</h1>
         <p className="subtitle">
-          How one developer built an ethical streaming platform by reverse engineering 
-          the criminals who profit from piracy.
+          A comprehensive analysis of building ethical streaming infrastructure by reverse engineering 
+          the security measures of criminals who profit from content they do not own, featuring extensive 
+          documentation of late-night debugging sessions and an alarming amount of coffee consumption.
         </p>
         <div className="author">
           <span className="avatar">V</span>
           <div>
             <strong>Vynx</strong>
-            <span>Developer & Reverse Engineer</span>
+            <span>Independent Researcher & Professional Insomniac</span>
           </div>
+        </div>
+        <div className="paper-meta">
+          <span>Received: June 2025</span>
+          <span>Revised: October 2025</span>
+          <span>Accepted: November 2025</span>
+          <span>Reading Time: ~20 minutes</span>
         </div>
       </header>
 
-      {/* Main layout */}
       <div className="about-layout">
-        {/* Sticky sidebar */}
         <nav className="about-nav">
           <div className="nav-inner">
-            <span className="nav-title">Contents</span>
-            {sections.map((s) => (
+            <div className="nav-header">
+              <span className="nav-title">Table of Contents</span>
+              <span className="nav-progress">{Math.round(progress)}%</span>
+            </div>
+            {sections.map((s, i) => (
               <a
                 key={s.id}
                 href={`#${s.id}`}
@@ -77,164 +90,582 @@ export default function AboutPage() {
                   document.getElementById(s.id)?.scrollIntoView({ behavior: 'smooth' });
                 }}
               >
+                <span className="nav-num">{String(i + 1).padStart(2, '0')}</span>
                 {s.title}
               </a>
             ))}
           </div>
         </nav>
 
-        {/* Content */}
         <main className="about-content">
 
-          <section id="intro">
-            <h2>The Mission</h2>
+          {/* Abstract */}
+          <section id="abstract">
+            <h2>Abstract</h2>
+            <div className="abstract-box">
+              <p>
+                This paper presents Flyx, a fully-functional video streaming platform developed over 
+                five months to test a hypothesis that many would consider obvious but few have bothered 
+                to prove: that free streaming services do not actually require malicious advertising, 
+                invasive tracking, cryptocurrency miners, or user interfaces designed by someone who 
+                genuinely hates humanity. The pirate streaming ecosystem has long operated under the 
+                assumption that exploitation is the price of free content. We challenge this assumption 
+                by building something that works without being terrible.
+              </p>
+              <p>
+                Through systematic reverse engineering of third-party streaming providers—entities that 
+                themselves profit from content they do not own—we demonstrate that it is entirely possible 
+                to extract and serve video content without subjecting users to the digital equivalent of 
+                walking through a minefield blindfolded. Our findings suggest that the prevalence of 
+                exploitative practices in pirate streaming reflects a choice to prioritize profit over 
+                basic human decency, not a technical or economic necessity.
+              </p>
+              <p>
+                <strong>Keywords:</strong> Streaming Architecture, Reverse Engineering, Ethical Design, 
+                Obfuscation Analysis, JavaScript Archaeology, Sleep Deprivation, Coffee Dependency
+              </p>
+            </div>
+          </section>
+
+          {/* Introduction */}
+          <section id="introduction">
+            <h2>1. Introduction</h2>
+            
+            <h3>1.1 The State of Free Streaming (A Horror Story)</h3>
             <p className="lead">
-              I built a streaming platform that does not assault you with pop-ups, mine crypto on 
-              your CPU, or track you across the web. I did it alone, with zero budget, to prove 
-              that the exploitation is optional.
+              The year is 2025. Humanity has achieved remarkable technological feats. We have sent 
+              robots to Mars. We have developed artificial intelligence that can write poetry and 
+              generate images of cats wearing business suits. And yet, if you want to watch a movie 
+              for free on the internet, you must first navigate an obstacle course of pop-up 
+              advertisements, fake download buttons, cryptocurrency miners, and user interfaces that 
+              appear to have been designed by a committee of people who have never actually used a 
+              computer.
             </p>
             <p>
-              Every pirate streaming site on the internet runs the same playbook: wrap stolen 
-              content in malware, pop-ups, and cryptocurrency miners. Users have accepted this as 
-              the price of free content. I wanted to prove them wrong.
+              This is not hyperbole. This is Tuesday.
             </p>
             <p>
-              Flyx is the result. A fully functional streaming platform with movies, TV shows, and 
-              live television. No advertisements. No tracking. No dark patterns. Just content, 
-              delivered cleanly, the way it should be.
+              The pirate streaming ecosystem represents one of the most hostile environments on the 
+              modern web. Users seeking free access to movies and television are routinely subjected 
+              to an arsenal of exploitative practices that would make a used car salesman blush. 
+              Pop-up advertisements spawn endlessly, like some sort of digital hydra. Fake &quot;close&quot; 
+              buttons trigger additional advertisements, because apparently the first seventeen were 
+              not enough. Cryptocurrency miners run silently in the background, turning your laptop 
+              into a space heater while generating approximately $0.003 worth of Monero for someone 
+              in a country you cannot pronounce.
+            </p>
+            <p>
+              Browser fingerprinting tracks you across the web with the persistence of an ex who 
+              &quot;just wants to talk.&quot; Malware distribution disguises itself as video players, 
+              codec updates, and occasionally as messages from Nigerian princes who have inexplicably 
+              developed an interest in streaming technology. Dark patterns trick users into clicking 
+              things they did not intend to click, visiting places they did not intend to visit, and 
+              questioning life choices they thought they had already resolved in therapy.
+            </p>
+
+            <h3>1.2 The Implicit Assumption</h3>
+            <p>
+              Underlying this entire ecosystem is an assumption so pervasive that most people have 
+              stopped questioning it: free content requires exploitation. If you are not paying with 
+              money, you must pay with your security, your privacy, your CPU cycles, and your sanity. 
+              This is presented as an immutable law of the universe, like gravity or the tendency of 
+              software projects to exceed their estimated completion dates by a factor of three.
+            </p>
+            <p>
+              We reject this assumption.
+            </p>
+            <p>
+              Not because we are naive idealists who believe in the inherent goodness of humanity—we 
+              have spent too much time reading YouTube comments for that—but because we suspected it 
+              was simply not true. The exploitation is not a necessary evil. It is a choice. A 
+              profitable choice, certainly, but a choice nonetheless.
+            </p>
+
+            <h3>1.3 The Hypothesis</h3>
+            <p>
+              This project began with a simple question: what if someone built a streaming platform 
+              that was not actively hostile to its users? What if, instead of treating visitors as 
+              resources to be extracted, we treated them as people who just wanted to watch a movie 
+              without their browser catching fire?
             </p>
             <blockquote>
-              &quot;The pop-ups are not necessary. The crypto miners are not necessary. The tracking 
-              is not necessary. They are choices. And those choices tell you everything about the 
-              people making them.&quot;
+              &quot;The best way to prove something is possible is to do it. The second best way is to 
+              write a really long document about doing it and hope people believe you.&quot;
+              <cite>— Ancient Proverb (Source: We Made It Up)</cite>
             </blockquote>
-          </section>
-
-          <section id="problem">
-            <h2>The Problem</h2>
-            <p className="lead">
-              Try to watch a movie for free on the internet. Within seconds, you will experience 
-              pop-ups, fake close buttons, notification spam, and somewhere in the background, 
-              your CPU mining cryptocurrency for strangers.
-            </p>
             <p>
-              This is not an accident. This is the business model. These sites make money by 
-              treating you as the product:
+              We chose the first option, then wrote the document anyway because we are overachievers 
+              with poor time management skills.
+            </p>
+
+            <h3>1.4 Scope and Contributions</h3>
+            <p>
+              This paper makes the following contributions to the field of &quot;things that should 
+              have been obvious but apparently needed proving&quot;:
             </p>
             <ul>
-              <li><strong>Malvertising:</strong> Over 50% of visitors get served actual malware through advertisements.</li>
-              <li><strong>Crypto Mining:</strong> Your CPU mines cryptocurrency while you watch. Your electricity, their profit.</li>
-              <li><strong>Data Harvesting:</strong> Browser fingerprinting and tracking cookies package your data for sale.</li>
-              <li><strong>Dark Patterns:</strong> Fake buttons, hidden redirects, and deceptive UI designed to generate clicks.</li>
+              <li>
+                <strong>Proof of Concept:</strong> A fully functional streaming platform that operates 
+                without advertisements, tracking, malware, or contempt for its users.
+              </li>
+              <li>
+                <strong>Reverse Engineering Documentation:</strong> Comprehensive analysis of the 
+                obfuscation and security measures employed by pirate streaming providers, including 
+                detailed accounts of the author&apos;s descent into madness while debugging minified 
+                JavaScript at 3 AM.
+              </li>
+              <li>
+                <strong>Architectural Reference:</strong> A blueprint for building privacy-respecting 
+                streaming applications that other developers can use, ignore, or print out and use as 
+                kindling, depending on their preferences.
+              </li>
+              <li>
+                <strong>Economic Analysis:</strong> Evidence that the &quot;we need aggressive 
+                monetization to survive&quot; argument is, to use the technical term, complete nonsense.
+              </li>
             </ul>
+          </section>
+
+          {/* Literature Review */}
+          <section id="literature">
+            <h2>2. Literature Review</h2>
+            
+            <h3>2.1 The Exploitation Economy</h3>
             <p>
-              Site operators claim they need aggressive monetization to survive. This is a lie. 
-              These sites do not host content—they aggregate it. The bandwidth costs are minimal. 
-              Modern serverless platforms offer generous free tiers. The exploitation is not 
-              necessary; it is simply more profitable.
+              Academic research into pirate streaming sites has documented what users have known for 
+              years: these platforms are terrible. Rafique et al. (2016) found that over 50% of 
+              visitors to major pirate streaming sites were served malware through advertisements. 
+              This is not a bug; it is the business model. The advertising networks that work with 
+              these sites have content policies best described as &quot;whatever pays.&quot;
+            </p>
+            <p>
+              Konoth et al. (2018) documented the rise of in-browser cryptocurrency mining, a practice 
+              that combines the excitement of watching your CPU usage spike to 100% with the financial 
+              reward of generating approximately nothing for yourself while making someone else slightly 
+              less poor. The authors noted that users often had no idea this was happening, which is 
+              either a testament to the subtlety of the implementation or the general state of computer 
+              literacy in the modern era.
+            </p>
+            <p>
+              Laperdrix et al. (2020) provided a comprehensive survey of browser fingerprinting 
+              techniques, demonstrating that even users who clear their cookies and use private 
+              browsing can be tracked with alarming accuracy. The paper reads like a horror novel 
+              for anyone who thought &quot;incognito mode&quot; actually meant something.
+            </p>
+
+            <h3>2.2 The Dark Patterns Epidemic</h3>
+            <p>
+              Gray et al. (2018) coined the term &quot;dark patterns&quot; to describe user interface 
+              designs that trick users into doing things they did not intend. Pirate streaming sites 
+              have elevated this to an art form. Fake close buttons, hidden redirects, misleading 
+              download links, and countdown timers that reset when you are not looking—these are not 
+              accidents. They are features.
+            </p>
+            <p>
+              Mathur et al. (2019) conducted a large-scale analysis of dark patterns across 11,000 
+              shopping websites and found them everywhere. We did not conduct a similar analysis of 
+              pirate streaming sites because we value our mental health, but anecdotal evidence 
+              suggests the situation is significantly worse. At least shopping sites occasionally 
+              want you to buy something. Pirate streaming sites just want to watch the world burn.
+            </p>
+
+            <h3>2.3 The &quot;Necessary Evil&quot; Myth</h3>
+            <p>
+              Defenders of exploitative practices often argue that they are economically necessary. 
+              &quot;Servers cost money,&quot; they say, as if this explains why clicking a play button 
+              should open seventeen browser tabs and install a toolbar nobody asked for.
+            </p>
+            <p>
+              This argument deserves scrutiny, primarily because it is wrong.
+            </p>
+            <p>
+              Pirate streaming sites do not host content. They aggregate it. They are glorified link 
+              directories with embedded players that point to streams hosted elsewhere. The actual 
+              bandwidth costs are borne by third-party providers. The site operators need to pay for 
+              domain registration, basic hosting, and perhaps a modest amount of server-side processing. 
+              Modern serverless platforms offer free tiers that can handle substantial traffic without 
+              cost.
+            </p>
+            <p>
+              The exploitation is not necessary. It is simply more profitable than the alternative. 
+              Site operators choose to deploy malware, mine cryptocurrency, and track users because 
+              these practices generate revenue, not because the sites could not function without them.
+            </p>
+
+            <h3>2.4 Privacy-Respecting Alternatives in Other Domains</h3>
+            <p>
+              The broader web has seen growing interest in privacy-respecting alternatives to 
+              surveillance-based services. DuckDuckGo has demonstrated that search can work without 
+              tracking. Signal has proven that messaging can be secure without being unusable. 
+              ProtonMail has shown that email can be private without requiring a PhD in cryptography 
+              to set up.
+            </p>
+            <p>
+              Yet the streaming space has seen limited progress in this direction. This is partly due 
+              to technical complexity—streaming is harder than search—and partly due to legal ambiguity 
+              surrounding content aggregation. But mostly, we suspect, it is because the people capable 
+              of building something better were busy with legitimate projects, while the people running 
+              pirate sites were too busy counting their malware revenue to care about user experience.
             </p>
           </section>
 
-          <section id="heist">
-            <h2>The Heist: Stealing from Thieves</h2>
-            <p className="lead">
-              Here is the delicious irony: the streaming providers I needed to crack are pirates 
-              themselves. They profit from content they do not own by wrapping it in malware. My 
-              job was to break into their systems and steal what they had already stolen, then 
-              serve it without the exploitation.
-            </p>
+
+          {/* Methodology */}
+          <section id="methodology">
+            <h2>3. Methodology</h2>
             
-            <h3>The Battlefield</h3>
+            <h3>3.1 Research Design</h3>
             <p>
-              These criminals have invested serious engineering talent into protecting their 
-              revenue streams. Every provider I cracked had multiple layers of defense:
+              This study employs what academics call &quot;constructive research methodology&quot; and 
+              what normal people call &quot;building the thing and seeing if it works.&quot; The primary 
+              research artifact—the Flyx streaming platform—serves as both the subject of investigation 
+              and the vehicle for generating insights. It also serves as evidence that the author has 
+              too much free time and questionable priorities.
+            </p>
+            <p>
+              The research proceeded through four distinct phases, each characterized by its own unique 
+              blend of optimism, despair, and caffeine dependency:
+            </p>
+            <div className="phases">
+              <div className="phase">
+                <span className="phase-num">01</span>
+                <div>
+                  <h4>Requirements Analysis</h4>
+                  <p>Feature prioritization, technology evaluation, and the gradual realization that 
+                  this project was going to be significantly more complicated than initially anticipated.</p>
+                  <span className="phase-time">Weeks 1-3</span>
+                </div>
+              </div>
+              <div className="phase">
+                <span className="phase-num">02</span>
+                <div>
+                  <h4>Core Development</h4>
+                  <p>Building the platform, reverse engineering stream providers, and developing an 
+                  intimate familiarity with the JavaScript debugger that borders on unhealthy.</p>
+                  <span className="phase-time">Weeks 4-16</span>
+                </div>
+              </div>
+              <div className="phase">
+                <span className="phase-num">03</span>
+                <div>
+                  <h4>Deployment & Optimization</h4>
+                  <p>Going live, discovering that everything works differently in production, and 
+                  fixing bugs that somehow did not exist five minutes ago.</p>
+                  <span className="phase-time">Weeks 17-19</span>
+                </div>
+              </div>
+              <div className="phase">
+                <span className="phase-num">04</span>
+                <div>
+                  <h4>Documentation</h4>
+                  <p>Writing this paper, which took longer than expected because academic writing is 
+                  hard and we kept getting distracted by the platform we built.</p>
+                  <span className="phase-time">Weeks 20-22</span>
+                </div>
+              </div>
+            </div>
+
+            <h3>3.2 Development Constraints</h3>
+            <p>
+              To ensure the validity of our findings regarding solo development feasibility—and also 
+              because we did not have a choice—the following constraints were observed throughout the 
+              project:
+            </p>
+            <div className="constraints">
+              <div className="constraint">
+                <span className="icon">👤</span>
+                <h4>Single Developer</h4>
+                <p>All code, design, and documentation produced by one individual. No contractors, 
+                collaborators, or rubber ducks that provided unusually good advice.</p>
+              </div>
+              <div className="constraint">
+                <span className="icon">💸</span>
+                <h4>Zero Budget</h4>
+                <p>Only free tiers of services utilized. If a service wanted a credit card, we found 
+                an alternative or learned to live without it.</p>
+              </div>
+              <div className="constraint">
+                <span className="icon">🌙</span>
+                <h4>Part-Time Effort</h4>
+                <p>Development conducted during evenings and weekends, averaging 15-20 hours per week 
+                over five months. Sleep was occasionally sacrificed.</p>
+              </div>
+              <div className="constraint">
+                <span className="icon">📚</span>
+                <h4>Public Resources Only</h4>
+                <p>All learning materials publicly available. No proprietary training, insider 
+                knowledge, or deals with supernatural entities.</p>
+              </div>
+            </div>
+
+            <h3>3.3 Ethical Considerations</h3>
+            <p>
+              Before proceeding, we established a set of non-negotiable ethical principles. The platform 
+              would have:
+            </p>
+            <ul>
+              <li>Zero advertisements of any kind, not even &quot;tasteful&quot; ones</li>
+              <li>Zero tracking cookies or cross-site identifiers</li>
+              <li>Zero cryptocurrency mining, even the &quot;opt-in&quot; kind that nobody opts into</li>
+              <li>Zero pop-ups, pop-unders, or pop-sideways</li>
+              <li>Zero fake buttons, misleading links, or dark patterns</li>
+              <li>Zero collection of personally identifiable information</li>
+              <li>Zero selling of user data to third parties, fourth parties, or any other parties</li>
+            </ul>
+            <p>
+              If we could not build the platform without violating these principles, we would not build 
+              it at all. Fortunately, as this paper demonstrates, we could.
+            </p>
+          </section>
+
+          {/* Architecture */}
+          <section id="architecture">
+            <h2>4. System Architecture</h2>
+            
+            <h3>4.1 Architectural Philosophy</h3>
+            <p>
+              The Flyx architecture is guided by a simple principle: minimize complexity, maximize 
+              reliability, and never, under any circumstances, require the developer to wake up at 
+              3 AM because a server crashed. This led us to embrace serverless computing with the 
+              enthusiasm of someone who has been personally victimized by server maintenance.
+            </p>
+            <p>
+              The system follows what we call the &quot;Not My Problem&quot; architectural pattern, 
+              wherein as many operational concerns as possible are delegated to managed services that 
+              are someone else&apos;s problem. Scaling? Vercel&apos;s problem. Database availability? 
+              Neon&apos;s problem. SSL certificates? Also someone else&apos;s problem. Our problem is 
+              writing code that works, which is frankly enough problems for one person.
+            </p>
+
+            <h3>4.2 Technology Stack</h3>
+            <p>
+              Each technology in the stack was selected through rigorous evaluation against our primary 
+              criteria: &quot;Will this make my life easier or harder?&quot; Technologies that made 
+              life harder were rejected, regardless of how impressive they looked on a resume.
+            </p>
+            <div className="tech-stack">
+              <div className="tech-item">
+                <strong>Next.js 14</strong>
+                <p>The backbone of the application. Server-side rendering for SEO, API routes for the 
+                proxy layer, and a developer experience that does not make us want to throw our laptop 
+                out the window. The App Router took some getting used to, but we got there eventually.</p>
+              </div>
+              <div className="tech-item">
+                <strong>TypeScript</strong>
+                <p>Type safety was non-negotiable for a project of this complexity. TypeScript caught 
+                countless bugs at compile time that would have otherwise manifested as mysterious 
+                production errors at the worst possible moment.</p>
+              </div>
+              <div className="tech-item">
+                <strong>Vercel</strong>
+                <p>Hosting, edge functions, and a global CDN, all on a free tier generous enough to 
+                handle our traffic without requiring us to sell organs. The deployment experience is 
+                so smooth it feels like cheating.</p>
+              </div>
+              <div className="tech-item">
+                <strong>Neon PostgreSQL</strong>
+                <p>Serverless PostgreSQL that scales to zero when not in use, which is perfect for a 
+                project with unpredictable traffic patterns and a budget of exactly zero dollars.</p>
+              </div>
+              <div className="tech-item">
+                <strong>HLS.js</strong>
+                <p>The industry standard for adaptive bitrate streaming in browsers. Handles manifest 
+                parsing, quality switching, and buffer management so we could focus on not making the 
+                user interface terrible.</p>
+              </div>
+            </div>
+
+            <h3>4.3 The Proxy Layer</h3>
+            <p>
+              The proxy layer is where the magic happens, and by &quot;magic&quot; we mean &quot;a 
+              significant amount of header manipulation and referrer spoofing that makes streams 
+              actually play.&quot;
+            </p>
+            <p>
+              Stream providers implement various restrictions to prevent their content from being 
+              embedded on unauthorized domains. They check Referer headers, Origin headers, and 
+              occasionally perform rituals that we do not fully understand but have learned to 
+              accommodate. The proxy layer intercepts all stream requests and rewrites headers to 
+              match what the providers expect, presenting a unified interface to the client while 
+              handling the complexity behind the scenes.
+            </p>
+          </section>
+
+          {/* The Heist */}
+          <section id="heist">
+            <h2>5. The Heist: Reverse Engineering Stream Providers</h2>
+            
+            <h3>5.1 The Irony</h3>
+            <p className="lead">
+              Here is the delicious irony at the heart of this project: the streaming providers we 
+              needed to crack are not legitimate businesses. They are pirates themselves—profiting 
+              from content they do not own by wrapping it in malware, pop-ups, and cryptocurrency 
+              miners. Our job was to break into their systems and steal what they had already stolen, 
+              then serve it without the exploitation.
+            </p>
+            <p>
+              We are, in essence, robbing the robbers. And we feel absolutely no guilt about it.
+            </p>
+            <blockquote>
+              &quot;These sites make millions from advertisements and malware while hiding behind 
+              layers of obfuscation that would make nation-state hackers proud. They are not 
+              protecting intellectual property—they are protecting their revenue stream from people 
+              like us who want to give users the content without the cancer.&quot;
+              <cite>— Field Notes, 3 AM, Week 7</cite>
+            </blockquote>
+
+            <h3>5.2 The Battlefield</h3>
+            <p>
+              Picture this: you find a pirate streaming site. It works. Videos play. But when you 
+              try to extract the actual stream URL to use in your own player—to strip away the 
+              pop-ups and malware—you hit a wall. Not just one wall. A fortress of walls, each more 
+              devious than the last. These criminals have invested serious engineering talent into 
+              making sure nobody can do what we were trying to do.
             </p>
 
             <div className="challenge">
-              <h4>🔐 The Code Spaghetti Monster</h4>
+              <h4>🔐 Challenge 1: The Code Spaghetti Monster</h4>
               <p>
-                Open DevTools on any pirate site. The JavaScript is not code—it is a war crime. 
-                Variable names like <code>_0x4a3f</code>. Strings split into character arrays and 
-                reassembled through twelve layers of function calls. <code>eval()</code> statements 
-                that generate more obfuscated code at runtime.
+                Open DevTools on any pirate streaming site and look at their JavaScript. It is not 
+                code—it is a war crime against readability. Variable names like <code>_0x4a3f</code> 
+                and <code>_0xb7c2</code>. Strings split into arrays of character codes, reassembled 
+                through twelve layers of function calls that reference other arrays by computed indices. 
+                Control flow that looks like someone threw spaghetti at a wall and called it architecture.
+              </p>
+              <p>
+                And the crown jewel: <code>eval()</code> statements that generate MORE obfuscated code 
+                at runtime. You cannot even read what you are trying to crack because it does not exist 
+                until the page executes.
               </p>
               <p className="solution">
-                <strong>The Break-In:</strong> I built a deobfuscation pipeline. Intercept every 
-                eval, trace string operations backwards, write AST transformers to rename variables. 
-                Slowly, the gibberish becomes readable.
+                <strong>Our Approach:</strong> We built a custom deobfuscation pipeline. Intercept every 
+                <code>eval()</code> call and log what it produces. Trace string operations backwards 
+                through the call stack. Write AST-based transformers that rename variables based on 
+                usage patterns. Slowly, painfully, over many late nights, the gibberish becomes readable. 
+                Then you find the one line that matters: where they construct the stream URL.
               </p>
             </div>
 
             <div className="challenge">
-              <h4>⏱️ The Ticking Clock</h4>
+              <h4>⏱️ Challenge 2: The Ticking Clock</h4>
               <p>
-                Found the stream URL? It expires in 90 seconds. Every request needs a fresh token 
-                computed from timestamps, content IDs, and secret keys buried in obfuscated code.
+                Found the stream URL? Congratulations. It expires in 90 seconds.
+              </p>
+              <p>
+                Every request to the stream server needs a fresh token computed from the current 
+                timestamp, the content ID, and a secret key buried somewhere in 50,000 lines of 
+                obfuscated JavaScript. Copy-paste the URL? Dead on arrival. You need to understand 
+                their entire authentication scheme and replicate it perfectly.
               </p>
               <p className="solution">
-                <strong>The Break-In:</strong> Hours stepping through minified code, mapping data 
-                flow. They use HMAC-SHA256 with a hardcoded key hidden in a fake jQuery plugin. 
-                Extract the key, reimplement server-side, generate tokens on demand.
+                <strong>Our Approach:</strong> Hours of stepping through minified code in the debugger, 
+                watching variables change, mapping the flow of data from input to output. Eventually 
+                you find it: they are using HMAC-SHA256 with a hardcoded key hidden in what appears to 
+                be a fake jQuery plugin. Extract the key, reimplement the algorithm server-side, 
+                generate valid tokens on demand. Their 90-second window becomes irrelevant.
               </p>
             </div>
 
             <div className="challenge">
-              <h4>🤖 The Bot Hunters</h4>
+              <h4>🤖 Challenge 3: The Bot Hunters</h4>
               <p>
-                These sites hate automation. They check for headless Chrome, analyze mouse movements, 
-                fingerprint WebGL renderers. Fail any check and you get a decoy stream that dies 
-                after 30 seconds.
+                These sites HATE automation. They check if you are running headless Chrome by looking 
+                for missing browser APIs. They analyze your mouse movements for human-like patterns. 
+                They fingerprint your WebGL renderer, your canvas, your audio context. They measure 
+                how long it takes you to click things and flag anything that seems too fast or too 
+                consistent.
+              </p>
+              <p>
+                Fail any check and you get a fake stream that plays for exactly 30 seconds before 
+                cutting to black—or worse, an IP ban that requires you to restart your router and 
+                contemplate your life choices.
               </p>
               <p className="solution">
-                <strong>The Break-In:</strong> Skip their JavaScript entirely. Bot detection runs 
-                client-side—if I never execute their code, I never trigger their checks. Pure HTTP 
-                requests, carefully crafted headers, surgical extraction.
+                <strong>Our Approach:</strong> We tried the obvious solutions first. Puppeteer with 
+                stealth plugins. Fake mouse movements with Bézier curves. Randomized timing delays. 
+                None of it worked consistently. Then we had a realization: their bot detection runs 
+                client-side. If we never execute their JavaScript, we never trigger their checks. 
+                Pure HTTP requests, carefully crafted headers, surgical extraction. No browser, no 
+                detection, no problem.
               </p>
             </div>
 
             <div className="challenge">
-              <h4>🪆 The Russian Nesting Dolls</h4>
+              <h4>🪆 Challenge 4: The Russian Nesting Dolls</h4>
               <p>
-                Click play. Video loads in an iframe. That iframe loads another iframe from a 
-                different domain. Which loads another. The actual player is four layers deep, each 
-                with different CORS policies and validation.
+                Click play on a pirate streaming site. The video loads in an iframe. That iframe 
+                loads another iframe from a different domain. Which loads ANOTHER iframe from yet 
+                another domain. The actual video player might be four layers deep, each layer hosted 
+                on a different domain with different CORS policies, each performing its own validation 
+                and token verification.
+              </p>
+              <p>
+                It is like trying to break into a bank vault that is inside another bank vault that 
+                is inside a third bank that is on fire.
               </p>
               <p className="solution">
-                <strong>The Break-In:</strong> Map the entire chain. Follow each redirect, extract 
-                each URL, spoof referrers at each hop. Build a system that traverses the maze 
-                automatically.
+                <strong>Our Approach:</strong> Map the entire chain. Follow each redirect, extract 
+                each URL, understand what each layer validates. Build a system that traverses the 
+                whole maze automatically, spoofing referrers at each hop, collecting tokens from 
+                each layer, until you reach the actual stream buried at the bottom.
               </p>
             </div>
 
-            <h3>War Stories</h3>
+            <h3>5.3 War Stories</h3>
+            <p>
+              Every provider was a different puzzle. Different obfuscation, different tricks, different 
+              ways to make our lives difficult. Here are the ones that nearly broke us—and how we broke 
+              them instead.
+            </p>
+
             <div className="war-story">
-              <h4>The 2Embed Labyrinth — 3 weeks to crack</h4>
+              <h4>The 2Embed Labyrinth — Three Weeks to Crack</h4>
               <p>
-                A hydra of domains—streamsrcs, embedsrcs, vidsrc—each redirecting to the next, 
-                generating new tokens. The final player used a packing algorithm I had never seen: 
-                strings shattered into character arrays, reassembled through maze-like function calls.
+                2Embed was our white whale. A hydra of domains—streamsrcs, embedsrcs, vidsrc, and 
+                half a dozen others—each redirecting to the next, each generating new tokens, each 
+                running its own obfuscated validation. The final player used a packing algorithm we 
+                had never seen before: strings were not just encoded, they were shattered into 
+                individual characters stored in arrays, then reassembled through a maze of function 
+                calls that referenced other arrays by computed indices.
               </p>
               <p>
-                <strong>The Breakthrough:</strong> 3 AM on a Tuesday. The packing seed was derived 
-                from the TMDB ID predictably. Extraction dropped from 5+ seconds with browser 
-                automation to 180ms with pure HTTP.
+                We spent two weeks just understanding how their packer worked. Filled notebooks with 
+                diagrams. Wrote a custom unpacker. Then discovered they had THREE different packing 
+                schemes that rotated based on content ID. Back to the drawing board.
+              </p>
+              <p>
+                <strong>The Breakthrough:</strong> 3 AM on a Tuesday, week three. We noticed the 
+                packing seed was derived from the TMDB ID in a predictable way. If we knew the 
+                content, we could predict which unpacker to use. Suddenly, extraction dropped from 
+                5+ seconds with full browser automation to 180 milliseconds with pure HTTP requests. 
+                We may have woken up the neighbors with our celebration.
               </p>
             </div>
 
             <div className="war-story">
-              <h4>SuperEmbed&apos;s Decoy Trap — The one that fought back</h4>
+              <h4>SuperEmbed&apos;s Decoy Trap — The One That Fought Back</h4>
               <p>
-                Their cruelest trick: decoy streams. Fail bot detection and they give you a stream 
-                that works perfectly for exactly 30 seconds, then dies. You think you have won. 
-                You deploy. Users complain.
+                SuperEmbed was paranoid. Canvas fingerprinting. WebGL checks. Timing analysis on 
+                every interaction. But their cruelest trick was the decoy streams. Fail their bot 
+                detection and they do not block you—they give you a stream that works perfectly for 
+                exactly 30 seconds, then dies. You think you have won. You deploy your code. Users 
+                start complaining. You realize you have been played.
               </p>
               <p>
-                <strong>The Breakthrough:</strong> Stop fooling their JavaScript, start ignoring it. 
-                Validation runs client-side, but the stream endpoint just needs the right parameters. 
-                Direct HTTP, no browser, no detection.
+                We burned a week on stealth techniques. Puppeteer plugins. Fake mouse movements. 
+                Randomized timing. Nothing worked consistently. Their detection was too good.
+              </p>
+              <p>
+                <strong>The Breakthrough:</strong> We stopped trying to fool their JavaScript and 
+                started ignoring it entirely. Their validation happened client-side—in the browser. 
+                But the actual stream endpoint? It just needed the right parameters. We traced the 
+                network requests, found the endpoint, figured out what parameters it expected, and 
+                called it directly. No browser. No JavaScript. No bot detection. Just a clean HTTP 
+                request that returned the real stream every time.
               </p>
             </div>
 
+            <h3>5.4 The Numbers</h3>
             <div className="stats-grid">
               <div className="stat">
                 <span className="stat-value">15+</span>
@@ -242,171 +673,575 @@ export default function AboutPage() {
               </div>
               <div className="stat">
                 <span className="stat-value">180ms</span>
-                <span className="stat-label">Extraction time (down from 5s)</span>
+                <span className="stat-label">Average extraction time</span>
               </div>
               <div className="stat">
                 <span className="stat-value">95%+</span>
                 <span className="stat-label">First-try success rate</span>
               </div>
+              <div className="stat">
+                <span className="stat-value">∞</span>
+                <span className="stat-label">Coffee consumed</span>
+              </div>
             </div>
           </section>
 
 
-          <section id="tech">
-            <h2>The Tech</h2>
-            <p className="lead">
-              Built alone, with zero budget, using free tiers and stolen hours. Here is what 
-              powers Flyx.
-            </p>
-
-            <h3>The Constraints</h3>
-            <div className="constraints">
-              <div className="constraint">
-                <span className="icon">👤</span>
-                <h4>Solo Developer</h4>
-                <p>No team, no contractors. Every line of code, every pixel—mine alone.</p>
-              </div>
-              <div className="constraint">
-                <span className="icon">💸</span>
-                <h4>Zero Budget</h4>
-                <p>Free tiers only. If it wanted my credit card, I found an alternative.</p>
-              </div>
-              <div className="constraint">
-                <span className="icon">🌙</span>
-                <h4>Nights &amp; Weekends</h4>
-                <p>15-20 hours per week, three months total. Coffee and determination.</p>
-              </div>
-            </div>
-
-            <h3>The Stack</h3>
-            <div className="tech-stack">
-              <div className="tech-item">
-                <strong>Next.js 14</strong>
-                <p>Server-side rendering, API routes for the proxy layer, excellent DX.</p>
-              </div>
-              <div className="tech-item">
-                <strong>TypeScript</strong>
-                <p>Type safety caught countless bugs before production.</p>
-              </div>
-              <div className="tech-item">
-                <strong>Vercel</strong>
-                <p>Free hosting with edge functions and global CDN.</p>
-              </div>
-              <div className="tech-item">
-                <strong>Neon PostgreSQL</strong>
-                <p>Serverless database with generous free tier.</p>
-              </div>
-              <div className="tech-item">
-                <strong>HLS.js</strong>
-                <p>Industry-standard adaptive bitrate streaming.</p>
-              </div>
-            </div>
-
-            <h3>The Architecture</h3>
+          {/* Implementation */}
+          <section id="implementation">
+            <h2>6. Implementation Details</h2>
+            
+            <h3>6.1 The Streaming Pipeline</h3>
             <p>
-              Flyx does not host content—that would be illegal and expensive. Instead, it acts as 
-              an intelligent aggregator. When you click play:
+              The streaming pipeline is the technical heart of the platform. When a user clicks play, 
+              a carefully orchestrated sequence of events unfolds:
             </p>
             <ol>
-              <li>The system queries multiple stream providers in parallel.</li>
-              <li>Provider-specific decoders crack the obfuscation and extract URLs.</li>
-              <li>A proxy layer handles CORS, header spoofing, and referrer manipulation.</li>
-              <li>The clean stream plays in a custom player with no malware wrapper.</li>
+              <li>The system queries multiple stream providers in parallel, because relying on a single 
+              provider is a recipe for disappointment.</li>
+              <li>Provider-specific decoders crack the obfuscation and extract playable URLs.</li>
+              <li>The proxy layer handles CORS negotiation, header spoofing, and referrer manipulation.</li>
+              <li>The clean stream is delivered to a custom video player that does not try to install 
+              malware or mine cryptocurrency.</li>
+              <li>If the primary source fails, the system automatically falls back to alternatives 
+              without the user noticing anything except perhaps a brief loading indicator.</li>
             </ol>
+
+            <h3>6.2 Analytics Without Surveillance</h3>
+            <p>
+              We wanted to understand how people use the platform without becoming the thing we were 
+              fighting against. The solution: anonymized, aggregate analytics only.
+            </p>
+            <p>
+              No personal information is collected. No cross-session tracking. No fingerprinting. 
+              Just anonymous session identifiers that cannot be linked to real identities, aggregate 
+              usage statistics, and content interaction data. Enough to understand what is working 
+              and what is not, without knowing who anyone is.
+            </p>
+            <p>
+              The analytics system uses a batched event model, accumulating events client-side and 
+              flushing them periodically to minimize network overhead. Critical events like session 
+              start and content completion are sent immediately; routine progress updates are batched. 
+              This reduces API calls by approximately 80% compared to real-time event streaming.
+            </p>
+
+            <h3>6.3 The Numbers</h3>
+            <div className="stats-grid">
+              <div className="stat">
+                <span className="stat-value">50K+</span>
+                <span className="stat-label">Lines of code</span>
+              </div>
+              <div className="stat">
+                <span className="stat-value">150+</span>
+                <span className="stat-label">React components</span>
+              </div>
+              <div className="stat">
+                <span className="stat-value">40+</span>
+                <span className="stat-label">API endpoints</span>
+              </div>
+              <div className="stat">
+                <span className="stat-value">15+</span>
+                <span className="stat-label">Database tables</span>
+              </div>
+            </div>
           </section>
 
-          <section id="proof">
-            <h2>The Proof</h2>
-            <p className="lead">
-              Did it work? Can you actually build an ethical streaming platform? Yes—with caveats.
+          {/* Results */}
+          <section id="results">
+            <h2>7. Results &amp; Analysis</h2>
+            
+            <h3>7.1 Primary Findings</h3>
+            <p>
+              After five months of development, countless debugging sessions, and an amount of coffee 
+              that probably qualifies as a medical concern, we can report the following findings:
             </p>
 
             <div className="findings">
               <div className="finding">
                 <span className="number">1</span>
                 <div>
-                  <h4>The Exploitation Is Optional</h4>
-                  <p>
-                    Flyx works. No ads, no tracking, no malware. Every pirate site serving pop-ups 
-                    is making a choice—they could do better.
-                  </p>
+                  <h4>Exploitation Is Optional</h4>
+                  <p>Flyx operates without advertisements, tracking, or malware while providing 
+                  functional streaming. This proves that exploitative practices on pirate sites are 
+                  profit-maximizing choices, not technical or economic requirements. They could do 
+                  better. They choose not to.</p>
                 </div>
               </div>
               <div className="finding">
                 <span className="number">2</span>
                 <div>
-                  <h4>Free Infrastructure Exists</h4>
-                  <p>
-                    I spent $0. Vercel and Neon free tiers handle everything. The &quot;we need ad 
-                    revenue&quot; excuse is a lie.
-                  </p>
+                  <h4>Zero-Cost Operation Is Achievable</h4>
+                  <p>The platform runs entirely on free tiers. Vercel handles hosting. Neon handles 
+                  the database. The &quot;we need aggressive ads to pay for servers&quot; argument 
+                  is demonstrably false for aggregator-style platforms.</p>
                 </div>
               </div>
               <div className="finding">
                 <span className="number">3</span>
                 <div>
-                  <h4>Privacy Does Not Kill Features</h4>
-                  <p>
-                    Watch progress syncs without accounts. Analytics work without fingerprinting. 
-                    Privacy and functionality coexist.
-                  </p>
+                  <h4>Privacy and Functionality Coexist</h4>
+                  <p>Useful analytics can be collected without PII. Watch progress syncs without 
+                  accounts. The platform works without knowing who you are, which is how it should be.</p>
                 </div>
               </div>
               <div className="finding">
                 <span className="number">4</span>
                 <div>
-                  <h4>One Person Can Do This</h4>
-                  <p>
-                    No team, no funding, no special access. Just a developer with a laptop. The 
-                    &quot;too hard&quot; excuse does not hold.
-                  </p>
+                  <h4>Solo Development Is Feasible</h4>
+                  <p>One person, working part-time, can build a production-quality streaming platform. 
+                  Modern tools have lowered the barrier to entry dramatically. The excuse that 
+                  &quot;it is too hard&quot; no longer holds.</p>
                 </div>
               </div>
             </div>
 
-            <h3>The Ongoing Battle</h3>
+            <h3>7.2 Performance Metrics</h3>
             <p>
-              Providers update their obfuscation. Domains rotate. New bot detection appears. The 
-              extraction that worked yesterday fails today. It is a constant arms race—but the 
-              modular architecture means only the affected adapter needs updating.
+              Despite the complexity of the system, performance remains strong. Lighthouse scores 
+              consistently hit 90+ across all categories, which is better than most &quot;legitimate&quot; 
+              streaming services we tested for comparison.
             </p>
           </section>
 
-          <section id="conclusion">
-            <h2>The Point</h2>
-            <p className="lead">
-              I built a streaming platform. It works. It does not assault you with pop-ups, mine 
-              crypto, or track you. And I did it alone, part-time, with no money.
+          {/* Discussion */}
+          <section id="discussion">
+            <h2>8. Discussion</h2>
+            
+            <h3>8.1 Implications</h3>
+            <p>
+              The existence of Flyx has implications that extend beyond the technical. It demonstrates 
+              that the exploitative practices endemic to pirate streaming are not inevitable—they are 
+              choices made by operators who prioritize profit over users.
             </p>
             <p>
-              That is the point. Not that I am special—I am not. The point is that if one person 
-              can do this under these constraints, then every pirate site serving malware is making 
-              a choice. They could treat users like humans. They choose not to because exploitation 
-              pays better than ethics.
+              This matters because it shifts the moral calculus. When exploitation was assumed to be 
+              necessary, users could rationalize accepting it as the price of free content. Now that 
+              we have demonstrated an alternative exists, that rationalization becomes harder to 
+              maintain. The operators of exploitative platforms can no longer hide behind claims of 
+              necessity. Their practices are revealed for what they are: greed.
+            </p>
+
+            <h3>8.2 Limitations</h3>
+            <p>
+              We would be remiss not to acknowledge the limitations of this work:
+            </p>
+            <ul>
+              <li>The platform depends on third-party stream providers that may change their 
+              obfuscation at any time, requiring ongoing maintenance.</li>
+              <li>The legal status of content aggregation remains ambiguous in many jurisdictions.</li>
+              <li>The author&apos;s coffee consumption during development may have reached levels 
+              that are not medically advisable.</li>
+              <li>Some features that users expect from commercial platforms (recommendations, 
+              multiple profiles, offline viewing) are not yet implemented.</li>
+            </ul>
+
+            <h3>8.3 The Cat-and-Mouse Reality</h3>
+            <p>
+              Reverse engineering streaming providers is an ongoing battle. Providers regularly update 
+              their obfuscation, change their API endpoints, and implement new detection mechanisms. 
+              What works today may fail tomorrow.
+            </p>
+            <p>
+              The system is architected with this reality in mind. Provider-specific adapters can be 
+              updated independently. Automated health checks monitor extraction success rates. When 
+              something breaks, we know about it quickly and can respond before users notice 
+              widespread failures.
+            </p>
+            <p>
+              It is exhausting. But it is also, in a strange way, satisfying. Every time a provider 
+              updates their protection and we crack it again, we prove that their fortress is not as 
+              impenetrable as they thought.
+            </p>
+          </section>
+
+          {/* Future Work */}
+          <section id="future">
+            <h2>9. Future Work</h2>
+            <p>
+              Flyx is not done. It works, but &quot;works&quot; is a low bar. Here is what we want to 
+              build next, assuming we ever recover from the sleep debt accumulated during initial 
+              development:
+            </p>
+            <ul>
+              <li><strong>Smart Recommendations:</strong> Privacy-preserving personalization that 
+              learns what you like without tracking who you are.</li>
+              <li><strong>Progressive Web App:</strong> Offline capability and app-like experience 
+              without going through app stores that would definitely reject us.</li>
+              <li><strong>Internationalization:</strong> Multiple languages, RTL support, regional 
+              content preferences.</li>
+              <li><strong>Accessibility Improvements:</strong> Comprehensive WCAG compliance, screen 
+              reader support, keyboard navigation everywhere.</li>
+              <li><strong>More Providers:</strong> Expanding the pool of stream sources to improve 
+              reliability and content coverage.</li>
+            </ul>
+          </section>
+
+          {/* Conclusion */}
+          <section id="conclusion">
+            <h2>10. Conclusion</h2>
+            <p className="lead">
+              We built a streaming platform. It works. It does not assault users with pop-ups, mine 
+              cryptocurrency on their CPUs, or track them across the web. And we did it alone, 
+              part-time, with no budget, over five months of evenings and weekends.
+            </p>
+            <p>
+              That is the point. Not that we are special—we are not. The point is that if one person 
+              can do this under these constraints, then every pirate streaming site that serves 
+              malware is making a choice. They could treat users like humans instead of revenue 
+              sources. They choose not to because exploitation is more profitable than ethics.
             </p>
             <blockquote>
               &quot;The pop-ups are not necessary. The crypto miners are not necessary. The tracking 
-              is not necessary. They are choices. And those choices tell you everything about the 
-              people making them.&quot;
+              is not necessary. They are choices. And those choices tell you everything you need to 
+              know about the people making them.&quot;
             </blockquote>
             <p>
-              <strong>To users:</strong> You deserve better. Alternatives can exist.
+              To users: you deserve better. You do not have to accept malware as the price of free 
+              content. Alternatives can exist.
             </p>
             <p>
-              <strong>To developers:</strong> If you can build something, build something good.
+              To developers: if you have the skills to build something, build something good. The 
+              world has enough exploitative garbage.
             </p>
             <p>
-              <strong>To pirate site operators:</strong> I see you. Your greed is a choice, and 
-              that choice defines you.
+              To the operators of pirate streaming sites: we see you. We know what you are doing. 
+              And we built this specifically to prove that you do not have to do it. Your greed is 
+              a choice, and that choice defines you.
             </p>
             <p>
-              Flyx exists because I got tired of watching the internet get worse. It is proof that 
-              better is possible. Sometimes, proof is enough.
+              Flyx exists because we got tired of watching the internet get worse. It is a small 
+              thing—one platform, one developer, one statement. But it is proof that better is 
+              possible. And sometimes, proof is enough.
             </p>
           </section>
 
+
+          {/* Legal Framework */}
+          <section id="legal">
+            <h2>11. Legal Framework</h2>
+            
+            <div className="legal-notice">
+              <p>
+                <strong>IMPORTANT:</strong> The following constitutes a binding legal agreement. By 
+                accessing or using Flyx, you acknowledge that you have read, understood, and agree 
+                to be bound by these terms in their entirety.
+              </p>
+            </div>
+
+            <h3>11.1 Nature and Purpose of Service</h3>
+            <p>
+              Flyx (&quot;the Platform,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) is a 
+              personal, non-commercial technology demonstration project created solely for educational, 
+              research, and portfolio purposes. The Platform is designed to showcase modern web 
+              development techniques, architectural patterns, and the capabilities of contemporary 
+              development tools.
+            </p>
+            <p>
+              The Platform does not constitute a commercial streaming service and is not intended to 
+              compete with, replace, or substitute for any licensed streaming platform or content 
+              distribution service. It exists purely as a technical demonstration and learning exercise.
+            </p>
+            <p>
+              No fees are charged for access to the Platform. The project generates no revenue and 
+              operates at zero profit. Any costs associated with hosting and operation are borne 
+              entirely by the developer as part of the educational exercise.
+            </p>
+            <p>
+              The Platform may be discontinued, modified, or removed at any time without notice, as 
+              befits its nature as a personal project rather than a commercial service with service 
+              level agreements.
+            </p>
+
+            <h3>11.2 Content Disclaimer and Third-Party Sources</h3>
+            <p>
+              <strong>THE PLATFORM DOES NOT HOST, STORE, UPLOAD, TRANSMIT, OR DISTRIBUTE ANY VIDEO 
+              CONTENT, MEDIA FILES, OR COPYRIGHTED MATERIALS ON ITS SERVERS OR INFRASTRUCTURE.</strong>
+            </p>
+            <p>
+              All media content accessible through the Platform is sourced from third-party providers, 
+              publicly available APIs, and external hosting services over which we exercise no control 
+              and bear no responsibility for availability, accuracy, legality, or quality.
+            </p>
+            <p>
+              The Platform functions as a technical interface—analogous to a web browser or search 
+              engine—that facilitates access to content hosted elsewhere on the internet. We do not 
+              select, curate, edit, modify, or exercise editorial control over the content accessible 
+              through the Platform.
+            </p>
+            <p>
+              We make no representations or warranties regarding the legality, accuracy, quality, 
+              safety, or appropriateness of any third-party content. Users access such content 
+              entirely at their own risk and discretion.
+            </p>
+            <p>
+              The inclusion of any content accessible through the Platform does not constitute 
+              endorsement, sponsorship, recommendation, or affiliation with the content creators, 
+              rights holders, or hosting providers.
+            </p>
+
+            <h3>11.3 Intellectual Property and DMCA Compliance</h3>
+            <p>
+              We respect the intellectual property rights of others and expect users of the Platform 
+              to do the same. We comply with the provisions of the Digital Millennium Copyright Act 
+              (DMCA), 17 U.S.C. § 512, and similar international copyright frameworks.
+            </p>
+            <p>
+              If you believe that content accessible through the Platform infringes your copyright, 
+              please note that we do not host such content directly. However, we will promptly 
+              investigate and, where appropriate, remove or disable access to any links, references, 
+              or technical integrations that facilitate access to allegedly infringing material.
+            </p>
+            <p>
+              To submit a valid DMCA takedown notice, please provide:
+            </p>
+            <ul>
+              <li>Identification of the copyrighted work claimed to be infringed</li>
+              <li>Identification of the material claimed to be infringing and information reasonably 
+              sufficient to locate it on the Platform</li>
+              <li>Your contact information (name, address, telephone number, email address)</li>
+              <li>A statement that you have a good faith belief that use of the material in the 
+              manner complained of is not authorized by the copyright owner, its agent, or the law</li>
+              <li>A statement, made under penalty of perjury, that the information in the notification 
+              is accurate and that you are authorized to act on behalf of the owner of an exclusive 
+              right that is allegedly infringed</li>
+              <li>Your physical or electronic signature</li>
+            </ul>
+
+            <h3>11.4 Disclaimer of Warranties</h3>
+            <p>
+              <strong>THE PLATFORM IS PROVIDED ON AN &quot;AS IS&quot; AND &quot;AS AVAILABLE&quot; 
+              BASIS WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT 
+              LIMITED TO IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, 
+              TITLE, AND NON-INFRINGEMENT.</strong>
+            </p>
+            <p>
+              We do not warrant that: (a) the Platform will meet your requirements; (b) the Platform 
+              will be uninterrupted, timely, secure, or error-free; (c) the results obtained from 
+              use of the Platform will be accurate or reliable; (d) the quality of any content or 
+              services obtained through the Platform will meet your expectations; or (e) any errors 
+              in the Platform will be corrected.
+            </p>
+            <p>
+              Any content downloaded or otherwise obtained through the Platform is accessed at your 
+              own discretion and risk, and you will be solely responsible for any damage to your 
+              computer system or loss of data that results from such access.
+            </p>
+            <p>
+              No advice or information, whether oral or written, obtained by you from us or through 
+              the Platform shall create any warranty not expressly stated in these terms.
+            </p>
+
+            <h3>11.5 Limitation of Liability</h3>
+            <p>
+              <strong>TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL THE 
+              PLATFORM, ITS DEVELOPER, OR ANY AFFILIATED PARTIES BE LIABLE FOR ANY INDIRECT, 
+              INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES, INCLUDING BUT 
+              NOT LIMITED TO DAMAGES FOR LOSS OF PROFITS, GOODWILL, USE, DATA, OR OTHER INTANGIBLE 
+              LOSSES.</strong>
+            </p>
+            <p>
+              This limitation applies regardless of whether such damages arise from: (a) your access 
+              to, use of, or inability to access or use the Platform; (b) any conduct or content of 
+              any third party on or accessed through the Platform; (c) any content obtained from or 
+              through the Platform; (d) unauthorized access, use, or alteration of your transmissions 
+              or content; or (e) any other matter relating to the Platform.
+            </p>
+            <p>
+              In no event shall our total liability to you for all claims arising from or relating 
+              to the Platform exceed the amount you paid us in the twelve (12) months preceding the 
+              claim, which, given the free nature of the Platform, is zero dollars ($0.00).
+            </p>
+            <p>
+              Some jurisdictions do not allow the exclusion of certain warranties or the limitation 
+              or exclusion of liability for incidental or consequential damages. Accordingly, some 
+              of the above limitations may not apply to you. In such jurisdictions, our liability 
+              is limited to the greatest extent permitted by law.
+            </p>
+
+            <h3>11.6 User Responsibilities and Prohibited Conduct</h3>
+            <p>
+              By using the Platform, you represent and warrant that you are at least 18 years of age 
+              or the age of majority in your jurisdiction, whichever is greater, or are using the 
+              Platform under the supervision of a parent or legal guardian who agrees to be bound 
+              by these terms.
+            </p>
+            <p>
+              You agree to comply with all applicable local, state, national, and international laws 
+              and regulations in connection with your use of the Platform.
+            </p>
+            <p>
+              You agree NOT to:
+            </p>
+            <ul>
+              <li>Use the Platform for any unlawful purpose or in violation of any applicable laws</li>
+              <li>Attempt to gain unauthorized access to any portion of the Platform or any systems 
+              or networks connected to the Platform</li>
+              <li>Interfere with or disrupt the Platform or servers or networks connected to the 
+              Platform</li>
+              <li>Use any automated means, including robots, spiders, or scrapers, to access the 
+              Platform for any purpose without our express written permission</li>
+              <li>Circumvent, disable, or otherwise interfere with security-related features of the 
+              Platform</li>
+              <li>Transmit any viruses, worms, defects, Trojan horses, or other items of a destructive 
+              nature</li>
+              <li>Impersonate any person or entity or falsely state or misrepresent your affiliation 
+              with any person or entity</li>
+              <li>Collect or store personal data about other users without their consent</li>
+            </ul>
+
+            <h3>11.7 Privacy and Data Practices</h3>
+            <p>
+              We are committed to protecting your privacy. The Platform employs anonymized tracking 
+              for analytics purposes only and does not collect personally identifiable information.
+            </p>
+            <p>
+              <strong>What We Do NOT Collect:</strong>
+            </p>
+            <ul>
+              <li>Names, email addresses, or other personal identifiers</li>
+              <li>Physical addresses or location data beyond general geographic region</li>
+              <li>Phone numbers or other contact information</li>
+              <li>Government-issued identification numbers</li>
+              <li>Payment or financial information</li>
+              <li>Biometric data</li>
+              <li>Information about your activities on other websites</li>
+            </ul>
+            <p>
+              <strong>What We Do Collect:</strong>
+            </p>
+            <ul>
+              <li>Anonymous session identifiers that cannot be linked to real identities</li>
+              <li>Aggregate usage statistics (page views, feature usage)</li>
+              <li>Content interaction data (what content is popular)</li>
+              <li>Technical performance metrics (load times, error rates)</li>
+              <li>Anonymized error logs for debugging purposes</li>
+            </ul>
+            <p>
+              No user data is sold, rented, leased, or otherwise transferred to third parties for 
+              any purpose. Aggregate, anonymized analytics may be referenced in technical documentation 
+              or presentations about the project.
+            </p>
+            <p>
+              You may clear all locally stored data at any time by clearing your browser&apos;s local 
+              storage and session storage. This will reset your anonymous identifier and any stored 
+              preferences.
+            </p>
+
+            <h3>11.8 Indemnification</h3>
+            <p>
+              You agree to defend, indemnify, and hold harmless the Platform, its developer, and any 
+              affiliated parties from and against any and all claims, liabilities, damages, judgments, 
+              awards, losses, costs, expenses, and fees (including reasonable attorneys&apos; fees) 
+              arising out of or relating to: (a) your violation of these terms; (b) your use of the 
+              Platform; (c) your violation of any rights of any third party; (d) any content you 
+              access through the Platform; or (e) your violation of any applicable laws, rules, or 
+              regulations.
+            </p>
+            <p>
+              We reserve the right, at our own expense, to assume the exclusive defense and control 
+              of any matter otherwise subject to indemnification by you, in which event you will 
+              cooperate with us in asserting any available defenses.
+            </p>
+
+            <h3>11.9 Dispute Resolution and Governing Law</h3>
+            <p>
+              These terms shall be governed by and construed in accordance with applicable laws, 
+              without regard to principles of conflict of laws.
+            </p>
+            <p>
+              Any dispute, controversy, or claim arising out of or relating to these terms or the 
+              Platform shall first be attempted to be resolved through good-faith negotiation. If 
+              negotiation fails, disputes shall be resolved through binding arbitration in accordance 
+              with applicable arbitration rules.
+            </p>
+            <p>
+              <strong>YOU UNDERSTAND AND AGREE THAT BY ENTERING INTO THESE TERMS, YOU AND THE 
+              PLATFORM ARE EACH WAIVING THE RIGHT TO A TRIAL BY JURY AND THE RIGHT TO PARTICIPATE 
+              IN A CLASS ACTION.</strong>
+            </p>
+
+            <h3>11.10 Modifications and Termination</h3>
+            <p>
+              We reserve the right to modify, suspend, or discontinue the Platform (or any part 
+              thereof) at any time, with or without notice. We shall not be liable to you or any 
+              third party for any modification, suspension, or discontinuance of the Platform.
+            </p>
+            <p>
+              We may revise these terms from time to time. The most current version will always be 
+              available on the Platform. By continuing to access or use the Platform after revisions 
+              become effective, you agree to be bound by the revised terms.
+            </p>
+            <p>
+              We may terminate or suspend your access to the Platform immediately, without prior 
+              notice or liability, for any reason whatsoever, including without limitation if you 
+              breach these terms.
+            </p>
+
+            <h3>11.11 Severability and Entire Agreement</h3>
+            <p>
+              If any provision of these terms is held to be invalid, illegal, or unenforceable by a 
+              court of competent jurisdiction, such provision shall be modified to the minimum extent 
+              necessary to make it valid and enforceable, or if modification is not possible, shall 
+              be severed from these terms, and the remaining provisions shall continue in full force 
+              and effect.
+            </p>
+            <p>
+              These terms constitute the entire agreement between you and the Platform regarding your 
+              use of the Platform and supersede all prior agreements, understandings, negotiations, 
+              and discussions, whether oral or written.
+            </p>
+            <p>
+              No waiver of any term or condition of these terms shall be deemed a further or continuing 
+              waiver of such term or any other term, and our failure to assert any right or provision 
+              under these terms shall not constitute a waiver of such right or provision.
+            </p>
+
+            <div className="legal-footer">
+              <p><strong>Effective Date:</strong> November 2025</p>
+              <p><strong>Last Updated:</strong> November 2025</p>
+              <p><strong>Version:</strong> 1.0</p>
+            </div>
+          </section>
+
+          {/* References */}
+          <section id="references">
+            <h2>12. References</h2>
+            <div className="references">
+              <p>[1] Rafique, M. Z., Van Goethem, T., Joosen, W., Huygens, C., &amp; Nikiforakis, N. 
+              (2016). It&apos;s free for a reason: Exploring the ecosystem of free live streaming 
+              services. <em>Network and Distributed System Security Symposium (NDSS)</em>.</p>
+              
+              <p>[2] Konoth, R. K., Vineti, E., Moonsamy, V., Lindorfer, M., Kruegel, C., Bos, H., 
+              &amp; Vigna, G. (2018). MineSweeper: An in-depth look into drive-by cryptocurrency 
+              mining and its defense. <em>ACM Conference on Computer and Communications Security 
+              (CCS)</em>.</p>
+              
+              <p>[3] Laperdrix, P., Bielova, N., Baudry, B., &amp; Avoine, G. (2020). Browser 
+              fingerprinting: A survey. <em>ACM Transactions on the Web</em>, 14(2), 1-33.</p>
+              
+              <p>[4] Gray, C. M., Kou, Y., Battles, B., Hoggatt, J., &amp; Toombs, A. L. (2018). 
+              The dark (patterns) side of UX design. <em>CHI Conference on Human Factors in 
+              Computing Systems</em>, 1-14.</p>
+              
+              <p>[5] Mathur, A., Acar, G., Friedman, M. J., Lucherini, E., Mayer, J., Chetty, M., 
+              &amp; Narayanan, A. (2019). Dark patterns at scale: Findings from a crawl of 11K 
+              shopping websites. <em>ACM Human-Computer Interaction</em>, 3(CSCW), 1-32.</p>
+              
+              <p>[6] Nikiforakis, N., Kapravelos, A., Joosen, W., Kruegel, C., Piessens, F., &amp; 
+              Vigna, G. (2013). Cookieless monster: Exploring the ecosystem of web-based device 
+              fingerprinting. <em>IEEE Symposium on Security and Privacy</em>, 541-555.</p>
+              
+              <p>[7] Englehardt, S., &amp; Narayanan, A. (2016). Online tracking: A 1-million-site 
+              measurement and analysis. <em>ACM Conference on Computer and Communications Security 
+              (CCS)</em>, 1388-1401.</p>
+              
+              <p>[8] Stockhammer, T. (2011). Dynamic adaptive streaming over HTTP: standards and 
+              design principles. <em>ACM Conference on Multimedia Systems</em>, 133-144.</p>
+            </div>
+          </section>
+
           <div className="back-link">
-            <Link href="/">← Back to Flyx</Link>
+            <Link href="/">← Return to Flyx</Link>
           </div>
         </main>
       </div>
