@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeDB, getDB } from '@/lib/db/neon-connection';
+import { getLocationFromHeaders } from '@/app/lib/utils/geolocation';
 
 interface WatchSessionData {
   id: string;
@@ -49,14 +50,8 @@ export async function POST(request: NextRequest) {
     const userAgent = request.headers.get('user-agent') || '';
     const deviceType = data.deviceType || getDeviceType(userAgent);
 
-    // Get geo data from request headers (Vercel/Cloudflare)
-    const country = request.headers.get('x-vercel-ip-country') || 
-                    request.headers.get('cf-ipcountry') || 
-                    (process.env.NODE_ENV === 'development' ? 'Local' : 'Unknown');
-    const city = request.headers.get('x-vercel-ip-city') || 
-                 request.headers.get('cf-ipcity') || 
-                 'Unknown';
-    const region = request.headers.get('x-vercel-ip-country-region') || 'Unknown';
+    // Get geo data from request headers using utility
+    const locationData = getLocationFromHeaders(request);
 
     // Upsert watch session
     await db.upsertWatchSession({
@@ -81,14 +76,16 @@ export async function POST(request: NextRequest) {
       seekCount: data.seekCount,
     });
 
-    // Also update user_activity with country for geographic tracking
+    // Also update user_activity with geo data for geographic tracking
     try {
       await db.upsertUserActivity({
         userId: data.userId,
         sessionId: data.sessionId || 'unknown',
         deviceType,
         userAgent,
-        country: country !== 'XX' ? country : 'Unknown',
+        country: locationData.countryCode,
+        city: locationData.city,
+        region: locationData.region,
         watchTime: data.totalWatchTime,
       });
     } catch (activityError) {

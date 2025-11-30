@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeDB, getDB } from '@/lib/db/neon-connection';
+import { getLocationFromHeaders } from '@/app/lib/utils/geolocation';
 
 export async function GET(request: NextRequest) {
   try {
@@ -108,17 +109,17 @@ export async function POST(request: NextRequest) {
       const userAgent = request.headers.get('user-agent') || '';
       const deviceType = getDeviceType(userAgent);
       
-      // Get geo data from headers (set by Vercel/Cloudflare)
-      const country = request.headers.get('x-vercel-ip-country') || 
-                      request.headers.get('cf-ipcountry') || 
-                      (process.env.NODE_ENV === 'development' ? 'Local' : 'Unknown');
+      // Get geo data from headers using utility
+      const locationData = getLocationFromHeaders(request);
 
       await db.upsertUserActivity({
         userId: data.userId,
         sessionId: data.sessionId,
         deviceType,
         userAgent,
-        country: country !== 'XX' ? country : 'Unknown',
+        country: locationData.countryCode,
+        city: locationData.city,
+        region: locationData.region,
         watchTime: data.watchTime || 0,
       });
 

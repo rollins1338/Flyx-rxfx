@@ -260,6 +260,8 @@ class DatabaseConnection {
         device_type TEXT,
         user_agent TEXT,
         country TEXT,
+        city TEXT,
+        region TEXT,
         created_at BIGINT,
         updated_at BIGINT
       )`,
@@ -303,6 +305,8 @@ class DatabaseConnection {
         quality TEXT,
         device_type TEXT,
         country TEXT,
+        city TEXT,
+        region TEXT,
         started_at BIGINT NOT NULL,
         last_heartbeat BIGINT NOT NULL,
         is_active BOOLEAN DEFAULT TRUE,
@@ -445,6 +449,8 @@ class DatabaseConnection {
         device_type TEXT,
         user_agent TEXT,
         country TEXT,
+        city TEXT,
+        region TEXT,
         created_at INTEGER DEFAULT(strftime('%s', 'now')),
         updated_at INTEGER DEFAULT(strftime('%s', 'now'))
       )`,
@@ -488,6 +494,8 @@ class DatabaseConnection {
         quality TEXT,
         device_type TEXT,
         country TEXT,
+        city TEXT,
+        region TEXT,
         started_at INTEGER NOT NULL,
         last_heartbeat INTEGER NOT NULL,
         is_active INTEGER DEFAULT 1,
@@ -752,47 +760,57 @@ class DatabaseConnection {
     deviceType?: string;
     userAgent?: string;
     country?: string;
+    city?: string;
+    region?: string;
     watchTime?: number;
   }): Promise<void> {
     const adapter = this.getAdapter();
     const now = Date.now();
-    const id = `ua_${activity.userId}_${activity.sessionId} `;
+    const id = `ua_${activity.userId}_${activity.sessionId}`;
 
     if (this.isNeon) {
       await adapter.execute(`
         INSERT INTO user_activity(
           id, user_id, session_id, first_seen, last_seen, total_sessions,
-          total_watch_time, device_type, user_agent, country, created_at, updated_at
-        ) VALUES($1, $2, $3, $4, $5, 1, $6, $7, $8, $9, $10, $11)
+          total_watch_time, device_type, user_agent, country, city, region, created_at, updated_at
+        ) VALUES($1, $2, $3, $4, $5, 1, $6, $7, $8, $9, $10, $11, $12, $13)
         ON CONFLICT(id) DO UPDATE SET
-last_seen = $12,
-  total_sessions = user_activity.total_sessions + 1,
-  total_watch_time = user_activity.total_watch_time + $13,
-  updated_at = $14
-    `, [
+          last_seen = $14,
+          total_sessions = user_activity.total_sessions + 1,
+          total_watch_time = user_activity.total_watch_time + $15,
+          country = COALESCE($16, user_activity.country),
+          city = COALESCE($17, user_activity.city),
+          region = COALESCE($18, user_activity.region),
+          updated_at = $19
+      `, [
         id, activity.userId, activity.sessionId, now, now, activity.watchTime || 0,
         activity.deviceType || null, activity.userAgent || null, activity.country || null,
-        now, now,
+        activity.city || null, activity.region || null, now, now,
         // Update values
-        now, activity.watchTime || 0, now
+        now, activity.watchTime || 0, activity.country || null, activity.city || null, 
+        activity.region || null, now
       ]);
     } else {
       await adapter.execute(`
         INSERT INTO user_activity(
-      id, user_id, session_id, first_seen, last_seen, total_sessions,
-      total_watch_time, device_type, user_agent, country, created_at, updated_at
-    ) VALUES(?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)
+          id, user_id, session_id, first_seen, last_seen, total_sessions,
+          total_watch_time, device_type, user_agent, country, city, region, created_at, updated_at
+        ) VALUES(?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
-last_seen = ?,
-  total_sessions = total_sessions + 1,
-  total_watch_time = total_watch_time + ?,
-  updated_at = ?
-    `, [
+          last_seen = ?,
+          total_sessions = total_sessions + 1,
+          total_watch_time = total_watch_time + ?,
+          country = COALESCE(?, country),
+          city = COALESCE(?, city),
+          region = COALESCE(?, region),
+          updated_at = ?
+      `, [
         id, activity.userId, activity.sessionId, now, now, activity.watchTime || 0,
         activity.deviceType || null, activity.userAgent || null, activity.country || null,
-        now, now,
+        activity.city || null, activity.region || null, now, now,
         // Update values
-        now, activity.watchTime || 0, now
+        now, activity.watchTime || 0, activity.country || null, activity.city || null,
+        activity.region || null, now
       ]);
     }
   }
@@ -887,6 +905,8 @@ last_seen = ?,
     quality?: string;
     deviceType?: string;
     country?: string;
+    city?: string;
+    region?: string;
   }): Promise<void> {
     const adapter = this.getAdapter();
     const now = Date.now();
@@ -894,60 +914,68 @@ last_seen = ?,
     if (this.isNeon) {
       await adapter.execute(`
         INSERT INTO live_activity(
-      id, user_id, session_id, activity_type, content_id, content_title,
-      content_type, season_number, episode_number, current_position, duration,
-      quality, device_type, country, started_at, last_heartbeat, is_active,
-      created_at, updated_at
-    ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, TRUE, $17, $18)
+          id, user_id, session_id, activity_type, content_id, content_title,
+          content_type, season_number, episode_number, current_position, duration,
+          quality, device_type, country, city, region, started_at, last_heartbeat, is_active,
+          created_at, updated_at
+        ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, TRUE, $19, $20)
         ON CONFLICT(id) DO UPDATE SET
-activity_type = $19,
-  content_id = $20,
-  content_title = $21,
-  current_position = $22,
-  duration = $23,
-  quality = $24,
-  last_heartbeat = $25,
-  is_active = TRUE,
-  updated_at = $26
-    `, [
+          activity_type = $21,
+          content_id = $22,
+          content_title = $23,
+          current_position = $24,
+          duration = $25,
+          quality = $26,
+          country = COALESCE($27, live_activity.country),
+          city = COALESCE($28, live_activity.city),
+          region = COALESCE($29, live_activity.region),
+          last_heartbeat = $30,
+          is_active = TRUE,
+          updated_at = $31
+      `, [
         activity.id, activity.userId, activity.sessionId, activity.activityType,
         activity.contentId || null, activity.contentTitle || null, activity.contentType || null,
         activity.seasonNumber || null, activity.episodeNumber || null,
         activity.currentPosition || 0, activity.duration || 0, activity.quality || null,
-        activity.deviceType || null, activity.country || null, now, now, now, now,
+        activity.deviceType || null, activity.country || null, activity.city || null, 
+        activity.region || null, now, now, now, now,
         // Update values
         activity.activityType, activity.contentId || null, activity.contentTitle || null,
         activity.currentPosition || 0, activity.duration || 0, activity.quality || null,
-        now, now
+        activity.country || null, activity.city || null, activity.region || null, now, now
       ]);
     } else {
       await adapter.execute(`
         INSERT INTO live_activity(
-      id, user_id, session_id, activity_type, content_id, content_title,
-      content_type, season_number, episode_number, current_position, duration,
-      quality, device_type, country, started_at, last_heartbeat, is_active,
-      created_at, updated_at
-    ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+          id, user_id, session_id, activity_type, content_id, content_title,
+          content_type, season_number, episode_number, current_position, duration,
+          quality, device_type, country, city, region, started_at, last_heartbeat, is_active,
+          created_at, updated_at
+        ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
-activity_type = ?,
-  content_id = ?,
-  content_title = ?,
-  current_position = ?,
-  duration = ?,
-  quality = ?,
-  last_heartbeat = ?,
-  is_active = 1,
-  updated_at = ?
-    `, [
+          activity_type = ?,
+          content_id = ?,
+          content_title = ?,
+          current_position = ?,
+          duration = ?,
+          quality = ?,
+          country = COALESCE(?, country),
+          city = COALESCE(?, city),
+          region = COALESCE(?, region),
+          last_heartbeat = ?,
+          is_active = 1,
+          updated_at = ?
+      `, [
         activity.id, activity.userId, activity.sessionId, activity.activityType,
         activity.contentId || null, activity.contentTitle || null, activity.contentType || null,
         activity.seasonNumber || null, activity.episodeNumber || null,
         activity.currentPosition || 0, activity.duration || 0, activity.quality || null,
-        activity.deviceType || null, activity.country || null, now, now, now, now,
+        activity.deviceType || null, activity.country || null, activity.city || null,
+        activity.region || null, now, now, now, now,
         // Update values
         activity.activityType, activity.contentId || null, activity.contentTitle || null,
         activity.currentPosition || 0, activity.duration || 0, activity.quality || null,
-        now, now
+        activity.country || null, activity.city || null, activity.region || null, now, now
       ]);
     }
   }

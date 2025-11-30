@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeDB, getDB } from '@/lib/db/neon-connection';
-import { getLocationFromHeaders, formatLocation } from '@/app/lib/utils/geolocation';
+import { getLocationFromHeaders } from '@/app/lib/utils/geolocation';
 
 // POST - Update/create live activity
 export async function POST(request: NextRequest) {
@@ -41,9 +41,12 @@ export async function POST(request: NextRequest) {
 
     // Get location using utility
     const locationData = getLocationFromHeaders(request);
-    const location = formatLocation(locationData);
 
-    console.log('[Live Activity] Location:', location, 'Device:', deviceType);
+    console.log('[Live Activity] Location:', {
+      country: locationData.countryCode,
+      city: locationData.city,
+      region: locationData.region,
+    }, 'Device:', deviceType);
 
     await db.upsertLiveActivity({
       id: activityId,
@@ -59,7 +62,9 @@ export async function POST(request: NextRequest) {
       duration: data.duration,
       quality: data.quality,
       deviceType,
-      country: location,
+      country: locationData.countryCode,
+      city: locationData.city,
+      region: locationData.region,
     });
 
     console.log('[Live Activity] Activity saved:', activityId);

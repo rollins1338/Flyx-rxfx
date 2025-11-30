@@ -93,47 +93,8 @@ function getSessionId(request: NextRequest): string {
   }
 }
 
-// Get geolocation from request headers (Vercel/Cloudflare provide this)
-function getLocationFromRequest(request: NextRequest): { country?: string; region?: string; city?: string } {
-  // Try Vercel headers first (automatically set by Vercel Edge Network)
-  const vercelCountry = request.headers.get('x-vercel-ip-country');
-  const vercelRegion = request.headers.get('x-vercel-ip-country-region');
-  const vercelCity = request.headers.get('x-vercel-ip-city');
-  
-  if (vercelCountry && vercelCountry !== 'XX') {
-    return {
-      country: vercelCountry,
-      region: vercelRegion || 'Unknown',
-      city: vercelCity ? decodeURIComponent(vercelCity) : 'Unknown',
-    };
-  }
-  
-  // Try Cloudflare headers
-  const cfCountry = request.headers.get('cf-ipcountry');
-  const cfCity = request.headers.get('cf-ipcity');
-  if (cfCountry && cfCountry !== 'XX') {
-    return {
-      country: cfCountry,
-      region: 'Unknown',
-      city: cfCity ? decodeURIComponent(cfCity) : 'Unknown',
-    };
-  }
-  
-  // Development fallback - check if running locally
-  if (process.env.NODE_ENV === 'development') {
-    return {
-      country: 'Local',
-      region: 'Development',
-      city: 'Localhost',
-    };
-  }
-  
-  return {
-    country: 'Unknown',
-    region: 'Unknown',
-    city: 'Unknown',
-  };
-}
+// Import geolocation utility
+import { getLocationFromHeaders, type LocationData } from '@/app/lib/utils/geolocation';
 
 export async function POST(request: NextRequest) {
   const requestId = `analytics_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
@@ -204,12 +165,12 @@ export async function POST(request: NextRequest) {
 
     // Step 2: Extract request metadata
     console.log(`[${requestId}] Step 2: Extracting request metadata`);
-    let sessionId, clientIP, location, userAgent, referrer;
+    let sessionId, clientIP, location: LocationData, userAgent, referrer;
     
     try {
       sessionId = getSessionId(request);
       clientIP = getClientIP(request);
-      location = getLocationFromRequest(request);
+      location = getLocationFromHeaders(request);
       userAgent = request.headers.get('user-agent') || '';
       referrer = request.headers.get('referer') || '';
       
@@ -218,7 +179,11 @@ export async function POST(request: NextRequest) {
         clientIP: clientIP.substring(0, 8) + '...',
         hasUserAgent: !!userAgent,
         hasReferrer: !!referrer,
-        location
+        location: {
+          country: location.countryCode,
+          city: location.city,
+          region: location.region,
+        }
       });
     } catch (metadataError) {
       console.error(`[${requestId}] Failed to extract request metadata`, metadataError);
@@ -284,9 +249,14 @@ export async function POST(request: NextRequest) {
         const enhancedMetadata = {
           ...event.metadata,
           ...event.data,
-          country: location.country,
+          // Geo location data from Vercel headers
+          country: location.countryCode,
+          country_name: location.country,
           region: location.region,
           city: location.city,
+          latitude: location.latitude,
+          longitude: location.longitude,
+          // Request metadata
           user_agent: userAgent,
           referrer: referrer,
           ip_hash: hashIP(clientIP),
@@ -337,7 +307,9 @@ export async function POST(request: NextRequest) {
           sessionId,
           deviceType: userAgent.includes('Mobile') ? 'mobile' : 'desktop',
           userAgent: userAgent.substring(0, 200),
-          country: location.country,
+          country: location.countryCode,
+          city: location.city,
+          region: location.region,
         });
       }
       console.log(`[${requestId}] User activity tracked for ${uniqueUserArray.length} users`);

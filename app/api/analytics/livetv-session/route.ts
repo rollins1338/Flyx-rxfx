@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getLocationFromHeaders } from '@/app/lib/utils/geolocation';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,7 +55,6 @@ export async function POST(request: NextRequest) {
       channelId,
       channelName,
       category,
-      country: bodyCountry,
       action,
       watchDuration = 0,
       bufferCount = 0,
@@ -62,17 +62,11 @@ export async function POST(request: NextRequest) {
       quality,
     } = body;
 
-    // Get country from Vercel/Cloudflare headers (more reliable than client-sent)
-    const country = request.headers.get('x-vercel-ip-country') || 
-                    request.headers.get('cf-ipcountry') || 
-                    bodyCountry ||
-                    (process.env.NODE_ENV === 'development' ? 'Local' : 'Unknown');
-
-    // Get additional geo info
-    const city = request.headers.get('x-vercel-ip-city') || 
-                 request.headers.get('cf-ipcity') || 
-                 'Unknown';
-    const region = request.headers.get('x-vercel-ip-country-region') || 'Unknown';
+    // Get geo data from Vercel/Cloudflare headers using utility
+    const locationData = getLocationFromHeaders(request);
+    const country = locationData.countryCode;
+    const city = locationData.city;
+    const region = locationData.region;
 
     if (!channelId || !action) {
       return NextResponse.json(

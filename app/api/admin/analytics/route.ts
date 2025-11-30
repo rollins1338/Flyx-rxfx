@@ -192,35 +192,88 @@ export async function GET(request: NextRequest) {
       [startTimestamp, endTimestamp]
     );
 
-    // 5. Geographic Heatmap (Enhanced with date filter)
-    // Extract country from analytics_events metadata (same source as live activity)
+    // 5. Geographic Heatmap (Enhanced - combines data from multiple sources)
+    // Primary source: user_activity table (most reliable for geo data)
+    // Fallback: analytics_events metadata
     const geographicRaw = await adapter.query(
       isNeon
         ? `
+          WITH geo_data AS (
+            -- From user_activity (primary source)
+            SELECT 
+              COALESCE(country, 'Unknown') as country,
+              COALESCE(city, 'Unknown') as city,
+              COALESCE(region, 'Unknown') as region,
+              user_id,
+              session_id
+            FROM user_activity
+            WHERE last_seen BETWEEN $1 AND $2
+            AND country IS NOT NULL
+            AND country != ''
+            AND country != 'Unknown'
+            
+            UNION ALL
+            
+            -- From analytics_events metadata (fallback)
+            SELECT 
+              COALESCE(metadata->>'country', 'Unknown') as country,
+              COALESCE(metadata->>'city', 'Unknown') as city,
+              COALESCE(metadata->>'region', 'Unknown') as region,
+              COALESCE(metadata->>'userId', 'unknown') as user_id,
+              session_id
+            FROM analytics_events
+            WHERE timestamp BETWEEN $1 AND $2
+            AND metadata->>'country' IS NOT NULL
+            AND metadata->>'country' != ''
+            AND metadata->>'country' != 'Unknown'
+          )
           SELECT 
-            COALESCE(metadata->>'country', 'Unknown') as country,
-            COUNT(DISTINCT session_id) as count
-          FROM analytics_events
-          WHERE timestamp BETWEEN $1 AND $2
-          AND metadata->>'country' IS NOT NULL
-          AND metadata->>'country' != ''
-          AND metadata->>'country' != 'Unknown'
-          GROUP BY metadata->>'country'
+            country,
+            COUNT(DISTINCT session_id) as count,
+            COUNT(DISTINCT user_id) as unique_users
+          FROM geo_data
+          GROUP BY country
           ORDER BY count DESC
         `
         : `
+          WITH geo_data AS (
+            -- From user_activity (primary source)
+            SELECT 
+              COALESCE(country, 'Unknown') as country,
+              COALESCE(city, 'Unknown') as city,
+              COALESCE(region, 'Unknown') as region,
+              user_id,
+              session_id
+            FROM user_activity
+            WHERE last_seen BETWEEN ? AND ?
+            AND country IS NOT NULL
+            AND country != ''
+            AND country != 'Unknown'
+            
+            UNION ALL
+            
+            -- From analytics_events metadata (fallback)
+            SELECT 
+              COALESCE(json_extract(metadata, '$.country'), 'Unknown') as country,
+              COALESCE(json_extract(metadata, '$.city'), 'Unknown') as city,
+              COALESCE(json_extract(metadata, '$.region'), 'Unknown') as region,
+              COALESCE(json_extract(metadata, '$.userId'), 'unknown') as user_id,
+              session_id
+            FROM analytics_events
+            WHERE timestamp BETWEEN ? AND ?
+            AND json_extract(metadata, '$.country') IS NOT NULL
+            AND json_extract(metadata, '$.country') != ''
+            AND json_extract(metadata, '$.country') != 'Unknown'
+          )
           SELECT 
-            COALESCE(json_extract(metadata, '$.country'), 'Unknown') as country,
-            COUNT(DISTINCT session_id) as count
-          FROM analytics_events
-          WHERE timestamp BETWEEN ? AND ?
-          AND json_extract(metadata, '$.country') IS NOT NULL
-          AND json_extract(metadata, '$.country') != ''
-          AND json_extract(metadata, '$.country') != 'Unknown'
-          GROUP BY json_extract(metadata, '$.country')
+            country,
+            COUNT(DISTINCT session_id) as count,
+            COUNT(DISTINCT user_id) as unique_users
+          FROM geo_data
+          GROUP BY country
           ORDER BY count DESC
         `,
-      [startTimestamp, endTimestamp]
+      isNeon ? [startTimestamp, endTimestamp] : [startTimestamp, endTimestamp, startTimestamp, endTimestamp]
     );
 
     // 6. Device Breakdown
@@ -330,7 +383,8 @@ export async function GET(request: NextRequest) {
 
     const geographic = geographicRaw.map((row: any) => ({
       country: row.country || 'Unknown',
-      count: parseInt(row.count) || 0
+      count: parseInt(row.count) || 0,
+      uniqueUsers: parseInt(row.unique_users) || 0
     }));
 
     const deviceBreakdown = deviceBreakdownRaw.map((row: any) => ({

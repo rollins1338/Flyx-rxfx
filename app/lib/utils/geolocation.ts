@@ -77,9 +77,22 @@ export function getLocationFromHeaders(request: Request): LocationData {
 export function formatLocation(location: LocationData): string {
   const parts = [];
   
-  if (location.city) parts.push(location.city);
-  if (location.region) parts.push(location.region);
-  if (location.country) parts.push(location.country);
+  if (location.city && location.city !== 'Unknown') parts.push(location.city);
+  if (location.region && location.region !== 'Unknown') parts.push(location.region);
+  if (location.countryCode && location.countryCode !== 'Unknown') parts.push(location.countryCode);
+  
+  return parts.length > 0 ? parts.join(', ') : 'Unknown';
+}
+
+/**
+ * Format location for display (full country name)
+ */
+export function formatLocationDisplay(location: LocationData): string {
+  const parts = [];
+  
+  if (location.city && location.city !== 'Unknown') parts.push(location.city);
+  if (location.region && location.region !== 'Unknown') parts.push(location.region);
+  if (location.country && location.country !== 'Unknown') parts.push(location.country);
   
   return parts.length > 0 ? parts.join(', ') : 'Unknown';
 }
@@ -110,4 +123,77 @@ export function getCountryFlag(countryCode: string): string {
     .map(char => 127397 + char.charCodeAt(0));
   
   return String.fromCodePoint(...codePoints);
+}
+
+/**
+ * Get country name from ISO 3166-1 alpha-2 code
+ */
+export function getCountryName(code: string): string {
+  const countryNames: Record<string, string> = {
+    'US': 'United States',
+    'CA': 'Canada',
+    'MX': 'Mexico',
+    'GB': 'United Kingdom',
+    'DE': 'Germany',
+    'FR': 'France',
+    'IT': 'Italy',
+    'ES': 'Spain',
+    'PT': 'Portugal',
+    'NL': 'Netherlands',
+    'BE': 'Belgium',
+    'CH': 'Switzerland',
+    'AT': 'Austria',
+    'SE': 'Sweden',
+    'NO': 'Norway',
+    'DK': 'Denmark',
+    'FI': 'Finland',
+    'PL': 'Poland',
+    'CZ': 'Czech Republic',
+    'RO': 'Romania',
+    'HU': 'Hungary',
+    'GR': 'Greece',
+    'TR': 'Turkey',
+    'RU': 'Russia',
+    'UA': 'Ukraine',
+    'BR': 'Brazil',
+    'AR': 'Argentina',
+    'CL': 'Chile',
+    'CO': 'Colombia',
+    'PE': 'Peru',
+    'VE': 'Venezuela',
+    'AU': 'Australia',
+    'NZ': 'New Zealand',
+    'JP': 'Japan',
+    'KR': 'South Korea',
+    'CN': 'China',
+    'TW': 'Taiwan',
+    'HK': 'Hong Kong',
+    'SG': 'Singapore',
+    'MY': 'Malaysia',
+    'TH': 'Thailand',
+    'VN': 'Vietnam',
+    'PH': 'Philippines',
+    'ID': 'Indonesia',
+    'IN': 'India',
+    'PK': 'Pakistan',
+    'BD': 'Bangladesh',
+    'AE': 'United Arab Emirates',
+    'SA': 'Saudi Arabia',
+    'IL': 'Israel',
+    'EG': 'Egypt',
+    'ZA': 'South Africa',
+    'NG': 'Nigeria',
+    'KE': 'Kenya',
+    'IE': 'Ireland',
+    'Local': 'Local Development',
+  };
+  
+  return countryNames[code] || code;
+}
+
+/**
+ * Extract just the country code for database storage
+ */
+export function getCountryCode(location: LocationData): string {
+  return location.countryCode || 'Unknown';
 }
