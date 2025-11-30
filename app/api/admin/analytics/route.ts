@@ -193,29 +193,31 @@ export async function GET(request: NextRequest) {
     );
 
     // 5. Geographic Heatmap (Enhanced with date filter)
-    // Query user_activity directly for geographic data based on last_seen timestamp
+    // Extract country from analytics_events metadata (same source as live activity)
     const geographicRaw = await adapter.query(
       isNeon
         ? `
           SELECT 
-            country,
-            COUNT(DISTINCT user_id) as count
-          FROM user_activity
-          WHERE last_seen BETWEEN $1 AND $2
-          AND country IS NOT NULL
-          AND country != ''
-          GROUP BY country
+            COALESCE(metadata->>'country', 'Unknown') as country,
+            COUNT(DISTINCT session_id) as count
+          FROM analytics_events
+          WHERE timestamp BETWEEN $1 AND $2
+          AND metadata->>'country' IS NOT NULL
+          AND metadata->>'country' != ''
+          AND metadata->>'country' != 'Unknown'
+          GROUP BY metadata->>'country'
           ORDER BY count DESC
         `
         : `
           SELECT 
-            country,
-            COUNT(DISTINCT user_id) as count
-          FROM user_activity
-          WHERE last_seen BETWEEN ? AND ?
-          AND country IS NOT NULL
-          AND country != ''
-          GROUP BY country
+            COALESCE(json_extract(metadata, '$.country'), 'Unknown') as country,
+            COUNT(DISTINCT session_id) as count
+          FROM analytics_events
+          WHERE timestamp BETWEEN ? AND ?
+          AND json_extract(metadata, '$.country') IS NOT NULL
+          AND json_extract(metadata, '$.country') != ''
+          AND json_extract(metadata, '$.country') != 'Unknown'
+          GROUP BY json_extract(metadata, '$.country')
           ORDER BY count DESC
         `,
       [startTimestamp, endTimestamp]
