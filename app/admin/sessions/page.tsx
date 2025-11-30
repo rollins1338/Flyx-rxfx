@@ -121,8 +121,38 @@ export default function AdminSessionsPage() {
     return `${minutes}m`;
   };
 
-  const formatDate = (timestamp: number) => {
-    return new Date(timestamp).toLocaleString();
+  const normalizeTimestamp = (timestamp: number | string | undefined | null): number | null => {
+    if (!timestamp) return null;
+    
+    // Handle string timestamps
+    const ts = typeof timestamp === 'string' ? parseInt(timestamp, 10) : timestamp;
+    
+    // Check if it's a valid number
+    if (isNaN(ts) || ts <= 0) return null;
+    
+    // Check if timestamp is in seconds (Unix) vs milliseconds
+    // If timestamp is less than year 2000 in ms, it's probably in seconds
+    return ts < 946684800000 ? ts * 1000 : ts;
+  };
+
+  const formatDate = (timestamp: number | string | undefined | null) => {
+    const normalizedTs = normalizeTimestamp(timestamp);
+    if (!normalizedTs) return 'N/A';
+    
+    const date = new Date(normalizedTs);
+    if (isNaN(date.getTime())) return 'N/A';
+    
+    return date.toLocaleString();
+  };
+
+  const formatTime = (timestamp: number | string | undefined | null) => {
+    const normalizedTs = normalizeTimestamp(timestamp);
+    if (!normalizedTs) return '--:--';
+    
+    const date = new Date(normalizedTs);
+    if (isNaN(date.getTime())) return '--:--';
+    
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   const getCompletionColor = (percentage: number) => {
@@ -159,8 +189,11 @@ export default function AdminSessionsPage() {
   const getHourlyDistribution = () => {
     const hours: Record<number, number> = {};
     sessions.forEach(s => {
-      const hour = new Date(s.started_at).getHours();
-      hours[hour] = (hours[hour] || 0) + 1;
+      const ts = normalizeTimestamp(s.started_at);
+      if (ts) {
+        const hour = new Date(ts).getHours();
+        hours[hour] = (hours[hour] || 0) + 1;
+      }
     });
     return hours;
   };
@@ -327,7 +360,7 @@ export default function AdminSessionsPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {sessions.slice(0, 20).map((session) => (
                 <div key={session.id} style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '12px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px', cursor: 'pointer' }} onClick={() => setSelectedSession(session)}>
-                  <div style={{ width: '60px', textAlign: 'center', color: '#64748b', fontSize: '12px' }}>{new Date(session.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                  <div style={{ width: '60px', textAlign: 'center', color: '#64748b', fontSize: '12px' }}>{formatTime(session.started_at)}</div>
                   <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: getCompletionColor(session.completion_percentage), boxShadow: `0 0 8px ${getCompletionColor(session.completion_percentage)}40` }} />
                   <div style={{ flex: 1 }}>
                     <div style={{ color: '#f8fafc', fontWeight: '500', fontSize: '14px' }}>{session.content_title || session.content_id}</div>
