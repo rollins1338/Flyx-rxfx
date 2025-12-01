@@ -19,6 +19,19 @@ function getCountryFlag(countryCode: string): string {
   }
 }
 
+// Helper function to get country name from ISO code
+function getCountryNameFromCode(code: string): string {
+  if (!code || code === 'Unknown' || code === 'Local') return code;
+  if (code.length !== 2) return code;
+  
+  try {
+    const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+    return regionNames.of(code.toUpperCase()) || code;
+  } catch {
+    return code;
+  }
+}
+
 interface UserStat {
   userId: string;
   username: string;
@@ -28,6 +41,8 @@ interface UserStat {
   totalWatchTime: number;
   lastActive: number;
   country: string;
+  city?: string;
+  deviceType?: string;
 }
 
 interface UserMetrics {
@@ -235,7 +250,9 @@ export default function AdminUsersPage() {
                     <td style={tdStyle}><span style={{ color: '#f8fafc', fontWeight: '500' }}>{user.totalSessions}</span></td>
                     <td style={tdStyle}>
                       <span style={{ color: '#f8fafc' }}>
-                        {user.country === 'Unknown' || !user.country ? '🌍 N/A' : `${getCountryFlag(user.country)} ${user.country}`}
+                        {user.country === 'Unknown' || !user.country || user.country.length !== 2
+                          ? '🌍 N/A' 
+                          : `${getCountryFlag(user.country)} ${getCountryNameFromCode(user.country)}`}
                       </span>
                     </td>
                   </tr>

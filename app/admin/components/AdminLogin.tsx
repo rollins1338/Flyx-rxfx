@@ -310,21 +310,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
                     </button>
                 </form>
 
-                <div style={{
-                    marginTop: '32px',
-                    padding: '20px',
-                    background: 'rgba(255, 255, 255, 0.03)',
-                    borderRadius: '12px',
-                    textAlign: 'center',
-                    border: '1px solid rgba(255, 255, 255, 0.05)'
-                }}>
-                    <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '6px', letterSpacing: '0.5px' }}>
-                        Default Credentials
-                    </div>
-                    <div style={{ fontSize: '14px', color: '#e2e8f0', fontFamily: 'monospace', fontWeight: '500' }}>
-                        admin / admin123
-                    </div>
-                </div>
+
             </div>
         </div>
     );

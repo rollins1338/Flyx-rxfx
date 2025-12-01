@@ -18,6 +18,12 @@ interface AdminSettings {
   timezone: string;
 }
 
+interface PasswordForm {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}
+
 export default function AdminSettingsPage() {
   const [health, setHealth] = useState<SystemHealth | null>(null);
   const [settings, setSettings] = useState<AdminSettings>({
@@ -30,7 +36,14 @@ export default function AdminSettingsPage() {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeSection, setActiveSection] = useState<'system' | 'preferences' | 'data' | 'about'>('system');
+  const [activeSection, setActiveSection] = useState<'system' | 'preferences' | 'security' | 'data' | 'about'>('system');
+  const [passwordForm, setPasswordForm] = useState<PasswordForm>({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [passwordChanging, setPasswordChanging] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     checkSystemHealth();
@@ -75,6 +88,46 @@ export default function AdminSettingsPage() {
     }
   };
 
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordMessage(null);
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordMessage({ type: 'error', text: 'New passwords do not match' });
+      return;
+    }
+
+    if (passwordForm.newPassword.length < 6) {
+      setPasswordMessage({ type: 'error', text: 'New password must be at least 6 characters' });
+      return;
+    }
+
+    setPasswordChanging(true);
+    try {
+      const response = await fetch('/api/admin/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setPasswordMessage({ type: 'success', text: 'Password changed successfully!' });
+        setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      } else {
+        setPasswordMessage({ type: 'error', text: data.error || 'Failed to change password' });
+      }
+    } catch {
+      setPasswordMessage({ type: 'error', text: 'Network error. Please try again.' });
+    } finally {
+      setPasswordChanging(false);
+    }
+  };
+
   const saveSettings = async () => {
     setSaving(true);
     try {
@@ -112,6 +165,7 @@ export default function AdminSettingsPage() {
         {[
           { id: 'system', label: '🖥️ System Health', icon: '🖥️' },
           { id: 'preferences', label: '⚙️ Preferences', icon: '⚙️' },
+          { id: 'security', label: '🔐 Security', icon: '🔐' },
           { id: 'data', label: '💾 Data Management', icon: '💾' },
           { id: 'about', label: 'ℹ️ About', icon: 'ℹ️' },
         ].map((section) => (
@@ -360,6 +414,95 @@ export default function AdminSettingsPage() {
         </div>
       )}
 
+      {/* Security Section */}
+      {activeSection === 'security' && (
+        <div>
+          <h3 style={{ margin: '0 0 20px 0', color: '#f8fafc', fontSize: '18px' }}>Change Password</h3>
+          
+          <form onSubmit={handlePasswordChange} style={{ maxWidth: '500px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ padding: '16px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '12px' }}>
+                <label style={{ display: 'block', color: '#f8fafc', fontWeight: '500', marginBottom: '8px' }}>
+                  Current Password
+                </label>
+                <input
+                  type="password"
+                  value={passwordForm.currentPassword}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                  required
+                  disabled={passwordChanging}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div style={{ padding: '16px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '12px' }}>
+                <label style={{ display: 'block', color: '#f8fafc', fontWeight: '500', marginBottom: '8px' }}>
+                  New Password
+                </label>
+                <input
+                  type="password"
+                  value={passwordForm.newPassword}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                  required
+                  disabled={passwordChanging}
+                  style={inputStyle}
+                  minLength={6}
+                />
+                <div style={{ color: '#64748b', fontSize: '12px', marginTop: '6px' }}>
+                  Minimum 6 characters
+                </div>
+              </div>
+
+              <div style={{ padding: '16px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '12px' }}>
+                <label style={{ display: 'block', color: '#f8fafc', fontWeight: '500', marginBottom: '8px' }}>
+                  Confirm New Password
+                </label>
+                <input
+                  type="password"
+                  value={passwordForm.confirmPassword}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                  required
+                  disabled={passwordChanging}
+                  style={inputStyle}
+                />
+              </div>
+
+              {passwordMessage && (
+                <div style={{
+                  padding: '14px 18px',
+                  borderRadius: '12px',
+                  background: passwordMessage.type === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                  border: `1px solid ${passwordMessage.type === 'success' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                  color: passwordMessage.type === 'success' ? '#10b981' : '#ef4444',
+                  fontSize: '14px'
+                }}>
+                  {passwordMessage.text}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={passwordChanging}
+                style={{
+                  padding: '12px 24px',
+                  background: '#7877c6',
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: 'white',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: passwordChanging ? 'not-allowed' : 'pointer',
+                  opacity: passwordChanging ? 0.7 : 1,
+                  width: 'fit-content'
+                }}
+              >
+                {passwordChanging ? 'Changing Password...' : 'Change Password'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {/* Data Management Section */}
       {activeSection === 'data' && (
         <div>
@@ -434,6 +577,18 @@ const selectStyle: React.CSSProperties = {
   cursor: 'pointer',
   outline: 'none',
   minWidth: '150px'
+};
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '10px 14px',
+  background: 'rgba(255, 255, 255, 0.05)',
+  border: '1px solid rgba(255, 255, 255, 0.1)',
+  borderRadius: '8px',
+  color: '#f8fafc',
+  fontSize: '14px',
+  outline: 'none',
+  boxSizing: 'border-box'
 };
 
 function SettingRow({ label, description, children }: { label: string; description: string; children: React.ReactNode }) {

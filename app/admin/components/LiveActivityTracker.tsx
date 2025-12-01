@@ -2,6 +2,19 @@
 
 import { useState, useEffect } from 'react';
 
+// Helper function to get country name from ISO code
+function getCountryNameFromCode(code: string): string {
+  if (!code || code === 'Unknown' || code === 'Local') return code;
+  if (code.length !== 2) return code;
+  
+  try {
+    const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+    return regionNames.of(code.toUpperCase()) || code;
+  } catch {
+    return code;
+  }
+}
+
 interface LiveActivity {
   id: string;
   user_id: string;
@@ -446,15 +459,18 @@ export default function LiveActivityTracker() {
                 By Location
               </h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {Object.entries(stats.byCountry).slice(0, 5).map(([country, count]) => (
+                {Object.entries(stats.byCountry)
+                  .filter(([country]) => country && country.length === 2 && country !== 'Unknown')
+                  .slice(0, 5)
+                  .map(([country, count]) => (
                   <div key={country} style={{
                     display: 'grid',
-                    gridTemplateColumns: '100px 1fr auto',
+                    gridTemplateColumns: '120px 1fr auto',
                     alignItems: 'center',
                     gap: '0.75rem'
                   }}>
                     <span style={{ color: '#e2e8f0', fontSize: '0.875rem' }}>
-                      {country}
+                      {getCountryNameFromCode(country)}
                     </span>
                     <div style={{
                       height: '8px',
@@ -679,9 +695,9 @@ export default function LiveActivityTracker() {
                       🎬 {activity.quality}
                     </span>
                   )}
-                  {activity.country && (
+                  {activity.country && activity.country.length === 2 && (
                     <span style={{ color: '#94a3b8', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                      📍 {activity.country}
+                      📍 {getCountryNameFromCode(activity.country)}
                     </span>
                   )}
                   <span style={{ color: '#94a3b8', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>

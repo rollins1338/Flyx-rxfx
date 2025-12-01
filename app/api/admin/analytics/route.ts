@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeDB, getDB } from '@/lib/db/neon-connection';
 import { verifyAdminAuth } from '@/lib/utils/admin-auth';
+import { isValidCountryCode, getCountryName } from '@/app/lib/utils/geolocation';
 
 export async function GET(request: NextRequest) {
   try {
@@ -271,173 +272,126 @@ export async function GET(request: NextRequest) {
       usersStatsRaw = [];
     }
 
-    // 5. Geographic Heatmap (Enhanced - combines data from multiple sources)
-    // Try multiple sources: user_activity, live_activity, and analytics_events metadata
+    // 5. Geographic Heatmap - Only use valid ISO country codes
+    // The country field should contain ISO 3166-1 alpha-2 codes (e.g., "US", "CA", "GB")
     let geographicRaw: any[] = [];
     
     try {
-      // Combine data from all sources for comprehensive geographic coverage
-      const geoMap = new Map<string, { count: number; uniqueUsers: number; sessions: number }>();
+      // Map to aggregate data by VALID country codes only
+      const geoMap = new Map<string, { count: number; uniqueUsers: Set<string>; sessions: Set<string> }>();
       
-      // Source 1: user_activity table (most reliable for historical data)
+      // Helper function to normalize and validate country code
+      const normalizeCountryCode = (code: string | null | undefined): string | null => {
+        if (!code || code === 'Unknown' || code === 'Local' || code === '') return null;
+        const upperCode = code.toUpperCase().trim();
+        // Only accept valid 2-letter ISO country codes
+        if (upperCode.length !== 2) return null;
+        if (!isValidCountryCode(upperCode)) return null;
+        return upperCode;
+      };
+      
+      // Source 1: user_activity table (primary source)
       try {
         const userActivityGeo = await adapter.query(
           isNeon
             ? `
               SELECT 
-                COALESCE(country, 'Unknown') as country,
-                COUNT(DISTINCT session_id) as sessions,
-                COUNT(DISTINCT user_id) as unique_users
+                country,
+                session_id,
+                user_id
               FROM user_activity
               WHERE last_seen BETWEEN $1 AND $2
               AND country IS NOT NULL
-              AND country != ''
-              AND country != 'Unknown'
-              AND country != 'Local'
-              GROUP BY country
+              AND LENGTH(country) = 2
             `
             : `
               SELECT 
-                COALESCE(country, 'Unknown') as country,
-                COUNT(DISTINCT session_id) as sessions,
-                COUNT(DISTINCT user_id) as unique_users
+                country,
+                session_id,
+                user_id
               FROM user_activity
               WHERE last_seen BETWEEN ? AND ?
               AND country IS NOT NULL
-              AND country != ''
-              AND country != 'Unknown'
-              AND country != 'Local'
-              GROUP BY country
+              AND LENGTH(country) = 2
             `,
           [startTimestamp, endTimestamp]
         );
         
         for (const row of userActivityGeo) {
-          const country = row.country;
-          if (country && country !== 'Unknown' && country !== 'Local') {
-            const existing = geoMap.get(country) || { count: 0, uniqueUsers: 0, sessions: 0 };
-            geoMap.set(country, {
-              count: existing.count + (parseInt(row.sessions) || 0),
-              uniqueUsers: Math.max(existing.uniqueUsers, parseInt(row.unique_users) || 0),
-              sessions: existing.sessions + (parseInt(row.sessions) || 0)
-            });
+          const countryCode = normalizeCountryCode(row.country);
+          if (countryCode) {
+            if (!geoMap.has(countryCode)) {
+              geoMap.set(countryCode, { count: 0, uniqueUsers: new Set(), sessions: new Set() });
+            }
+            const data = geoMap.get(countryCode)!;
+            data.count++;
+            if (row.user_id) data.uniqueUsers.add(row.user_id);
+            if (row.session_id) data.sessions.add(row.session_id);
           }
         }
       } catch (e) {
         console.warn('user_activity geo query failed:', e);
       }
       
-      // Source 2: live_activity table (for recent/real-time data)
+      // Source 2: live_activity table (for real-time data)
       try {
         const liveActivityGeo = await adapter.query(
           isNeon
             ? `
               SELECT 
-                COALESCE(country, 'Unknown') as country,
-                COUNT(DISTINCT session_id) as sessions,
-                COUNT(DISTINCT user_id) as unique_users
+                country,
+                session_id,
+                user_id
               FROM live_activity
               WHERE last_heartbeat BETWEEN $1 AND $2
               AND country IS NOT NULL
-              AND country != ''
-              AND country != 'Unknown'
-              AND country != 'Local'
-              GROUP BY country
+              AND LENGTH(country) = 2
             `
             : `
               SELECT 
-                COALESCE(country, 'Unknown') as country,
-                COUNT(DISTINCT session_id) as sessions,
-                COUNT(DISTINCT user_id) as unique_users
+                country,
+                session_id,
+                user_id
               FROM live_activity
               WHERE last_heartbeat BETWEEN ? AND ?
               AND country IS NOT NULL
-              AND country != ''
-              AND country != 'Unknown'
-              AND country != 'Local'
-              GROUP BY country
+              AND LENGTH(country) = 2
             `,
           [startTimestamp, endTimestamp]
         );
         
         for (const row of liveActivityGeo) {
-          const country = row.country;
-          if (country && country !== 'Unknown' && country !== 'Local') {
-            const existing = geoMap.get(country) || { count: 0, uniqueUsers: 0, sessions: 0 };
-            // Add sessions but take max of unique users to avoid double counting
-            geoMap.set(country, {
-              count: existing.count + (parseInt(row.sessions) || 0),
-              uniqueUsers: Math.max(existing.uniqueUsers, parseInt(row.unique_users) || 0),
-              sessions: existing.sessions + (parseInt(row.sessions) || 0)
-            });
+          const countryCode = normalizeCountryCode(row.country);
+          if (countryCode) {
+            if (!geoMap.has(countryCode)) {
+              geoMap.set(countryCode, { count: 0, uniqueUsers: new Set(), sessions: new Set() });
+            }
+            const data = geoMap.get(countryCode)!;
+            // Only count if not already counted (by session)
+            if (row.session_id && !data.sessions.has(row.session_id)) {
+              data.count++;
+              data.sessions.add(row.session_id);
+            }
+            if (row.user_id) data.uniqueUsers.add(row.user_id);
           }
         }
       } catch (e) {
         console.warn('live_activity geo query failed:', e);
       }
       
-      // Source 3: analytics_events metadata (fallback/additional data)
-      try {
-        const analyticsGeo = await adapter.query(
-          isNeon
-            ? `
-              SELECT 
-                COALESCE(metadata->>'country', 'Unknown') as country,
-                COUNT(DISTINCT session_id) as sessions,
-                COUNT(DISTINCT COALESCE(metadata->>'userId', session_id)) as unique_users
-              FROM analytics_events
-              WHERE timestamp BETWEEN $1 AND $2
-              AND metadata->>'country' IS NOT NULL
-              AND metadata->>'country' != ''
-              AND metadata->>'country' != 'Unknown'
-              AND metadata->>'country' != 'Local'
-              GROUP BY metadata->>'country'
-            `
-            : `
-              SELECT 
-                COALESCE(json_extract(metadata, '$.country'), 'Unknown') as country,
-                COUNT(DISTINCT session_id) as sessions,
-                COUNT(DISTINCT COALESCE(json_extract(metadata, '$.userId'), session_id)) as unique_users
-              FROM analytics_events
-              WHERE timestamp BETWEEN ? AND ?
-              AND json_extract(metadata, '$.country') IS NOT NULL
-              AND json_extract(metadata, '$.country') != ''
-              AND json_extract(metadata, '$.country') != 'Unknown'
-              AND json_extract(metadata, '$.country') != 'Local'
-              GROUP BY json_extract(metadata, '$.country')
-            `,
-          [startTimestamp, endTimestamp]
-        );
-        
-        for (const row of analyticsGeo) {
-          const country = row.country;
-          if (country && country !== 'Unknown' && country !== 'Local') {
-            // Only add if not already in map (avoid double counting)
-            if (!geoMap.has(country)) {
-              geoMap.set(country, {
-                count: parseInt(row.sessions) || 0,
-                uniqueUsers: parseInt(row.unique_users) || 0,
-                sessions: parseInt(row.sessions) || 0
-              });
-            }
-          }
-        }
-      } catch (e) {
-        console.warn('analytics_events geo query failed:', e);
-      }
-      
-      // Convert map to array and sort by count
+      // Convert map to array with proper country names
       geographicRaw = Array.from(geoMap.entries())
-        .map(([country, data]) => ({ 
-          country, 
-          count: data.count, 
-          unique_users: data.uniqueUsers,
-          sessions: data.sessions
+        .map(([countryCode, data]) => ({ 
+          country: countryCode,
+          countryName: getCountryName(countryCode),
+          count: data.sessions.size || data.count,
+          unique_users: data.uniqueUsers.size,
+          sessions: data.sessions.size
         }))
-        .filter(g => g.country && g.country !== 'Unknown' && g.country !== 'Local')
+        .filter(g => g.count > 0)
         .sort((a, b) => b.count - a.count);
         
-      console.log(`Geographic data: Found ${geographicRaw.length} countries with data`);
+      console.log(`Geographic data: Found ${geographicRaw.length} valid countries with data`);
         
     } catch (geoError) {
       console.error('Geographic query error:', geoError);
@@ -553,6 +507,7 @@ export async function GET(request: NextRequest) {
 
     const geographic = geographicRaw.map((row: any) => ({
       country: row.country || 'Unknown',
+      countryName: row.countryName || getCountryName(row.country) || row.country,
       count: parseInt(row.count) || 0,
       uniqueUsers: parseInt(row.unique_users) || 0,
       sessions: parseInt(row.sessions) || parseInt(row.count) || 0

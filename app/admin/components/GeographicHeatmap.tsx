@@ -4,7 +4,10 @@ import { useState, useMemo } from 'react';
 
 interface GeographicData {
   country: string;
+  countryName?: string;
   count: number;
+  uniqueUsers?: number;
+  sessions?: number;
 }
 
 interface Props {
@@ -659,9 +662,9 @@ export default function GeographicHeatmap({ data }: Props) {
                     <span style={{ fontSize: '22px' }}>{getCountryFlag(item.country)}</span>
                     <div>
                       <div style={{ color: '#f8fafc', fontWeight: '600', fontSize: '14px' }}>
-                        {countryInfo?.name || item.country}
+                        {item.countryName || countryInfo?.name || item.country}
                       </div>
-                      {item.country !== 'Unknown' && item.country !== 'Local' && (
+                      {item.country !== 'Unknown' && item.country !== 'Local' && item.country.length === 2 && (
                         <div style={{ color: '#64748b', fontSize: '11px' }}>{item.country}</div>
                       )}
                     </div>

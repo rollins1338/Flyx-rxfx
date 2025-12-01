@@ -3,6 +3,19 @@
 import { useState, useEffect, useCallback } from 'react';
 import LiveActivityTracker from '../components/LiveActivityTracker';
 
+// Helper function to get country name from ISO code
+function getCountryNameFromCode(code: string): string {
+  if (!code || code === 'Unknown' || code === 'Local') return code;
+  if (code.length !== 2) return code;
+  
+  try {
+    const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+    return regionNames.of(code.toUpperCase()) || code;
+  } catch {
+    return code;
+  }
+}
+
 interface LiveActivity {
   id: string;
   user_id: string;
@@ -268,11 +281,14 @@ export default function AdminLivePage() {
           <h3 style={{ margin: '0 0 20px 0', color: '#f8fafc', fontSize: '18px' }}>🌍 Active Users by Location</h3>
           {stats.byCountry && Object.keys(stats.byCountry).length > 0 ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
-              {Object.entries(stats.byCountry).sort((a, b) => b[1] - a[1]).map(([country, count]) => (
+              {Object.entries(stats.byCountry)
+                .filter(([country]) => country && country.length === 2 && country !== 'Unknown')
+                .sort((a, b) => b[1] - a[1])
+                .map(([country, count]) => (
                 <div key={country} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px' }}>
                   <span style={{ fontSize: '24px' }}>🌐</span>
                   <div style={{ flex: 1 }}>
-                    <div style={{ color: '#f8fafc', fontWeight: '500' }}>{country}</div>
+                    <div style={{ color: '#f8fafc', fontWeight: '500' }}>{getCountryNameFromCode(country)}</div>
                     <div style={{ color: '#64748b', fontSize: '12px' }}>{count} active user{count !== 1 ? 's' : ''}</div>
                   </div>
                   <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px rgba(16, 185, 129, 0.4)' }} />

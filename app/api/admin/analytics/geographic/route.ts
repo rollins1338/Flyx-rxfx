@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeDB, getDB } from '@/lib/db/neon-connection';
 import { verifyAdminAuth } from '@/lib/utils/admin-auth';
-import { getCountryName } from '@/app/lib/utils/geolocation';
+import { getCountryName, isValidCountryCode } from '@/app/lib/utils/geolocation';
 
 export async function GET(request: NextRequest) {
   try {
@@ -159,22 +159,33 @@ export async function GET(request: NextRequest) {
       [Date.now() - 5 * 60 * 1000] // Last 5 minutes
     );
 
-    // Process country data
-    const countryData = countryDataRaw.map((row: any) => ({
-      country: row.country,
-      countryName: getCountryName(row.country),
-      sessions: parseInt(row.sessions) || 0,
-      uniqueUsers: parseInt(row.unique_users) || 0,
-      totalWatchTime: Math.round((parseInt(row.total_watch_time) || 0) / 60), // Convert to minutes
-    }));
+    // Process country data - only include valid ISO country codes
+    const countryData = countryDataRaw
+      .filter((row: any) => {
+        const code = row.country;
+        // Only include valid 2-letter ISO country codes
+        return code && code.length === 2 && isValidCountryCode(code);
+      })
+      .map((row: any) => ({
+        country: row.country.toUpperCase(),
+        countryName: getCountryName(row.country),
+        sessions: parseInt(row.sessions) || 0,
+        uniqueUsers: parseInt(row.unique_users) || 0,
+        totalWatchTime: Math.round((parseInt(row.total_watch_time) || 0) / 60), // Convert to minutes
+      }));
 
-    // Process live geo data
-    const liveGeo = liveGeoRaw.map((row: any) => ({
-      country: row.country,
-      countryName: getCountryName(row.country),
-      city: row.city,
-      activeUsers: parseInt(row.active_users) || 0,
-    }));
+    // Process live geo data - only include valid ISO country codes
+    const liveGeo = liveGeoRaw
+      .filter((row: any) => {
+        const code = row.country;
+        return code && code.length === 2 && isValidCountryCode(code);
+      })
+      .map((row: any) => ({
+        country: row.country.toUpperCase(),
+        countryName: getCountryName(row.country),
+        city: row.city,
+        activeUsers: parseInt(row.active_users) || 0,
+      }));
 
     // Calculate totals
     const totals = {

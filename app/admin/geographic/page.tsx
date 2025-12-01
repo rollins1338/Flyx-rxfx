@@ -6,7 +6,10 @@ import GeographicHeatmap from '../components/GeographicHeatmap';
 
 interface GeoStat {
   country: string;
+  countryName?: string;
   count: number;
+  uniqueUsers?: number;
+  sessions?: number;
 }
 
 interface GeoMetrics {
@@ -53,7 +56,7 @@ export default function AdminGeographicPage() {
           const total = geoData.reduce((sum: number, g: GeoStat) => sum + g.count, 0);
           const topCountry = geoData[0];
           
-          // Group by region (simplified)
+          // Group by region (simplified) - use country code for region mapping
           const regionMap: Record<string, number> = {};
           geoData.forEach((g: GeoStat) => {
             const region = getRegion(g.country);
@@ -64,9 +67,12 @@ export default function AdminGeographicPage() {
             .map(([region, count]) => ({ region, count }))
             .sort((a, b) => b.count - a.count);
           
+          // Use countryName from API if available, otherwise use getCountryName
+          const topCountryDisplay = topCountry?.countryName || getCountryName(topCountry?.country) || topCountry?.country || 'N/A';
+          
           setMetrics({
             totalCountries: geoData.filter((g: GeoStat) => g.country !== 'Unknown').length,
-            topCountry: topCountry?.country || 'N/A',
+            topCountry: topCountryDisplay,
             topCountryPercentage: total > 0 ? Math.round((topCountry?.count / total) * 100) : 0,
             internationalPercentage: total > 0 ? Math.round(((total - (geoData[0]?.count || 0)) / total) * 100) : 0,
             regionBreakdown,
