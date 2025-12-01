@@ -127,65 +127,44 @@ function extractQualityOptions(html: string): QualityOption[] {
   for (const match of qualityMatches) {
     const url = match[1];
 
-    // Extract title from URL - this is the cleaned source name
+    // Extract title from URL's tit parameter - this IS the filename/source name
     const titleMatch = url.match(/tit=([^&]+)/);
-    let rawTitle = titleMatch ? decodeURIComponent(titleMatch[1].replace(/\+/g, ' ')) : '';
+    let title = titleMatch ? decodeURIComponent(titleMatch[1].replace(/\+/g, ' ')) : '';
 
-    // Clean up title - remove common junk patterns but preserve meaningful content
-    let title = rawTitle
-      .replace(/\s*\[.*?\]\s*/g, '') // Remove bracket content
-      .replace(/\s+/g, ' ') // Normalize spaces
-      .trim();
+    // Normalize spaces only, keep the full filename intact
+    title = title.replace(/\s+/g, ' ').trim();
 
     // Detect quality from URL or title
     const urlLower = url.toLowerCase();
     const titleLower = title.toLowerCase();
-    const rawTitleLower = rawTitle.toLowerCase();
 
     let detectedQuality = 'other';
-    let qualityLabel = '';
     
     if (urlLower.includes('2160p') || urlLower.includes('4k') || urlLower.includes('uhd') ||
-      rawTitleLower.includes('2160p') || rawTitleLower.includes('4k') || rawTitleLower.includes('uhd')) {
+      titleLower.includes('2160p') || titleLower.includes('4k') || titleLower.includes('uhd')) {
       detectedQuality = '2160p';
-      qualityLabel = '4K';
-    } else if (urlLower.includes('1080p') || rawTitleLower.includes('1080p')) {
+    } else if (urlLower.includes('1080p') || titleLower.includes('1080p')) {
       detectedQuality = '1080p';
-      qualityLabel = '1080p';
-    } else if (urlLower.includes('720p') || rawTitleLower.includes('720p')) {
+    } else if (urlLower.includes('720p') || titleLower.includes('720p')) {
       detectedQuality = '720p';
-      qualityLabel = '720p';
-    } else if (urlLower.includes('480p') || rawTitleLower.includes('480p')) {
+    } else if (urlLower.includes('480p') || titleLower.includes('480p')) {
       detectedQuality = '480p';
-      qualityLabel = '480p';
-    } else if (urlLower.includes('360p') || rawTitleLower.includes('360p')) {
+    } else if (urlLower.includes('360p') || titleLower.includes('360p')) {
       detectedQuality = '360p';
-      qualityLabel = '360p';
     }
 
-    // Build a meaningful display title
-    // If we have a raw title, use it; otherwise generate one
-    if (!title || title === 'Source' || title.length < 3) {
-      // Generate a descriptive name based on quality and source number
-      if (qualityLabel) {
-        title = `2Embed ${qualityLabel} #${sourceCounter}`;
-      } else {
-        title = `2Embed Source #${sourceCounter}`;
-      }
+    // If no title found, generate a fallback name
+    if (!title || title.length < 3) {
+      title = `2Embed Source #${sourceCounter}`;
       sourceCounter++;
-    } else {
-      // We have a title - append quality if not already present and we detected one
-      if (qualityLabel && !titleLower.includes(qualityLabel.toLowerCase())) {
-        title = `${title} (${qualityLabel})`;
-      }
     }
 
     // Filter out non-English sources
-    if (!isEnglishSource(rawTitle)) {
+    if (!isEnglishSource(title)) {
       continue;
     }
 
-    // Store with the display title
+    // Store with the full filename as the title
     qualities[detectedQuality].push({ quality: title, url, title });
   }
 
