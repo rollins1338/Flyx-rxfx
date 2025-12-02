@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAdmin } from '../context/AdminContext';
 import { useStats } from '../context/StatsContext';
 
@@ -43,6 +44,7 @@ interface EngagementStats {
 
 export default function EngagementPage() {
   useAdmin();
+  const router = useRouter();
   // Use unified stats for key metrics - SINGLE SOURCE OF TRUTH
   const { stats: unifiedStats } = useStats();
   
@@ -443,7 +445,7 @@ export default function EngagementPage() {
                       <tr 
                         key={user.user_id} 
                         style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)', cursor: 'pointer' }}
-                        onClick={() => window.location.href = `/admin/users?userId=${encodeURIComponent(user.user_id)}`}
+                        onClick={() => router.push(`/admin/users?userId=${encodeURIComponent(user.user_id)}`)}
                         title="Click to view user profile"
                       >
                         <td style={tdStyle}>

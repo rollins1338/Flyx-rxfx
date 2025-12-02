@@ -74,65 +74,77 @@ async function getAllUsers(
 ) {
   const now = Date.now();
   
-  // Get all users with their activity summary - NO DUPLICATES
-  // Use DISTINCT ON (PostgreSQL) or GROUP BY to ensure unique users
-  const usersQuery = isNeon
-    ? `SELECT DISTINCT ON (ua.user_id)
-         ua.user_id,
-         ua.session_id,
-         ua.first_seen,
-         ua.last_seen,
-         ua.total_sessions,
-         ua.total_watch_time,
-         ua.country,
-         ua.city,
-         ua.region,
-         ua.device_type,
-         ua.user_agent,
-         CASE WHEN la.is_active = TRUE AND la.last_heartbeat >= $1 THEN TRUE ELSE FALSE END as is_online,
-         la.activity_type as current_activity,
-         la.content_title as current_content
-       FROM user_activity ua
-       LEFT JOIN live_activity la ON ua.user_id = la.user_id AND la.is_active = TRUE
-       WHERE ua.first_seen > 0 AND ua.last_seen > 0 AND ua.last_seen <= $4
-       ORDER BY ua.user_id, ua.last_seen DESC
-       LIMIT $2 OFFSET $3`
-    : `SELECT 
-         ua.user_id,
-         ua.session_id,
-         ua.first_seen,
-         ua.last_seen,
-         ua.total_sessions,
-         ua.total_watch_time,
-         ua.country,
-         ua.city,
-         ua.region,
-         ua.device_type,
-         ua.user_agent,
-         CASE WHEN la.is_active = 1 AND la.last_heartbeat >= ? THEN 1 ELSE 0 END as is_online,
-         la.activity_type as current_activity,
-         la.content_title as current_content
-       FROM user_activity ua
-       LEFT JOIN live_activity la ON ua.user_id = la.user_id AND la.is_active = 1
-       WHERE ua.first_seen > 0 AND ua.last_seen > 0 AND ua.last_seen <= ?
-       GROUP BY ua.user_id
-       ORDER BY ua.last_seen DESC
-       LIMIT ? OFFSET ?`;
+  // First, check what columns exist in user_activity table
+  let users: any[] = [];
+  
+  try {
+    // Simple query without JOINs first to avoid column issues
+    const usersQuery = isNeon
+      ? `SELECT DISTINCT ON (user_id)
+           id, user_id, session_id, first_seen, last_seen,
+           total_sessions, total_watch_time, country, city, region,
+           device_type, user_agent
+         FROM user_activity
+         WHERE first_seen > 0 AND last_seen > 0 AND last_seen <= $3
+         ORDER BY user_id, last_seen DESC
+         LIMIT $1 OFFSET $2`
+      : `SELECT 
+           id, user_id, session_id, first_seen, last_seen,
+           total_sessions, total_watch_time, country, city, region,
+           device_type, user_agent
+         FROM user_activity
+         WHERE first_seen > 0 AND last_seen > 0 AND last_seen <= ?
+         GROUP BY user_id
+         ORDER BY last_seen DESC
+         LIMIT ? OFFSET ?`;
 
-  const users = await adapter.query(usersQuery, isNeon ? [fiveMinutesAgo, limit, offset, now] : [fiveMinutesAgo, now, limit, offset]);
+    users = await adapter.query(usersQuery, isNeon ? [limit, offset, now] : [now, limit, offset]);
+  } catch (e) {
+    console.error('Error fetching users from user_activity:', e);
+    // Fallback: try without the timestamp filter
+    try {
+      const fallbackQuery = isNeon
+        ? `SELECT DISTINCT ON (user_id) * FROM user_activity ORDER BY user_id, last_seen DESC LIMIT $1 OFFSET $2`
+        : `SELECT * FROM user_activity GROUP BY user_id ORDER BY last_seen DESC LIMIT ? OFFSET ?`;
+      users = await adapter.query(fallbackQuery, isNeon ? [limit, offset] : [limit, offset]);
+    } catch (e2) {
+      console.error('Fallback query also failed:', e2);
+      users = [];
+    }
+  }
+  
+  // Get live activity separately
+  let liveUsers: Record<string, any> = {};
+  try {
+    const liveQuery = isNeon
+      ? `SELECT user_id, activity_type, content_title FROM live_activity WHERE is_active = TRUE AND last_heartbeat >= $1`
+      : `SELECT user_id, activity_type, content_title FROM live_activity WHERE is_active = 1 AND last_heartbeat >= ?`;
+    const liveResult = await adapter.query(liveQuery, [fiveMinutesAgo]);
+    liveResult.forEach((l: any) => {
+      liveUsers[l.user_id] = { activity: l.activity_type, content: l.content_title };
+    });
+  } catch (e) {
+    console.error('Error fetching live activity:', e);
+  }
 
   // Get total count of UNIQUE users with valid timestamps
-  const countQuery = isNeon
-    ? 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE first_seen > 0 AND last_seen > 0'
-    : 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE first_seen > 0 AND last_seen > 0';
-  const countResult = await adapter.query(countQuery);
-  const totalUsers = parseInt(countResult[0]?.count) || 0;
+  let totalUsers = 0;
+  try {
+    const countQuery = isNeon
+      ? 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE first_seen > 0 AND last_seen > 0'
+      : 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE first_seen > 0 AND last_seen > 0';
+    const countResult = await adapter.query(countQuery);
+    totalUsers = parseInt(countResult[0]?.count) || 0;
+  } catch (e) {
+    console.error('Error counting users:', e);
+  }
 
   // Filter and validate all user data
   const validUsers = users
     .map((u: any) => {
       const firstSeen = normalizeTimestamp(u.first_seen);
       const lastSeen = normalizeTimestamp(u.last_seen);
+      const live = liveUsers[u.user_id];
       
       return {
         userId: u.user_id,
@@ -147,9 +159,9 @@ async function getAllUsers(
         region: u.region || null,
         deviceType: u.device_type || 'unknown',
         userAgent: u.user_agent,
-        isOnline: !!u.is_online,
-        currentActivity: u.current_activity || null,
-        currentContent: u.current_content || null,
+        isOnline: !!live,
+        currentActivity: live?.activity || null,
+        currentContent: live?.content || null,
       };
     })
     .filter((u: any) => u.userId && (u.firstSeen > 0 || u.lastSeen > 0));
@@ -180,66 +192,82 @@ async function getAllUsers(
 async function getUserProfile(adapter: any, isNeon: boolean, userId: string, now: number) {
   const fiveMinutesAgo = now - 5 * 60 * 1000;
 
-  // 1. Get basic user info - get the most recent record for this user
-  const userQuery = isNeon
-    ? `SELECT * FROM user_activity WHERE user_id = $1 AND first_seen > 0 ORDER BY last_seen DESC LIMIT 1`
-    : `SELECT * FROM user_activity WHERE user_id = ? AND first_seen > 0 ORDER BY last_seen DESC LIMIT 1`;
-  const userResult = await adapter.query(userQuery, [userId]);
-  
-  if (!userResult || userResult.length === 0) {
-    return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
-  }
+  try {
+    // 1. Get basic user info - get the most recent record for this user
+    const userQuery = isNeon
+      ? `SELECT * FROM user_activity WHERE user_id = $1 ORDER BY last_seen DESC LIMIT 1`
+      : `SELECT * FROM user_activity WHERE user_id = ? ORDER BY last_seen DESC LIMIT 1`;
+    const userResult = await adapter.query(userQuery, [userId]);
+    
+    if (!userResult || userResult.length === 0) {
+      return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
+    }
 
-  const user = userResult[0];
-  
-  // Validate user timestamps
-  const userFirstSeen = normalizeTimestamp(user.first_seen);
-  const userLastSeen = normalizeTimestamp(user.last_seen);
+    const user = userResult[0];
+    
+    // Validate user timestamps
+    const userFirstSeen = normalizeTimestamp(user.first_seen);
+    const userLastSeen = normalizeTimestamp(user.last_seen);
 
-  // 2. Get current live activity
-  const liveQuery = isNeon
-    ? `SELECT * FROM live_activity WHERE user_id = $1 AND is_active = TRUE AND last_heartbeat >= $2`
-    : `SELECT * FROM live_activity WHERE user_id = ? AND is_active = 1 AND last_heartbeat >= ?`;
-  const liveResult = await adapter.query(liveQuery, [userId, fiveMinutesAgo]);
-  const liveActivity = liveResult[0] || null;
+    // 2. Get current live activity (with error handling)
+    let liveActivity = null;
+    try {
+      const liveQuery = isNeon
+        ? `SELECT * FROM live_activity WHERE user_id = $1 AND is_active = TRUE AND last_heartbeat >= $2`
+        : `SELECT * FROM live_activity WHERE user_id = ? AND is_active = 1 AND last_heartbeat >= ?`;
+      const liveResult = await adapter.query(liveQuery, [userId, fiveMinutesAgo]);
+      liveActivity = liveResult[0] || null;
+    } catch (e) {
+      console.error('Error fetching live activity:', e);
+    }
 
-  // 3. Get watch history (last 50 sessions)
-  const watchQuery = isNeon
-    ? `SELECT 
-         content_id, content_type, content_title, 
-         season_number, episode_number,
-         started_at, ended_at, total_watch_time, 
-         last_position, duration, completion_percentage,
-         quality, device_type, is_completed, pause_count, seek_count
-       FROM watch_sessions 
-       WHERE user_id = $1 
-       ORDER BY started_at DESC 
-       LIMIT 50`
-    : `SELECT 
-         content_id, content_type, content_title, 
-         season_number, episode_number,
-         started_at, ended_at, total_watch_time, 
-         last_position, duration, completion_percentage,
-         quality, device_type, is_completed, pause_count, seek_count
-       FROM watch_sessions 
-       WHERE user_id = ? 
-       ORDER BY started_at DESC 
-       LIMIT 50`;
-  const watchHistory = await adapter.query(watchQuery, [userId]);
+    // 3. Get watch history (last 50 sessions) - with error handling
+    let watchHistory: any[] = [];
+    try {
+      const watchQuery = isNeon
+        ? `SELECT 
+             content_id, content_type, content_title, 
+             season_number, episode_number,
+             started_at, ended_at, total_watch_time, 
+             last_position, duration, completion_percentage,
+             quality, device_type, is_completed, pause_count, seek_count
+           FROM watch_sessions 
+           WHERE user_id = $1 
+           ORDER BY started_at DESC 
+           LIMIT 50`
+        : `SELECT 
+             content_id, content_type, content_title, 
+             season_number, episode_number,
+             started_at, ended_at, total_watch_time, 
+             last_position, duration, completion_percentage,
+             quality, device_type, is_completed, pause_count, seek_count
+           FROM watch_sessions 
+           WHERE user_id = ? 
+           ORDER BY started_at DESC 
+           LIMIT 50`;
+      watchHistory = await adapter.query(watchQuery, [userId]) || [];
+    } catch (e) {
+      console.error('Error fetching watch history:', e);
+    }
 
-  // 4. Get page view history (last 100 events)
-  const eventsQuery = isNeon
-    ? `SELECT event_type, timestamp, metadata 
-       FROM analytics_events 
-       WHERE user_id = $1 OR session_id = $1
-       ORDER BY timestamp DESC 
-       LIMIT 100`
-    : `SELECT event_type, timestamp, metadata 
-       FROM analytics_events 
-       WHERE user_id = ? OR session_id = ?
-       ORDER BY timestamp DESC 
-       LIMIT 100`;
-  const events = await adapter.query(eventsQuery, isNeon ? [userId] : [userId, userId]);
+    // 4. Get page view history (last 100 events) - with error handling
+    let events: any[] = [];
+    try {
+      const eventsQuery = isNeon
+        ? `SELECT event_type, timestamp, metadata 
+           FROM analytics_events 
+           WHERE user_id = $1 OR session_id = $1
+           ORDER BY timestamp DESC 
+           LIMIT 100`
+        : `SELECT event_type, timestamp, metadata 
+           FROM analytics_events 
+           WHERE user_id = ? OR session_id = ?
+           ORDER BY timestamp DESC 
+           LIMIT 100`;
+      events = await adapter.query(eventsQuery, isNeon ? [userId] : [userId, userId]) || [];
+    } catch (e) {
+      console.error('Error fetching events:', e);
+    }
 
   // 5. Calculate engagement metrics
   const totalWatchTime = watchHistory.reduce((sum: number, w: any) => sum + (parseInt(w.total_watch_time) || 0), 0);
@@ -383,6 +411,14 @@ async function getUserProfile(adapter: any, isNeon: boolean, userId: string, now
       .filter((w: any) => w.startedAt > 0),
     recentActivity,
   });
+  } catch (error) {
+    console.error('Error in getUserProfile:', error);
+    return NextResponse.json({ 
+      success: false, 
+      error: 'Failed to fetch user profile',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
+  }
 }
 
 function getMostCommon(arr: string[]): string | null {

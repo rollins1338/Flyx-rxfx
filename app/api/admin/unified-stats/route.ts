@@ -67,47 +67,51 @@ export async function GET(request: NextRequest) {
 
     // ============================================
     // 2. USER METRICS (from user_activity ONLY - single source)
-    // Only count users with valid timestamps (after Jan 1, 2020)
     // ============================================
-    const minValidTimestamp = new Date('2020-01-01').getTime(); // 1577836800000
     let users = { total: 0, dau: 0, wau: 0, mau: 0, newToday: 0, returning: 0 };
     try {
-      // Get all metrics in a single query for consistency
-      // Filter out invalid timestamps (must be after 2020 and not in the future)
-      const userMetricsQuery = isNeon
-        ? `SELECT 
-             COUNT(DISTINCT user_id) as total,
-             COUNT(DISTINCT CASE WHEN last_seen >= $1 AND last_seen <= $5 THEN user_id END) as dau,
-             COUNT(DISTINCT CASE WHEN last_seen >= $2 AND last_seen <= $5 THEN user_id END) as wau,
-             COUNT(DISTINCT CASE WHEN last_seen >= $3 AND last_seen <= $5 THEN user_id END) as mau,
-             COUNT(DISTINCT CASE WHEN first_seen >= $1 AND first_seen <= $5 THEN user_id END) as new_today,
-             COUNT(DISTINCT CASE WHEN first_seen < $1 AND last_seen >= $4 AND last_seen <= $5 THEN user_id END) as returning
-           FROM user_activity
-           WHERE first_seen >= $6 AND last_seen >= $6 AND last_seen <= $5`
-        : `SELECT 
-             COUNT(DISTINCT user_id) as total,
-             COUNT(DISTINCT CASE WHEN last_seen >= ? AND last_seen <= ? THEN user_id END) as dau,
-             COUNT(DISTINCT CASE WHEN last_seen >= ? AND last_seen <= ? THEN user_id END) as wau,
-             COUNT(DISTINCT CASE WHEN last_seen >= ? AND last_seen <= ? THEN user_id END) as mau,
-             COUNT(DISTINCT CASE WHEN first_seen >= ? AND first_seen <= ? THEN user_id END) as new_today,
-             COUNT(DISTINCT CASE WHEN first_seen < ? AND last_seen >= ? AND last_seen <= ? THEN user_id END) as returning
-           FROM user_activity
-           WHERE first_seen >= ? AND last_seen >= ? AND last_seen <= ?`;
+      // Simple query first to check if table exists and has data
+      const simpleQuery = isNeon
+        ? `SELECT COUNT(*) as total FROM user_activity WHERE first_seen > 0 AND last_seen > 0`
+        : `SELECT COUNT(*) as total FROM user_activity WHERE first_seen > 0 AND last_seen > 0`;
       
-      const params = isNeon 
-        ? [oneDayAgo, oneWeekAgo, oneMonthAgo, oneDayAgo, now, minValidTimestamp]
-        : [oneDayAgo, now, oneWeekAgo, now, oneMonthAgo, now, oneDayAgo, now, oneDayAgo, oneDayAgo, now, minValidTimestamp, minValidTimestamp, now];
+      const simpleResult = await adapter.query(simpleQuery);
+      users.total = parseInt(simpleResult[0]?.total) || 0;
       
-      const userResult = await adapter.query(userMetricsQuery, params);
+      // Get DAU (active in last 24h)
+      const dauQuery = isNeon
+        ? `SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= $1 AND last_seen <= $2`
+        : `SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= ? AND last_seen <= ?`;
+      const dauResult = await adapter.query(dauQuery, [oneDayAgo, now]);
+      users.dau = parseInt(dauResult[0]?.count) || 0;
       
-      if (userResult[0]) {
-        users.total = parseInt(userResult[0].total) || 0;
-        users.dau = parseInt(userResult[0].dau) || 0;
-        users.wau = parseInt(userResult[0].wau) || 0;
-        users.mau = parseInt(userResult[0].mau) || 0;
-        users.newToday = parseInt(userResult[0].new_today) || 0;
-        users.returning = parseInt(userResult[0].returning) || 0;
-      }
+      // Get WAU (active in last week)
+      const wauQuery = isNeon
+        ? `SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= $1 AND last_seen <= $2`
+        : `SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= ? AND last_seen <= ?`;
+      const wauResult = await adapter.query(wauQuery, [oneWeekAgo, now]);
+      users.wau = parseInt(wauResult[0]?.count) || 0;
+      
+      // Get MAU (active in last month)
+      const mauQuery = isNeon
+        ? `SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= $1 AND last_seen <= $2`
+        : `SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= ? AND last_seen <= ?`;
+      const mauResult = await adapter.query(mauQuery, [oneMonthAgo, now]);
+      users.mau = parseInt(mauResult[0]?.count) || 0;
+      
+      // Get new users today
+      const newQuery = isNeon
+        ? `SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE first_seen >= $1 AND first_seen <= $2`
+        : `SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE first_seen >= ? AND first_seen <= ?`;
+      const newResult = await adapter.query(newQuery, [oneDayAgo, now]);
+      users.newToday = parseInt(newResult[0]?.count) || 0;
+      
+      // Get returning users
+      const returningQuery = isNeon
+        ? `SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE first_seen < $1 AND last_seen >= $1 AND last_seen <= $2`
+        : `SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE first_seen < ? AND last_seen >= ? AND last_seen <= ?`;
+      const returningResult = await adapter.query(returningQuery, isNeon ? [oneDayAgo, now] : [oneDayAgo, oneDayAgo, now]);
+      users.returning = parseInt(returningResult[0]?.count) || 0;
     } catch (e) {
       console.error('Error fetching user stats:', e);
     }

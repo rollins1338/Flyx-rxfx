@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useAdmin } from '../context/AdminContext';
 import { useStats } from '../context/StatsContext';
 
 // Helper functions
@@ -92,6 +93,7 @@ interface UserProfile {
 }
 
 export default function AdminUsersPage() {
+  useAdmin(); // Ensure admin authentication
   const { stats: unifiedStats } = useStats();
   
   const [users, setUsers] = useState<User[]>([]);
@@ -115,14 +117,19 @@ export default function AdminUsersPage() {
   };
 
   useEffect(() => { 
-    fetchUsers(); 
+    // Small delay to ensure auth is ready
+    const timer = setTimeout(() => {
+      fetchUsers(); 
+      
+      // Check if userId is in URL params to auto-open profile
+      const urlParams = new URLSearchParams(window.location.search);
+      const userIdParam = urlParams.get('userId');
+      if (userIdParam) {
+        fetchUserProfile(userIdParam);
+      }
+    }, 100);
     
-    // Check if userId is in URL params to auto-open profile
-    const urlParams = new URLSearchParams(window.location.search);
-    const userIdParam = urlParams.get('userId');
-    if (userIdParam) {
-      fetchUserProfile(userIdParam);
-    }
+    return () => clearTimeout(timer);
   }, []);
 
   const fetchUsers = async () => {
@@ -146,10 +153,19 @@ export default function AdminUsersPage() {
       const response = await fetch(`/api/admin/users?userId=${encodeURIComponent(userId)}`);
       if (response.ok) {
         const data = await response.json();
-        setSelectedUser(data);
+        if (data.success !== false) {
+          setSelectedUser(data);
+        } else {
+          console.error('Failed to fetch user profile:', data.error);
+          setSelectedUser(null);
+        }
+      } else {
+        console.error('Failed to fetch user profile: HTTP', response.status);
+        setSelectedUser(null);
       }
     } catch (err) {
       console.error('Failed to fetch user profile:', err);
+      setSelectedUser(null);
     } finally {
       setLoadingProfile(false);
     }
