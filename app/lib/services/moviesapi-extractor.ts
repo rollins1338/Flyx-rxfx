@@ -1,3 +1,10 @@
+/**
+ * MoviesAPI Extractor
+ * Uses the moviesapi.to scrapify API with proper encryption
+ */
+
+import CryptoJS from 'crypto-js';
+
 interface StreamSource {
     quality: string;
     title: string;
@@ -13,162 +20,207 @@ interface ExtractionResult {
     error?: string;
 }
 
-// Fetch Logic
-async function fetchUrl(url: string, options: RequestInit = {}): Promise<{ data: string; headers: Headers; statusCode: number }> {
-    const defaultHeaders = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Connection': 'keep-alive',
-        ...options.headers
-    };
+// API Configuration
+const ENCRYPTION_KEY = 'moviesapi-secure-encryption-key-2024-v1';
+const PLAYER_API_KEY = 'moviesapi-player-auth-key-2024-secure';
+const SCRAPIFY_URL = 'https://w1.moviesapi.to/api/scrapify';
 
-    const response = await fetch(url, {
-        ...options,
-        headers: defaultHeaders,
-        redirect: 'follow'
-    });
+// Source configurations - ordered by reliability
+// Orion (m4uhd) is best for newer movies, Beta (fmovies) is good general fallback
+const SOURCES = [
+    { name: 'Orion', source: 'm4uhd', priority: 1 },       // Best for newer movies
+    { name: 'Beta', source: 'fmovies', priority: 2 },      // Good general fallback
+    { name: 'Apollo', source: 'sflix2', srv: '0', priority: 3 },
+    { name: 'Alpha', source: 'sflix2', srv: '1', priority: 4 },
+    { name: 'Nexon', source: 'bmovies', priority: 5 },
+];
 
-    const data = await response.text();
-    return { data, headers: response.headers, statusCode: response.status };
-}
-
-// Unpack packed JavaScript (p,a,c,k,e,d format)
-function unpackScript(packed: string): string {
-    // Extract the packed function arguments
-    const match = packed.match(/eval\(function\(p,a,c,k,e,d\)\{[^}]+\}\('([^']+)',(\d+),(\d+),'([^']+)'\.split\('\|'\)/);
-    if (!match) {
-        throw new Error('Could not parse packed script');
-    }
-    
-    const [, p, a, c, dict] = match;
-    const radix = parseInt(a);
-    const count = parseInt(c);
-    const keywords = dict.split('|');
-    
-    // Unpack function
-    let result = p;
-    for (let i = count - 1; i >= 0; i--) {
-        if (keywords[i]) {
-            const pattern = new RegExp('\\b' + i.toString(radix) + '\\b', 'g');
-            result = result.replace(pattern, keywords[i]);
+/**
+ * Fetch from scrapify API with encryption
+ */
+async function fetchFromScrapify(
+    tmdbId: string,
+    type: 'movie' | 'tv',
+    season?: number,
+    episode?: number,
+    sourceName: string = 'fmovies',
+    srv?: string
+): Promise<{ url: string; subtitles: any[] } | null> {
+    try {
+        // Build payload
+        const payload: any = {
+            source: sourceName,
+            type: type,
+            id: tmdbId,
+        };
+        
+        if (type === 'tv' && season && episode) {
+            payload.season = season;
+            payload.episode = episode;
         }
+        
+        if (srv) {
+            payload.srv = srv;
+        }
+
+        // Encrypt payload
+        const encrypted = CryptoJS.AES.encrypt(
+            JSON.stringify(payload),
+            ENCRYPTION_KEY
+        ).toString();
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+        const response = await fetch(`${SCRAPIFY_URL}/v1/fetch`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-player-key': PLAYER_API_KEY,
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'application/json, text/plain, */*',
+                'Referer': 'https://w1.moviesapi.to/',
+                'Origin': 'https://w1.moviesapi.to'
+            },
+            body: JSON.stringify({ payload: encrypted }),
+            signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            return null;
+        }
+
+        const json = await response.json();
+        
+        let streamUrl = '';
+        let subtitles: any[] = [];
+        
+        if (json.sources && json.sources[0]) {
+            streamUrl = json.sources[0].url;
+            subtitles = json.sources[0].tracks || json.sources[0].subtitles || [];
+        } else if (json.url) {
+            streamUrl = json.url;
+            subtitles = json.tracks || json.subtitles || [];
+        }
+
+        if (!streamUrl) {
+            return null;
+        }
+
+        return { url: streamUrl, subtitles };
+    } catch (error) {
+        console.error(`[MoviesApi] Scrapify fetch error:`, error);
+        return null;
     }
-    
-    return result;
 }
 
+/**
+ * Apply URL transformations based on source
+ */
+function transformUrl(url: string, sourceName: string): string {
+    if (sourceName === 'Apollo' || sourceName === 'Nexon') {
+        const stripped = url.replace(/^https?:\/\//, '');
+        return `https://ax.1hd.su/${stripped}`;
+    } else if (sourceName === 'Alpha') {
+        const stripped = url.replace(/^https?:\/\//, '');
+        return `https://xd.flix1.online/${stripped}`;
+    }
+    return url;
+}
+
+/**
+ * Check if stream URL is accessible
+ */
+async function checkStreamAccessibility(url: string): Promise<boolean> {
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        const response = await fetch(url, {
+            method: 'HEAD',
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Referer': 'https://w1.moviesapi.to/'
+            },
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        return response.ok;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Main extraction function
+ */
 export async function extractMoviesApiStreams(
     tmdbId: string,
     type: 'movie' | 'tv',
     season?: number,
     episode?: number
 ): Promise<ExtractionResult> {
-    // Build the moviesapi.club URL
-    let clubUrl: string;
-    if (type === 'movie') {
-        clubUrl = `https://moviesapi.club/movie/${tmdbId}`;
-    } else {
-        clubUrl = `https://moviesapi.club/tv/${tmdbId}-${season}-${episode}`;
-    }
+    console.log(`[MoviesApi] Extracting for ${type} ID ${tmdbId}...`);
 
-    console.log(`[MoviesApi] Extracting for ${type} ID ${tmdbId} (${clubUrl})...`);
-
-    try {
-        // Step 1: Get the iframe URL from moviesapi.club
-        console.log('[MoviesApi] Step 1: Fetching moviesapi.club page...');
-        const clubPage = await fetchUrl(clubUrl);
+    // Try sources in order of priority
+    for (const src of SOURCES) {
+        console.log(`[MoviesApi] Trying source: ${src.name} (${src.source})`);
         
-        if (clubPage.statusCode !== 200) {
-            throw new Error(`moviesapi.club returned ${clubPage.statusCode}`);
-        }
-
-        // Look for vidora.stream iframe
-        const iframeMatch = clubPage.data.match(/src="(https:\/\/vidora\.stream\/embed\/[^"]+)"/);
-        if (!iframeMatch) {
-            console.log('[MoviesApi] No vidora.stream iframe found, checking for other sources...');
-            
-            // Try to find any iframe src
-            const anyIframeMatch = clubPage.data.match(/iframe[^>]+src="([^"]+)"/i);
-            if (anyIframeMatch) {
-                console.log(`[MoviesApi] Found alternative iframe: ${anyIframeMatch[1]}`);
-            }
-            
-            throw new Error('No vidora.stream iframe found on moviesapi.club');
-        }
-
-        const vidoraUrl = iframeMatch[1];
-        console.log(`[MoviesApi] Step 2: Found vidora URL: ${vidoraUrl}`);
-
-        // Step 2: Fetch the vidora.stream embed page
-        const vidoraPage = await fetchUrl(vidoraUrl, {
-            headers: { 'Referer': clubUrl }
-        });
-
-        if (vidoraPage.statusCode !== 200) {
-            throw new Error(`vidora.stream returned ${vidoraPage.statusCode}`);
-        }
-
-        console.log(`[MoviesApi] Step 3: Parsing vidora page (${vidoraPage.data.length} chars)...`);
-
-        // Step 3: Find and extract the packed script
-        // Look for the dictionary pattern at the end of the packed script
-        const dictMatch = vidoraPage.data.match(/\.split\('\|'\)\)\)/);
-        if (!dictMatch) {
-            throw new Error('Could not find packed script dictionary');
-        }
-
-        // Find the start of the eval
-        const dictIndex = vidoraPage.data.indexOf(dictMatch[0]);
-        const evalStart = vidoraPage.data.lastIndexOf("eval(function(p,a,c,k,e,d)", dictIndex);
-        if (evalStart === -1) {
-            throw new Error('Could not find packed script start');
-        }
-
-        const packedScript = vidoraPage.data.substring(evalStart, dictIndex + dictMatch[0].length);
-        console.log(`[MoviesApi] Found packed script (${packedScript.length} chars)`);
-
-        // Step 4: Unpack the script
-        let unpackedCode: string;
         try {
-            // Use eval to unpack (safe in server context)
-            const unpackExpression = packedScript.replace(/^eval/, '');
-            unpackedCode = eval(unpackExpression);
-            console.log(`[MoviesApi] Unpacked script (${unpackedCode.length} chars)`);
-        } catch (e: any) {
-            console.error('[MoviesApi] Eval unpack failed:', e.message);
-            // Try manual unpack as fallback
-            unpackedCode = unpackScript(packedScript);
+            const result = await fetchFromScrapify(
+                tmdbId,
+                type,
+                season,
+                episode,
+                src.source,
+                src.srv
+            );
+
+            if (!result || !result.url) {
+                console.log(`[MoviesApi] ${src.name}: No URL returned`);
+                continue;
+            }
+
+            // Transform URL if needed
+            const streamUrl = transformUrl(result.url, src.name);
+            console.log(`[MoviesApi] ${src.name}: Got URL, checking accessibility...`);
+
+            // Check if stream is accessible
+            const isAccessible = await checkStreamAccessibility(streamUrl);
+            
+            if (!isAccessible) {
+                console.log(`[MoviesApi] ${src.name}: Stream not accessible (403/blocked)`);
+                continue;
+            }
+
+            console.log(`[MoviesApi] ✓ ${src.name} working!`);
+            console.log(`[MoviesApi] Stream URL: ${streamUrl}`);
+
+            return {
+                success: true,
+                sources: [{
+                    quality: 'auto',
+                    title: `MoviesAPI - ${src.name}`,
+                    url: streamUrl,
+                    type: 'hls',
+                    referer: 'https://w1.moviesapi.to/',
+                    requiresSegmentProxy: true
+                }]
+            };
+        } catch (error) {
+            console.error(`[MoviesApi] ${src.name} error:`, error);
+            continue;
         }
-
-        // Step 5: Extract the m3u8 URL
-        const fileMatch = unpackedCode.match(/file:"([^"]+)"/);
-        if (!fileMatch) {
-            console.log('[MoviesApi] Unpacked code preview:', unpackedCode.substring(0, 500));
-            throw new Error('Could not find file URL in unpacked script');
-        }
-
-        const m3u8Url = fileMatch[1];
-        console.log(`[MoviesApi] ✓ Found M3U8 URL: ${m3u8Url}`);
-
-        // Extract title if available
-        const titleMatch = unpackedCode.match(/title:"([^"]+)"/);
-        const title = titleMatch ? titleMatch[1] : 'MoviesAPI';
-
-        return {
-            success: true,
-            sources: [{
-                quality: 'auto',
-                title: `MoviesAPI - ${title}`,
-                url: m3u8Url,
-                type: 'hls',
-                referer: 'https://vidora.stream/',
-                requiresSegmentProxy: true
-            }]
-        };
-
-    } catch (error: any) {
-        console.error('[MoviesApi] Extraction failed:', error.message);
-        return { success: false, sources: [], error: error.message };
     }
+
+    // If all sources failed, return error
+    console.error('[MoviesApi] All sources failed');
+    return {
+        success: false,
+        sources: [],
+        error: 'All MoviesAPI sources unavailable'
+    };
 }
