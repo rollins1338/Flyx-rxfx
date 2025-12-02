@@ -371,7 +371,7 @@ export async function GET(request: NextRequest) {
       [startTimestamp, endTimestamp]
     );
 
-    // 8. Advanced Metrics
+    // 8. Advanced Metrics - Enhanced with real bounce rate and session data
     const advancedMetricsRaw = await adapter.query(
       isNeon
         ? `
@@ -401,6 +401,123 @@ export async function GET(request: NextRequest) {
         `,
       [startTimestamp, endTimestamp]
     );
+    
+    // 9. Traffic & Landing Page Metrics from analytics_events
+    let trafficMetrics: any = { totalPageViews: 0, uniqueVisitors: 0, avgTimeOnSite: 0, landingPages: [] };
+    try {
+      // Get page view counts
+      const pageViewsQuery = isNeon
+        ? `
+          SELECT 
+            COUNT(*) as "totalPageViews",
+            COUNT(DISTINCT session_id) as "uniqueVisitors"
+          FROM analytics_events
+          WHERE timestamp BETWEEN $1 AND $2
+          AND event_type = 'page_view'
+        `
+        : `
+          SELECT 
+            COUNT(*) as totalPageViews,
+            COUNT(DISTINCT session_id) as uniqueVisitors
+          FROM analytics_events
+          WHERE timestamp BETWEEN ? AND ?
+          AND event_type = 'page_view'
+        `;
+      const pageViewsRaw = await adapter.query(pageViewsQuery, [startTimestamp, endTimestamp]);
+      
+      // Get landing pages (first page view per session)
+      const landingPagesQuery = isNeon
+        ? `
+          WITH first_pages AS (
+            SELECT DISTINCT ON (session_id) 
+              session_id,
+              metadata->>'page' as page
+            FROM analytics_events
+            WHERE timestamp BETWEEN $1 AND $2
+            AND event_type = 'page_view'
+            ORDER BY session_id, timestamp ASC
+          )
+          SELECT page, COUNT(*) as count
+          FROM first_pages
+          WHERE page IS NOT NULL
+          GROUP BY page
+          ORDER BY count DESC
+          LIMIT 10
+        `
+        : `
+          SELECT 
+            JSON_EXTRACT(metadata, '$.page') as page,
+            COUNT(*) as count
+          FROM (
+            SELECT session_id, metadata, MIN(timestamp) as first_ts
+            FROM analytics_events
+            WHERE timestamp BETWEEN ? AND ?
+            AND event_type = 'page_view'
+            GROUP BY session_id
+          )
+          WHERE page IS NOT NULL
+          GROUP BY page
+          ORDER BY count DESC
+          LIMIT 10
+        `;
+      const landingPagesRaw = await adapter.query(landingPagesQuery, [startTimestamp, endTimestamp]);
+      
+      // Calculate average time on site from user_activity
+      const avgTimeQuery = isNeon
+        ? `
+          SELECT AVG(total_watch_time) / 60 as "avgTimeOnSite"
+          FROM user_activity
+          WHERE last_seen BETWEEN $1 AND $2
+        `
+        : `
+          SELECT AVG(total_watch_time) / 60 as avgTimeOnSite
+          FROM user_activity
+          WHERE last_seen BETWEEN ? AND ?
+        `;
+      const avgTimeRaw = await adapter.query(avgTimeQuery, [startTimestamp, endTimestamp]);
+      
+      trafficMetrics = {
+        totalPageViews: parseInt(pageViewsRaw[0]?.totalPageViews) || 0,
+        uniqueVisitors: parseInt(pageViewsRaw[0]?.uniqueVisitors) || 0,
+        avgTimeOnSite: Math.round(parseFloat(avgTimeRaw[0]?.avgTimeOnSite) || 0),
+        landingPages: landingPagesRaw.map((row: any) => ({
+          page: row.page || '/',
+          count: parseInt(row.count) || 0
+        }))
+      };
+    } catch (trafficError) {
+      console.error('Traffic metrics query error:', trafficError);
+    }
+    
+    // 10. Real-time session duration from user_activity
+    let sessionDurationMetrics: any = { avgDuration: 0, medianDuration: 0, totalSessions: 0 };
+    try {
+      const sessionDurationQuery = isNeon
+        ? `
+          SELECT 
+            COUNT(*) as "totalSessions",
+            AVG(EXTRACT(EPOCH FROM (TO_TIMESTAMP(last_seen / 1000) - TO_TIMESTAMP(first_seen / 1000)))) / 60 as "avgDuration"
+          FROM user_activity
+          WHERE last_seen BETWEEN $1 AND $2
+          AND first_seen > 0
+        `
+        : `
+          SELECT 
+            COUNT(*) as totalSessions,
+            AVG((last_seen - first_seen) / 60000.0) as avgDuration
+          FROM user_activity
+          WHERE last_seen BETWEEN ? AND ?
+          AND first_seen > 0
+        `;
+      const sessionDurationRaw = await adapter.query(sessionDurationQuery, [startTimestamp, endTimestamp]);
+      
+      sessionDurationMetrics = {
+        totalSessions: parseInt(sessionDurationRaw[0]?.totalSessions) || 0,
+        avgDuration: Math.round(parseFloat(sessionDurationRaw[0]?.avgDuration) || 0)
+      };
+    } catch (sessionError) {
+      console.error('Session duration query error:', sessionError);
+    }
 
     // Process and format data
     const overview = {
@@ -461,7 +578,12 @@ export async function GET(request: NextRequest) {
     const advancedMetrics = {
       uniqueViewers: parseInt(advancedMetricsRaw[0]?.uniqueViewers) || 0,
       avgSessionDuration: Math.round(parseFloat(advancedMetricsRaw[0]?.avgSessionDuration) || 0),
-      bounceRate: Math.round(parseFloat(advancedMetricsRaw[0]?.bounceRate) || 0)
+      bounceRate: Math.round(parseFloat(advancedMetricsRaw[0]?.bounceRate) || 0),
+      // Enhanced metrics
+      totalPageViews: trafficMetrics.totalPageViews,
+      uniqueVisitors: trafficMetrics.uniqueVisitors,
+      avgTimeOnSite: trafficMetrics.avgTimeOnSite || sessionDurationMetrics.avgDuration,
+      realSessionCount: sessionDurationMetrics.totalSessions
     };
 
     return NextResponse.json({
@@ -475,6 +597,8 @@ export async function GET(request: NextRequest) {
         deviceBreakdown,
         peakHours,
         advancedMetrics,
+        trafficMetrics,    // New - page views, landing pages
+        sessionMetrics: sessionDurationMetrics, // New - real session durations
         dateRange: {
           start: start.toISOString(),
           end: end.toISOString()

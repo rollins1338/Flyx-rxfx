@@ -312,6 +312,93 @@ class DatabaseConnection {
         is_active BOOLEAN DEFAULT TRUE,
         created_at BIGINT,
         updated_at BIGINT
+      )`,
+
+      // Page views tracking - detailed page-level analytics
+      `CREATE TABLE IF NOT EXISTS page_views (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        page_path TEXT NOT NULL,
+        page_title TEXT,
+        referrer TEXT,
+        entry_time BIGINT NOT NULL,
+        exit_time BIGINT,
+        time_on_page INTEGER DEFAULT 0,
+        scroll_depth INTEGER DEFAULT 0,
+        interactions INTEGER DEFAULT 0,
+        device_type TEXT,
+        country TEXT,
+        is_bounce BOOLEAN DEFAULT FALSE,
+        created_at BIGINT
+      )`,
+
+      // User engagement metrics - aggregated per user (anonymized)
+      `CREATE TABLE IF NOT EXISTS user_engagement (
+        user_id TEXT PRIMARY KEY,
+        first_visit BIGINT NOT NULL,
+        last_visit BIGINT NOT NULL,
+        total_visits INTEGER DEFAULT 1,
+        total_page_views INTEGER DEFAULT 0,
+        total_time_on_site INTEGER DEFAULT 0,
+        total_watch_time INTEGER DEFAULT 0,
+        total_content_watched INTEGER DEFAULT 0,
+        avg_session_duration INTEGER DEFAULT 0,
+        avg_pages_per_session REAL DEFAULT 0,
+        favorite_content_type TEXT,
+        favorite_genre TEXT,
+        preferred_quality TEXT,
+        device_types TEXT,
+        countries TEXT,
+        bounce_count INTEGER DEFAULT 0,
+        return_visits INTEGER DEFAULT 0,
+        last_content_id TEXT,
+        last_content_type TEXT,
+        engagement_score INTEGER DEFAULT 0,
+        created_at BIGINT,
+        updated_at BIGINT
+      )`,
+
+      // Session details - comprehensive session tracking
+      `CREATE TABLE IF NOT EXISTS session_details (
+        session_id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        started_at BIGINT NOT NULL,
+        ended_at BIGINT,
+        duration INTEGER DEFAULT 0,
+        page_views INTEGER DEFAULT 0,
+        unique_pages INTEGER DEFAULT 0,
+        interactions INTEGER DEFAULT 0,
+        content_views INTEGER DEFAULT 0,
+        watch_time INTEGER DEFAULT 0,
+        entry_page TEXT,
+        exit_page TEXT,
+        device_type TEXT,
+        browser TEXT,
+        os TEXT,
+        country TEXT,
+        city TEXT,
+        is_bounce BOOLEAN DEFAULT FALSE,
+        is_returning BOOLEAN DEFAULT FALSE,
+        referrer_source TEXT,
+        referrer_medium TEXT,
+        created_at BIGINT,
+        updated_at BIGINT
+      )`,
+
+      // Page performance metrics
+      `CREATE TABLE IF NOT EXISTS page_metrics (
+        page_path TEXT PRIMARY KEY,
+        total_views INTEGER DEFAULT 0,
+        unique_visitors INTEGER DEFAULT 0,
+        total_time_on_page INTEGER DEFAULT 0,
+        avg_time_on_page REAL DEFAULT 0,
+        bounce_rate REAL DEFAULT 0,
+        exit_rate REAL DEFAULT 0,
+        avg_scroll_depth REAL DEFAULT 0,
+        entry_count INTEGER DEFAULT 0,
+        exit_count INTEGER DEFAULT 0,
+        updated_at BIGINT
       )`
     ];
 
@@ -335,7 +422,17 @@ class DatabaseConnection {
       'CREATE INDEX IF NOT EXISTS idx_live_activity_user ON live_activity(user_id)',
       'CREATE INDEX IF NOT EXISTS idx_live_activity_session ON live_activity(session_id)',
       'CREATE INDEX IF NOT EXISTS idx_live_activity_heartbeat ON live_activity(last_heartbeat DESC)',
-      'CREATE INDEX IF NOT EXISTS idx_live_activity_active ON live_activity(is_active, last_heartbeat DESC)'
+      'CREATE INDEX IF NOT EXISTS idx_live_activity_active ON live_activity(is_active, last_heartbeat DESC)',
+      // Enhanced tracking indexes (PostgreSQL)
+      'CREATE INDEX IF NOT EXISTS idx_page_views_user ON page_views(user_id)',
+      'CREATE INDEX IF NOT EXISTS idx_page_views_session ON page_views(session_id)',
+      'CREATE INDEX IF NOT EXISTS idx_page_views_page ON page_views(page_path)',
+      'CREATE INDEX IF NOT EXISTS idx_page_views_entry ON page_views(entry_time DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_user_engagement_visits ON user_engagement(total_visits DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_user_engagement_last ON user_engagement(last_visit DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_session_details_user ON session_details(user_id)',
+      'CREATE INDEX IF NOT EXISTS idx_session_details_started ON session_details(started_at DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_page_metrics_views ON page_metrics(total_views DESC)'
     ];
 
     for (const table of tables) {
@@ -539,6 +636,93 @@ class DatabaseConnection {
         is_active INTEGER DEFAULT 1,
         created_at INTEGER DEFAULT(strftime('%s', 'now')),
         updated_at INTEGER DEFAULT(strftime('%s', 'now'))
+      )`,
+
+      // Page views tracking - detailed page-level analytics (SQLite)
+      `CREATE TABLE IF NOT EXISTS page_views(
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        page_path TEXT NOT NULL,
+        page_title TEXT,
+        referrer TEXT,
+        entry_time INTEGER NOT NULL,
+        exit_time INTEGER,
+        time_on_page INTEGER DEFAULT 0,
+        scroll_depth INTEGER DEFAULT 0,
+        interactions INTEGER DEFAULT 0,
+        device_type TEXT,
+        country TEXT,
+        is_bounce INTEGER DEFAULT 0,
+        created_at INTEGER DEFAULT(strftime('%s', 'now'))
+      )`,
+
+      // User engagement metrics (SQLite)
+      `CREATE TABLE IF NOT EXISTS user_engagement(
+        user_id TEXT PRIMARY KEY,
+        first_visit INTEGER NOT NULL,
+        last_visit INTEGER NOT NULL,
+        total_visits INTEGER DEFAULT 1,
+        total_page_views INTEGER DEFAULT 0,
+        total_time_on_site INTEGER DEFAULT 0,
+        total_watch_time INTEGER DEFAULT 0,
+        total_content_watched INTEGER DEFAULT 0,
+        avg_session_duration INTEGER DEFAULT 0,
+        avg_pages_per_session REAL DEFAULT 0,
+        favorite_content_type TEXT,
+        favorite_genre TEXT,
+        preferred_quality TEXT,
+        device_types TEXT,
+        countries TEXT,
+        bounce_count INTEGER DEFAULT 0,
+        return_visits INTEGER DEFAULT 0,
+        last_content_id TEXT,
+        last_content_type TEXT,
+        engagement_score INTEGER DEFAULT 0,
+        created_at INTEGER DEFAULT(strftime('%s', 'now')),
+        updated_at INTEGER DEFAULT(strftime('%s', 'now'))
+      )`,
+
+      // Session details (SQLite)
+      `CREATE TABLE IF NOT EXISTS session_details(
+        session_id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        started_at INTEGER NOT NULL,
+        ended_at INTEGER,
+        duration INTEGER DEFAULT 0,
+        page_views INTEGER DEFAULT 0,
+        unique_pages INTEGER DEFAULT 0,
+        interactions INTEGER DEFAULT 0,
+        content_views INTEGER DEFAULT 0,
+        watch_time INTEGER DEFAULT 0,
+        entry_page TEXT,
+        exit_page TEXT,
+        device_type TEXT,
+        browser TEXT,
+        os TEXT,
+        country TEXT,
+        city TEXT,
+        is_bounce INTEGER DEFAULT 0,
+        is_returning INTEGER DEFAULT 0,
+        referrer_source TEXT,
+        referrer_medium TEXT,
+        created_at INTEGER DEFAULT(strftime('%s', 'now')),
+        updated_at INTEGER DEFAULT(strftime('%s', 'now'))
+      )`,
+
+      // Page performance metrics (SQLite)
+      `CREATE TABLE IF NOT EXISTS page_metrics(
+        page_path TEXT PRIMARY KEY,
+        total_views INTEGER DEFAULT 0,
+        unique_visitors INTEGER DEFAULT 0,
+        total_time_on_page INTEGER DEFAULT 0,
+        avg_time_on_page REAL DEFAULT 0,
+        bounce_rate REAL DEFAULT 0,
+        exit_rate REAL DEFAULT 0,
+        avg_scroll_depth REAL DEFAULT 0,
+        entry_count INTEGER DEFAULT 0,
+        exit_count INTEGER DEFAULT 0,
+        updated_at INTEGER DEFAULT(strftime('%s', 'now'))
       )`
     ];
 
@@ -562,7 +746,17 @@ class DatabaseConnection {
       'CREATE INDEX IF NOT EXISTS idx_live_activity_user ON live_activity(user_id)',
       'CREATE INDEX IF NOT EXISTS idx_live_activity_session ON live_activity(session_id)',
       'CREATE INDEX IF NOT EXISTS idx_live_activity_heartbeat ON live_activity(last_heartbeat DESC)',
-      'CREATE INDEX IF NOT EXISTS idx_live_activity_active ON live_activity(is_active, last_heartbeat DESC)'
+      'CREATE INDEX IF NOT EXISTS idx_live_activity_active ON live_activity(is_active, last_heartbeat DESC)',
+      // Enhanced tracking indexes (SQLite)
+      'CREATE INDEX IF NOT EXISTS idx_page_views_user ON page_views(user_id)',
+      'CREATE INDEX IF NOT EXISTS idx_page_views_session ON page_views(session_id)',
+      'CREATE INDEX IF NOT EXISTS idx_page_views_page ON page_views(page_path)',
+      'CREATE INDEX IF NOT EXISTS idx_page_views_entry ON page_views(entry_time DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_user_engagement_visits ON user_engagement(total_visits DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_user_engagement_last ON user_engagement(last_visit DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_session_details_user ON session_details(user_id)',
+      'CREATE INDEX IF NOT EXISTS idx_session_details_started ON session_details(started_at DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_page_metrics_views ON page_metrics(total_views DESC)'
     ];
 
     for (const table of tables) {

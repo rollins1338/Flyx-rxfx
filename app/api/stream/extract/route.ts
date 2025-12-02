@@ -236,41 +236,14 @@ async function getStreamDuration(streamUrl: string, referer: string): Promise<nu
 
 /**
  * Validate stream duration against expected runtime
- * Returns true if duration is within acceptable range
+ * TEMPORARILY DISABLED - Returns true for all streams
+ * TODO: Re-enable when duration validation is more reliable
  */
 function isValidDuration(streamDurationSeconds: number, expectedRuntimeMinutes: number): boolean {
-  if (streamDurationSeconds === 0 || expectedRuntimeMinutes === 0) {
-    // Can't validate, assume valid
-    return true;
-  }
-
-  const expectedSeconds = expectedRuntimeMinutes * 60;
-  const streamMinutes = Math.round(streamDurationSeconds / 60);
-  
-  // More lenient validation:
-  // - Allow up to 30 minutes difference (for extended cuts, different versions, credits)
-  // - OR allow 40% tolerance (whichever is more lenient)
-  // - But reject anything less than 20 minutes for movies (likely wrong content/ads)
-  // - For TV episodes, reject if less than 10 minutes
-  
-  const thirtyMinutesTolerance = 30 * 60; // 30 minutes in seconds
-  const percentageTolerance = expectedSeconds * 0.4; // 40% tolerance
-  const tolerance = Math.max(thirtyMinutesTolerance, percentageTolerance);
-  
-  const minAcceptable = expectedSeconds - tolerance;
-  const maxAcceptable = expectedSeconds + tolerance;
-  
-  // Absolute minimum - reject very short content (likely wrong/ads)
-  const absoluteMinimum = expectedRuntimeMinutes > 60 ? 20 * 60 : 10 * 60; // 20min for movies, 10min for TV
-  
-  const isValid = streamDurationSeconds >= Math.max(minAcceptable, absoluteMinimum) && 
-                  streamDurationSeconds <= maxAcceptable;
-  
-  if (!isValid) {
-    console.log(`[EXTRACT] Duration mismatch: stream=${streamMinutes}min, expected=${expectedRuntimeMinutes}min (tolerance: ±${Math.round(tolerance/60)}min)`);
-  }
-
-  return isValid;
+  // TEMPORARILY DISABLED - Accept all streams regardless of duration
+  // This allows more content to be available while we improve validation
+  console.log(`[EXTRACT] Duration check DISABLED: stream=${Math.round(streamDurationSeconds / 60)}min, expected=${expectedRuntimeMinutes}min - ACCEPTING`);
+  return true;
 }
 
 /**

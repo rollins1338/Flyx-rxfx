@@ -167,37 +167,92 @@ export default function AnalyticsPage() {
     return result;
   }, [sessions, searchQuery, filterDevice, filterQuality, sortField, sortOrder]);
 
-  // Calculate trends
+  // Previous period analytics for trend comparison
+  const [previousAnalytics, setPreviousAnalytics] = useState<Analytics | null>(null);
+
+  // Fetch previous period data for trends
+  useEffect(() => {
+    const fetchPreviousPeriod = async () => {
+      try {
+        const now = Date.now();
+        const ranges: Record<string, number> = {
+          '24h': 24 * 60 * 60 * 1000,
+          '7d': 7 * 24 * 60 * 60 * 1000,
+          '30d': 30 * 24 * 60 * 60 * 1000,
+          'all': 0,
+        };
+
+        const periodLength = ranges[timeRange] || ranges['7d'];
+        if (periodLength === 0) {
+          setPreviousAnalytics(null);
+          return;
+        }
+
+        // Calculate previous period: from (now - 2*period) to (now - period)
+        const prevEndDate = now - periodLength;
+        const prevStartDate = now - (2 * periodLength);
+
+        const params = new URLSearchParams({
+          limit: '200',
+          startDate: prevStartDate.toString(),
+          endDate: prevEndDate.toString(),
+        });
+
+        const response = await fetch(`/api/analytics/watch-session?${params}`);
+        const data = await response.json();
+
+        if (data.success && data.analytics) {
+          setPreviousAnalytics(data.analytics);
+        }
+      } catch (error) {
+        console.error('Failed to fetch previous period analytics:', error);
+        setPreviousAnalytics(null);
+      }
+    };
+
+    if (timeRange !== 'all') {
+      fetchPreviousPeriod();
+    } else {
+      setPreviousAnalytics(null);
+    }
+  }, [timeRange]);
+
+  // Calculate trends using real previous period data
   const trends = useMemo((): TrendData[] => {
     if (!analytics) return [];
     
-    // Simulate previous period data (in production, fetch actual previous period)
-    const prevMultiplier = 0.85 + Math.random() * 0.3;
+    // Use real previous period data if available, otherwise show N/A
+    const prev = previousAnalytics;
+    
+    const calculateChange = (current: number, previous: number | undefined): number => {
+      if (previous === undefined || previous === 0) return 0;
+      return Math.round(((current - previous) / previous) * 100);
+    };
     
     return [
       {
         label: 'Total Sessions',
         current: analytics.totalSessions,
-        previous: Math.round(analytics.totalSessions * prevMultiplier),
-        change: Math.round((1 - prevMultiplier) * 100),
+        previous: prev?.totalSessions ?? 0,
+        change: calculateChange(analytics.totalSessions, prev?.totalSessions),
       },
       {
         label: 'Watch Time',
         current: analytics.totalWatchTime,
-        previous: Math.round(analytics.totalWatchTime * prevMultiplier),
-        change: Math.round((1 - prevMultiplier) * 100),
+        previous: prev?.totalWatchTime ?? 0,
+        change: calculateChange(analytics.totalWatchTime, prev?.totalWatchTime),
       },
       {
         label: 'Completion Rate',
         current: analytics.completionRate,
-        previous: Math.round(analytics.completionRate * prevMultiplier),
-        change: Math.round((1 - prevMultiplier) * 100),
+        previous: prev?.completionRate ?? 0,
+        change: calculateChange(analytics.completionRate, prev?.completionRate),
       },
       {
         label: 'Avg Watch Time',
         current: analytics.averageWatchTime,
-        previous: Math.round(analytics.averageWatchTime * prevMultiplier),
-        change: Math.round((1 - prevMultiplier) * 100),
+        previous: prev?.averageWatchTime ?? 0,
+        change: calculateChange(analytics.averageWatchTime, prev?.averageWatchTime),
       },
     ];
   }, [analytics]);
@@ -549,38 +604,69 @@ export default function AnalyticsPage() {
       {activeTab === 'trends' && (
         <div className={styles.trendsSection}>
           <h2>Performance Trends</h2>
-          <p style={{ color: '#94a3b8', marginBottom: '24px' }}>Compare current period vs previous period</p>
+          <p style={{ color: '#94a3b8', marginBottom: '24px' }}>
+            {timeRange === 'all' 
+              ? 'Trend comparison not available for "All Time" - select a specific time range'
+              : previousAnalytics 
+                ? 'Compare current period vs previous period (real data)'
+                : 'Loading previous period data...'}
+          </p>
           
-          <div className={styles.trendsGrid}>
-            {trends.map((trend) => (
-              <div key={trend.label} className={styles.trendCard}>
-                <div className={styles.trendHeader}>
-                  <span className={styles.trendLabel}>{trend.label}</span>
-                  <span className={`${styles.trendChange} ${trend.change >= 0 ? styles.positive : styles.negative}`}>
-                    {trend.change >= 0 ? '↑' : '↓'} {Math.abs(trend.change)}%
-                  </span>
-                </div>
-                <div className={styles.trendValues}>
-                  <div className={styles.trendCurrent}>
-                    <span className={styles.trendValueLabel}>Current</span>
-                    <span className={styles.trendValue}>
-                      {typeof trend.current === 'number' && trend.label.includes('Time') 
-                        ? formatDuration(trend.current) 
-                        : trend.current}
-                    </span>
+          {timeRange === 'all' ? (
+            <div style={{ 
+              textAlign: 'center', 
+              padding: '60px 40px', 
+              background: 'rgba(255, 255, 255, 0.03)', 
+              borderRadius: '16px',
+              border: '1px solid rgba(255, 255, 255, 0.1)'
+            }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>📊</div>
+              <h3 style={{ color: '#f8fafc', margin: '0 0 8px 0' }}>Select a Time Range</h3>
+              <p style={{ color: '#64748b', margin: 0 }}>
+                Choose 24h, 7d, or 30d to see trend comparisons with the previous period
+              </p>
+            </div>
+          ) : (
+            <div className={styles.trendsGrid}>
+              {trends.map((trend) => {
+                const hasPreviousData = trend.previous > 0;
+                return (
+                  <div key={trend.label} className={styles.trendCard}>
+                    <div className={styles.trendHeader}>
+                      <span className={styles.trendLabel}>{trend.label}</span>
+                      {hasPreviousData ? (
+                        <span className={`${styles.trendChange} ${trend.change >= 0 ? styles.positive : styles.negative}`}>
+                          {trend.change >= 0 ? '↑' : '↓'} {Math.abs(trend.change)}%
+                        </span>
+                      ) : (
+                        <span style={{ color: '#64748b', fontSize: '12px' }}>No prior data</span>
+                      )}
+                    </div>
+                    <div className={styles.trendValues}>
+                      <div className={styles.trendCurrent}>
+                        <span className={styles.trendValueLabel}>Current</span>
+                        <span className={styles.trendValue}>
+                          {typeof trend.current === 'number' && trend.label.includes('Time') 
+                            ? formatDuration(trend.current) 
+                            : trend.current}
+                        </span>
+                      </div>
+                      <div className={styles.trendPrevious}>
+                        <span className={styles.trendValueLabel}>Previous</span>
+                        <span className={styles.trendValue}>
+                          {hasPreviousData 
+                            ? (typeof trend.previous === 'number' && trend.label.includes('Time') 
+                                ? formatDuration(trend.previous) 
+                                : trend.previous)
+                            : 'N/A'}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div className={styles.trendPrevious}>
-                    <span className={styles.trendValueLabel}>Previous</span>
-                    <span className={styles.trendValue}>
-                      {typeof trend.previous === 'number' && trend.label.includes('Time') 
-                        ? formatDuration(trend.previous) 
-                        : trend.previous}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

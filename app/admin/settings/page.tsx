@@ -53,24 +53,44 @@ export default function AdminSettingsPage() {
   const checkSystemHealth = async () => {
     setLoading(true);
     try {
-      // Check API health
+      // Check API health with real latency measurement
       const apiStart = Date.now();
-      await fetch('/api/admin/analytics?period=day');
+      const apiResponse = await fetch('/api/admin/analytics?period=day');
       const apiLatency = Date.now() - apiStart;
+      const apiHealthy = apiResponse.ok;
       
-      // Simulate other health checks
+      // Check database health by making a lightweight query
+      const dbStart = Date.now();
+      let dbHealthy = false;
+      let dbLatency = 0;
+      try {
+        const dbResponse = await fetch('/api/analytics/watch-session?limit=1');
+        dbLatency = Date.now() - dbStart;
+        dbHealthy = dbResponse.ok;
+      } catch {
+        dbHealthy = false;
+      }
+      
       setHealth({
-        database: { status: 'healthy', latency: Math.round(apiLatency * 0.6) },
-        api: { status: 'healthy', latency: apiLatency },
-        cache: { status: 'healthy', hitRate: 85 + Math.random() * 10 },
-        storage: { used: 2.4, total: 10 },
+        database: { 
+          status: dbHealthy ? (dbLatency < 500 ? 'healthy' : 'warning') : 'error', 
+          latency: dbLatency 
+        },
+        api: { 
+          status: apiHealthy ? (apiLatency < 1000 ? 'healthy' : 'warning') : 'error', 
+          latency: apiLatency 
+        },
+        // Cache status - we don't have real cache metrics, so mark as N/A
+        cache: { status: 'healthy', hitRate: 0 },
+        // Storage - we don't have real storage metrics available
+        storage: { used: 0, total: 0 },
       });
     } catch (error) {
       setHealth({
         database: { status: 'error', latency: 0 },
         api: { status: 'error', latency: 0 },
         cache: { status: 'unknown', hitRate: 0 },
-        storage: { used: 0, total: 10 },
+        storage: { used: 0, total: 0 },
       });
     } finally {
       setLoading(false);
@@ -268,7 +288,7 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
 
-              {/* Cache Status */}
+              {/* Cache Status - Note: No real cache metrics available */}
               <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '12px', padding: '20px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -281,38 +301,33 @@ export default function AdminSettingsPage() {
                     fontSize: '12px',
                     fontWeight: '600',
                     textTransform: 'uppercase',
-                    background: `${getStatusColor(health.cache.status)}20`,
-                    color: getStatusColor(health.cache.status)
+                    background: 'rgba(100, 116, 139, 0.2)',
+                    color: '#64748b'
                   }}>
-                    {health.cache.status}
+                    N/A
                   </span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: '14px' }}>
                   <span>Hit Rate</span>
-                  <span style={{ color: '#10b981', fontWeight: '600' }}>
-                    {Math.round(health.cache.hitRate)}%
+                  <span style={{ color: '#64748b', fontWeight: '600' }}>
+                    Not tracked
                   </span>
                 </div>
               </div>
 
-              {/* Storage Status */}
+              {/* Storage Status - Note: No real storage metrics available */}
               <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '12px', padding: '20px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <span style={{ fontSize: '24px' }}>💾</span>
                     <span style={{ color: '#f8fafc', fontWeight: '600' }}>Storage</span>
                   </div>
-                  <span style={{ color: '#f8fafc', fontWeight: '600' }}>
-                    {health.storage.used}GB / {health.storage.total}GB
+                  <span style={{ color: '#64748b', fontWeight: '600' }}>
+                    N/A
                   </span>
                 </div>
-                <div style={{ height: '8px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden' }}>
-                  <div style={{
-                    height: '100%',
-                    width: `${(health.storage.used / health.storage.total) * 100}%`,
-                    background: 'linear-gradient(90deg, #7877c6, #ff77c6)',
-                    borderRadius: '4px'
-                  }} />
+                <div style={{ color: '#64748b', fontSize: '13px' }}>
+                  Storage metrics not available for serverless deployment
                 </div>
               </div>
             </div>

@@ -15,6 +15,17 @@ interface AdvancedMetrics {
   uniqueViewers: number;
   avgSessionDuration: number;
   bounceRate: number;
+  totalPageViews?: number;
+  uniqueVisitors?: number;
+  avgTimeOnSite?: number;
+  realSessionCount?: number;
+}
+
+interface TrafficMetrics {
+  totalPageViews: number;
+  uniqueVisitors: number;
+  avgTimeOnSite: number;
+  landingPages: Array<{ page: string; count: number }>;
 }
 
 interface LiveTVStats {
@@ -29,6 +40,8 @@ interface FullAnalytics {
   advancedMetrics: AdvancedMetrics;
   deviceBreakdown: Array<{ deviceType: string; count: number }>;
   peakHours: Array<{ hour: number; count: number }>;
+  trafficMetrics?: TrafficMetrics;
+  sessionMetrics?: { totalSessions: number; avgDuration: number };
 }
 
 export default function OverviewStats() {
@@ -268,6 +281,77 @@ export default function OverviewStats() {
             value={`${userMetrics.retentionRate}%`}
             icon="💪"
           />
+        </div>
+      )}
+
+      {/* Traffic & Engagement Metrics */}
+      {fullAnalytics?.advancedMetrics && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+          gap: '16px',
+          marginBottom: '24px'
+        }}>
+          <LiveStatCard
+            title="Page Views"
+            value={fullAnalytics.advancedMetrics.totalPageViews || fullAnalytics.overview.totalViews}
+            icon="👁️"
+          />
+          <LiveStatCard
+            title="Unique Visitors"
+            value={fullAnalytics.advancedMetrics.uniqueVisitors || fullAnalytics.advancedMetrics.uniqueViewers}
+            icon="🧑‍💻"
+          />
+          <LiveStatCard
+            title="Bounce Rate"
+            value={`${fullAnalytics.advancedMetrics.bounceRate}%`}
+            icon="↩️"
+          />
+          <LiveStatCard
+            title="Avg Time on Site"
+            value={`${fullAnalytics.advancedMetrics.avgTimeOnSite || fullAnalytics.advancedMetrics.avgSessionDuration}m`}
+            icon="⏱️"
+          />
+        </div>
+      )}
+
+      {/* Landing Pages */}
+      {fullAnalytics?.trafficMetrics?.landingPages && fullAnalytics.trafficMetrics.landingPages.length > 0 && (
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.03)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          borderRadius: '12px',
+          padding: '20px',
+          marginBottom: '24px'
+        }}>
+          <h4 style={{ margin: '0 0 16px 0', color: '#f8fafc', fontSize: '14px', fontWeight: '600' }}>
+            Top Landing Pages
+          </h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {fullAnalytics.trafficMetrics.landingPages.slice(0, 5).map((page, index) => {
+              const total = fullAnalytics.trafficMetrics!.landingPages.reduce((sum, p) => sum + p.count, 0);
+              const percentage = total > 0 ? (page.count / total) * 100 : 0;
+              return (
+                <div key={page.page} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ color: '#64748b', fontSize: '12px', width: '20px' }}>#{index + 1}</span>
+                  <span style={{ color: '#f8fafc', fontSize: '13px', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {page.page}
+                  </span>
+                  <div style={{ flex: 1, height: '8px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden', maxWidth: '150px' }}>
+                    <div style={{
+                      height: '100%',
+                      width: `${percentage}%`,
+                      background: 'linear-gradient(90deg, #7877c6, #ff77c6)',
+                      borderRadius: '4px'
+                    }} />
+                  </div>
+                  <span style={{ color: '#94a3b8', fontSize: '12px', width: '60px', textAlign: 'right' }}>
+                    {page.count} ({Math.round(percentage)}%)
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

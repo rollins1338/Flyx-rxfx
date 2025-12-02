@@ -55,6 +55,7 @@ class AnalyticsService {
   private liveActivityInterval: NodeJS.Timeout | null = null;
   private watchTimeSyncInterval: NodeJS.Timeout | null = null;
   private liveTVSessionInterval: NodeJS.Timeout | null = null;
+  private pageTrackingInterval: NodeJS.Timeout | null = null;
   private currentActivity: {
     type: string;
     contentId?: string;
@@ -69,6 +70,21 @@ class AnalyticsService {
     channelName?: string;
     category?: string;
   } | null = null;
+  
+  // Page-level tracking
+  private currentPageView: {
+    id: string;
+    path: string;
+    title: string;
+    entryTime: number;
+    scrollDepth: number;
+    maxScrollDepth: number;
+    interactions: number;
+    referrer: string;
+    isFirstPage: boolean;
+  } | null = null;
+  
+  private sessionPageCount: number = 0;
   
   // Watch time tracking
   private watchTimeAccumulator: Map<string, {
@@ -129,8 +145,16 @@ class AnalyticsService {
     if (this.shouldTrackPage()) {
       this.startLiveActivityHeartbeat();
       this.startWatchTimeSyncInterval();
+      this.startPageTracking();
     } else {
       console.log('[Analytics] Skipping live activity for admin page');
+    }
+    
+    // Track scroll depth
+    if (typeof window !== 'undefined') {
+      window.addEventListener('scroll', this.handleScroll.bind(this), { passive: true });
+      document.addEventListener('click', this.handleInteraction.bind(this));
+      document.addEventListener('keydown', this.handleInteraction.bind(this));
     }
     
     // Track page visibility changes
@@ -140,9 +164,11 @@ class AnalyticsService {
         this.syncAllWatchTime();
         this.stopLiveActivity();
         this.endLiveTVSession();
+        this.syncCurrentPageView();
       } else {
         this.startLiveActivityHeartbeat();
         this.startWatchTimeSyncInterval();
+        this.startPageTracking();
       }
     });
     
@@ -153,6 +179,8 @@ class AnalyticsService {
       this.syncAllWatchTime();
       this.stopLiveActivity();
       this.endLiveTVSession();
+      this.syncCurrentPageView(true);
+      this.syncUserEngagement();
     });
     
     // Track page navigation for SPA
@@ -252,6 +280,11 @@ class AnalyticsService {
    * Track page view
    */
   trackPageView(path: string, data?: PageViewEvent): void {
+    // Sync previous page view before starting new one
+    if (this.currentPageView && this.currentPageView.path !== path) {
+      this.syncCurrentPageView();
+    }
+    
     this.track('page_view', {
       page: path,
       referrer: document.referrer,
@@ -267,9 +300,134 @@ class AnalyticsService {
       // Ignore storage errors
     }
     
+    // Start tracking this page
+    this.sessionPageCount++;
+    this.currentPageView = {
+      id: `pv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      path,
+      title: document.title,
+      entryTime: Date.now(),
+      scrollDepth: 0,
+      maxScrollDepth: 0,
+      interactions: 0,
+      referrer: document.referrer,
+      isFirstPage: this.sessionPageCount === 1,
+    };
+    
     // Update current activity to browsing when not watching
     if (!this.currentActivity || this.currentActivity.type !== 'watching') {
       this.currentActivity = { type: 'browsing' };
+    }
+  }
+  
+  /**
+   * Handle scroll events for depth tracking
+   */
+  private handleScroll(): void {
+    if (!this.currentPageView) return;
+    
+    const scrollTop = window.scrollY || document.documentElement.scrollTop;
+    const scrollHeight = document.documentElement.scrollHeight - window.innerHeight;
+    const scrollPercentage = scrollHeight > 0 ? Math.round((scrollTop / scrollHeight) * 100) : 0;
+    
+    this.currentPageView.scrollDepth = scrollPercentage;
+    if (scrollPercentage > this.currentPageView.maxScrollDepth) {
+      this.currentPageView.maxScrollDepth = scrollPercentage;
+    }
+  }
+  
+  /**
+   * Handle user interactions
+   */
+  private handleInteraction(): void {
+    if (!this.currentPageView) return;
+    this.currentPageView.interactions++;
+  }
+  
+  /**
+   * Start page tracking interval
+   */
+  private startPageTracking(): void {
+    if (this.pageTrackingInterval) return;
+    
+    // Sync page view data every 30 seconds
+    this.pageTrackingInterval = setInterval(() => {
+      this.syncCurrentPageView();
+    }, 30000);
+  }
+  
+  /**
+   * Stop page tracking
+   */
+  private stopPageTracking(): void {
+    if (this.pageTrackingInterval) {
+      clearInterval(this.pageTrackingInterval);
+      this.pageTrackingInterval = null;
+    }
+  }
+  
+  /**
+   * Sync current page view to server
+   */
+  private async syncCurrentPageView(isExit: boolean = false): Promise<void> {
+    if (!this.currentPageView || !this.userSession) return;
+    
+    const timeOnPage = Math.round((Date.now() - this.currentPageView.entryTime) / 1000);
+    
+    // Only sync if meaningful time spent (at least 1 second)
+    if (timeOnPage < 1) return;
+    
+    try {
+      await fetch('/api/analytics/page-view', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: this.currentPageView.id,
+          userId: this.userSession.userId,
+          sessionId: this.userSession.sessionId,
+          pagePath: this.currentPageView.path,
+          pageTitle: this.currentPageView.title,
+          referrer: this.currentPageView.referrer,
+          entryTime: this.currentPageView.entryTime,
+          exitTime: isExit ? Date.now() : undefined,
+          timeOnPage,
+          scrollDepth: this.currentPageView.maxScrollDepth,
+          interactions: this.currentPageView.interactions,
+          isBounce: this.sessionPageCount === 1 && isExit,
+          isExit,
+        }),
+        keepalive: isExit,
+      });
+    } catch (error) {
+      console.error('[Analytics] Failed to sync page view:', error);
+    }
+  }
+  
+  /**
+   * Sync user engagement metrics
+   */
+  private async syncUserEngagement(): Promise<void> {
+    if (!this.userSession) return;
+    
+    try {
+      const sessionStart = parseInt(sessionStorage.getItem('flyx_session_start') || '0');
+      const sessionDuration = sessionStart > 0 ? Math.round((Date.now() - sessionStart) / 1000) : 0;
+      const pageViews = parseInt(sessionStorage.getItem('flyx_page_views') || '1');
+      
+      await fetch('/api/analytics/user-engagement', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: this.userSession.userId,
+          sessionId: this.userSession.sessionId,
+          sessionDuration,
+          pageViews,
+          isBounce: pageViews <= 1,
+        }),
+        keepalive: true,
+      });
+    } catch (error) {
+      console.error('[Analytics] Failed to sync user engagement:', error);
     }
   }
 

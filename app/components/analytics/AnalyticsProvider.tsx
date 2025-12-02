@@ -91,6 +91,10 @@ interface AnalyticsContextType {
   endLiveTVSession: () => void;
   recordLiveTVBuffer: () => void;
   updateLiveTVQuality: (quality: string) => void;
+  
+  // Page engagement tracking
+  trackScrollDepth: (depth: number) => void;
+  trackInteractionEvent: (element: string, action: string) => void;
 }
 
 const AnalyticsContext = createContext<AnalyticsContextType | null>(null);
@@ -285,6 +289,15 @@ export default function AnalyticsProvider({ children }: AnalyticsProviderProps) 
     analyticsService.updateLiveTVQuality(quality);
   }, []);
 
+  // Page engagement tracking
+  const trackScrollDepth = useCallback((depth: number) => {
+    analyticsService.track('scroll_depth', { depth, page: window.location.pathname });
+  }, []);
+
+  const trackInteractionEvent = useCallback((element: string, action: string) => {
+    analyticsService.trackInteraction({ element, action: action as any });
+  }, []);
+
   const value = {
     trackEvent,
     trackPageView,
@@ -309,6 +322,8 @@ export default function AnalyticsProvider({ children }: AnalyticsProviderProps) 
     endLiveTVSession,
     recordLiveTVBuffer,
     updateLiveTVQuality,
+    trackScrollDepth,
+    trackInteractionEvent,
   };
 
   return (
