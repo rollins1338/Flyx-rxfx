@@ -45,15 +45,39 @@ export async function GET(request: NextRequest) {
       redirect: 'manual'
     });
 
-    // Handle redirects by returning them to the client
+    // Handle redirects by following them internally
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get('location');
       if (location) {
-        // Proxy the redirect through our endpoint
+        // Follow the redirect internally instead of returning a redirect response
         const redirectUrl = new URL(location, decodedUrl).toString();
-        return NextResponse.redirect(
-          `/api/stream-proxy?url=${encodeURIComponent(redirectUrl)}&source=${source}&referer=${encodeURIComponent(referer)}`
-        );
+        const redirectResponse = await fetch(redirectUrl, {
+          headers,
+          redirect: 'follow'
+        });
+        
+        if (!redirectResponse.ok) {
+          return NextResponse.json(
+            { error: `Redirect target error: ${redirectResponse.status}` },
+            { status: redirectResponse.status }
+          );
+        }
+        
+        // Return the redirected content
+        const contentType = redirectResponse.headers.get('content-type') || '';
+        const arrayBuffer = await redirectResponse.arrayBuffer();
+        
+        return new NextResponse(arrayBuffer, {
+          status: 200,
+          headers: {
+            'Content-Type': contentType || 'video/mp2t',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Allow-Headers': 'Range, Content-Type',
+            'Cache-Control': 'public, max-age=3600',
+            'Content-Length': arrayBuffer.byteLength.toString(),
+          },
+        });
       }
     }
 
