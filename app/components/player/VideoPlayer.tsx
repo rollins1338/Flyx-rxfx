@@ -1,12 +1,13 @@
 'use client';
 
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import Hls from 'hls.js';
 import { useAnalytics } from '../analytics/AnalyticsProvider';
 import { useWatchProgress } from '@/lib/hooks/useWatchProgress';
 import { streamRetryManager } from '@/lib/utils/stream-retry';
 import { trackWatchStart, trackWatchProgress, trackWatchPause, trackWatchComplete } from '@/lib/utils/live-activity';
 import { getSubtitlePreferences, setSubtitlesEnabled, setSubtitleLanguage, getSubtitleStyle, setSubtitleStyle, type SubtitleStyle } from '@/lib/utils/subtitle-preferences';
+import { usePinchZoom } from '@/hooks/usePinchZoom';
 import styles from './VideoPlayer.module.css';
 
 interface VideoPlayerProps {
@@ -27,6 +28,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const videoWrapperRef = useRef<HTMLDivElement>(null);
 
   const subtitlesFetchedRef = useRef(false);
   const subtitlesAutoLoadedRef = useRef(false);
@@ -95,6 +97,34 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
   const controlsTimeoutRef = useRef<NodeJS.Timeout>();
   const lastFetchedKey = useRef('');
   const volumeIndicatorTimeoutRef = useRef<NodeJS.Timeout>();
+
+  // Pinch-to-zoom for mobile
+  const [showZoomIndicator, setShowZoomIndicator] = useState(false);
+  const zoomIndicatorTimeoutRef = useRef<NodeJS.Timeout>();
+  
+  const handleZoomChange = useCallback((scale: number) => {
+    if (scale !== 1) {
+      setShowZoomIndicator(true);
+      if (zoomIndicatorTimeoutRef.current) {
+        clearTimeout(zoomIndicatorTimeoutRef.current);
+      }
+      zoomIndicatorTimeoutRef.current = setTimeout(() => {
+        setShowZoomIndicator(false);
+      }, 1500);
+    }
+  }, []);
+
+  const {
+    scale: zoomScale,
+    isZoomed,
+    resetZoom,
+    handlers: zoomHandlers,
+    style: zoomStyle,
+  } = usePinchZoom(videoWrapperRef, {
+    minScale: 1,
+    maxScale: 3,
+    onZoomChange: handleZoomChange,
+  });
 
   // Fetch sources for a specific provider
   const fetchSources = async (providerName: string, force: boolean = false): Promise<any[] | null> => {
@@ -562,7 +592,17 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
   // Fullscreen handler
   useEffect(() => {
     const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+      const isNowFullscreen = !!document.fullscreenElement;
+      setIsFullscreen(isNowFullscreen);
+      
+      // Unlock orientation when exiting fullscreen (e.g., via Escape key)
+      if (!isNowFullscreen && screen.orientation && 'unlock' in screen.orientation) {
+        try {
+          (screen.orientation as any).unlock();
+        } catch (e) {
+          // Ignore unlock errors
+        }
+      }
     };
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
@@ -671,11 +711,34 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     });
   };
 
-  const toggleFullscreen = () => {
+  const toggleFullscreen = async () => {
     if (!containerRef.current) return;
+    
     if (!document.fullscreenElement) {
-      containerRef.current.requestFullscreen();
+      try {
+        await containerRef.current.requestFullscreen();
+        
+        // Force landscape orientation on mobile devices
+        if (screen.orientation && 'lock' in screen.orientation) {
+          try {
+            await (screen.orientation as any).lock('landscape');
+          } catch (e) {
+            // Orientation lock may not be supported or allowed
+            console.log('[VideoPlayer] Could not lock orientation:', e);
+          }
+        }
+      } catch (e) {
+        console.error('[VideoPlayer] Fullscreen request failed:', e);
+      }
     } else {
+      // Unlock orientation when exiting fullscreen
+      if (screen.orientation && 'unlock' in screen.orientation) {
+        try {
+          (screen.orientation as any).unlock();
+        } catch (e) {
+          // Ignore unlock errors
+        }
+      }
       document.exitFullscreen();
     }
   };
@@ -925,11 +988,48 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
         </div>
       )}
 
-      <video
-        ref={videoRef}
-        className={styles.video}
-        playsInline
-      />
+      {/* Video wrapper for pinch-to-zoom on mobile */}
+      <div
+        ref={videoWrapperRef}
+        className={styles.videoWrapper}
+        {...zoomHandlers}
+      >
+        <video
+          ref={videoRef}
+          className={styles.video}
+          style={zoomStyle}
+          playsInline
+        />
+      </div>
+
+      {/* Zoom indicator */}
+      {showZoomIndicator && (
+        <div className={styles.zoomIndicator}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+            <path d="M12 10h-2v2H9v-2H7V9h2V7h1v2h2v1z"/>
+          </svg>
+          <span>{Math.round(zoomScale * 100)}%</span>
+        </div>
+      )}
+
+      {/* Reset zoom button */}
+      {isZoomed && (
+        <button
+          className={styles.resetZoomButton}
+          onClick={(e) => {
+            e.stopPropagation();
+            resetZoom();
+          }}
+          title="Reset zoom"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+            <path d="M7 9h5v1H7z"/>
+          </svg>
+          <span>1x</span>
+        </button>
+      )}
 
       {showNextEpisodeButton && nextEpisode && (
         <button

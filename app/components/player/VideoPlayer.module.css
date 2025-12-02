@@ -1139,3 +1139,262 @@
     transform: scale(1);
   }
 }
+
+/*
+ Video wrapper for pinch-to-zoom */
+.videoWrapper {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  touch-action: manipulation;
+}
+
+/* Zoom indicator */
+.zoomIndicator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  z-index: 100;
+  animation: zoomFadeIn 0.2s ease;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  color: white;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+@keyframes zoomFadeIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* Reset zoom button */
+.resetZoomButton {
+  position: absolute;
+  bottom: 100px;
+  left: 1rem;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  z-index: 20;
+  transition: all 0.2s ease;
+  animation: slideInLeft 0.3s ease;
+}
+
+.resetZoomButton:hover {
+  background: rgba(229, 9, 20, 0.8);
+  border-color: rgba(229, 9, 20, 0.5);
+  transform: scale(1.05);
+}
+
+.resetZoomButton:active {
+  transform: scale(0.95);
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Mobile adjustments for zoom */
+@media (max-width: 768px) {
+  .resetZoomButton {
+    bottom: 90px;
+    left: 0.75rem;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.75rem;
+  }
+
+  .zoomIndicator {
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+  }
+
+  .zoomIndicator svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+/* Fullscreen zoom adjustments */
+.playerContainer:fullscreen .resetZoomButton {
+  bottom: 120px;
+  left: 2rem;
+}
+
+
+/* Portrait mode on mobile - fit video properly */
+@media (max-width: 768px) and (orientation: portrait) {
+  .playerContainer {
+    /* Use aspect ratio to maintain 16:9 in portrait */
+    aspect-ratio: 16 / 9;
+    width: 100%;
+    height: auto;
+    max-height: 40vh;
+  }
+
+  .videoWrapper {
+    aspect-ratio: 16 / 9;
+  }
+
+  .video {
+    object-fit: contain;
+  }
+
+  /* Adjust controls for portrait */
+  .controls {
+    padding: 2rem 0.75rem 0.75rem;
+  }
+
+  .titleOverlay {
+    padding: 0.75rem;
+    padding-top: 3rem;
+  }
+
+  .titleOverlay h2 {
+    font-size: 1rem;
+  }
+
+  .episodeInfo {
+    font-size: 0.75rem;
+  }
+
+  .progressInfo {
+    font-size: 0.7rem;
+  }
+
+  .centerPlayButton {
+    width: 60px;
+    height: 60px;
+  }
+
+  .centerPlayButton svg {
+    width: 40px;
+    height: 40px;
+  }
+
+  .nextEpisodeButton {
+    bottom: 70px;
+    right: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
+  }
+
+  .settingsMenu {
+    min-width: 180px;
+    max-height: 200px;
+  }
+
+  .zoomIndicator {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+  }
+
+  .resetZoomButton {
+    bottom: 70px;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.7rem;
+  }
+}
+
+/* Landscape fullscreen - fill the screen */
+@media (orientation: landscape) {
+  .playerContainer:fullscreen {
+    width: 100vw;
+    height: 100vh;
+    max-height: none;
+    aspect-ratio: unset;
+  }
+
+  .playerContainer:fullscreen .videoWrapper {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: unset;
+  }
+
+  .playerContainer:fullscreen .video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+}
+
+/* Small phones in portrait */
+@media (max-width: 480px) and (orientation: portrait) {
+  .playerContainer {
+    max-height: 35vh;
+  }
+
+  .btn {
+    padding: 0.3rem;
+  }
+
+  .btn svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .time {
+    font-size: 0.7rem;
+  }
+
+  .progressContainer {
+    height: 4px;
+    margin-bottom: 1rem;
+  }
+
+  .leftControls,
+  .rightControls {
+    gap: 0.4rem;
+  }
+}
+
+/* Ensure fullscreen works properly on all devices */
+.playerContainer:-webkit-full-screen {
+  width: 100vw;
+  height: 100vh;
+}
+
+.playerContainer:-moz-full-screen {
+  width: 100vw;
+  height: 100vh;
+}
+
+.playerContainer:-ms-fullscreen {
+  width: 100vw;
+  height: 100vh;
+}
