@@ -1,49 +1,27 @@
-# Admin Panel - Single Source of Truth
+# Admin Panel - Single Source of Truth (FIXED)
+
+## Issues Fixed
+
+### 1. Multiple Data Sources → Single Source
+- **Before**: Each page made its own API calls, calculated metrics differently
+- **After**: ALL pages use `useStats()` hook which calls `/api/admin/unified-stats`
+
+### 2. Duplicate Users → Unique Users Only
+- **Before**: Same user could appear multiple times in lists
+- **After**: SQL uses `DISTINCT ON` (PostgreSQL) or `GROUP BY` to ensure unique users
+
+### 3. Invalid Timestamps → Validated Timestamps
+- **Before**: Dates like "Jan 1, 1970" or future dates could appear
+- **After**: All timestamps validated to be within reasonable range (10 years ago to now)
+
+### 4. Fake/Inflated Data → Accurate Counts
+- **Before**: Metrics could be inflated by counting same user multiple times
+- **After**: Single SQL query calculates all user metrics with proper DISTINCT counts
 
 ## Architecture
 
-All admin pages now use a unified data architecture:
+### Single Source of Truth: `/api/admin/unified-stats`
 
-### 1. Unified Stats Context (`/api/admin/unified-stats`)
-Single source of truth for key metrics displayed across all pages:
-- Live Users, DAU, WAU, MAU
-- Total Users, New Users, Returning Users
-- Sessions, Watch Time, Completion Rate
-- Geographic & Device data
-
-### 2. User Profiles API (`/api/admin/users`)
-Comprehensive user tracking with detailed profiles:
-- **List all users**: `GET /api/admin/users`
-- **User profile**: `GET /api/admin/users?userId=xxx`
-
-User profiles include:
-- Basic info (first seen, last seen, location, device)
-- Live status (online/offline, current activity)
-- Engagement metrics (watch time, completion, streaks)
-- Content preferences (movies vs TV, quality)
-- Activity patterns (by hour, by day)
-- Complete watch history
-- Recent activity timeline
-
-### 3. How Pages Use Data
-
-```tsx
-import { useStats } from '../context/StatsContext';
-
-export default function AdminPage() {
-  // Key metrics from unified stats
-  const { stats: unifiedStats } = useStats();
-  
-  // All pages show the SAME numbers for:
-  // - unifiedStats.totalUsers
-  // - unifiedStats.activeToday (DAU)
-  // - unifiedStats.activeThisWeek (WAU)
-  // - unifiedStats.liveUsers
-  // etc.
-}
-```
-
-### 4. Data Flow
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    StatsContext                          │
@@ -53,28 +31,93 @@ export default function AdminPage() {
                            ▼
 ┌─────────────────────────────────────────────────────────┐
 │              /api/admin/unified-stats                    │
-│   (aggregates from all tables - single source)          │
+│                                                          │
+│  • Real-time: live_activity (5 min heartbeat)           │
+│  • Users: user_activity (DISTINCT counts)               │
+│  • Content: watch_sessions (validated timestamps)       │
+│  • Geographic: user_activity (valid country codes)      │
+│  • Devices: user_activity (grouped by type)             │
 └─────────────────────────────────────────────────────────┘
                            │
            ┌───────────────┼───────────────┐
            ▼               ▼               ▼
-      Dashboard        Users Page      Live Page
+      Dashboard        Users Page      All Pages
       (same #s)        (same #s)       (same #s)
 ```
 
-### 5. User Profile Features
+### Timestamp Validation
 
-Click any user in the Users page to see:
-- **Profile Header**: User ID, online status, current activity
-- **Engagement Stats**: Watch time, completion rate, streaks
-- **Location & Device**: Country, city, device type
-- **Preferences**: Movies vs TV, quality preferences
-- **Activity Patterns**: Heatmaps by hour and day
-- **Watch History**: Last 50 watched items with completion %
-- **Recent Activity**: Page views, watch starts/ends
+All timestamps are validated:
+```typescript
+function isValidTimestamp(ts: number): boolean {
+  if (!ts || ts <= 0) return false;
+  const now = Date.now();
+  const tenYearsAgo = now - (10 * 365 * 24 * 60 * 60 * 1000);
+  return ts >= tenYearsAgo && ts <= now + 60000;
+}
+```
 
-### 6. Tables Used
-- `user_activity` - User sessions and activity
-- `live_activity` - Real-time presence
-- `watch_sessions` - Content viewing history
-- `analytics_events` - Page views and events
+### User Deduplication
+
+SQL ensures unique users:
+```sql
+-- PostgreSQL
+SELECT DISTINCT ON (user_id) ...
+ORDER BY user_id, last_seen DESC
+
+-- SQLite
+SELECT ... GROUP BY user_id
+ORDER BY last_seen DESC
+```
+
+### Metrics Calculation (Single Query)
+
+All user metrics calculated in ONE query to ensure consistency:
+```sql
+SELECT 
+  COUNT(DISTINCT user_id) as total,
+  COUNT(DISTINCT CASE WHEN last_seen >= $oneDayAgo THEN user_id END) as dau,
+  COUNT(DISTINCT CASE WHEN last_seen >= $oneWeekAgo THEN user_id END) as wau,
+  COUNT(DISTINCT CASE WHEN last_seen >= $oneMonthAgo THEN user_id END) as mau,
+  COUNT(DISTINCT CASE WHEN first_seen >= $oneDayAgo THEN user_id END) as new_today
+FROM user_activity
+WHERE first_seen > 0 AND last_seen > 0
+```
+
+## How to Use
+
+### In Admin Pages
+
+```tsx
+import { useStats } from '../context/StatsContext';
+
+export default function MyAdminPage() {
+  const { stats: unifiedStats } = useStats();
+  
+  // These are THE numbers - same everywhere
+  const totalUsers = unifiedStats.totalUsers;
+  const dau = unifiedStats.activeToday;
+  const wau = unifiedStats.activeThisWeek;
+  const mau = unifiedStats.activeThisMonth;
+  const liveUsers = unifiedStats.liveUsers;
+}
+```
+
+### For User Lists
+
+Use `/api/admin/users` which:
+- Returns unique users only (no duplicates)
+- Validates all timestamps
+- Filters out invalid data
+- Provides consistent counts
+
+## Files Updated
+
+- `app/api/admin/unified-stats/route.ts` - Single source API
+- `app/api/admin/users/route.ts` - User list with deduplication
+- `app/admin/users/page.tsx` - User profiles with validation
+- `app/admin/components/OverviewStats.tsx` - Uses unified stats
+- `app/admin/engagement/page.tsx` - Uses unified stats
+- `app/admin/live/page.tsx` - Uses unified stats
+- `app/admin/geographic/page.tsx` - Uses unified stats
+- `app/admin/sessions/page.tsx` - Uses unified stats

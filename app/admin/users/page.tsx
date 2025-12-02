@@ -163,27 +163,42 @@ export default function AdminUsersPage() {
     return result;
   }, [users, searchQuery, filterStatus, sortBy, sortOrder]);
 
+  // Validate timestamp is reasonable (not in the future, not too old)
+  const isValidTimestamp = (ts: number): boolean => {
+    if (!ts || ts <= 0) return false;
+    const now = Date.now();
+    const tenYearsAgo = now - (10 * 365 * 24 * 60 * 60 * 1000);
+    return ts >= tenYearsAgo && ts <= now + 60000; // Allow 1 min future for clock skew
+  };
+
   const formatTimeAgo = (timestamp: number) => {
-    if (!timestamp) return 'Never';
+    if (!timestamp || !isValidTimestamp(timestamp)) return 'N/A';
     const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    if (seconds < 0) return 'Just now'; // Handle slight future timestamps
     if (seconds < 60) return 'Just now';
     const minutes = Math.floor(seconds / 60);
     if (minutes < 60) return `${minutes}m ago`;
     const hours = Math.floor(minutes / 60);
     if (hours < 24) return `${hours}h ago`;
     const days = Math.floor(hours / 24);
+    if (days > 365) return `${Math.floor(days / 365)}y ago`;
     return `${days}d ago`;
   };
 
   const formatDuration = (minutes: number) => {
+    if (!minutes || minutes < 0) return '0m';
     const hours = Math.floor(minutes / 60);
     const mins = Math.round(minutes % 60);
     return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
   };
 
   const formatDate = (timestamp: number) => {
-    if (!timestamp) return 'N/A';
-    return new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    if (!timestamp || !isValidTimestamp(timestamp)) return 'N/A';
+    try {
+      return new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    } catch {
+      return 'N/A';
+    }
   };
 
   const getDayName = (day: number) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day] || '';

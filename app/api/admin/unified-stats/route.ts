@@ -1,9 +1,15 @@
 /**
- * Unified Stats API
- * GET /api/admin/unified-stats - Single source of truth for all admin stats
+ * Unified Stats API - SINGLE SOURCE OF TRUTH
+ * GET /api/admin/unified-stats
  * 
- * This endpoint consolidates data from all tables to provide consistent
- * metrics across the entire admin panel.
+ * ALL admin pages MUST use this endpoint for key metrics.
+ * This ensures consistent data across the entire admin panel.
+ * 
+ * Data Sources:
+ * - live_activity: Real-time user presence (last 5 min heartbeat)
+ * - user_activity: User sessions and activity history
+ * - watch_sessions: Content viewing data
+ * - analytics_events: Page views and events
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -13,7 +19,6 @@ import { getCountryName } from '@/app/lib/utils/geolocation';
 
 export async function GET(request: NextRequest) {
   try {
-    // Verify admin authentication
     const authResult = await verifyAdminAuth(request);
     if (!authResult.success) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -61,108 +66,77 @@ export async function GET(request: NextRequest) {
     }
 
     // ============================================
-    // 2. USER METRICS (from user_activity + analytics_events)
+    // 2. USER METRICS (from user_activity ONLY - single source)
     // ============================================
     let users = { total: 0, dau: 0, wau: 0, mau: 0, newToday: 0, returning: 0 };
     try {
-      // Total unique users ever
-      const totalQuery = isNeon
-        ? 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity'
-        : 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity';
-      const totalResult = await adapter.query(totalQuery);
-      users.total = parseInt(totalResult[0]?.count) || 0;
-
-      // DAU - users active in last 24 hours
-      const dauQuery = isNeon
-        ? 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= $1'
-        : 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= ?';
-      const dauResult = await adapter.query(dauQuery, [oneDayAgo]);
-      users.dau = parseInt(dauResult[0]?.count) || 0;
-
-      // If no user_activity data, try analytics_events
-      if (users.dau === 0) {
-        const dauEventsQuery = isNeon
-          ? 'SELECT COUNT(DISTINCT session_id) as count FROM analytics_events WHERE timestamp >= $1'
-          : 'SELECT COUNT(DISTINCT session_id) as count FROM analytics_events WHERE timestamp >= ?';
-        const dauEventsResult = await adapter.query(dauEventsQuery, [oneDayAgo]);
-        users.dau = parseInt(dauEventsResult[0]?.count) || 0;
+      // Get all metrics in a single query for consistency
+      const userMetricsQuery = isNeon
+        ? `SELECT 
+             COUNT(DISTINCT user_id) as total,
+             COUNT(DISTINCT CASE WHEN last_seen >= $1 AND last_seen <= $5 THEN user_id END) as dau,
+             COUNT(DISTINCT CASE WHEN last_seen >= $2 AND last_seen <= $5 THEN user_id END) as wau,
+             COUNT(DISTINCT CASE WHEN last_seen >= $3 AND last_seen <= $5 THEN user_id END) as mau,
+             COUNT(DISTINCT CASE WHEN first_seen >= $1 AND first_seen <= $5 THEN user_id END) as new_today,
+             COUNT(DISTINCT CASE WHEN first_seen < $1 AND last_seen >= $4 AND last_seen <= $5 THEN user_id END) as returning
+           FROM user_activity
+           WHERE first_seen > 0 AND last_seen > 0`
+        : `SELECT 
+             COUNT(DISTINCT user_id) as total,
+             COUNT(DISTINCT CASE WHEN last_seen >= ? AND last_seen <= ? THEN user_id END) as dau,
+             COUNT(DISTINCT CASE WHEN last_seen >= ? AND last_seen <= ? THEN user_id END) as wau,
+             COUNT(DISTINCT CASE WHEN last_seen >= ? AND last_seen <= ? THEN user_id END) as mau,
+             COUNT(DISTINCT CASE WHEN first_seen >= ? AND first_seen <= ? THEN user_id END) as new_today,
+             COUNT(DISTINCT CASE WHEN first_seen < ? AND last_seen >= ? AND last_seen <= ? THEN user_id END) as returning
+           FROM user_activity
+           WHERE first_seen > 0 AND last_seen > 0`;
+      
+      const params = isNeon 
+        ? [oneDayAgo, oneWeekAgo, oneMonthAgo, oneDayAgo, now]
+        : [oneDayAgo, now, oneWeekAgo, now, oneMonthAgo, now, oneDayAgo, now, oneDayAgo, oneDayAgo, now];
+      
+      const userResult = await adapter.query(userMetricsQuery, params);
+      
+      if (userResult[0]) {
+        users.total = parseInt(userResult[0].total) || 0;
+        users.dau = parseInt(userResult[0].dau) || 0;
+        users.wau = parseInt(userResult[0].wau) || 0;
+        users.mau = parseInt(userResult[0].mau) || 0;
+        users.newToday = parseInt(userResult[0].new_today) || 0;
+        users.returning = parseInt(userResult[0].returning) || 0;
       }
-
-      // WAU - users active in last 7 days
-      const wauQuery = isNeon
-        ? 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= $1'
-        : 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= ?';
-      const wauResult = await adapter.query(wauQuery, [oneWeekAgo]);
-      users.wau = parseInt(wauResult[0]?.count) || 0;
-
-      if (users.wau === 0) {
-        const wauEventsQuery = isNeon
-          ? 'SELECT COUNT(DISTINCT session_id) as count FROM analytics_events WHERE timestamp >= $1'
-          : 'SELECT COUNT(DISTINCT session_id) as count FROM analytics_events WHERE timestamp >= ?';
-        const wauEventsResult = await adapter.query(wauEventsQuery, [oneWeekAgo]);
-        users.wau = parseInt(wauEventsResult[0]?.count) || 0;
-      }
-
-      // MAU - users active in last 30 days
-      const mauQuery = isNeon
-        ? 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= $1'
-        : 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= ?';
-      const mauResult = await adapter.query(mauQuery, [oneMonthAgo]);
-      users.mau = parseInt(mauResult[0]?.count) || 0;
-
-      if (users.mau === 0) {
-        const mauEventsQuery = isNeon
-          ? 'SELECT COUNT(DISTINCT session_id) as count FROM analytics_events WHERE timestamp >= $1'
-          : 'SELECT COUNT(DISTINCT session_id) as count FROM analytics_events WHERE timestamp >= ?';
-        const mauEventsResult = await adapter.query(mauEventsQuery, [oneMonthAgo]);
-        users.mau = parseInt(mauEventsResult[0]?.count) || 0;
-      }
-
-      // New users today
-      const newQuery = isNeon
-        ? 'SELECT COUNT(*) as count FROM user_activity WHERE first_seen >= $1'
-        : 'SELECT COUNT(*) as count FROM user_activity WHERE first_seen >= ?';
-      const newResult = await adapter.query(newQuery, [oneDayAgo]);
-      users.newToday = parseInt(newResult[0]?.count) || 0;
-
-      // Returning users (first seen before today, active today)
-      const returningQuery = isNeon
-        ? 'SELECT COUNT(*) as count FROM user_activity WHERE first_seen < $1 AND last_seen >= $2'
-        : 'SELECT COUNT(*) as count FROM user_activity WHERE first_seen < ? AND last_seen >= ?';
-      const returningResult = await adapter.query(returningQuery, [oneDayAgo, oneDayAgo]);
-      users.returning = parseInt(returningResult[0]?.count) || 0;
-
     } catch (e) {
       console.error('Error fetching user stats:', e);
     }
 
     // ============================================
-    // 3. CONTENT METRICS (from watch_sessions)
+    // 3. CONTENT METRICS (from watch_sessions - validated timestamps)
     // ============================================
     let content = { totalSessions: 0, totalWatchTime: 0, avgDuration: 0, completionRate: 0 };
     try {
+      // Only count sessions with valid timestamps (within reasonable range)
       const contentQuery = isNeon
         ? `SELECT 
              COUNT(*) as total_sessions,
-             COALESCE(SUM(total_watch_time), 0) as total_watch_time,
-             COALESCE(AVG(total_watch_time), 0) as avg_duration,
-             COALESCE(AVG(completion_percentage), 0) as avg_completion
+             COALESCE(SUM(CASE WHEN total_watch_time > 0 AND total_watch_time < 86400 THEN total_watch_time ELSE 0 END), 0) as total_watch_time,
+             COALESCE(AVG(CASE WHEN total_watch_time > 0 AND total_watch_time < 86400 THEN total_watch_time ELSE NULL END), 0) as avg_duration,
+             COALESCE(AVG(CASE WHEN completion_percentage >= 0 AND completion_percentage <= 100 THEN completion_percentage ELSE NULL END), 0) as avg_completion
            FROM watch_sessions 
-           WHERE started_at >= $1`
+           WHERE started_at >= $1 AND started_at <= $2`
         : `SELECT 
              COUNT(*) as total_sessions,
-             COALESCE(SUM(total_watch_time), 0) as total_watch_time,
-             COALESCE(AVG(total_watch_time), 0) as avg_duration,
-             COALESCE(AVG(completion_percentage), 0) as avg_completion
+             COALESCE(SUM(CASE WHEN total_watch_time > 0 AND total_watch_time < 86400 THEN total_watch_time ELSE 0 END), 0) as total_watch_time,
+             COALESCE(AVG(CASE WHEN total_watch_time > 0 AND total_watch_time < 86400 THEN total_watch_time ELSE NULL END), 0) as avg_duration,
+             COALESCE(AVG(CASE WHEN completion_percentage >= 0 AND completion_percentage <= 100 THEN completion_percentage ELSE NULL END), 0) as avg_completion
            FROM watch_sessions 
-           WHERE started_at >= ?`;
+           WHERE started_at >= ? AND started_at <= ?`;
       
-      const contentResult = await adapter.query(contentQuery, [oneDayAgo]);
+      const contentResult = await adapter.query(contentQuery, [oneDayAgo, now]);
       
       if (contentResult[0]) {
         content.totalSessions = parseInt(contentResult[0].total_sessions) || 0;
-        content.totalWatchTime = Math.round(parseFloat(contentResult[0].total_watch_time) / 60) || 0; // Convert to minutes
-        content.avgDuration = Math.round(parseFloat(contentResult[0].avg_duration) / 60) || 0; // Convert to minutes
+        content.totalWatchTime = Math.round(parseFloat(contentResult[0].total_watch_time) / 60) || 0;
+        content.avgDuration = Math.round(parseFloat(contentResult[0].avg_duration) / 60) || 0;
         content.completionRate = Math.round(parseFloat(contentResult[0].avg_completion)) || 0;
       }
     } catch (e) {
