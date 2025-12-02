@@ -28,7 +28,6 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const videoWrapperRef = useRef<HTMLDivElement>(null);
 
   const subtitlesFetchedRef = useRef(false);
   const subtitlesAutoLoadedRef = useRef(false);
@@ -101,7 +100,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
   // Pinch-to-zoom for mobile
   const [showZoomIndicator, setShowZoomIndicator] = useState(false);
   const zoomIndicatorTimeoutRef = useRef<NodeJS.Timeout>();
-  
+
   const handleZoomChange = useCallback((scale: number) => {
     if (scale !== 1) {
       setShowZoomIndicator(true);
@@ -118,11 +117,11 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     scale: zoomScale,
     isZoomed,
     resetZoom,
-    handlers: zoomHandlers,
-    style: zoomStyle,
-  } = usePinchZoom(videoWrapperRef, {
+    containerProps: zoomContainerProps,
+    contentStyle: zoomContentStyle,
+  } = usePinchZoom({
     minScale: 1,
-    maxScale: 3,
+    maxScale: 4,
     onZoomChange: handleZoomChange,
   });
 
@@ -926,13 +925,24 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     }
   };
 
+  // Handle tap to play/pause (separate from zoom gestures)
+  const handleContainerClick = useCallback((e: React.MouseEvent) => {
+    // Only toggle play if clicking directly on the container or video wrapper
+    // and not on controls or other interactive elements
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('[class*="settings"]') || target.closest('[class*="controls"]')) {
+      return;
+    }
+    togglePlay();
+  }, []);
+
   return (
     <div
       ref={containerRef}
       className={`${styles.playerContainer} ${!showControls && isPlaying ? styles.hideCursor : ''}`}
       onMouseMove={resetControlsTimeout}
       onMouseLeave={() => isPlaying && setShowControls(false)}
-      onClick={togglePlay}
+      onClick={handleContainerClick}
     >
       {(isLoading || isBuffering) && (
         <div className={styles.loading}>
@@ -990,14 +1000,13 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
 
       {/* Video wrapper for pinch-to-zoom on mobile */}
       <div
-        ref={videoWrapperRef}
+        {...zoomContainerProps}
         className={styles.videoWrapper}
-        {...zoomHandlers}
       >
         <video
           ref={videoRef}
           className={styles.video}
-          style={zoomStyle}
+          style={zoomContentStyle}
           playsInline
         />
       </div>
