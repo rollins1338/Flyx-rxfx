@@ -53,11 +53,12 @@ export default function OverviewStats() {
 
 
   // ALL key metrics come from unified stats - SINGLE SOURCE OF TRUTH
+  // These are all UNIQUE user counts (no duplicates)
   const liveUserCount = unifiedStats.liveUsers;
   const userMetrics = {
-    dau: unifiedStats.activeToday,
-    wau: unifiedStats.activeThisWeek,
-    mau: unifiedStats.activeThisMonth,
+    dau: unifiedStats.activeToday,      // Unique users active in last 24h
+    wau: unifiedStats.activeThisWeek,   // Unique users active in last 7 days
+    mau: unifiedStats.activeThisMonth,  // Unique users active in last 30 days
     newUsers: unifiedStats.newUsersToday,
     returningUsers: unifiedStats.returningUsers,
     retentionRate: unifiedStats.activeToday > 0 
@@ -73,6 +74,7 @@ export default function OverviewStats() {
   };
 
   useEffect(() => {
+    // Only fetch detailed analytics for charts/peak hours - not for key metrics
     fetchDetailedAnalytics();
     fetchLiveTVStats();
     const interval = setInterval(fetchLiveTVStats, 30000);
@@ -161,14 +163,13 @@ export default function OverviewStats() {
         <LiveStatCard title="Retention Rate" value={`${userMetrics.retentionRate}%`} icon="💪" />
       </div>
 
-      {fullAnalytics?.advancedMetrics && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-          <LiveStatCard title="Page Views" value={fullAnalytics.advancedMetrics.totalPageViews || fullAnalytics.overview.totalViews} icon="👁️" />
-          <LiveStatCard title="Unique Visitors" value={fullAnalytics.advancedMetrics.uniqueVisitors || fullAnalytics.advancedMetrics.uniqueViewers} icon="🧑‍💻" />
-          <LiveStatCard title="Bounce Rate" value={`${fullAnalytics.advancedMetrics.bounceRate}%`} icon="↩️" />
-          <LiveStatCard title="Avg Time on Site" value={`${fullAnalytics.advancedMetrics.avgTimeOnSite || fullAnalytics.advancedMetrics.avgSessionDuration}m`} icon="⏱️" />
-        </div>
-      )}
+      {/* Page view metrics from unified stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+        <LiveStatCard title="Page Views (24h)" value={unifiedStats.pageViews || fullAnalytics?.advancedMetrics?.totalPageViews || 0} icon="👁️" />
+        <LiveStatCard title="Unique Visitors (24h)" value={unifiedStats.uniqueVisitors || fullAnalytics?.advancedMetrics?.uniqueVisitors || 0} icon="🧑‍💻" />
+        <LiveStatCard title="Bounce Rate" value={`${fullAnalytics?.advancedMetrics?.bounceRate || 0}%`} icon="↩️" />
+        <LiveStatCard title="Avg Time on Site" value={`${fullAnalytics?.advancedMetrics?.avgTimeOnSite || fullAnalytics?.advancedMetrics?.avgSessionDuration || 0}m`} icon="⏱️" />
+      </div>
 
 
       {fullAnalytics?.trafficMetrics?.landingPages && fullAnalytics.trafficMetrics.landingPages.length > 0 && (

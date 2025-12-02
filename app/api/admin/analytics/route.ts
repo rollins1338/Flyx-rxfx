@@ -65,14 +65,15 @@ export async function GET(request: NextRequest) {
     const adapter = db.getAdapter();
     const isNeon = db.isUsingNeon();
 
-    // 1. Overview Statistics
+    // 1. Overview Statistics - use DISTINCT for accurate counts
     const overviewRaw = await adapter.query(
       isNeon
         ? `
           SELECT 
             COUNT(*) as "totalViews",
             COALESCE(SUM(total_watch_time), 0) / 60 as "totalWatchTime",
-            COUNT(DISTINCT session_id) as "uniqueSessions"
+            COUNT(DISTINCT session_id) as "uniqueSessions",
+            COUNT(DISTINCT user_id) as "uniqueUsers"
           FROM watch_sessions
           WHERE started_at BETWEEN $1 AND $2
         `
@@ -80,7 +81,8 @@ export async function GET(request: NextRequest) {
           SELECT 
             COUNT(*) as totalViews,
             COALESCE(SUM(total_watch_time), 0) / 60 as totalWatchTime,
-            COUNT(DISTINCT session_id) as uniqueSessions
+            COUNT(DISTINCT session_id) as uniqueSessions,
+            COUNT(DISTINCT user_id) as uniqueUsers
           FROM watch_sessions
           WHERE started_at BETWEEN ? AND ?
         `,
@@ -524,6 +526,7 @@ export async function GET(request: NextRequest) {
       totalViews: parseInt(overviewRaw[0]?.totalViews) || 0,
       totalWatchTime: Math.round(parseFloat(overviewRaw[0]?.totalWatchTime) || 0),
       uniqueSessions: parseInt(overviewRaw[0]?.uniqueSessions) || 0,
+      uniqueUsers: parseInt(overviewRaw[0]?.uniqueUsers) || 0,
       avgSessionDuration: Math.round(parseFloat(advancedMetricsRaw[0]?.avgSessionDuration) || 0)
     };
 

@@ -8,33 +8,50 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 
-// Unified stats interface
+// Unified stats interface - SINGLE SOURCE OF TRUTH
+// All counts use DISTINCT user_id to avoid duplicates
 interface UnifiedStats {
-  // Real-time (live_activity table)
+  // Real-time (live_activity table) - unique users currently active
   liveUsers: number;
   liveWatching: number;
   liveBrowsing: number;
   liveTVViewers: number;
   
-  // User metrics (user_activity table)
+  // User metrics (user_activity table) - all counts are UNIQUE users
   totalUsers: number;
-  activeToday: number;      // DAU
-  activeThisWeek: number;   // WAU
-  activeThisMonth: number;  // MAU
-  newUsersToday: number;
-  returningUsers: number;
+  activeToday: number;      // DAU - unique users active in last 24h
+  activeThisWeek: number;   // WAU - unique users active in last 7 days
+  activeThisMonth: number;  // MAU - unique users active in last 30 days
+  newUsersToday: number;    // unique users first seen in last 24h
+  returningUsers: number;   // unique users who returned today
   
-  // Content metrics (watch_sessions table)
+  // Content metrics (watch_sessions table) - last 24h
   totalSessions: number;
   totalWatchTime: number;   // in minutes
   avgSessionDuration: number;
   completionRate: number;
   
-  // Geographic
+  // Page views (analytics_events table) - last 24h
+  pageViews: number;
+  uniqueVisitors: number;
+  
+  // Geographic - unique users per country (last 7 days)
   topCountries: Array<{ country: string; countryName: string; count: number }>;
   
-  // Devices
+  // Devices - unique users per device (last 7 days)
   deviceBreakdown: Array<{ device: string; count: number }>;
+  
+  // Time ranges for transparency
+  timeRanges: {
+    realtime: string;
+    dau: string;
+    wau: string;
+    mau: string;
+    content: string;
+    geographic: string;
+    devices: string;
+    pageViews: string;
+  };
   
   // Timestamps
   lastUpdated: number;
@@ -64,8 +81,20 @@ const defaultStats: UnifiedStats = {
   totalWatchTime: 0,
   avgSessionDuration: 0,
   completionRate: 0,
+  pageViews: 0,
+  uniqueVisitors: 0,
   topCountries: [],
   deviceBreakdown: [],
+  timeRanges: {
+    realtime: '5 minutes',
+    dau: '24 hours',
+    wau: '7 days',
+    mau: '30 days',
+    content: '24 hours',
+    geographic: '7 days',
+    devices: '7 days',
+    pageViews: '24 hours',
+  },
   lastUpdated: 0,
   dataSource: 'none',
 };
@@ -104,13 +133,13 @@ export function StatsProvider({ children }: { children: ReactNode }) {
       
       if (data.success) {
         setStats({
-          // Real-time
+          // Real-time (unique users currently active)
           liveUsers: data.realtime?.totalActive || 0,
           liveWatching: data.realtime?.watching || 0,
           liveBrowsing: data.realtime?.browsing || 0,
           liveTVViewers: data.realtime?.livetv || 0,
           
-          // User metrics
+          // User metrics (all unique user counts)
           totalUsers: data.users?.total || 0,
           activeToday: data.users?.dau || 0,
           activeThisWeek: data.users?.wau || 0,
@@ -118,17 +147,24 @@ export function StatsProvider({ children }: { children: ReactNode }) {
           newUsersToday: data.users?.newToday || 0,
           returningUsers: data.users?.returning || 0,
           
-          // Content metrics
+          // Content metrics (last 24h)
           totalSessions: data.content?.totalSessions || 0,
           totalWatchTime: data.content?.totalWatchTime || 0,
           avgSessionDuration: data.content?.avgDuration || 0,
           completionRate: data.content?.completionRate || 0,
           
-          // Geographic
+          // Page views (last 24h)
+          pageViews: data.pageViews?.total || 0,
+          uniqueVisitors: data.pageViews?.uniqueVisitors || 0,
+          
+          // Geographic (unique users per country, last 7 days)
           topCountries: data.geographic || [],
           
-          // Devices
+          // Devices (unique users per device, last 7 days)
           deviceBreakdown: data.devices || [],
+          
+          // Time ranges for transparency
+          timeRanges: data.timeRanges || defaultStats.timeRanges,
           
           // Meta
           lastUpdated: Date.now(),

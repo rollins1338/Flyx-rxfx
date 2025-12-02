@@ -12,7 +12,8 @@ import {
     Map,
     History,
     BarChart3,
-    MousePointerClick
+    MousePointerClick,
+    TrendingUp
 } from 'lucide-react';
 
 export default function AdminSidebar() {
@@ -20,6 +21,7 @@ export default function AdminSidebar() {
 
     const menuItems = [
         { icon: LayoutDashboard, label: 'Overview', href: '/admin' },
+        { icon: TrendingUp, label: 'Insights', href: '/admin/insights' },
         { icon: BarChart3, label: 'Analytics', href: '/admin/analytics' },
         { icon: MousePointerClick, label: 'Engagement', href: '/admin/engagement' },
         { icon: Users, label: 'Users', href: '/admin/users' },

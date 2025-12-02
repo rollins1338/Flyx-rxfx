@@ -53,6 +53,7 @@ export default function AdminSessionsPage() {
   const limit = 100;
   
   // Key metrics from unified stats - SINGLE SOURCE OF TRUTH
+  // Session metrics are for the last 24 hours
   const metrics: SessionMetrics = {
     totalSessions: unifiedStats.totalSessions || localMetrics?.totalSessions || 0,
     avgDuration: unifiedStats.avgSessionDuration || localMetrics?.avgDuration || 0,

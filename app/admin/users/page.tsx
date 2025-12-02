@@ -107,12 +107,13 @@ export default function AdminUsersPage() {
 
 
   // Key metrics from unified stats - SINGLE SOURCE OF TRUTH
+  // All user counts are UNIQUE (no duplicates)
   const metrics = {
-    totalUsers: unifiedStats.totalUsers,
-    activeToday: unifiedStats.activeToday,
-    activeThisWeek: unifiedStats.activeThisWeek,
-    liveUsers: unifiedStats.liveUsers,
-    avgWatchTime: unifiedStats.totalUsers > 0 ? Math.round(unifiedStats.totalWatchTime / unifiedStats.totalUsers) : 0,
+    totalUsers: unifiedStats.totalUsers,           // Total unique users ever
+    activeToday: unifiedStats.activeToday,         // Unique users active in last 24h (DAU)
+    activeThisWeek: unifiedStats.activeThisWeek,   // Unique users active in last 7 days (WAU)
+    liveUsers: unifiedStats.liveUsers,             // Unique users currently online
+    avgWatchTime: unifiedStats.activeToday > 0 ? Math.round(unifiedStats.totalWatchTime / unifiedStats.activeToday) : 0,
     engagementRate: unifiedStats.totalUsers > 0 ? Math.round((unifiedStats.activeThisWeek / unifiedStats.totalUsers) * 100) : 0,
   };
 
@@ -252,14 +253,14 @@ export default function AdminUsersPage() {
         <p style={{ margin: '8px 0 0 0', color: '#94a3b8', fontSize: '16px' }}>Track individual users, watch habits, and visit patterns</p>
       </div>
 
-      {/* Key metrics from unified stats */}
+      {/* Key metrics from unified stats - all unique user counts */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-        <MetricCard title="Total Users" value={metrics.totalUsers} icon="👥" color="#7877c6" />
-        <MetricCard title="Active Today" value={metrics.activeToday} icon="📊" color="#10b981" subtitle="DAU" />
-        <MetricCard title="Active This Week" value={metrics.activeThisWeek} icon="📈" color="#f59e0b" subtitle="WAU" />
-        <MetricCard title="Online Now" value={metrics.liveUsers} icon="🟢" color="#22c55e" pulse />
-        <MetricCard title="Avg Watch Time" value={`${metrics.avgWatchTime}m`} icon="⏱️" color="#ec4899" subtitle="Per user" />
-        <MetricCard title="Engagement" value={`${metrics.engagementRate}%`} icon="💪" color="#3b82f6" subtitle="Weekly" />
+        <MetricCard title="Total Users" value={metrics.totalUsers} icon="👥" color="#7877c6" subtitle="All time" />
+        <MetricCard title="Active Today" value={metrics.activeToday} icon="📊" color="#10b981" subtitle="DAU (24h)" />
+        <MetricCard title="Active This Week" value={metrics.activeThisWeek} icon="📈" color="#f59e0b" subtitle="WAU (7d)" />
+        <MetricCard title="Online Now" value={metrics.liveUsers} icon="🟢" color="#22c55e" pulse subtitle="Real-time" />
+        <MetricCard title="Avg Watch Time" value={`${metrics.avgWatchTime}m`} icon="⏱️" color="#ec4899" subtitle="Per active user" />
+        <MetricCard title="Engagement" value={`${metrics.engagementRate}%`} icon="💪" color="#3b82f6" subtitle="WAU/Total" />
       </div>
 
       {/* Filters */}

@@ -7,15 +7,20 @@
  * 
  * Data Sources:
  * - live_activity: Real-time user presence (last 5 min heartbeat)
- * - user_activity: User sessions and activity history
+ * - user_activity: User sessions and activity history (UNIQUE users only)
  * - watch_sessions: Content viewing data
  * - analytics_events: Page views and events
+ * 
+ * IMPORTANT: All user counts use COUNT(DISTINCT user_id) to avoid duplicates
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeDB, getDB } from '@/lib/db/neon-connection';
 import { verifyAdminAuth } from '@/lib/utils/admin-auth';
 import { getCountryName } from '@/app/lib/utils/geolocation';
+
+// Minimum valid timestamp (Jan 1, 2020)
+const MIN_VALID_TIMESTAMP = 1577836800000;
 
 export async function GET(request: NextRequest) {
   try {
@@ -37,15 +42,17 @@ export async function GET(request: NextRequest) {
 
     // ============================================
     // 1. REAL-TIME DATA (from live_activity)
+    // Count UNIQUE users currently active
     // ============================================
     let realtime = { totalActive: 0, watching: 0, browsing: 0, livetv: 0 };
     try {
+      // Count unique users per activity type
       const liveQuery = isNeon
-        ? `SELECT activity_type, COUNT(*) as count 
+        ? `SELECT activity_type, COUNT(DISTINCT user_id) as count 
            FROM live_activity 
            WHERE is_active = TRUE AND last_heartbeat >= $1 
            GROUP BY activity_type`
-        : `SELECT activity_type, COUNT(*) as count 
+        : `SELECT activity_type, COUNT(DISTINCT user_id) as count 
            FROM live_activity 
            WHERE is_active = 1 AND last_heartbeat >= ? 
            GROUP BY activity_type`;
@@ -66,62 +73,78 @@ export async function GET(request: NextRequest) {
     }
 
     // ============================================
-    // 2. USER METRICS (from user_activity ONLY - single source)
+    // 2. USER METRICS (from user_activity ONLY)
+    // ALWAYS use COUNT(DISTINCT user_id) for accurate unique user counts
     // ============================================
     let users = { total: 0, dau: 0, wau: 0, mau: 0, newToday: 0, returning: 0 };
     try {
-      // Simple query first to check if table exists and has data
-      const simpleQuery = isNeon
-        ? `SELECT COUNT(*) as total FROM user_activity WHERE first_seen > 0 AND last_seen > 0`
-        : `SELECT COUNT(*) as total FROM user_activity WHERE first_seen > 0 AND last_seen > 0`;
+      // Total UNIQUE users with valid timestamps
+      const totalQuery = isNeon
+        ? `SELECT COUNT(DISTINCT user_id) as total FROM user_activity 
+           WHERE first_seen >= $1 AND last_seen >= $1 AND last_seen <= $2`
+        : `SELECT COUNT(DISTINCT user_id) as total FROM user_activity 
+           WHERE first_seen >= ? AND last_seen >= ? AND last_seen <= ?`;
       
-      const simpleResult = await adapter.query(simpleQuery);
-      users.total = parseInt(simpleResult[0]?.total) || 0;
+      const totalResult = await adapter.query(totalQuery, 
+        isNeon ? [MIN_VALID_TIMESTAMP, now] : [MIN_VALID_TIMESTAMP, MIN_VALID_TIMESTAMP, now]);
+      users.total = parseInt(totalResult[0]?.total) || 0;
       
-      // Get DAU (active in last 24h)
+      // DAU - UNIQUE users active in last 24h
       const dauQuery = isNeon
-        ? `SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= $1 AND last_seen <= $2`
-        : `SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= ? AND last_seen <= ?`;
+        ? `SELECT COUNT(DISTINCT user_id) as count FROM user_activity 
+           WHERE last_seen >= $1 AND last_seen <= $2`
+        : `SELECT COUNT(DISTINCT user_id) as count FROM user_activity 
+           WHERE last_seen >= ? AND last_seen <= ?`;
       const dauResult = await adapter.query(dauQuery, [oneDayAgo, now]);
       users.dau = parseInt(dauResult[0]?.count) || 0;
       
-      // Get WAU (active in last week)
+      // WAU - UNIQUE users active in last week
       const wauQuery = isNeon
-        ? `SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= $1 AND last_seen <= $2`
-        : `SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= ? AND last_seen <= ?`;
+        ? `SELECT COUNT(DISTINCT user_id) as count FROM user_activity 
+           WHERE last_seen >= $1 AND last_seen <= $2`
+        : `SELECT COUNT(DISTINCT user_id) as count FROM user_activity 
+           WHERE last_seen >= ? AND last_seen <= ?`;
       const wauResult = await adapter.query(wauQuery, [oneWeekAgo, now]);
       users.wau = parseInt(wauResult[0]?.count) || 0;
       
-      // Get MAU (active in last month)
+      // MAU - UNIQUE users active in last month
       const mauQuery = isNeon
-        ? `SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= $1 AND last_seen <= $2`
-        : `SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= ? AND last_seen <= ?`;
+        ? `SELECT COUNT(DISTINCT user_id) as count FROM user_activity 
+           WHERE last_seen >= $1 AND last_seen <= $2`
+        : `SELECT COUNT(DISTINCT user_id) as count FROM user_activity 
+           WHERE last_seen >= ? AND last_seen <= ?`;
       const mauResult = await adapter.query(mauQuery, [oneMonthAgo, now]);
       users.mau = parseInt(mauResult[0]?.count) || 0;
       
-      // Get new users today
+      // New users today - UNIQUE users whose first_seen is within last 24h
       const newQuery = isNeon
-        ? `SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE first_seen >= $1 AND first_seen <= $2`
-        : `SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE first_seen >= ? AND first_seen <= ?`;
+        ? `SELECT COUNT(DISTINCT user_id) as count FROM user_activity 
+           WHERE first_seen >= $1 AND first_seen <= $2`
+        : `SELECT COUNT(DISTINCT user_id) as count FROM user_activity 
+           WHERE first_seen >= ? AND first_seen <= ?`;
       const newResult = await adapter.query(newQuery, [oneDayAgo, now]);
       users.newToday = parseInt(newResult[0]?.count) || 0;
       
-      // Get returning users
+      // Returning users - UNIQUE users who were first seen before today but active today
       const returningQuery = isNeon
-        ? `SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE first_seen < $1 AND last_seen >= $1 AND last_seen <= $2`
-        : `SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE first_seen < ? AND last_seen >= ? AND last_seen <= ?`;
-      const returningResult = await adapter.query(returningQuery, isNeon ? [oneDayAgo, now] : [oneDayAgo, oneDayAgo, now]);
+        ? `SELECT COUNT(DISTINCT user_id) as count FROM user_activity 
+           WHERE first_seen < $1 AND last_seen >= $1 AND last_seen <= $2`
+        : `SELECT COUNT(DISTINCT user_id) as count FROM user_activity 
+           WHERE first_seen < ? AND last_seen >= ? AND last_seen <= ?`;
+      const returningResult = await adapter.query(returningQuery, 
+        isNeon ? [oneDayAgo, now] : [oneDayAgo, oneDayAgo, now]);
       users.returning = parseInt(returningResult[0]?.count) || 0;
     } catch (e) {
       console.error('Error fetching user stats:', e);
     }
 
     // ============================================
-    // 3. CONTENT METRICS (from watch_sessions - validated timestamps)
+    // 3. CONTENT METRICS (from watch_sessions)
+    // Use validated timestamps and reasonable bounds
     // ============================================
     let content = { totalSessions: 0, totalWatchTime: 0, avgDuration: 0, completionRate: 0 };
     try {
-      // Only count sessions with valid timestamps (within reasonable range)
+      // Count sessions from last 24h with valid data
       const contentQuery = isNeon
         ? `SELECT 
              COUNT(*) as total_sessions,
@@ -142,8 +165,8 @@ export async function GET(request: NextRequest) {
       
       if (contentResult[0]) {
         content.totalSessions = parseInt(contentResult[0].total_sessions) || 0;
-        content.totalWatchTime = Math.round(parseFloat(contentResult[0].total_watch_time) / 60) || 0;
-        content.avgDuration = Math.round(parseFloat(contentResult[0].avg_duration) / 60) || 0;
+        content.totalWatchTime = Math.round(parseFloat(contentResult[0].total_watch_time) / 60) || 0; // Convert to minutes
+        content.avgDuration = Math.round(parseFloat(contentResult[0].avg_duration) / 60) || 0; // Convert to minutes
         content.completionRate = Math.round(parseFloat(contentResult[0].avg_completion)) || 0;
       }
     } catch (e) {
@@ -152,24 +175,27 @@ export async function GET(request: NextRequest) {
 
     // ============================================
     // 4. GEOGRAPHIC DATA (from user_activity)
+    // Count UNIQUE users per country
     // ============================================
     let geographic: Array<{ country: string; countryName: string; count: number }> = [];
     try {
       const geoQuery = isNeon
         ? `SELECT UPPER(country) as country, COUNT(DISTINCT user_id) as count 
            FROM user_activity 
-           WHERE last_seen >= $1 AND country IS NOT NULL AND LENGTH(country) = 2
+           WHERE last_seen >= $1 AND last_seen <= $2
+             AND country IS NOT NULL AND country != '' AND LENGTH(country) = 2
            GROUP BY UPPER(country) 
            ORDER BY count DESC 
-           LIMIT 10`
+           LIMIT 20`
         : `SELECT UPPER(country) as country, COUNT(DISTINCT user_id) as count 
            FROM user_activity 
-           WHERE last_seen >= ? AND country IS NOT NULL AND LENGTH(country) = 2
+           WHERE last_seen >= ? AND last_seen <= ?
+             AND country IS NOT NULL AND country != '' AND LENGTH(country) = 2
            GROUP BY UPPER(country) 
            ORDER BY count DESC 
-           LIMIT 10`;
+           LIMIT 20`;
       
-      const geoResult = await adapter.query(geoQuery, [oneWeekAgo]);
+      const geoResult = await adapter.query(geoQuery, [oneWeekAgo, now]);
       
       geographic = geoResult.map((row: any) => ({
         country: row.country,
@@ -181,23 +207,24 @@ export async function GET(request: NextRequest) {
     }
 
     // ============================================
-    // 5. DEVICE BREAKDOWN (from user_activity + watch_sessions)
+    // 5. DEVICE BREAKDOWN (from user_activity)
+    // Count UNIQUE users per device type
     // ============================================
     let devices: Array<{ device: string; count: number }> = [];
     try {
       const deviceQuery = isNeon
-        ? `SELECT COALESCE(device_type, 'unknown') as device, COUNT(*) as count 
+        ? `SELECT COALESCE(device_type, 'unknown') as device, COUNT(DISTINCT user_id) as count 
            FROM user_activity 
-           WHERE last_seen >= $1
+           WHERE last_seen >= $1 AND last_seen <= $2
            GROUP BY device_type 
            ORDER BY count DESC`
-        : `SELECT COALESCE(device_type, 'unknown') as device, COUNT(*) as count 
+        : `SELECT COALESCE(device_type, 'unknown') as device, COUNT(DISTINCT user_id) as count 
            FROM user_activity 
-           WHERE last_seen >= ?
+           WHERE last_seen >= ? AND last_seen <= ?
            GROUP BY device_type 
            ORDER BY count DESC`;
       
-      const deviceResult = await adapter.query(deviceQuery, [oneWeekAgo]);
+      const deviceResult = await adapter.query(deviceQuery, [oneWeekAgo, now]);
       
       devices = deviceResult.map((row: any) => ({
         device: row.device || 'unknown',
@@ -207,6 +234,35 @@ export async function GET(request: NextRequest) {
       console.error('Error fetching device stats:', e);
     }
 
+    // ============================================
+    // 6. PAGE VIEWS (from analytics_events)
+    // ============================================
+    let pageViews = { total: 0, uniqueVisitors: 0 };
+    try {
+      const pageViewQuery = isNeon
+        ? `SELECT 
+             COUNT(*) as total,
+             COUNT(DISTINCT COALESCE(user_id, session_id)) as unique_visitors
+           FROM analytics_events 
+           WHERE event_type = 'page_view' 
+             AND timestamp >= $1 AND timestamp <= $2`
+        : `SELECT 
+             COUNT(*) as total,
+             COUNT(DISTINCT COALESCE(user_id, session_id)) as unique_visitors
+           FROM analytics_events 
+           WHERE event_type = 'page_view' 
+             AND timestamp >= ? AND timestamp <= ?`;
+      
+      const pageViewResult = await adapter.query(pageViewQuery, [oneDayAgo, now]);
+      
+      if (pageViewResult[0]) {
+        pageViews.total = parseInt(pageViewResult[0].total) || 0;
+        pageViews.uniqueVisitors = parseInt(pageViewResult[0].unique_visitors) || 0;
+      }
+    } catch (e) {
+      console.error('Error fetching page view stats:', e);
+    }
+
     return NextResponse.json({
       success: true,
       realtime,
@@ -214,6 +270,18 @@ export async function GET(request: NextRequest) {
       content,
       geographic,
       devices,
+      pageViews,
+      // Include time ranges for transparency
+      timeRanges: {
+        realtime: '5 minutes',
+        dau: '24 hours',
+        wau: '7 days',
+        mau: '30 days',
+        content: '24 hours',
+        geographic: '7 days',
+        devices: '7 days',
+        pageViews: '24 hours',
+      },
       timestamp: now,
       timestampISO: new Date(now).toISOString(),
     });
