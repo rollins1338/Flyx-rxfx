@@ -2,12 +2,16 @@
  * Stream Extract API - Self-Hosted Decoder (Primary Method)
  * 
  * Uses the self-hosted decoder running on Vercel's Node.js runtime
+ * Primary: MoviesAPI (moviesapi.club → vidora.stream)
+ * Fallback: 2Embed (2embed.cc → player4u → yesmovies.baby)
+ * 
  * GET /api/stream/extract?tmdbId=550&type=movie
  * GET /api/stream/extract?tmdbId=1396&type=tv&season=1&episode=1
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { extract2EmbedStreams } from '@/app/lib/services/2embed-extractor';
+import { extractMoviesApiStreams } from '@/app/lib/services/moviesapi-extractor';
 import { performanceMonitor } from '@/app/lib/utils/performance-monitor';
 
 // Node.js runtime (default) - required for fetch
@@ -425,39 +429,53 @@ export async function GET(request: NextRequest) {
     const expectedRuntime = tmdbInfo.runtime;
     console.log(`[EXTRACT] Expected runtime from TMDB: ${expectedRuntime}min`);
 
-    // Create a promise for this extraction
-    let extractionPromise;
-    if (provider === 'moviesapi') {
-      const { extractMoviesApiStreams } = await import('@/app/lib/services/moviesapi-extractor');
-      extractionPromise = extractMoviesApiStreams(tmdbId, type, season, episode).then(async (res) => {
-        if (!res.success) throw new Error(res.error || 'MoviesApi extraction failed');
+    // Create extraction with automatic fallback
+    // Primary: MoviesAPI, Fallback: 2Embed
+    const extractionPromise = (async () => {
+      // Try MoviesAPI first (primary)
+      console.log('[EXTRACT] Trying primary source: MoviesAPI...');
+      try {
+        const moviesApiResult = await extractMoviesApiStreams(tmdbId, type, season, episode);
         
-        // Validate duration for moviesapi sources too
-        if (expectedRuntime && expectedRuntime > 0 && res.sources.length > 0) {
-          const firstSource = res.sources[0];
-          const streamDuration = await getStreamDuration(firstSource.url, firstSource.referer);
-          
-          if (streamDuration > 0) {
-            console.log(`[EXTRACT] MoviesAPI stream duration: ${Math.round(streamDuration / 60)}min, expected: ${expectedRuntime}min`);
+        if (moviesApiResult.success && moviesApiResult.sources.length > 0) {
+          // Validate duration for moviesapi sources
+          if (expectedRuntime && expectedRuntime > 0) {
+            const firstSource = moviesApiResult.sources[0];
+            const streamDuration = await getStreamDuration(firstSource.url, firstSource.referer);
             
-            if (!isValidDuration(streamDuration, expectedRuntime)) {
-              console.warn('[EXTRACT] MoviesAPI duration validation FAILED - content may be incorrect');
-              throw new Error('Content duration mismatch - source rejected for safety');
+            if (streamDuration > 0) {
+              console.log(`[EXTRACT] MoviesAPI stream duration: ${Math.round(streamDuration / 60)}min, expected: ${expectedRuntime}min`);
+              
+              if (!isValidDuration(streamDuration, expectedRuntime)) {
+                console.warn('[EXTRACT] MoviesAPI duration validation FAILED - trying fallback');
+                throw new Error('Content duration mismatch');
+              }
             }
           }
+          
+          console.log(`[EXTRACT] ✓ MoviesAPI succeeded with ${moviesApiResult.sources.length} source(s)`);
+          return { sources: moviesApiResult.sources, provider: 'moviesapi' };
         }
         
-        return res.sources;
-      });
-    } else {
-      extractionPromise = extractWith2Embed(tmdbId, type, season, episode, expectedRuntime);
-    }
+        throw new Error(moviesApiResult.error || 'MoviesAPI returned no sources');
+      } catch (moviesApiError) {
+        console.warn('[EXTRACT] MoviesAPI failed:', moviesApiError instanceof Error ? moviesApiError.message : moviesApiError);
+        
+        // Fallback to 2Embed
+        console.log('[EXTRACT] Trying fallback source: 2Embed...');
+        
+        const sources = await extractWith2Embed(tmdbId, type, season, episode, expectedRuntime);
+        console.log(`[EXTRACT] ✓ 2Embed succeeded with ${sources.length} source(s)`);
+        return { sources, provider: '2embed' };
+      }
+    })();
 
-    pendingRequests.set(cacheKey, extractionPromise);
+    pendingRequests.set(cacheKey, extractionPromise.then(r => r.sources));
 
     try {
-      // Extract
-      const sources = await extractionPromise;
+      // Extract with automatic fallback
+      const result = await extractionPromise;
+      const { sources, provider: usedProvider } = result;
 
       // Remove from pending requests
       pendingRequests.delete(cacheKey);
@@ -478,15 +496,15 @@ export async function GET(request: NextRequest) {
         type,
         sources: sources.length,
         cached: false,
-        provider
+        provider: usedProvider
       });
-      console.log(`[EXTRACT] Success in ${executionTime}ms - ${sources.length} qualities`);
+      console.log(`[EXTRACT] Success in ${executionTime}ms - ${sources.length} qualities via ${usedProvider}`);
 
       // Return proxied URLs
       const proxiedSources = sources.map((source: any) => ({
         quality: source.quality,
         title: source.title || source.quality,
-        url: `/api/stream-proxy?url=${encodeURIComponent(source.url)}&source=${provider}&referer=${encodeURIComponent(source.referer)}`,
+        url: `/api/stream-proxy?url=${encodeURIComponent(source.url)}&source=${usedProvider}&referer=${encodeURIComponent(source.referer)}`,
         directUrl: source.url,
         referer: source.referer,
         type: source.type,
@@ -499,7 +517,7 @@ export async function GET(request: NextRequest) {
         // Backward compatibility - return first source as default
         streamUrl: proxiedSources[0].url,
         url: proxiedSources[0].url,
-        provider: provider,
+        provider: usedProvider,
         requiresProxy: true,
         requiresSegmentProxy: true,
         cached: false,
