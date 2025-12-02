@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAdmin } from '../context/AdminContext';
+import { useStats } from '../context/StatsContext';
 import GeographicHeatmap from '../components/GeographicHeatmap';
 
 interface GeoStat {
@@ -22,10 +23,18 @@ interface GeoMetrics {
 
 export default function AdminGeographicPage() {
   const { dateRange, setIsLoading } = useAdmin();
+  // Use unified stats for key metrics - SINGLE SOURCE OF TRUTH
+  const { stats: unifiedStats } = useStats();
+  
   const [geographic, setGeographic] = useState<GeoStat[]>([]);
   const [metrics, setMetrics] = useState<GeoMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'regions'>('list');
+  
+  // Prefer unified stats for geographic data when available
+  const geoData = unifiedStats.topCountries.length > 0 
+    ? unifiedStats.topCountries.map(c => ({ country: c.country, countryName: c.countryName, count: c.count }))
+    : geographic;
 
   useEffect(() => {
     fetchData();
@@ -364,7 +373,7 @@ export default function AdminGeographicPage() {
 
       {/* Content based on view mode */}
       {viewMode === 'list' ? (
-        <GeographicHeatmap data={geographic} />
+        <GeographicHeatmap data={geoData} />
       ) : (
         <div style={{
           background: 'linear-gradient(135deg, rgba(10, 10, 20, 0.98), rgba(15, 15, 30, 0.95))',

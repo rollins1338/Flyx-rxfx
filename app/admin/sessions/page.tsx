@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAdmin } from '../context/AdminContext';
+import { useStats } from '../context/StatsContext';
 
 interface WatchSession {
   id: string;
@@ -38,8 +39,11 @@ interface SessionMetrics {
 
 export default function AdminSessionsPage() {
   const { dateRange, setIsLoading } = useAdmin();
+  // Use unified stats for key metrics - SINGLE SOURCE OF TRUTH
+  const { stats: unifiedStats } = useStats();
+  
   const [sessions, setSessions] = useState<WatchSession[]>([]);
-  const [metrics, setMetrics] = useState<SessionMetrics | null>(null);
+  const [localMetrics, setLocalMetrics] = useState<SessionMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'completed' | 'abandoned'>('all');
   const [contentTypeFilter, setContentTypeFilter] = useState<'all' | 'movie' | 'tv'>('all');
@@ -47,6 +51,18 @@ export default function AdminSessionsPage() {
   const [selectedSession, setSelectedSession] = useState<WatchSession | null>(null);
   const [viewMode, setViewMode] = useState<'table' | 'timeline'>('table');
   const limit = 100;
+  
+  // Key metrics from unified stats - SINGLE SOURCE OF TRUTH
+  const metrics: SessionMetrics = {
+    totalSessions: unifiedStats.totalSessions || localMetrics?.totalSessions || 0,
+    avgDuration: unifiedStats.avgSessionDuration || localMetrics?.avgDuration || 0,
+    avgCompletion: unifiedStats.completionRate || localMetrics?.avgCompletion || 0,
+    completedCount: localMetrics?.completedCount || 0,
+    avgPauses: localMetrics?.avgPauses || 0,
+    avgSeeks: localMetrics?.avgSeeks || 0,
+    peakHour: localMetrics?.peakHour || 20,
+    mostWatchedType: localMetrics?.mostWatchedType || 'Movies',
+  };
 
   useEffect(() => {
     fetchSessions();
@@ -89,10 +105,10 @@ export default function AdminSessionsPage() {
         
         setSessions(sessionData);
         
-        // Calculate metrics
+        // Calculate local metrics (for details not in unified stats)
         if (data.analytics) {
           const analytics = data.analytics;
-          setMetrics({
+          setLocalMetrics({
             totalSessions: analytics.totalSessions || 0,
             avgDuration: analytics.averageWatchTime || 0,
             avgCompletion: analytics.averageCompletionRate || 0,
@@ -223,22 +239,20 @@ export default function AdminSessionsPage() {
         </p>
       </div>
 
-      {/* Metrics Cards */}
-      {metrics && (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-          gap: '16px',
-          marginBottom: '24px'
-        }}>
-          <MetricCard title="Total Sessions" value={metrics.totalSessions} icon="📊" />
-          <MetricCard title="Avg Duration" value={formatDuration(metrics.avgDuration)} icon="⏱️" />
-          <MetricCard title="Avg Completion" value={`${metrics.avgCompletion}%`} icon="✅" />
-          <MetricCard title="Completed" value={metrics.completedCount} icon="🎬" />
-          <MetricCard title="Avg Pauses" value={metrics.avgPauses} icon="⏸️" />
-          <MetricCard title="Avg Seeks" value={metrics.avgSeeks} icon="⏩" />
-        </div>
-      )}
+      {/* Metrics Cards - Using unified stats for key metrics */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+        gap: '16px',
+        marginBottom: '24px'
+      }}>
+        <MetricCard title="Total Sessions" value={metrics.totalSessions} icon="📊" />
+        <MetricCard title="Avg Duration" value={formatDuration(metrics.avgDuration)} icon="⏱️" />
+        <MetricCard title="Avg Completion" value={`${metrics.avgCompletion}%`} icon="✅" />
+        <MetricCard title="Completed" value={metrics.completedCount} icon="🎬" />
+        <MetricCard title="Avg Pauses" value={metrics.avgPauses} icon="⏸️" />
+        <MetricCard title="Avg Seeks" value={metrics.avgSeeks} icon="⏩" />
+      </div>
 
       {/* Filters and Controls */}
       <div style={{

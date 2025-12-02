@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useAdmin } from '../context/AdminContext';
+import { useStats } from '../context/StatsContext';
+
+// Use unified stats for key metrics - SINGLE SOURCE OF TRUTH
 
 // Helper function to get country flag emoji
 function getCountryFlag(countryCode: string): string {
@@ -56,13 +59,32 @@ interface UserMetrics {
 
 export default function AdminUsersPage() {
   const { dateRange, setIsLoading } = useAdmin();
+  // Use unified stats for key metrics - SINGLE SOURCE OF TRUTH
+  const { stats: unifiedStats } = useStats();
+  
   const [users, setUsers] = useState<UserStat[]>([]);
-  const [metrics, setMetrics] = useState<UserMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'lastActive' | 'watchTime' | 'sessions'>('lastActive');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [filterStatus, setFilterStatus] = useState<'all' | 'online' | 'offline'>('all');
+  const [localDevices, setLocalDevices] = useState<Array<{ device: string; count: number }>>([]);
+
+  // Key metrics from unified stats - SINGLE SOURCE OF TRUTH
+  const metrics: UserMetrics = {
+    totalUsers: unifiedStats.totalUsers,
+    activeToday: unifiedStats.activeToday,
+    activeThisWeek: unifiedStats.activeThisWeek,
+    avgWatchTimePerUser: unifiedStats.totalUsers > 0 
+      ? Math.round(unifiedStats.totalWatchTime / unifiedStats.totalUsers) 
+      : 0,
+    topDevices: unifiedStats.deviceBreakdown.length > 0 
+      ? unifiedStats.deviceBreakdown.slice(0, 5) 
+      : localDevices,
+    engagementRate: unifiedStats.totalUsers > 0 
+      ? Math.round((unifiedStats.activeThisWeek / unifiedStats.totalUsers) * 100) 
+      : 0,
+  };
 
   useEffect(() => {
     fetchUserData();
@@ -86,22 +108,8 @@ export default function AdminUsersPage() {
         const usersData = data.data.usersStats || [];
         const devices = data.data.deviceBreakdown || [];
         setUsers(usersData);
-
-        const now = Date.now();
-        const dayAgo = now - 24 * 60 * 60 * 1000;
-        const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
-        const activeToday = usersData.filter((u: UserStat) => u.lastActive > dayAgo).length;
-        const activeThisWeek = usersData.filter((u: UserStat) => u.lastActive > weekAgo).length;
-        const totalWatchTime = usersData.reduce((sum: number, u: UserStat) => sum + (u.totalWatchTime || 0), 0);
-
-        setMetrics({
-          totalUsers: usersData.length,
-          activeToday,
-          activeThisWeek,
-          avgWatchTimePerUser: usersData.length > 0 ? Math.round(totalWatchTime / usersData.length) : 0,
-          topDevices: devices.slice(0, 5).map((d: { deviceType: string; count: number }) => ({ device: d.deviceType, count: d.count })),
-          engagementRate: usersData.length > 0 ? Math.round((activeThisWeek / usersData.length) * 100) : 0,
-        });
+        // Store devices as fallback if unified stats don't have them
+        setLocalDevices(devices.slice(0, 5).map((d: { deviceType: string; count: number }) => ({ device: d.deviceType, count: d.count })));
       }
     } catch (err) {
       console.error('Failed to fetch user data:', err);
@@ -164,18 +172,17 @@ export default function AdminUsersPage() {
         <p style={{ margin: '8px 0 0 0', color: '#94a3b8', fontSize: '16px' }}>Comprehensive user behavior analysis and engagement metrics</p>
       </div>
 
-      {metrics && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-          <MetricCard title="Total Users" value={metrics.totalUsers} icon="👥" color="#7877c6" />
-          <MetricCard title="Active Today" value={metrics.activeToday} icon="🟢" color="#10b981" subtitle="Last 24h" />
-          <MetricCard title="Active This Week" value={metrics.activeThisWeek} icon="📊" color="#f59e0b" />
-          <MetricCard title="Avg Watch Time" value={`${metrics.avgWatchTimePerUser}m`} icon="⏱️" color="#ec4899" subtitle="Per user" />
-          <MetricCard title="Engagement Rate" value={`${metrics.engagementRate}%`} icon="📈" color="#3b82f6" subtitle="Weekly active" />
-          <MetricCard title="Online Now" value={users.filter(u => isOnline(u.lastActive)).length} icon="🔴" color="#ef4444" pulse />
-        </div>
-      )}
+      {/* Key metrics from unified stats - SINGLE SOURCE OF TRUTH */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+        <MetricCard title="Total Users" value={metrics.totalUsers} icon="👥" color="#7877c6" />
+        <MetricCard title="Active Today" value={metrics.activeToday} icon="🟢" color="#10b981" subtitle="Last 24h (DAU)" />
+        <MetricCard title="Active This Week" value={metrics.activeThisWeek} icon="📊" color="#f59e0b" subtitle="WAU" />
+        <MetricCard title="Avg Watch Time" value={`${metrics.avgWatchTimePerUser}m`} icon="⏱️" color="#ec4899" subtitle="Per user" />
+        <MetricCard title="Engagement Rate" value={`${metrics.engagementRate}%`} icon="📈" color="#3b82f6" subtitle="Weekly active" />
+        <MetricCard title="Online Now" value={unifiedStats.liveUsers} icon="🔴" color="#ef4444" pulse />
+      </div>
 
-      {metrics && metrics.topDevices.length > 0 && (
+      {metrics.topDevices.length > 0 && (
         <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '12px', padding: '20px', marginBottom: '24px' }}>
           <h3 style={{ margin: '0 0 16px 0', color: '#f8fafc', fontSize: '16px' }}>User Devices</h3>
           <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>

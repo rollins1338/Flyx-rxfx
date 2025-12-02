@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import LiveActivityTracker from '../components/LiveActivityTracker';
+import { useStats } from '../context/StatsContext';
 
 // Helper function to get country name from ISO code
 function getCountryNameFromCode(code: string): string {
@@ -50,6 +51,9 @@ interface HistoricalPoint {
 }
 
 export default function AdminLivePage() {
+  // Use unified stats for consistent data
+  const { stats: unifiedStats } = useStats();
+  
   const [activities, setActivities] = useState<LiveActivity[]>([]);
   const [stats, setStats] = useState<LiveStats | null>(null);
   const [peakToday, setPeakToday] = useState(0);
@@ -57,6 +61,13 @@ export default function AdminLivePage() {
   const [viewMode, setViewMode] = useState<'realtime' | 'summary' | 'map'>('realtime');
   const [refreshRate, setRefreshRate] = useState(5);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+
+  // Sync with unified stats
+  useEffect(() => {
+    if (unifiedStats.liveUsers > 0) {
+      setPeakToday(prev => Math.max(prev, unifiedStats.liveUsers));
+    }
+  }, [unifiedStats.liveUsers]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -67,7 +78,8 @@ export default function AdminLivePage() {
         setStats(data.stats);
         setLastUpdate(new Date());
         
-        const currentActive = data.stats?.totalActive || 0;
+        // Use unified stats for the count to ensure consistency
+        const currentActive = unifiedStats.liveUsers || data.stats?.totalActive || 0;
         setPeakToday(prev => Math.max(prev, currentActive));
         
         // Add to history for mini chart
@@ -141,17 +153,15 @@ export default function AdminLivePage() {
         </div>
       </div>
 
-      {/* Live Stats Cards */}
-      {stats && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-          <StatCard title="Active Now" value={stats.totalActive} icon="👥" color="#10b981" pulse />
-          <StatCard title="Watching VOD" value={stats.watching} icon="▶️" color="#7877c6" />
-          <StatCard title="Live TV" value={stats.livetv} icon="📺" color="#f59e0b" />
-          <StatCard title="Browsing" value={stats.browsing} icon="🔍" color="#3b82f6" />
-          <StatCard title="Peak Today" value={peakToday} icon="📈" color="#ec4899" />
-          <StatCard title="Countries" value={Object.keys(stats.byCountry || {}).length} icon="🌍" color="#8b5cf6" />
-        </div>
-      )}
+      {/* Live Stats Cards - Using unified stats for consistency */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+        <StatCard title="Active Now" value={unifiedStats.liveUsers || stats?.totalActive || 0} icon="👥" color="#10b981" pulse />
+        <StatCard title="Watching VOD" value={unifiedStats.liveWatching || stats?.watching || 0} icon="▶️" color="#7877c6" />
+        <StatCard title="Live TV" value={unifiedStats.liveTVViewers || stats?.livetv || 0} icon="📺" color="#f59e0b" />
+        <StatCard title="Browsing" value={unifiedStats.liveBrowsing || stats?.browsing || 0} icon="🔍" color="#3b82f6" />
+        <StatCard title="Peak Today" value={peakToday} icon="📈" color="#ec4899" />
+        <StatCard title="Countries" value={unifiedStats.topCountries.length || Object.keys(stats?.byCountry || {}).length} icon="🌍" color="#8b5cf6" />
+      </div>
 
       {/* Mini Activity Chart */}
       {history.length > 1 && (

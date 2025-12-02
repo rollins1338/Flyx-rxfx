@@ -46,6 +46,14 @@ export async function POST(request: NextRequest) {
     
     const pageViewId = data.id || generateId();
 
+    // Normalize values with explicit types
+    const entryTime = parseInt(String(data.entryTime || now));
+    const exitTime = data.exitTime ? parseInt(String(data.exitTime)) : null;
+    const timeOnPageVal = parseInt(String(data.timeOnPage || 0));
+    const scrollDepthVal = parseInt(String(data.scrollDepth || 0));
+    const interactionsVal = parseInt(String(data.interactions || 0));
+    const isBounceVal = data.isBounce === true;
+
     if (db.isUsingNeon()) {
       // PostgreSQL - upsert page view
       await adapter.execute(`
@@ -53,13 +61,13 @@ export async function POST(request: NextRequest) {
           id, user_id, session_id, page_path, page_title, referrer,
           entry_time, exit_time, time_on_page, scroll_depth, interactions,
           device_type, country, is_bounce, created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7::BIGINT, $8::BIGINT, $9::INTEGER, $10::INTEGER, $11::INTEGER, $12, $13, $14::BOOLEAN, $15::BIGINT)
         ON CONFLICT (id) DO UPDATE SET
-          exit_time = COALESCE($8, page_views.exit_time),
-          time_on_page = $9,
-          scroll_depth = GREATEST(page_views.scroll_depth, $10),
-          interactions = $11,
-          is_bounce = $14
+          exit_time = COALESCE($8::BIGINT, page_views.exit_time),
+          time_on_page = $9::INTEGER,
+          scroll_depth = GREATEST(page_views.scroll_depth, $10::INTEGER),
+          interactions = $11::INTEGER,
+          is_bounce = $14::BOOLEAN
       `, [
         pageViewId,
         data.userId,
@@ -67,43 +75,49 @@ export async function POST(request: NextRequest) {
         data.pagePath,
         data.pageTitle || '',
         data.referrer || '',
-        data.entryTime,
-        data.exitTime || null,
-        data.timeOnPage || 0,
-        data.scrollDepth || 0,
-        data.interactions || 0,
+        entryTime,
+        exitTime,
+        timeOnPageVal,
+        scrollDepthVal,
+        interactionsVal,
         deviceType,
         location.countryCode,
-        data.isBounce || false,
+        isBounceVal,
         now
       ]);
 
       // Update page metrics aggregate
+      const timeOnPage = parseInt(String(data.timeOnPage || 0));
+      const scrollDepth = parseFloat(String(data.scrollDepth || 0));
+      const bounceValue = data.isBounce ? 100.0 : 0.0;
+      const entryCount = data.isFirstPage ? 1 : 0;
+      const exitCount = data.isExit ? 1 : 0;
+      
       await adapter.execute(`
         INSERT INTO page_metrics (
           page_path, total_views, unique_visitors, total_time_on_page,
           avg_time_on_page, bounce_rate, avg_scroll_depth,
           entry_count, exit_count, updated_at
-        ) VALUES ($1, 1, 1, $2, $2, $3, $4, $5, $6, $7)
+        ) VALUES ($1, 1, 1, $2::INTEGER, $2::REAL, $3::REAL, $4::REAL, $5::INTEGER, $6::INTEGER, $7::BIGINT)
         ON CONFLICT (page_path) DO UPDATE SET
           total_views = page_metrics.total_views + 1,
-          total_time_on_page = page_metrics.total_time_on_page + $2,
-          avg_time_on_page = (page_metrics.total_time_on_page + $2) / (page_metrics.total_views + 1),
+          total_time_on_page = page_metrics.total_time_on_page + $2::INTEGER,
+          avg_time_on_page = (page_metrics.total_time_on_page + $2::INTEGER)::REAL / (page_metrics.total_views + 1),
           bounce_rate = CASE 
-            WHEN $3 THEN (page_metrics.bounce_rate * page_metrics.total_views + 100) / (page_metrics.total_views + 1)
+            WHEN $3::REAL > 0 THEN (page_metrics.bounce_rate * page_metrics.total_views + 100.0) / (page_metrics.total_views + 1)
             ELSE (page_metrics.bounce_rate * page_metrics.total_views) / (page_metrics.total_views + 1)
           END,
-          avg_scroll_depth = (page_metrics.avg_scroll_depth * page_metrics.total_views + $4) / (page_metrics.total_views + 1),
-          entry_count = page_metrics.entry_count + $5,
-          exit_count = page_metrics.exit_count + $6,
-          updated_at = $7
+          avg_scroll_depth = (page_metrics.avg_scroll_depth * page_metrics.total_views + $4::REAL) / (page_metrics.total_views + 1),
+          entry_count = page_metrics.entry_count + $5::INTEGER,
+          exit_count = page_metrics.exit_count + $6::INTEGER,
+          updated_at = $7::BIGINT
       `, [
         data.pagePath,
-        data.timeOnPage || 0,
-        data.isBounce || false,
-        data.scrollDepth || 0,
-        data.isFirstPage ? 1 : 0,
-        data.isExit ? 1 : 0,
+        timeOnPage,
+        bounceValue,
+        scrollDepth,
+        entryCount,
+        exitCount,
         now
       ]);
     } else {

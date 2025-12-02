@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useAdmin } from '../context/AdminContext';
+import { useStats } from '../context/StatsContext';
 
 interface PageMetric {
   page_path: string;
@@ -42,6 +43,9 @@ interface EngagementStats {
 
 export default function EngagementPage() {
   useAdmin();
+  // Use unified stats for key metrics - SINGLE SOURCE OF TRUTH
+  const { stats: unifiedStats } = useStats();
+  
   const [activeTab, setActiveTab] = useState<'pages' | 'users' | 'sessions'>('pages');
   const [timeRange, setTimeRange] = useState('7d');
   const [loading, setLoading] = useState(true);
@@ -286,16 +290,15 @@ export default function EngagementPage() {
       {activeTab === 'users' && (
         <>
           {/* Engagement Stats Overview */}
-          {engagementStats && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-              <StatCard title="Total Users" value={engagementStats.total_users || 0} icon="👥" color="#7877c6" />
-              <StatCard title="Avg Visits/User" value={(engagementStats.avg_visits_per_user || 0).toFixed(1)} icon="🔄" color="#10b981" />
-              <StatCard title="Avg Pages/User" value={(engagementStats.avg_pages_per_user || 0).toFixed(1)} icon="📄" color="#f59e0b" />
-              <StatCard title="Avg Time/User" value={formatDuration(engagementStats.avg_time_per_user || 0)} icon="⏱️" color="#ec4899" />
-              <StatCard title="Avg Engagement" value={Math.round(engagementStats.avg_engagement_score || 0)} icon="📊" color="#3b82f6" />
-              <StatCard title="Return Rate" value={`${Math.round(engagementStats.return_rate || 0)}%`} icon="↩️" color="#22c55e" />
-            </div>
-          )}
+          {/* Key metrics from unified stats - SINGLE SOURCE OF TRUTH */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+            <StatCard title="Total Users" value={unifiedStats.totalUsers} icon="👥" color="#7877c6" />
+            <StatCard title="Active Today (DAU)" value={unifiedStats.activeToday} icon="🟢" color="#10b981" />
+            <StatCard title="Active This Week" value={unifiedStats.activeThisWeek} icon="📊" color="#f59e0b" />
+            <StatCard title="Avg Time/User" value={formatDuration(engagementStats?.avg_time_per_user || 0)} icon="⏱️" color="#ec4899" />
+            <StatCard title="Avg Engagement" value={Math.round(engagementStats?.avg_engagement_score || 0)} icon="📊" color="#3b82f6" />
+            <StatCard title="Return Rate" value={`${Math.round(engagementStats?.return_rate || 0)}%`} icon="↩️" color="#22c55e" />
+          </div>
 
           {/* Engagement Distribution */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px', marginBottom: '24px' }}>

@@ -1081,7 +1081,7 @@ class DatabaseConnection {
     }
   }
 
-  async getUserMetrics(timeRange: { start: number; end: number }): Promise<{
+  async getUserMetrics(_timeRange: { start: number; end: number }): Promise<{
     dau: number;
     wau: number;
     mau: number;
@@ -1091,51 +1091,98 @@ class DatabaseConnection {
     avgSessionDuration: number;
   }> {
     const adapter = this.getAdapter();
-    const { start, end } = timeRange;
+    // timeRange is available but we use current time for more accurate DAU/WAU/MAU
+    const now = Date.now();
 
-    // Calculate DAU (users active in last 24 hours)
-    const dauQuery = this.isNeon
-      ? 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= $1'
-      : 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= ?';
-    const dauResult = await adapter.query(dauQuery, [end - 24 * 60 * 60 * 1000]);
-    const dau = dauResult[0]?.count || 0;
+    // Use current time for DAU/WAU/MAU calculations (more accurate)
+    const oneDayAgo = now - 24 * 60 * 60 * 1000;
+    const oneWeekAgo = now - 7 * 24 * 60 * 60 * 1000;
+    const oneMonthAgo = now - 30 * 24 * 60 * 60 * 1000;
 
-    // Calculate WAU (users active in last 7 days)
-    const wauQuery = this.isNeon
-      ? 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= $1'
-      : 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= ?';
-    const wauResult = await adapter.query(wauQuery, [end - 7 * 24 * 60 * 60 * 1000]);
-    const wau = wauResult[0]?.count || 0;
+    let dau = 0, wau = 0, mau = 0, newUsers = 0, returningUsers = 0, totalSessions = 0, avgSessionDuration = 0;
 
-    // Calculate MAU (users active in last 30 days)
-    const mauQuery = this.isNeon
-      ? 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= $1'
-      : 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= ?';
-    const mauResult = await adapter.query(mauQuery, [end - 30 * 24 * 60 * 60 * 1000]);
-    const mau = mauResult[0]?.count || 0;
+    try {
+      // Calculate DAU from multiple sources for accuracy
+      // First try user_activity
+      const dauQuery = this.isNeon
+        ? 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= $1'
+        : 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= ?';
+      const dauResult = await adapter.query(dauQuery, [oneDayAgo]);
+      dau = parseInt(dauResult[0]?.count) || 0;
 
-    // Calculate new users (first seen in time range)
-    const newUsersQuery = this.isNeon
-      ? 'SELECT COUNT(*) as count FROM user_activity WHERE first_seen BETWEEN $1 AND $2'
-      : 'SELECT COUNT(*) as count FROM user_activity WHERE first_seen BETWEEN ? AND ?';
-    const newUsersResult = await adapter.query(newUsersQuery, [start, end]);
-    const newUsers = newUsersResult[0]?.count || 0;
+      // Also check analytics_events for unique users
+      if (dau === 0) {
+        const dauEventsQuery = this.isNeon
+          ? `SELECT COUNT(DISTINCT COALESCE(metadata->>'userId', session_id)) as count FROM analytics_events WHERE timestamp >= $1`
+          : `SELECT COUNT(DISTINCT COALESCE(JSON_EXTRACT(metadata, '$.userId'), session_id)) as count FROM analytics_events WHERE timestamp >= ?`;
+        const dauEventsResult = await adapter.query(dauEventsQuery, [oneDayAgo]);
+        dau = parseInt(dauEventsResult[0]?.count) || 0;
+      }
 
-    // Calculate returning users (first seen before range, active in range)
-    const returningQuery = this.isNeon
-      ? 'SELECT COUNT(*) as count FROM user_activity WHERE first_seen < $1 AND last_seen BETWEEN $2 AND $3'
-      : 'SELECT COUNT(*) as count FROM user_activity WHERE first_seen < ? AND last_seen BETWEEN ? AND ?';
-    const returningResult = await adapter.query(returningQuery, [start, start, end]);
-    const returningUsers = returningResult[0]?.count || 0;
+      // Calculate WAU
+      const wauQuery = this.isNeon
+        ? 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= $1'
+        : 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= ?';
+      const wauResult = await adapter.query(wauQuery, [oneWeekAgo]);
+      wau = parseInt(wauResult[0]?.count) || 0;
 
-    // Calculate total sessions in range
-    const sessionsQuery = this.isNeon
-      ? 'SELECT COUNT(*) as count, COALESCE(SUM(total_watch_time), 0) as total_time FROM watch_sessions WHERE started_at BETWEEN $1 AND $2'
-      : 'SELECT COUNT(*) as count, COALESCE(SUM(total_watch_time), 0) as total_time FROM watch_sessions WHERE started_at BETWEEN ? AND ?';
-    const sessionsResult = await adapter.query(sessionsQuery, [start, end]);
-    const totalSessions = sessionsResult[0]?.count || 0;
-    const totalTime = sessionsResult[0]?.total_time || 0;
-    const avgSessionDuration = totalSessions > 0 ? Math.round(totalTime / totalSessions) : 0;
+      if (wau === 0) {
+        const wauEventsQuery = this.isNeon
+          ? `SELECT COUNT(DISTINCT COALESCE(metadata->>'userId', session_id)) as count FROM analytics_events WHERE timestamp >= $1`
+          : `SELECT COUNT(DISTINCT COALESCE(JSON_EXTRACT(metadata, '$.userId'), session_id)) as count FROM analytics_events WHERE timestamp >= ?`;
+        const wauEventsResult = await adapter.query(wauEventsQuery, [oneWeekAgo]);
+        wau = parseInt(wauEventsResult[0]?.count) || 0;
+      }
+
+      // Calculate MAU
+      const mauQuery = this.isNeon
+        ? 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= $1'
+        : 'SELECT COUNT(DISTINCT user_id) as count FROM user_activity WHERE last_seen >= ?';
+      const mauResult = await adapter.query(mauQuery, [oneMonthAgo]);
+      mau = parseInt(mauResult[0]?.count) || 0;
+
+      if (mau === 0) {
+        const mauEventsQuery = this.isNeon
+          ? `SELECT COUNT(DISTINCT COALESCE(metadata->>'userId', session_id)) as count FROM analytics_events WHERE timestamp >= $1`
+          : `SELECT COUNT(DISTINCT COALESCE(JSON_EXTRACT(metadata, '$.userId'), session_id)) as count FROM analytics_events WHERE timestamp >= ?`;
+        const mauEventsResult = await adapter.query(mauEventsQuery, [oneMonthAgo]);
+        mau = parseInt(mauEventsResult[0]?.count) || 0;
+      }
+
+      // Calculate new users (first seen in last 24h)
+      const newUsersQuery = this.isNeon
+        ? 'SELECT COUNT(*) as count FROM user_activity WHERE first_seen >= $1'
+        : 'SELECT COUNT(*) as count FROM user_activity WHERE first_seen >= ?';
+      const newUsersResult = await adapter.query(newUsersQuery, [oneDayAgo]);
+      newUsers = parseInt(newUsersResult[0]?.count) || 0;
+
+      // Calculate returning users
+      const returningQuery = this.isNeon
+        ? 'SELECT COUNT(*) as count FROM user_activity WHERE first_seen < $1 AND last_seen >= $2'
+        : 'SELECT COUNT(*) as count FROM user_activity WHERE first_seen < ? AND last_seen >= ?';
+      const returningResult = await adapter.query(returningQuery, [oneDayAgo, oneDayAgo]);
+      returningUsers = parseInt(returningResult[0]?.count) || 0;
+
+      // Calculate total sessions from watch_sessions
+      const sessionsQuery = this.isNeon
+        ? 'SELECT COUNT(*) as count, COALESCE(SUM(total_watch_time), 0) as total_time FROM watch_sessions WHERE started_at >= $1'
+        : 'SELECT COUNT(*) as count, COALESCE(SUM(total_watch_time), 0) as total_time FROM watch_sessions WHERE started_at >= ?';
+      const sessionsResult = await adapter.query(sessionsQuery, [oneDayAgo]);
+      totalSessions = parseInt(sessionsResult[0]?.count) || 0;
+      const totalTime = parseInt(sessionsResult[0]?.total_time) || 0;
+      avgSessionDuration = totalSessions > 0 ? Math.round(totalTime / totalSessions) : 0;
+
+      // If no watch sessions, try counting from analytics_events
+      if (totalSessions === 0) {
+        const sessionsEventsQuery = this.isNeon
+          ? 'SELECT COUNT(DISTINCT session_id) as count FROM analytics_events WHERE timestamp >= $1'
+          : 'SELECT COUNT(DISTINCT session_id) as count FROM analytics_events WHERE timestamp >= ?';
+        const sessionsEventsResult = await adapter.query(sessionsEventsQuery, [oneDayAgo]);
+        totalSessions = parseInt(sessionsEventsResult[0]?.count) || 0;
+      }
+    } catch (error) {
+      console.error('Error calculating user metrics:', error);
+    }
 
     return {
       dau,
