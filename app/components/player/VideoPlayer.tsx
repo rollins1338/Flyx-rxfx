@@ -96,6 +96,11 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
   const [loadingProviders, setLoadingProviders] = useState<Record<string, boolean>>({});
   const [isCastOverlayVisible, setIsCastOverlayVisible] = useState(false);
 
+  // HLS quality levels
+  const [hlsLevels, setHlsLevels] = useState<{ height: number; bitrate: number; index: number }[]>([]);
+  const [currentHlsLevel, setCurrentHlsLevel] = useState<number>(-1); // -1 = auto
+  const [currentResolution, setCurrentResolution] = useState<string>('');
+
   const controlsTimeoutRef = useRef<NodeJS.Timeout>();
   const lastFetchedKey = useRef('');
   const volumeIndicatorTimeoutRef = useRef<NodeJS.Timeout>();
@@ -410,6 +415,23 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
         hls.attachMedia(video);
 
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          // Extract available quality levels
+          if (hls.levels && hls.levels.length > 0) {
+            const levels = hls.levels.map((level, index) => ({
+              height: level.height || 0,
+              bitrate: level.bitrate || 0,
+              index
+            })).filter(l => l.height > 0).sort((a, b) => b.height - a.height);
+            
+            // Remove duplicates by height
+            const uniqueLevels = levels.filter((level, idx, arr) => 
+              arr.findIndex(l => l.height === level.height) === idx
+            );
+            
+            setHlsLevels(uniqueLevels);
+            console.log('[VideoPlayer] HLS quality levels:', uniqueLevels);
+          }
+          
           if (currentSubtitle && availableSubtitles.length > 0) {
             const currentSub = availableSubtitles.find(sub => sub.id === currentSubtitle);
             if (currentSub) {
@@ -419,6 +441,14 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
             }
           }
           video.play().catch(e => console.log('[VideoPlayer] Autoplay prevented:', e));
+        });
+
+        // Track current level changes
+        hls.on(Hls.Events.LEVEL_SWITCHED, (_event, data) => {
+          const level = hls.levels[data.level];
+          if (level && level.height) {
+            setCurrentResolution(`${level.height}p`);
+          }
         });
 
         hls.on(Hls.Events.ERROR, async (_event, data) => {
@@ -960,6 +990,11 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
       hlsRef.current.destroy();
       hlsRef.current = null;
     }
+    // Reset HLS levels when changing source
+    setHlsLevels([]);
+    setCurrentHlsLevel(-1);
+    setCurrentResolution('');
+    
     setCurrentSourceIndex(index);
     let finalUrl = source.url;
     if (source.requiresSegmentProxy) {
@@ -975,6 +1010,23 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
       }
     }
     setStreamUrl(finalUrl);
+  };
+
+  // Change HLS quality level
+  const changeHlsLevel = (levelIndex: number) => {
+    if (hlsRef.current) {
+      hlsRef.current.currentLevel = levelIndex;
+      setCurrentHlsLevel(levelIndex);
+      
+      if (levelIndex === -1) {
+        setCurrentResolution('Auto');
+      } else {
+        const level = hlsLevels.find(l => l.index === levelIndex);
+        if (level) {
+          setCurrentResolution(`${level.height}p`);
+        }
+      }
+    }
   };
 
   const handleRetry = () => {
@@ -1364,7 +1416,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
               )}
             </div>
 
-            {availableSources.length > 1 && (
+            {(availableSources.length > 1 || hlsLevels.length > 0) && (
               <div className={styles.settingsContainer}>
                 <button onClick={(e) => {
                   e.stopPropagation();
@@ -1379,8 +1431,37 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
 
                 {showSettings && (
                   <div className={styles.settingsMenu} onClick={(e) => e.stopPropagation()}>
+                    {/* HLS Quality Levels (if available) */}
+                    {hlsLevels.length > 0 && (
+                      <div className={styles.settingsSection}>
+                        <div className={styles.settingsLabel}>
+                          Resolution {currentResolution && <span style={{ opacity: 0.7, fontSize: '0.85em' }}>({currentResolution})</span>}
+                        </div>
+                        <div className={styles.sourcesList}>
+                          <button
+                            className={`${styles.settingsOption} ${currentHlsLevel === -1 ? styles.active : ''}`}
+                            onClick={() => changeHlsLevel(-1)}
+                          >
+                            Auto
+                          </button>
+                          {hlsLevels.map((level) => (
+                            <button
+                              key={level.index}
+                              className={`${styles.settingsOption} ${currentHlsLevel === level.index ? styles.active : ''}`}
+                              onClick={() => changeHlsLevel(level.index)}
+                            >
+                              {level.height}p
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Source Selection */}
                     <div className={styles.settingsSection}>
-                      <div className={styles.settingsLabel}>Quality</div>
+                      <div className={styles.settingsLabel}>
+                        Source {hlsLevels.length === 0 && currentResolution && <span style={{ opacity: 0.7, fontSize: '0.85em' }}>({currentResolution})</span>}
+                      </div>
                       <div className={styles.sourcesList}>
                         {availableSources.map((source, index) => (
                           <button
