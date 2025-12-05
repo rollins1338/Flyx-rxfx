@@ -346,23 +346,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     }
   };
 
-  // Fetch provider availability on mount
-  useEffect(() => {
-    fetch('/api/providers')
-      .then(res => res.json())
-      .then(data => {
-        if (data.providers) {
-          setProviderAvailability({
-            vidsrc: data.providers.vidsrc?.enabled ?? false,
-            moviesapi: data.providers.moviesapi?.enabled ?? true,
-            '2embed': data.providers['2embed']?.enabled ?? true,
-          });
-        }
-      })
-      .catch(err => console.warn('[VideoPlayer] Failed to fetch provider availability:', err));
-  }, []);
-
-  // Initial fetch
+  // Initial fetch - checks provider availability first, then fetches from best provider
   useEffect(() => {
     // Reset subtitle auto-load flag for new video
     subtitlesAutoLoadedRef.current = false;
@@ -373,40 +357,65 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     
     // Reset lastFetchedKey to allow fresh fetch
     lastFetchedKey.current = '';
-    
-    // Use moviesapi as default (always available)
-    const defaultProvider = 'moviesapi';
-    setMenuProvider(defaultProvider);
-    setProvider(defaultProvider);
     setLoadingProviders({});
     setIsLoading(true);
     setError(null);
     setHighlightServerButton(false);
     setStreamUrl(null);
 
-    // Direct fetch for initial sources (avoid closure issues with fetchSources)
-    const params = new URLSearchParams({
-      tmdbId,
-      type: mediaType,
-      provider: defaultProvider,
-    });
-
-    if (mediaType === 'tv' && season && episode) {
-      params.append('season', season.toString());
-      params.append('episode', episode.toString());
-    }
-
-    console.log(`[VideoPlayer] Initial fetch for ${defaultProvider}:`, `/api/stream/extract?${params}`);
-
-    fetch(`/api/stream/extract?${params}`, { priority: 'high' as RequestPriority })
+    // First fetch provider availability, then fetch sources from best provider
+    fetch('/api/providers')
       .then(res => res.json())
       .then(data => {
+        const availability = {
+          vidsrc: data.providers?.vidsrc?.enabled ?? false,
+          moviesapi: data.providers?.moviesapi?.enabled ?? true,
+          '2embed': data.providers?.['2embed']?.enabled ?? true,
+        };
+        setProviderAvailability(availability);
+        
+        // Use vidsrc if enabled, otherwise moviesapi
+        const defaultProvider = availability.vidsrc ? 'vidsrc' : 'moviesapi';
+        console.log(`[VideoPlayer] Provider availability: vidsrc=${availability.vidsrc}, using ${defaultProvider}`);
+        
+        setMenuProvider(defaultProvider);
+        setProvider(defaultProvider);
+        
+        return defaultProvider;
+      })
+      .catch(err => {
+        console.warn('[VideoPlayer] Failed to fetch provider availability:', err);
+        // Default to moviesapi if we can't check
+        setMenuProvider('moviesapi');
+        setProvider('moviesapi');
+        return 'moviesapi';
+      })
+      .then(defaultProvider => {
+        // Now fetch sources from the selected provider
+        const params = new URLSearchParams({
+          tmdbId,
+          type: mediaType,
+          provider: defaultProvider,
+        });
+
+        if (mediaType === 'tv' && season && episode) {
+          params.append('season', season.toString());
+          params.append('episode', episode.toString());
+        }
+
+        console.log(`[VideoPlayer] Initial fetch for ${defaultProvider}:`, `/api/stream/extract?${params}`);
+
+        return fetch(`/api/stream/extract?${params}`, { priority: 'high' as RequestPriority })
+          .then(res => res.json())
+          .then(data => ({ data, defaultProvider }));
+      })
+      .then(({ data, defaultProvider }) => {
         if (!data.sources || data.sources.length === 0) {
           throw new Error(data.error || 'No sources available');
         }
 
         const sources = data.sources;
-        console.log(`[VideoPlayer] Initial fetch got ${sources.length} sources`);
+        console.log(`[VideoPlayer] Initial fetch got ${sources.length} sources from ${defaultProvider}`);
 
         // Cache and set sources
         setSourcesCache(prev => ({ ...prev, [defaultProvider]: sources }));
