@@ -1028,9 +1028,13 @@ class DatabaseConnection {
   }): Promise<void> {
     const adapter = this.getAdapter();
     const now = Date.now();
-    const id = `ua_${activity.userId}_${activity.sessionId}`;
+    // Use only userId for the primary key - one record per user
+    const id = `ua_${activity.userId}`;
 
     if (this.isNeon) {
+      // First, check if this is a new session for this user
+      // A session is "new" if the session_id is different from the stored one
+      // We only increment total_sessions when the session_id changes
       await adapter.execute(`
         INSERT INTO user_activity(
           id, user_id, session_id, first_seen, last_seen, total_sessions,
@@ -1038,19 +1042,25 @@ class DatabaseConnection {
         ) VALUES($1, $2, $3, $4, $5, 1, $6, $7, $8, $9, $10, $11, $12, $13)
         ON CONFLICT(id) DO UPDATE SET
           last_seen = $14,
-          total_sessions = user_activity.total_sessions + 1,
-          total_watch_time = user_activity.total_watch_time + $15,
-          country = COALESCE($16, user_activity.country),
-          city = COALESCE($17, user_activity.city),
-          region = COALESCE($18, user_activity.region),
-          updated_at = $19
+          -- Only increment session count if this is a different session than the last one
+          total_sessions = CASE 
+            WHEN user_activity.session_id != $15 THEN user_activity.total_sessions + 1 
+            ELSE user_activity.total_sessions 
+          END,
+          -- Update session_id to track the current session
+          session_id = $16,
+          total_watch_time = user_activity.total_watch_time + $17,
+          country = COALESCE($18, user_activity.country),
+          city = COALESCE($19, user_activity.city),
+          region = COALESCE($20, user_activity.region),
+          updated_at = $21
       `, [
         id, activity.userId, activity.sessionId, now, now, activity.watchTime || 0,
         activity.deviceType || null, activity.userAgent || null, activity.country || null,
         activity.city || null, activity.region || null, now, now,
         // Update values
-        now, activity.watchTime || 0, activity.country || null, activity.city || null, 
-        activity.region || null, now
+        now, activity.sessionId, activity.sessionId, activity.watchTime || 0, 
+        activity.country || null, activity.city || null, activity.region || null, now
       ]);
     } else {
       await adapter.execute(`
@@ -1060,7 +1070,13 @@ class DatabaseConnection {
         ) VALUES(?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           last_seen = ?,
-          total_sessions = total_sessions + 1,
+          -- Only increment session count if this is a different session than the last one
+          total_sessions = CASE 
+            WHEN session_id != ? THEN total_sessions + 1 
+            ELSE total_sessions 
+          END,
+          -- Update session_id to track the current session
+          session_id = ?,
           total_watch_time = total_watch_time + ?,
           country = COALESCE(?, country),
           city = COALESCE(?, city),
@@ -1071,8 +1087,8 @@ class DatabaseConnection {
         activity.deviceType || null, activity.userAgent || null, activity.country || null,
         activity.city || null, activity.region || null, now, now,
         // Update values
-        now, activity.watchTime || 0, activity.country || null, activity.city || null,
-        activity.region || null, now
+        now, activity.sessionId, activity.sessionId, activity.watchTime || 0,
+        activity.country || null, activity.city || null, activity.region || null, now
       ]);
     }
   }

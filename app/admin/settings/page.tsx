@@ -9,6 +9,27 @@ interface SystemHealth {
   storage: { used: number; total: number };
 }
 
+interface DataStatus {
+  stats: {
+    totalRecords: number;
+    uniqueUsers: number;
+    totalSessions: number;
+    totalWatchTime: number;
+    avgSessionsPerUser: string;
+    avgWatchTimePerUser: number;
+    suspiciousSessionCounts: number;
+    zeroWatchTimeWithSessions: number;
+  };
+  issues: string[];
+  needsFix: boolean;
+}
+
+interface FixResult {
+  usersFixed: number;
+  errors: number;
+  details: string[];
+}
+
 interface AdminSettings {
   refreshInterval: number;
   darkMode: boolean;
@@ -44,10 +65,17 @@ export default function AdminSettingsPage() {
   });
   const [passwordChanging, setPasswordChanging] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  
+  // Data fix states
+  const [dataStatus, setDataStatus] = useState<DataStatus | null>(null);
+  const [dataStatusLoading, setDataStatusLoading] = useState(false);
+  const [fixingData, setFixingData] = useState<string | null>(null);
+  const [fixResults, setFixResults] = useState<{ watchTimeFix?: FixResult; sessionsFix?: FixResult } | null>(null);
 
   useEffect(() => {
     checkSystemHealth();
     loadSettings();
+    checkDataStatus();
   }, []);
 
   const checkSystemHealth = async () => {
@@ -105,6 +133,52 @@ export default function AdminSettingsPage() {
       } catch (e) {
         console.error('Failed to load settings:', e);
       }
+    }
+  };
+
+  const checkDataStatus = async () => {
+    setDataStatusLoading(true);
+    try {
+      const response = await fetch('/api/admin/fix-data');
+      if (response.ok) {
+        const data = await response.json();
+        setDataStatus(data);
+      }
+    } catch (error) {
+      console.error('Failed to check data status:', error);
+    } finally {
+      setDataStatusLoading(false);
+    }
+  };
+
+  const runDataFix = async (action: 'fix-watch-time' | 'fix-sessions' | 'fix-all') => {
+    if (!confirm(`Are you sure you want to run "${action}"? This will modify your database.`)) {
+      return;
+    }
+    
+    setFixingData(action);
+    setFixResults(null);
+    
+    try {
+      const response = await fetch('/api/admin/fix-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        setFixResults(data.results);
+        // Refresh data status after fix
+        await checkDataStatus();
+      } else {
+        alert(`Fix failed: ${data.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      alert(`Fix failed: ${error instanceof Error ? error.message : 'Network error'}`);
+    } finally {
+      setFixingData(null);
     }
   };
 
@@ -542,6 +616,151 @@ export default function AdminSettingsPage() {
             </SettingRow>
           </div>
 
+          {/* Data Quality Status */}
+          <div style={{ marginTop: '24px', padding: '20px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h4 style={{ margin: 0, color: '#f8fafc', fontSize: '16px' }}>📊 Data Quality Status</h4>
+              <button
+                onClick={checkDataStatus}
+                disabled={dataStatusLoading}
+                style={{
+                  padding: '6px 12px',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '6px',
+                  color: '#94a3b8',
+                  cursor: dataStatusLoading ? 'not-allowed' : 'pointer',
+                  fontSize: '12px',
+                }}
+              >
+                {dataStatusLoading ? '⏳ Checking...' : '🔄 Refresh'}
+              </button>
+            </div>
+            
+            {dataStatus && (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '16px' }}>
+                  <StatBox label="Total Records" value={dataStatus.stats.totalRecords.toLocaleString()} />
+                  <StatBox label="Unique Users" value={dataStatus.stats.uniqueUsers.toLocaleString()} />
+                  <StatBox label="Avg Sessions/User" value={dataStatus.stats.avgSessionsPerUser} />
+                  <StatBox label="Avg Watch Time" value={`${dataStatus.stats.avgWatchTimePerUser}m`} />
+                </div>
+                
+                {dataStatus.issues.length > 0 && (
+                  <div style={{ padding: '12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', marginBottom: '16px' }}>
+                    <div style={{ color: '#ef4444', fontWeight: '600', marginBottom: '8px' }}>⚠️ Issues Detected:</div>
+                    {dataStatus.issues.map((issue, i) => (
+                      <div key={i} style={{ color: '#fca5a5', fontSize: '13px', marginBottom: '4px' }}>• {issue}</div>
+                    ))}
+                  </div>
+                )}
+                
+                {!dataStatus.needsFix && (
+                  <div style={{ padding: '12px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '8px' }}>
+                    <span style={{ color: '#10b981' }}>✅ Data looks healthy!</span>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Data Fix Tools */}
+          <div style={{ marginTop: '24px', padding: '20px', background: 'rgba(120, 119, 198, 0.1)', border: '1px solid rgba(120, 119, 198, 0.3)', borderRadius: '12px' }}>
+            <h4 style={{ margin: '0 0 12px 0', color: '#7877c6', fontSize: '16px' }}>🔧 Data Fix Tools</h4>
+            <p style={{ margin: '0 0 16px 0', color: '#94a3b8', fontSize: '14px' }}>
+              Fix corrupted analytics data. These tools will recalculate values from source data.
+            </p>
+            
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
+              <button
+                onClick={() => runDataFix('fix-watch-time')}
+                disabled={!!fixingData}
+                style={{
+                  padding: '12px 20px',
+                  background: fixingData === 'fix-watch-time' ? 'rgba(120, 119, 198, 0.3)' : 'rgba(120, 119, 198, 0.15)',
+                  border: '1px solid rgba(120, 119, 198, 0.4)',
+                  borderRadius: '8px',
+                  color: '#a5b4fc',
+                  cursor: fixingData ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  opacity: fixingData && fixingData !== 'fix-watch-time' ? 0.5 : 1,
+                }}
+              >
+                {fixingData === 'fix-watch-time' ? '⏳ Fixing...' : '⏱️ Fix Watch Time'}
+              </button>
+              
+              <button
+                onClick={() => runDataFix('fix-sessions')}
+                disabled={!!fixingData}
+                style={{
+                  padding: '12px 20px',
+                  background: fixingData === 'fix-sessions' ? 'rgba(120, 119, 198, 0.3)' : 'rgba(120, 119, 198, 0.15)',
+                  border: '1px solid rgba(120, 119, 198, 0.4)',
+                  borderRadius: '8px',
+                  color: '#a5b4fc',
+                  cursor: fixingData ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  opacity: fixingData && fixingData !== 'fix-sessions' ? 0.5 : 1,
+                }}
+              >
+                {fixingData === 'fix-sessions' ? '⏳ Fixing...' : '📊 Fix Session Counts'}
+              </button>
+              
+              <button
+                onClick={() => runDataFix('fix-all')}
+                disabled={!!fixingData}
+                style={{
+                  padding: '12px 20px',
+                  background: fixingData === 'fix-all' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.15)',
+                  border: '1px solid rgba(16, 185, 129, 0.4)',
+                  borderRadius: '8px',
+                  color: '#6ee7b7',
+                  cursor: fixingData ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  opacity: fixingData && fixingData !== 'fix-all' ? 0.5 : 1,
+                }}
+              >
+                {fixingData === 'fix-all' ? '⏳ Fixing All...' : '🚀 Fix Everything'}
+              </button>
+            </div>
+            
+            {/* Fix Results */}
+            {fixResults && (
+              <div style={{ padding: '16px', background: 'rgba(0, 0, 0, 0.2)', borderRadius: '8px', marginTop: '12px' }}>
+                <div style={{ color: '#10b981', fontWeight: '600', marginBottom: '12px' }}>✅ Fix Complete!</div>
+                
+                {fixResults.watchTimeFix && (
+                  <div style={{ marginBottom: '12px' }}>
+                    <div style={{ color: '#f8fafc', fontWeight: '500', marginBottom: '4px' }}>Watch Time Fix:</div>
+                    <div style={{ color: '#94a3b8', fontSize: '13px' }}>
+                      • Fixed {fixResults.watchTimeFix.usersFixed} users
+                      {fixResults.watchTimeFix.errors > 0 && <span style={{ color: '#ef4444' }}> ({fixResults.watchTimeFix.errors} errors)</span>}
+                    </div>
+                    {fixResults.watchTimeFix.details.map((d, i) => (
+                      <div key={i} style={{ color: '#64748b', fontSize: '12px', marginLeft: '12px' }}>→ {d}</div>
+                    ))}
+                  </div>
+                )}
+                
+                {fixResults.sessionsFix && (
+                  <div>
+                    <div style={{ color: '#f8fafc', fontWeight: '500', marginBottom: '4px' }}>Session Count Fix:</div>
+                    <div style={{ color: '#94a3b8', fontSize: '13px' }}>
+                      • Fixed {fixResults.sessionsFix.usersFixed} users
+                      {fixResults.sessionsFix.errors > 0 && <span style={{ color: '#ef4444' }}> ({fixResults.sessionsFix.errors} errors)</span>}
+                    </div>
+                    {fixResults.sessionsFix.details.map((d, i) => (
+                      <div key={i} style={{ color: '#64748b', fontSize: '12px', marginLeft: '12px' }}>→ {d}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <div style={{ marginTop: '24px', padding: '20px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '12px' }}>
             <h4 style={{ margin: '0 0 12px 0', color: '#ef4444', fontSize: '16px' }}>⚠️ Danger Zone</h4>
             <p style={{ margin: '0 0 16px 0', color: '#94a3b8', fontSize: '14px' }}>
@@ -676,6 +895,15 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
       <span style={{ color: '#64748b', fontSize: '14px' }}>{label}</span>
       <span style={{ color: '#f8fafc', fontSize: '14px', fontWeight: '500' }}>{value}</span>
+    </div>
+  );
+}
+
+function StatBox({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ padding: '12px', background: 'rgba(0, 0, 0, 0.2)', borderRadius: '8px', textAlign: 'center' }}>
+      <div style={{ color: '#f8fafc', fontSize: '18px', fontWeight: '600' }}>{value}</div>
+      <div style={{ color: '#64748b', fontSize: '11px', marginTop: '4px' }}>{label}</div>
     </div>
   );
 }
