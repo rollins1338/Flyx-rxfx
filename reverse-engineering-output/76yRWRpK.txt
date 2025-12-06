@@ -1,0 +1,161 @@
+import axios from "axios";
+import * as cheerio from "cheerio";
+const USER_AGENT = "Mozilla/5.0";
+export type Source = {
+  sources: { url: string; quality: string }[];
+  tracks: { url: string; lang: string; label: string }[];
+  audio: { url: string; name: string; language: string }[];
+  intro: {
+    start: number;
+    end: number;
+  };
+  outro: {
+    start: number;
+    end: number;
+  };
+  headers: { [key: string]: string };
+};
+
+const fastAxios = axios.create({
+  timeout: 8000,
+  headers: { "User-Agent": USER_AGENT },
+  maxRedirects: 3,
+});
+
+function unpackPacker(p: string, a: number, c: number, k: string[]): string {
+  function encodeBase36(cn: number): string {
+    return (cn < a ? "" : encodeBase36(parseInt(String(cn / a), 10))) +
+      (((cn = cn % a) > 35) ? String.fromCharCode(cn + 29) : cn.toString(36));
+  }
+  while (c--) {
+    if (k[c]) {
+      const regex = new RegExp("\\b" + encodeBase36(c) + "\\b", "g");
+      const replacement = k[c] as string;
+      p = p.replace(regex, replacement);
+    }
+  }
+  return p;
+}
+
+function extractM3U8FromCode(jsCode: string, iframeUrl: string): string | undefined {
+  const baseDomain = new URL(iframeUrl).origin;
+  const match = jsCode.match(/file\s*:\s*["']([^"']+\.m3u8[^"']*)["']/);
+  if (match && match[1]) {
+    const u = match[1];
+    return u.startsWith("/") ? `${baseDomain}${u}` : u;
+  }
+  return undefined;
+}
+
+async function prefetchFinalM3U8(m3u8Url: string, referer: string): Promise<string> {
+  try {
+    const resp = await fastAxios.get(m3u8Url, {
+      headers: { Referer: referer },
+      maxRedirects: 0,
+      validateStatus: (s: number) => (s >= 200 && s < 400) || s === 302 || s === 301,
+    } as any);
+
+    const location = (resp.headers as any)["location"] as string | undefined;
+    if (location) return new URL(location, m3u8Url).toString();
+
+    const reqAny = resp.request as any;
+    const finalUrl = reqAny?.res?.responseUrl || reqAny?.responseURL;
+    if (typeof finalUrl === "string" && finalUrl.length > 0) return finalUrl;
+    return m3u8Url;
+  } catch {
+    return m3u8Url;
+  }
+}
+
+export async function extractFilemoon(targetUrl: string): Promise<Source> {
+  const baseUrl = new URL(targetUrl);
+  const { data: mainPage } = await fastAxios.get(targetUrl);
+  const $ = cheerio.load(mainPage);
+  let iframeSrc = $("iframe").attr("src") || "";
+  if (!iframeSrc) throw new Error("No iframe found");
+
+  if (iframeSrc.startsWith("/")) iframeSrc = `${baseUrl.origin}${iframeSrc}`;
+  else if (!/^https?:\/\//i.test(iframeSrc)) iframeSrc = `${baseUrl.origin}/${iframeSrc}`;
+
+  const iframeDomain = new URL(iframeSrc).origin;
+  const { data: iframePage } = await fastAxios.get(iframeSrc, { headers: { Referer: `${iframeDomain}/` } });
+
+  let packedCode: string | null = null;
+  const evalIndex = String(iframePage).indexOf("eval(function(p,a,c,k,e,d)");
+  if (evalIndex !== -1) {
+    const end = String(iframePage).indexOf("</script>", evalIndex);
+    packedCode = end !== -1 ? String(iframePage).substring(evalIndex, end) : String(iframePage).substring(evalIndex);
+  }
+  if (!packedCode) {
+    const $iframe = cheerio.load(String(iframePage));
+    $iframe("script").each((_, el) => {
+      const code = $iframe(el).html() || "";
+      if (code.includes("eval(function(p,a,c,k,e,d)")) {
+        packedCode = code;
+        return false;
+      }
+    });
+  }
+  if (!packedCode) throw new Error("No packed script found");
+
+  const match = packedCode.match(/eval\(function\(p,a,c,k,e,d\)\{[\s\S]+?\}\((['"`])([\s\S]+?)\1\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*\1([\s\S]+?)\1\.split\('\|'\)\)\)/);
+  if (!match || !match[2] || !match[3] || !match[4] || !match[5]) throw new Error("Unpack regex failed");
+
+  const payload = match[2] as string;
+  const aNum = parseInt(match[3] as string, 10);
+  const cNum = parseInt(match[4] as string, 10);
+  const dict = (match[5] as string).split("|");
+  const unpacked = unpackPacker(payload, aNum, cNum, dict);
+
+  const m3u8 = extractM3U8FromCode(unpacked, iframeSrc);
+  if (!m3u8) throw new Error("No m3u8 found");
+
+  const finalUrl = await prefetchFinalM3U8(m3u8, `${iframeDomain}/`);
+
+  const extractedTracks: Array<{ url: string; lang: string; label: string }> = [];
+  try {
+    let thumbMatch = unpacked.match(/tracks\s*:\s*\[\s*\{[^\}]*?file\s*:\s*['"]([^'"\\]+)['"][^\}]*?kind\s*:\s*['"]thumbnails['"]/i);
+    if (!thumbMatch) {
+      thumbMatch = unpacked.match(/tracks\s*:\s*\[\s*\{[^\}]*?kind\s*:\s*['"]thumbnails['"][^\}]*?file\s*:\s*['"]([^'"\\]+)['"]/i);
+    }
+    if (!thumbMatch) {
+      thumbMatch = unpacked.match(/file\s*:\s*['"]([^'"\\]+)['"]\s*,\s*kind\s*:\s*['"]thumbnails['"]/i) ||
+        unpacked.match(/kind\s*:\s*['"]thumbnails['"]\s*,\s*file\s*:\s*['"]([^'"\\]+)['"]/i);
+    }
+    if (thumbMatch && thumbMatch[1]) {
+      let thumbFile = thumbMatch[1];
+      if (thumbFile.startsWith("/")) {
+        thumbFile = `${iframeDomain}${thumbFile}`;
+      }
+      extractedTracks.push({ url: thumbFile, lang: "thumbnails", label: "thumbnails" });
+    }
+  } catch {}
+
+    const source: Source = {
+    sources: [
+      {
+        url: finalUrl,
+        quality: "auto",
+      },
+    ],
+    tracks: extractedTracks,
+      audio: [],
+      intro: { start: 0, end: 0 },
+      outro: { start: 0, end: 0 },
+      headers: {
+      Referer: `${iframeDomain}/`,
+      "User-Agent": USER_AGENT,
+      },
+    };
+
+    return source;
+}
+
+async function main() {
+  const result = await extractFilemoon("https://filemoon.sx/e/gqw2z2n271o2");
+  console.log(result);
+}
+
+if (import.meta.main) {
+  main();
+}

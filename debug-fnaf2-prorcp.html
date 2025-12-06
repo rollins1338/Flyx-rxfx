@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Five Nights at Freddy's 2 (2025)</title>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="origin" />
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css" integrity="sha512-xh6O/CkQoPOWDdYTDqeRdPCVd1SpvCA9XXcUnZS2FmJNp1coAFzvtCN9BmamE+4aHK8yyUHUSCcJHgXloTyT2A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+<style>
+
+    /* scroll */
+    /* Hide the default scrollbar */
+    ::-webkit-scrollbar {
+      position: absolute;
+      width: 5px; /* Width of the scrollbar */
+    }
+    
+    
+    /* Track (the area on which the scrollbar is rendered) */
+    ::-webkit-scrollbar-track {
+      background: rgba(255,255,255,0); /* Track background color */
+    }
+    
+    /* Handle (the draggable part of the scrollbar) */
+    ::-webkit-scrollbar-thumb {
+      background: #888; /* Handle background color */
+      border-radius: 3px; /* Handle border radius */
+    }
+    
+    /* Handle on hover */
+    ::-webkit-scrollbar-thumb:hover {
+      background: #555; /* Handle background color on hover */
+    }
+    
+
+        
+    pjsdiv:has(> #player_parent_settings) {
+        box-shadow: 0 -1px 10px black;
+        border-top-left-radius: 5px !important;
+        border-bottom-left-radius: 5px !important;
+    }
+    
+    
+    .hidden {
+        display:none !important;
+    }
+    
+    
+    
+    #pjs_player_parent_subtitle {
+        display: block !important;
+    }
+    
+    
+    #player_parent , #player {
+        width: 100%;
+        height: 100%;
+    }
+    
+    
+    html {
+        margin:0;
+        width:100%;
+        height:100%;
+    }
+    body {
+        margin:0;
+        width:100%;
+        height:100%;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", "Liberation Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    }
+    
+    
+    :root {
+        --plyr-color-main: #e600e6;
+        --webkit-text-track-display: none;
+    }
+    
+    .plyr__menu__container div[role="menu"] {
+        max-height: calc(100vh - 100px) !important;
+        overflow-y: auto !important;
+    }
+    
+    .plyr {
+        height: 100%;
+    }
+    
+    .plyr--full-ui ::-webkit-media-text-track-container {
+        display: var(--webkit-text-track-display);
+    }
+    
+    .plyr__captions {
+        font-size: 21px !important;
+        font-family: Arial !important;
+    }
+    .plyr__controls{
+        z-index: 999999;
+    }
+    .plyr__progress {
+        z-index: 999999;
+    }
+    
+    #player_parent_control_showSubtitles {
+        display: none;
+    }
+    
+    #player_parent_control_unmute_button {
+        opacity: 0.8;
+    }
+    
+    #player_parent_control_unmute_button pjsdiv:nth-child(3) {
+        width:95px !important;
+    }
+    #player_parent_control_unmute_button:hover {
+        opacity: 1;
+    }
+    #player_parent_control_unmute_button::after {
+        content: " UNMUTE";
+        background: #000;
+        padding: 6px 5px 4px 5px;
+        margin-left: 12px;
+        font-size: 12px;
+        margin-top: -12px;
+        position: absolute;
+        border-radius: 3px;
+        font-weight: bold;
+        pointer-events: none;
+    }
+    
+    #subtitles_button img {
+        width: 100%;
+        height: 100%;
+    }
+    
+    
+    .reporting_window {
+        border-top-left-radius: 5px !important;
+        border-bottom-left-radius: 5px !important;
+        box-shadow: 0px -1px 7px black !important;
+        font-size:14px;
+        display: none;
+        color: white;
+        right: 0;
+        position: absolute;
+        width: 100%;
+        bottom: 60px;
+        z-index: 999;
+        overflow:hidden;
+        background: #333333;
+        max-width: 150px !important;
+    }
+    
+    .reporting_window .header {
+        width: 100%;
+        height: 30px;
+    }
+    
+    .reporting_window .header i {
+        font-size: 14px;
+        line-height: 30px;
+        padding: 0 10px;
+    }
+    .reporting_window .header i:hover {
+        cursor: pointer;
+    }
+    
+    
+    .reporting_window .header #close {
+        float: right;
+    }
+    
+    .reporting_window .content {
+        width: 100%;
+        height: calc(100% - 30px);
+        overflow: hidden;
+        overflow-y: auto;
+        font-size: 0.8rem;
+    }
+    
+    .reporting_window .content div {
+        color: white;
+        padding: 0px 5px;
+        overflow-wrap: anywhere;
+    }
+    
+    .reporting_window .content div:hover {
+        cursor: pointer;
+        background-color: #222222;
+    }
+    
+    .reporting_window .content * {
+        cursor: pointer;
+    }
+    
+    .reporting_window #sentReport {
+        margin: 10px;
+    }
+    
+    
+    
+    
+    .subtitles_window {
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", "Liberation Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+        border-top-left-radius: 5px !important;
+        border-bottom-left-radius: 5px !important;
+        box-shadow: 0px -1px 7px black !important;
+        font-size:14px;
+        display: none;
+        color: white;
+        right: 0;
+        position: absolute;
+        width: 100%;
+        height: calc(100% - 65px);
+        bottom: 60px;
+        z-index: 999;
+        overflow:hidden;
+        background: #333333;
+        max-width: 300px !important;
+    }
+    
+    .subtitles_loader {
+        position: absolute;
+        width: 100%;
+        height: calc(100% - 30px);
+        margin-top: 30px;
+        background: rgba(0,0,0,0.7);
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5em;
+        display: none;
+    }
+    .subtitles_loader::after {
+        content: 'Loading...';
+    }
+    
+    .subtitles_window .header {
+        width: 100%;
+        height: 30px;
+    }
+    
+    .subtitles_window .header i {
+        font-size: 14px;
+        line-height: 30px;
+        padding: 0 10px;
+    }
+    .subtitles_window .header i:hover {
+        cursor: pointer;
+    }
+    
+    .subtitles_window .header #back {
+        float: left;
+        display: none;
+    }
+    .subtitles_window .header #close {
+        float: right;
+    }
+    
+    .subtitles_window .header #title {
+        font-size: 14px;
+        line-height: 30px;
+        font-weight: bold;
+    }
+    
+    .subtitles_window .content {
+        width: 100%;
+        height: calc(100% - 30px);
+        overflow: hidden;
+        overflow-y: auto;
+        font-size: 0.8rem;
+    }
+    
+    .subtitles_window .content div {
+        color: white;
+        padding: 7px 10px;
+        overflow-wrap: anywhere;
+    }
+    
+    .subtitles_window .content div:hover {
+        cursor: pointer;
+        background-color: #222222;
+    } 
+    
+    
+    .subtitles_window .content .subtitle_active {
+        background-color: rgba(255, 255, 255, 0.2);
+    }
+    
+    .subtitles_window .content .lang {
+        font-weight: bold;
+    }
+    
+    
+    
+    #player_parent_control_player_logo svg {
+        width:56px !important;
+        height:22.75px !important;
+    }
+    
+    
+        
+    @media (max-width: 400px) {
+        
+        #player_parent_control_reportingButton {
+            display: none !important;
+        }
+        
+        #player_parent_control_player_logo {
+            display: none !important;
+        }
+    }
+    
+    .loader {
+        top: calc(50% - 24px);
+        left: calc(50% - 24px);
+        position: absolute;
+        width: 48px;
+        height: 48px;
+        border: 5px solid;
+        border-color: #e600e6 transparent;
+        border-radius: 50%;
+        display: none;
+        box-sizing: border-box;
+        animation: rotation 1s linear infinite;
+    }
+    
+    @keyframes rotation {
+        0% {
+            transform: rotate(0deg);
+        }
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+    
+    
+</style>
+
+</head>
+<body data-i="30274401"  >
+    
+    
+    <div id="player_parent">
+    </div>
+    
+    <div id="reporting_content" style="display: none;">
+                
+        
+        <div class='header'>
+            <i id="close" class="fa-solid fa-xmark"></i>
+        </div>
+        <div class='content'>
+            <div>
+                <input type="radio" id="reportError" name="problem" value="file_error" checked="checked">
+                <label for="reportError" >File Error</label><br>
+            </div>
+            <div>
+                <input type="radio" id="reportVideo" name="problem" value="wrong_video">
+                <label for="reportVideo">Wrong Video</label><br>
+            </div>
+            <div>
+                <input type="radio" id="reportAudio" name="problem" value="wrong_audio">
+                <label for="reportAudio">Wrong Audio</label><br>
+            </div>
+            
+            <div>
+                <input id="math" type="hidden" name="math" value="7-7" />
+                <p>
+                    7-7 = <input id="solution" type="number" name="solution" min="0" max="9"/>
+                </p>
+            </div>
+            
+            <button id="sentReport" data-hash="MzFkMjI0NzE1MDMwOTQzZWI3NzU3M2NkZTIwZTVjNmE6VkZkSFREWmxWRkY1ZDNGRE5tb3pVRmhOV0V4clNqZzFSWE5EYW5Gb2VqTlRjM1lyU2s5QmVsZFhLeTkzTkV0MFJGSkljU3RyTUdWSmNrbEhTRTQxVDFwbVJuRnJRMFJEVkVsemIzcFBPREUwZUhOTWVYUnlhMFppUlc1bGNIWlZOeXROWkZselRsbzBZVkUxUldnd1dpOXRhblJRUVVaeVpuUlJVbTF4WWxwdFpUSXJXR3BuZFV0SWF6UklkazlIUldKaE9XOVNMMU14WjFWSlRIQndWMDR6Y3pkbFRWSkZTR2RDY0ZWR2NIQnRjR3hGUjJaeVZGTm9Oa0UxUVdFNWQyc3ZjRkJ0TWxGS2QzWTJlalZFTVdSMFREVktka1p2Vlhvdk1HZHdRMmxCUTJsTVowVjBPRW9yV1RsM09EYzNha1F3UVhOM1QyVktTbEZxT0dScWNVSktSazVTTUZSU2RIZ3ZaVTFsYTNSNE5TdHBURTR4Y3psSkwybzVOblF6YzFRMVVsZDZhM1Y2VUdwd2FrUnBTazVuU2tGak9Fc3dSMUk0ZGs5NVJsbG5PVFpKYzBrNGJsQlZhMDVFT0ZObUswUjVkbVJRT0ZoalkxSjZUUzlSUW5wRVpUQXpkWGhOUjBJM0wxWkhhR3hyU0dOVVFpOUxWMGhFWnpWVVRIbHZVRkZHTlZvMFpUSmlVSFE0UVdjMGFYWnJVRU5hYzJOSlZYUTVhM1pFUkZaSWNrNXlRa2d5UmtWNlpHcDBObE5RUkVOU2VVaHBkekJJZWxSd2VURmxjRTVKWnpWTVFrVktka2RIWVhkWFpVUkRWRTlsY0RGT2RESjBjbXR6VjNsek5taFdTM1EzYXpSSU0yRm1jbk50WTNwc1pGaFNWRXRLWkhGdVYwRnJTbXA0VG1Ndk1FSkNObGwyU0RORmRrdG9iVFUwU0VSdVkyUkNTRmxRYlhoTVlYRm9ZVmxYTURSVVZEWmthRVkyZFdkRVprbEZNalY0V0VaSWVFazFUbU0xVFRCUVZGZDNWbnB6ZUM5NU5rTm5lbkJvYmpOM2NWZFBXblk0T1dwdGFHWjJObEZRWjFoTVMzZHdjR2w1U0hGQ2NFaGtTQzk2V21sRVMyNUdiM1ZGWTBsNGRVZGxSM1ZYSzJZeVVFeHZha2x5TDNwck1XcHNhalJKVUZjMVYybGFXa0pHWVVsa05GbFVUelJvZEUxRkx5dFJiR014UWpSUVJGRlZNbEZwYWxSSVNFZHBSVzR4VEU1eU5uZElWMmRSWkdONlIwOTZWaXRMYTBKeFkwVkdSRTFhTkM5R0x5OHZjMWxqVFRKTkx6RlpkVk5QWTFCVlVHSTRRMVpOUldwRVJqQndNRFJXYUU1WlR5dGxRek5KWVVkNlp6RXZNbmx5ZFdScmJGcG1NVXRpUTI1aFprZFJTRnBqVW1ZdmIzaEtVWGxSU2tjemJWTkJiRnBCWWsxb1lrdzRURlJ3YmpaNFMzWkZVWGMzUVdaNU0zbzJPR3R4ZFVwdlIxWldkbEI2YjFaS2VWaEJTVFpsY0Zob1dVVlRXVXcxUkRFMVdXRktTWGxZUTA4emQzUnRlR0p0WVhkSlExaDJjME5MU1dGQ2FGYzBTak0xVm5keWRFZEdNbnByUWtOaVZVMXpPU3M1WVVsQlVuSkhXaTlvZVZWcmN6WjVRbTB2YlZFcmVsZG1PRTh2WnpGM1YzQlVVbWt4V0dGd1V6VkNkV0Z0VEZZeVkwaFdaMm8xY1ROYVNFNWxkbEpXV214WllqTkdRbTFGWkdOVU5rMWFRVmx0WW1Vek5EWnNjbE0zY1ZCQk9HY3lTQzl5UlZoUkwxaEZaazVKU0ZkSFVrUkRTVlpJU1hZNE9XVlBNMmhDUTBSaVIxcElUVWRzTkVKQk5rWm9iREV3YjJ3NFpUWldkbFoyVFc5MldtSlFNR05WTlU1NGRGbEZVWFV5YVU5emVWQnlOblI2TVhGM1VtUTNPRnBwV1hKUGNFZExUa3BaTkZaR1lucEZibkp0Tm01MWFsaE1Oak5KZHpNM1NDOVVWRU50VlhJMWNscEZVeXRPUVZacGVrVmpaM0IzVmtsWkszZzBSa1pXYldab1ZHRkhObFZTVTI5bGNFNWxRMUJDUW5kNkwxWnlkemxZU1E9PQ--">Sent report</button>
+        </div>
+    </div>
+    
+    
+    <div id="JoAHUMCLXV" style="display:none;">=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</div>
+
+    <script src="https://unpkg.com/jquery@3.2.1/dist/jquery.min.js"></script>
+        
+        
+    <script src="https://unpkg.com/jquery.cookie@1.4.1/jquery.cookie.js"></script>
+    
+    <script src="/pjs/pjs_main_drv_cast.261125.js?_=1764114171"></script>
+    
+    <script src="/srt2vtt.js?t=1744906949"></script>
+    
+
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.0.3/pako.min.js"></script>
+
+
+    <srcipt src="https://unpkg.com/pako@2.1.0/dist/pako.min.js"></srcipt>
+    
+    
+    <script src="/subtitles_pjs_24.04.js?t=1744906949"></script>
+    
+    <script src="/reporting.js?t=1744906950"></script>
+    
+    
+    <script src="/tprs/src/parser.js?_=1744906890"></script>
+    <script src="/tprs/src/handlers.js?_=1744906890"></script>
+    <script src="/tprs/index.js?_=1744906890"></script>
+    
+    <script src="/sbx.js?t=1751380596"></script>
+    
+        <script src="/sV05kUlNvOdOxvtC/a6a95bb5246c6a03e4978992dcd1e03c.js?_=1744906950"></script>
+        
+    <script>
+    
+        var ds_langs = [];
+        var ds_lang = false;
+        var sub_shown_lang = "";
+        
+        
+        
+        
+        var flnm = removeExtension(atob('Rml2ZS5OaWdodHMuYXQuRnJlZGR5J3MuMi4yMDI1LjEwODBwLlRTLkVTLkVOLVJHQi9GaXZlLk5pZ2h0cy5hdC5GcmVkZHkncy4yLjIwMjUuMTA4MHAuVFMuRVMuRU4tUkdCLm1wNA=='));
+        
+        
+        flnm = flnm.split("/");
+        var flnm_data = [];
+        for (const key in flnm) {
+            flnm_data.push(tprs.parse(flnm[key]));
+        }
+        
+        var pljs_sub_lang = localStorage.getItem("pljssubtitle");
+        if(typeof pljs_sub_lang === 'string' || pljs_sub_lang instanceof String){
+            for (let lang of sub_langs) {
+                var tmp_lang_regexp = new RegExp(lang.LanguageName, "i");
+                if(tmp_lang_regexp.test(pljs_sub_lang)){
+                    ds_lang = lang;
+                    break;
+                }
+            }
+        }
+    
+    
+        
+    
+                ds_lang = get_lang_from_iso639(JSON.parse('[]')[0]);
+                
+                
+        
+        var pass_path = "//tmstr1.cloudnestra.com/rt_ping.php";
+        
+        var ping_interval = false;
+        
+        
+        var subs_shown = false;
+        var the_subtitles = [];
+        
+        var default_subtitles = "";
+          
+                    default_subtitles = "[]";
+                    
+        
+        
+        
+                var db_subs = [];
+                
+        
+        var lc_on = IsLcOn();
+        
+        var current_sub_name = "cs_"+$("body").data("i");
+        
+        if($("body").data("s") && $("body").data("e")){
+            current_sub_name += "_"+$("body").data("s")+"x"+$("body").data("e");
+        }
+        
+        if(default_subtitles.length > 0){
+            the_subtitles = default_subtitles.split(",");
+            //player.api("subtitle",default_subtitles);
+        }
+        
+        
+        //var player = new Playerjs({id:"player_parent", cuid:"257cda64e66ee5e9b3d2857e26fb7d30",file:"", poster:"//image.tmdb.org/t/p/w780/54BOXpX2ieTXMDzHymdDMnUIzYG.jpg" , ready:"PlayerReady" , autoplay:1 , subtitle: default_subtitles});
+                
+                var player = new Playerjs({id:"player_parent", file: JoAHUMCLXV , cuid:"257cda64e66ee5e9b3d2857e26fb7d30",poster:"//image.tmdb.org/t/p/w780/54BOXpX2ieTXMDzHymdDMnUIzYG.jpg" , ready:"PlayerReady" , autoplay:1 , subtitle: default_subtitles , "default_quality":"max"});    
+                
+        
+        if(player.api("subtitles").length > 1 && ds_lang){
+            setStartSubtitle();
+        }else if(player.api("subtitles").length === 1){
+            player.api("subtitle" , player.api("subtitles").length-1);
+        }
+        
+                
+        
+        
+        if(lc_on){
+            current_sub = localStorage.getItem(current_sub_name);
+            if(typeof current_sub === 'string' && isJson(current_sub)){
+                current_sub = JSON.parse(current_sub);
+                if(current_sub.lang_short != sub_shown_lang){
+                    addSubtitle(current_sub);
+                }
+            }
+        }
+        
+        var video = $("#player_parent").find("video")[0];
+    
+    
+        
+                var watched = {
+            value: 0,
+            report: 0,
+            interval: false ,
+            duration: 0,
+            set: function (value) {
+                this.value = value;
+                this.onChange();
+            },
+            onChange: function(){
+                //console.log(this.value);
+                //console.log(this.duration);
+                if(this.duration > 0){
+                    if(this.report < 5){
+                        var limit = this.duration*0.05;
+                        if(limit < 30){
+                            limit = 30
+                        }
+                        if(this.value > limit){
+                            this.report = 5;
+                            $.get("/fsdD/MzFkMjI0NzE1MDMwOTQzZWI3NzU3M2NkZTIwZTVjNmE6VkZkSFREWmxWRkY1ZDNGRE5tb3pVRmhOV0V4clNqZzFSWE5EYW5Gb2VqTlRjM1lyU2s5QmVsZFhLeTkzTkV0MFJGSkljU3RyTUdWSmNrbEhTRTQxVDFwbVJuRnJRMFJEVkVsemIzcFBPREUwZUhOTWVYUnlhMFppUlc1bGNIWlZOeXROWkZselRsbzBZVkUxUldnd1dpOXRhblJRUVVaeVpuUlJVbTF4WWxwdFpUSXJXR3BuZFV0SWF6UklkazlIUldKaE9XOVNMMU14WjFWSlRIQndWMDR6Y3pkbFRWSkZTR2RDY0ZWR2NIQnRjR3hGUjJaeVZGTm9Oa0UxUVdFNWQyc3ZjRkJ0TWxGS2QzWTJlalZFTVdSMFREVktka1p2Vlhvdk1HZHdRMmxCUTJsTVowVjBPRW9yV1RsM09EYzNha1F3UVhOM1QyVktTbEZxT0dScWNVSktSazVTTUZSU2RIZ3ZaVTFsYTNSNE5TdHBURTR4Y3psSkwybzVOblF6YzFRMVVsZDZhM1Y2VUdwd2FrUnBTazVuU2tGak9Fc3dSMUk0ZGs5NVJsbG5PVFpKYzBrNGJsQlZhMDVFT0ZObUswUjVkbVJRT0ZoalkxSjZUUzlSUW5wRVpUQXpkWGhOUjBJM0wxWkhhR3hyU0dOVVFpOUxWMGhFWnpWVVRIbHZVRkZHTlZvMFpUSmlVSFE0UVdjMGFYWnJVRU5hYzJOSlZYUTVhM1pFUkZaSWNrNXlRa2d5UmtWNlpHcDBObE5RUkVOU2VVaHBkekJJZWxSd2VURmxjRTVKWnpWTVFrVktka2RIWVhkWFpVUkRWRTlsY0RGT2RESjBjbXR6VjNsek5taFdTM1EzYXpSSU0yRm1jbk50WTNwc1pGaFNWRXRLWkhGdVYwRnJTbXA0VG1Ndk1FSkNObGwyU0RORmRrdG9iVFUwU0VSdVkyUkNTRmxRYlhoTVlYRm9ZVmxYTURSVVZEWmthRVkyZFdkRVprbEZNalY0V0VaSWVFazFUbU0xVFRCUVZGZDNWbnB6ZUM5NU5rTm5lbkJvYmpOM2NWZFBXblk0T1dwdGFHWjJObEZRWjFoTVMzZHdjR2w1U0hGQ2NFaGtTQzk2V21sRVMyNUdiM1ZGWTBsNGRVZGxSM1ZYSzJZeVVFeHZha2x5TDNwck1XcHNhalJKVUZjMVYybGFXa0pHWVVsa05GbFVUelJvZEUxRkx5dFJiR014UWpSUVJGRlZNbEZwYWxSSVNFZHBSVzR4VEU1eU5uZElWMmRSWkdONlIwOTZWaXRMYTBKeFkwVkdSRTFhTkM5R0x5OHZjMWxqVFRKTkx6RlpkVk5QWTFCVlVHSTRRMVpOUldwRVJqQndNRFJXYUU1WlR5dGxRek5KWVVkNlp6RXZNbmx5ZFdScmJGcG1NVXRpUTI1aFprZFJTRnBqVW1ZdmIzaEtVWGxSU2tjemJWTkJiRnBCWWsxb1lrdzRURlJ3YmpaNFMzWkZVWGMzUVdaNU0zbzJPR3R4ZFVwdlIxWldkbEI2YjFaS2VWaEJTVFpsY0Zob1dVVlRXVXcxUkRFMVdXRktTWGxZUTA4emQzUnRlR0p0WVhkSlExaDJjME5MU1dGQ2FGYzBTak0xVm5keWRFZEdNbnByUWtOaVZVMXpPU3M1WVVsQlVuSkhXaTlvZVZWcmN6WjVRbTB2YlZFcmVsZG1PRTh2WnpGM1YzQlVVbWt4V0dGd1V6VkNkV0Z0VEZZeVkwaFdaMm8xY1ROYVNFNWxkbEpXV214WllqTkdRbTFGWkdOVU5rMWFRVmx0WW1Vek5EWnNjbE0zY1ZCQk9HY3lTQzl5UlZoUkwxaEZaazVKU0ZkSFVrUkRTVlpJU1hZNE9XVlBNMmhDUTBSaVIxcElUVWRzTkVKQk5rWm9iREV3YjJ3NFpUWldkbFoyVFc5MldtSlFNR05WTlU1NGRGbEZVWFV5YVU5emVWQnlOblI2TVhGM1VtUTNPRnBwV1hKUGNFZExUa3BaTkZaR1lucEZibkp0Tm01MWFsaE1Oak5KZHpNM1NDOVVWRU50VlhJMWNscEZVeXRPUVZacGVrVmpaM0IzVmtsWkszZzBSa1pXYldab1ZHRkhObFZTVTI5bGNFNWxRMUJDUW5kNkwxWnlkemxZU1E9PQ--");
+                        }
+                        /*
+                        if(this.value > (this.duration*0.05)){
+                            this.report = 5;
+                            $.get("/vsdV/MzFkMjI0NzE1MDMwOTQzZWI3NzU3M2NkZTIwZTVjNmE6VkZkSFREWmxWRkY1ZDNGRE5tb3pVRmhOV0V4clNqZzFSWE5EYW5Gb2VqTlRjM1lyU2s5QmVsZFhLeTkzTkV0MFJGSkljU3RyTUdWSmNrbEhTRTQxVDFwbVJuRnJRMFJEVkVsemIzcFBPREUwZUhOTWVYUnlhMFppUlc1bGNIWlZOeXROWkZselRsbzBZVkUxUldnd1dpOXRhblJRUVVaeVpuUlJVbTF4WWxwdFpUSXJXR3BuZFV0SWF6UklkazlIUldKaE9XOVNMMU14WjFWSlRIQndWMDR6Y3pkbFRWSkZTR2RDY0ZWR2NIQnRjR3hGUjJaeVZGTm9Oa0UxUVdFNWQyc3ZjRkJ0TWxGS2QzWTJlalZFTVdSMFREVktka1p2Vlhvdk1HZHdRMmxCUTJsTVowVjBPRW9yV1RsM09EYzNha1F3UVhOM1QyVktTbEZxT0dScWNVSktSazVTTUZSU2RIZ3ZaVTFsYTNSNE5TdHBURTR4Y3psSkwybzVOblF6YzFRMVVsZDZhM1Y2VUdwd2FrUnBTazVuU2tGak9Fc3dSMUk0ZGs5NVJsbG5PVFpKYzBrNGJsQlZhMDVFT0ZObUswUjVkbVJRT0ZoalkxSjZUUzlSUW5wRVpUQXpkWGhOUjBJM0wxWkhhR3hyU0dOVVFpOUxWMGhFWnpWVVRIbHZVRkZHTlZvMFpUSmlVSFE0UVdjMGFYWnJVRU5hYzJOSlZYUTVhM1pFUkZaSWNrNXlRa2d5UmtWNlpHcDBObE5RUkVOU2VVaHBkekJJZWxSd2VURmxjRTVKWnpWTVFrVktka2RIWVhkWFpVUkRWRTlsY0RGT2RESjBjbXR6VjNsek5taFdTM1EzYXpSSU0yRm1jbk50WTNwc1pGaFNWRXRLWkhGdVYwRnJTbXA0VG1Ndk1FSkNObGwyU0RORmRrdG9iVFUwU0VSdVkyUkNTRmxRYlhoTVlYRm9ZVmxYTURSVVZEWmthRVkyZFdkRVprbEZNalY0V0VaSWVFazFUbU0xVFRCUVZGZDNWbnB6ZUM5NU5rTm5lbkJvYmpOM2NWZFBXblk0T1dwdGFHWjJObEZRWjFoTVMzZHdjR2w1U0hGQ2NFaGtTQzk2V21sRVMyNUdiM1ZGWTBsNGRVZGxSM1ZYSzJZeVVFeHZha2x5TDNwck1XcHNhalJKVUZjMVYybGFXa0pHWVVsa05GbFVUelJvZEUxRkx5dFJiR014UWpSUVJGRlZNbEZwYWxSSVNFZHBSVzR4VEU1eU5uZElWMmRSWkdONlIwOTZWaXRMYTBKeFkwVkdSRTFhTkM5R0x5OHZjMWxqVFRKTkx6RlpkVk5QWTFCVlVHSTRRMVpOUldwRVJqQndNRFJXYUU1WlR5dGxRek5KWVVkNlp6RXZNbmx5ZFdScmJGcG1NVXRpUTI1aFprZFJTRnBqVW1ZdmIzaEtVWGxSU2tjemJWTkJiRnBCWWsxb1lrdzRURlJ3YmpaNFMzWkZVWGMzUVdaNU0zbzJPR3R4ZFVwdlIxWldkbEI2YjFaS2VWaEJTVFpsY0Zob1dVVlRXVXcxUkRFMVdXRktTWGxZUTA4emQzUnRlR0p0WVhkSlExaDJjME5MU1dGQ2FGYzBTak0xVm5keWRFZEdNbnByUWtOaVZVMXpPU3M1WVVsQlVuSkhXaTlvZVZWcmN6WjVRbTB2YlZFcmVsZG1PRTh2WnpGM1YzQlVVbWt4V0dGd1V6VkNkV0Z0VEZZeVkwaFdaMm8xY1ROYVNFNWxkbEpXV214WllqTkdRbTFGWkdOVU5rMWFRVmx0WW1Vek5EWnNjbE0zY1ZCQk9HY3lTQzl5UlZoUkwxaEZaazVKU0ZkSFVrUkRTVlpJU1hZNE9XVlBNMmhDUTBSaVIxcElUVWRzTkVKQk5rWm9iREV3YjJ3NFpUWldkbFoyVFc5MldtSlFNR05WTlU1NGRGbEZVWFV5YVU5emVWQnlOblI2TVhGM1VtUTNPRnBwV1hKUGNFZExUa3BaTkZaR1lucEZibkp0Tm01MWFsaE1Oak5KZHpNM1NDOVVWRU50VlhJMWNscEZVeXRPUVZacGVrVmpaM0IzVmtsWkszZzBSa1pXYldab1ZHRkhObFZTVTI5bGNFNWxRMUJDUW5kNkwxWnlkemxZU1E9PQ--");
+                        }
+                        */
+                    }
+                    
+                }
+            },
+            setDur: function(dur){
+                this.duration = dur;
+            }
+        }
+                
+        function PlayerReady(){
+            gen_subs_el();
+            gen_reporting_el();
+        }
+    
+    
+            
+        var pm_player_data = {type:"PLAYER_EVENT"};
+        var pm_time_last_update = 0;
+        var pm_time_last_update_use = false;
+        
+        pm_player_data.data = {
+            imdbId: "tt30274401",
+            tmdbId: 1228246,
+            type: "movie",
+            season: false,
+            episode: false,
+            currentTime: 0,
+            duration: 0
+        };
+    
+        function PlayerjsEvents(event,id,data){
+            
+            
+            if(event=="play"){
+                if(!ping_interval)
+                    restart_ping_interval();
+                
+                pm_player_data.data.event = "play";
+                window.parent.postMessage(pm_player_data , '*');
+                //console.log(pm_player_data);
+                
+                if(!watched.interval){
+                    watched.interval = setInterval(function(){
+                        if(player.api("playing")){
+                            watched.set(watched.value+1);
+                            if(watched.value % 60 == 0){
+                                //$.get("/watched");
+                            }
+                        }
+                    },1000);
+                }
+            }
+            
+            if(event == "pause"){
+                clearInterval(ping_interval);
+                ping_interval = false;
+                pm_player_data.data.event = "pause";
+                window.parent.postMessage(pm_player_data , '*');
+                //console.log(pm_player_data);
+            }
+            
+            if(event == "time"){
+                if((Date.now() - pm_time_last_update) > 5000){
+                    pm_time_last_update = Date.now();
+                    pm_player_data.data.event = "timeupdate";
+                    pm_player_data.data.currentTime = parseInt(player.api("time"));
+                    window.parent.postMessage(pm_player_data , '*');
+                }
+            }
+            
+            if(event == "end"){
+                clearInterval(ping_interval);
+                ping_interval = false;
+                pm_player_data.data.event = "ended";
+                pm_player_data.data.currentTime = parseInt(player.api("duration"));
+                window.parent.postMessage(pm_player_data , '*');
+                player.api("pause");
+                //console.log(pm_player_data);
+                
+                            }
+            
+            if(event == "seek"){
+                pm_player_data.data.event = "seeked";
+                pm_player_data.data.currentTime = parseInt(player.api("time"));
+                window.parent.postMessage(pm_player_data , '*');
+                //console.log(pm_player_data);
+            }
+            
+            
+            if(event=="networkErrorHls"){
+                data_parsed = JSON.parse(data);
+                if(data_parsed.details == "fragLoadError" && data_parsed.fatal && watched.value < 60){
+                    // checkAndLogUrlStatus();
+                    // logToServerAndRedirect(pm_player_data);
+                    // window.location.replace("https://cloudnestra.comMzFkMjI0NzE1MDMwOTQzZWI3NzU3M2NkZTIwZTVjNmE6VkZkSFREWmxWRkY1ZDNGRE5tb3pVRmhOV0V4clNqZzFSWE5EYW5Gb2VqTlRjM1lyU2s5QmVsZFhLeTkzTkV0MFJGSkljU3RyTUdWSmNrbEhTRTQxVDFwbVJuRnJRMFJEVkVsemIzcFBPREUwZUhOTWVYUnlhMFppUlc1bGNIWlZOeXROWkZselRsbzBZVkUxUldnd1dpOXRhblJRUVVaeVpuUlJVbTF4WWxwdFpUSXJXR3BuZFV0SWF6UklkazlIUldKaE9XOVNMMU14WjFWSlRIQndWMDR6Y3pkbFRWSkZTR2RDY0ZWR2NIQnRjR3hGUjJaeVZGTm9Oa0UxUVdFNWQyc3ZjRkJ0TWxGS2QzWTJlalZFTVdSMFREVktka1p2Vlhvdk1HZHdRMmxCUTJsTVowVjBPRW9yV1RsM09EYzNha1F3UVhOM1QyVktTbEZxT0dScWNVSktSazVTTUZSU2RIZ3ZaVTFsYTNSNE5TdHBURTR4Y3psSkwybzVOblF6YzFRMVVsZDZhM1Y2VUdwd2FrUnBTazVuU2tGak9Fc3dSMUk0ZGs5NVJsbG5PVFpKYzBrNGJsQlZhMDVFT0ZObUswUjVkbVJRT0ZoalkxSjZUUzlSUW5wRVpUQXpkWGhOUjBJM0wxWkhhR3hyU0dOVVFpOUxWMGhFWnpWVVRIbHZVRkZHTlZvMFpUSmlVSFE0UVdjMGFYWnJVRU5hYzJOSlZYUTVhM1pFUkZaSWNrNXlRa2d5UmtWNlpHcDBObE5RUkVOU2VVaHBkekJJZWxSd2VURmxjRTVKWnpWTVFrVktka2RIWVhkWFpVUkRWRTlsY0RGT2RESjBjbXR6VjNsek5taFdTM1EzYXpSSU0yRm1jbk50WTNwc1pGaFNWRXRLWkhGdVYwRnJTbXA0VG1Ndk1FSkNObGwyU0RORmRrdG9iVFUwU0VSdVkyUkNTRmxRYlhoTVlYRm9ZVmxYTURSVVZEWmthRVkyZFdkRVprbEZNalY0V0VaSWVFazFUbU0xVFRCUVZGZDNWbnB6ZUM5NU5rTm5lbkJvYmpOM2NWZFBXblk0T1dwdGFHWjJObEZRWjFoTVMzZHdjR2w1U0hGQ2NFaGtTQzk2V21sRVMyNUdiM1ZGWTBsNGRVZGxSM1ZYSzJZeVVFeHZha2x5TDNwck1XcHNhalJKVUZjMVYybGFXa0pHWVVsa05GbFVUelJvZEUxRkx5dFJiR014UWpSUVJGRlZNbEZwYWxSSVNFZHBSVzR4VEU1eU5uZElWMmRSWkdONlIwOTZWaXRMYTBKeFkwVkdSRTFhTkM5R0x5OHZjMWxqVFRKTkx6RlpkVk5QWTFCVlVHSTRRMVpOUldwRVJqQndNRFJXYUU1WlR5dGxRek5KWVVkNlp6RXZNbmx5ZFdScmJGcG1NVXRpUTI1aFprZFJTRnBqVW1ZdmIzaEtVWGxSU2tjemJWTkJiRnBCWWsxb1lrdzRURlJ3YmpaNFMzWkZVWGMzUVdaNU0zbzJPR3R4ZFVwdlIxWldkbEI2YjFaS2VWaEJTVFpsY0Zob1dVVlRXVXcxUkRFMVdXRktTWGxZUTA4emQzUnRlR0p0WVhkSlExaDJjME5MU1dGQ2FGYzBTak0xVm5keWRFZEdNbnByUWtOaVZVMXpPU3M1WVVsQlVuSkhXaTlvZVZWcmN6WjVRbTB2YlZFcmVsZG1PRTh2WnpGM1YzQlVVbWt4V0dGd1V6VkNkV0Z0VEZZeVkwaFdaMm8xY1ROYVNFNWxkbEpXV214WllqTkdRbTFGWkdOVU5rMWFRVmx0WW1Vek5EWnNjbE0zY1ZCQk9HY3lTQzl5UlZoUkwxaEZaazVKU0ZkSFVrUkRTVlpJU1hZNE9XVlBNMmhDUTBSaVIxcElUVWRzTkVKQk5rWm9iREV3YjJ3NFpUWldkbFoyVFc5MldtSlFNR05WTlU1NGRGbEZVWFV5YVU5emVWQnlOblI2TVhGM1VtUTNPRnBwV1hKUGNFZExUa3BaTkZaR1lucEZibkp0Tm01MWFsaE1Oak5KZHpNM1NDOVVWRU50VlhJMWNscEZVeXRPUVZacGVrVmpaM0IzVmtsWkszZzBSa1pXYldab1ZHRkhObFZTVTI5bGNFNWxRMUJDUW5kNkwxWnlkemxZU1E9PQ--");
+                }
+            }
+            
+            //if(event=="loaderror"){
+                
+                
+                if(data == "manifestLoadError (networkError)" || data == "not found" || data == "Media failed to decode"){
+                    //reloadWithPost({ fallback_url_path: ''});
+                    // checkAndLogUrlStatus();
+                    // logToServerAndRedirect(pm_player_data);
+                    // window.location.replace("https://cloudnestra.comMzFkMjI0NzE1MDMwOTQzZWI3NzU3M2NkZTIwZTVjNmE6VkZkSFREWmxWRkY1ZDNGRE5tb3pVRmhOV0V4clNqZzFSWE5EYW5Gb2VqTlRjM1lyU2s5QmVsZFhLeTkzTkV0MFJGSkljU3RyTUdWSmNrbEhTRTQxVDFwbVJuRnJRMFJEVkVsemIzcFBPREUwZUhOTWVYUnlhMFppUlc1bGNIWlZOeXROWkZselRsbzBZVkUxUldnd1dpOXRhblJRUVVaeVpuUlJVbTF4WWxwdFpUSXJXR3BuZFV0SWF6UklkazlIUldKaE9XOVNMMU14WjFWSlRIQndWMDR6Y3pkbFRWSkZTR2RDY0ZWR2NIQnRjR3hGUjJaeVZGTm9Oa0UxUVdFNWQyc3ZjRkJ0TWxGS2QzWTJlalZFTVdSMFREVktka1p2Vlhvdk1HZHdRMmxCUTJsTVowVjBPRW9yV1RsM09EYzNha1F3UVhOM1QyVktTbEZxT0dScWNVSktSazVTTUZSU2RIZ3ZaVTFsYTNSNE5TdHBURTR4Y3psSkwybzVOblF6YzFRMVVsZDZhM1Y2VUdwd2FrUnBTazVuU2tGak9Fc3dSMUk0ZGs5NVJsbG5PVFpKYzBrNGJsQlZhMDVFT0ZObUswUjVkbVJRT0ZoalkxSjZUUzlSUW5wRVpUQXpkWGhOUjBJM0wxWkhhR3hyU0dOVVFpOUxWMGhFWnpWVVRIbHZVRkZHTlZvMFpUSmlVSFE0UVdjMGFYWnJVRU5hYzJOSlZYUTVhM1pFUkZaSWNrNXlRa2d5UmtWNlpHcDBObE5RUkVOU2VVaHBkekJJZWxSd2VURmxjRTVKWnpWTVFrVktka2RIWVhkWFpVUkRWRTlsY0RGT2RESjBjbXR6VjNsek5taFdTM1EzYXpSSU0yRm1jbk50WTNwc1pGaFNWRXRLWkhGdVYwRnJTbXA0VG1Ndk1FSkNObGwyU0RORmRrdG9iVFUwU0VSdVkyUkNTRmxRYlhoTVlYRm9ZVmxYTURSVVZEWmthRVkyZFdkRVprbEZNalY0V0VaSWVFazFUbU0xVFRCUVZGZDNWbnB6ZUM5NU5rTm5lbkJvYmpOM2NWZFBXblk0T1dwdGFHWjJObEZRWjFoTVMzZHdjR2w1U0hGQ2NFaGtTQzk2V21sRVMyNUdiM1ZGWTBsNGRVZGxSM1ZYSzJZeVVFeHZha2x5TDNwck1XcHNhalJKVUZjMVYybGFXa0pHWVVsa05GbFVUelJvZEUxRkx5dFJiR014UWpSUVJGRlZNbEZwYWxSSVNFZHBSVzR4VEU1eU5uZElWMmRSWkdONlIwOTZWaXRMYTBKeFkwVkdSRTFhTkM5R0x5OHZjMWxqVFRKTkx6RlpkVk5QWTFCVlVHSTRRMVpOUldwRVJqQndNRFJXYUU1WlR5dGxRek5KWVVkNlp6RXZNbmx5ZFdScmJGcG1NVXRpUTI1aFprZFJTRnBqVW1ZdmIzaEtVWGxSU2tjemJWTkJiRnBCWWsxb1lrdzRURlJ3YmpaNFMzWkZVWGMzUVdaNU0zbzJPR3R4ZFVwdlIxWldkbEI2YjFaS2VWaEJTVFpsY0Zob1dVVlRXVXcxUkRFMVdXRktTWGxZUTA4emQzUnRlR0p0WVhkSlExaDJjME5MU1dGQ2FGYzBTak0xVm5keWRFZEdNbnByUWtOaVZVMXpPU3M1WVVsQlVuSkhXaTlvZVZWcmN6WjVRbTB2YlZFcmVsZG1PRTh2WnpGM1YzQlVVbWt4V0dGd1V6VkNkV0Z0VEZZeVkwaFdaMm8xY1ROYVNFNWxkbEpXV214WllqTkdRbTFGWkdOVU5rMWFRVmx0WW1Vek5EWnNjbE0zY1ZCQk9HY3lTQzl5UlZoUkwxaEZaazVKU0ZkSFVrUkRTVlpJU1hZNE9XVlBNMmhDUTBSaVIxcElUVWRzTkVKQk5rWm9iREV3YjJ3NFpUWldkbFoyVFc5MldtSlFNR05WTlU1NGRGbEZVWFV5YVU5emVWQnlOblI2TVhGM1VtUTNPRnBwV1hKUGNFZExUa3BaTkZaR1lucEZibkp0Tm01MWFsaE1Oak5KZHpNM1NDOVVWRU50VlhJMWNscEZVeXRPUVZacGVrVmpaM0IzVmtsWkszZzBSa1pXYldab1ZHRkhObFZTVTI5bGNFNWxRMUJDUW5kNkwxWnlkemxZU1E9PQ--");
+                }
+            //}
+            
+            if(event=="duration"){
+                if(watched.duration == 0){
+                    watched.setDur(parseInt(player.api("duration")));
+                    
+                    pm_player_data.data.duration = parseInt(player.api("duration"));
+                    pm_player_data.data.event = "timeupdate";
+                    window.parent.postMessage(pm_player_data , '*');   
+                }
+            }
+            
+            if(event == "subtitle"){
+                var sub_lang = get_lang_from_name(data);
+                sub_shown_lang = sub_lang.ISO639;
+            }
+        }
+        
+        
+        function openVidsrc(){
+            var win = window.open('https://vidsrcme.ru/', '_blank');
+            if (win) {
+                //Browser has allowed it to be opened
+                win.focus();
+            }
+        }
+        
+        
+        
+        
+        window.addEventListener('message', message => {
+            if (message.source == window) {
+                return; // Skip message in this event listener
+            }
+            
+            if(message.source == window.parent){
+                if(isJson(message.data)){
+                    message_data = JSON.parse(message.data);
+                    if(message_data.player === true){
+                        if(message_data.action == "play"){
+                            player.api("play");
+                        }
+                        if(message_data.action == "pause"){
+                            player.api("pause");
+                        }
+                        
+                        if(message_data.action == "mute"){
+                            player.api("mute");
+                        }
+                        
+                        if(message_data.action == "unmute"){
+                            player.api("unmute");
+                        }
+                        
+                        if(message_data.action.includes("seek")){
+                            var seek_match = message_data.action.match(/seek(\+|-)([0-9]+)/);
+                            if(seek_match.length){
+                                player.api("seek",seek_match[1]+seek_match[2])
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        
+        
+        
+        function IsLcOn(){
+            var is_on = false;
+            try {
+                localStorage.setItem('test_lc' , "1");
+                if(localStorage.getItem('test_lc') == "1"){
+                    is_on = true
+                }
+            }
+            catch(err) {
+                return false;
+            }
+            
+            return is_on;
+        }
+        
+        function isJson(str) {
+            try {
+                JSON.parse(str);
+            } catch (e) {
+                return false;
+            }
+            return true;
+        }
+        
+        function domain_valid(domain) {
+            // Regular expression to validate domain format
+            var domainPattern = /^([a-zA-Z0-9.-]+)?[a-zA-Z0-9-]\.[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?$/;
+
+            return domainPattern.test(domain);
+        }
+        
+        
+        function reloadWithPost(data) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = window.location.href.split('?')[0];
+            
+            for (const key in data) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = data[key];
+                form.appendChild(input);
+            }
+            
+            document.body.appendChild(form);
+            form.submit();
+        }
+        
+        
+        // Function to check single URL and log status code
+        function checkAndLogUrlStatus() {
+            $.ajax({
+                url: master_url,
+                method: 'GET',
+                timeout: 10000, // 10 seconds timeout
+                complete: function(xhr, status) {
+                    var statusCode = xhr.status;
+                    var statusText = xhr.statusText;
+                    
+                    // Prepare log data
+                    var logData = {
+                        url: master_url,
+                        status_code: statusCode,
+                        status_text: statusText,
+                        request_status: status, // "success", "error", "timeout"
+                        timestamp: new Date().toISOString(),
+                        user_agent: navigator.userAgent,
+                        referrer: document.referrer
+                    };
+                    
+                    console.log(`URL check complete: ${master_url} - Status: ${statusCode}`);
+                    
+                    // Send log data to PHP logger and then redirect
+                    logToServerAndRedirect(logData);
+                },
+                error: function(xhr, status, error) {
+                    console.error('URL check failed:', error);
+                    
+                    // Log the failure and redirect anyway
+                    var logData = {
+                        url: master_url,
+                        status_code: 0,
+                        status_text: 'Check Failed',
+                        request_status: status,
+                        timestamp: new Date().toISOString(),
+                        user_agent: navigator.userAgent,
+                        referrer: document.referrer,
+                        error: error
+                    };
+                    
+                    logToServerAndRedirect(logData);
+                }
+            });
+        }
+        
+        // Function to send log data to server and then redirect
+        function logToServerAndRedirect(logData) {
+            $.ajax({
+                url: '/http_check.php',
+                method: 'POST',
+                data: logData,
+                success: function(response) {
+                    console.log('Log saved successfully:', response);
+                    performRedirect();
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to save log:', error);
+                    // Still redirect even if logging fails
+                    performRedirect();
+                }
+            });
+        }
+        
+        // function to sent log data to server
+        function logToServer(logData) {
+            $.ajax({
+                url: '/http_check.php',
+                method: 'POST',
+                data: logData,
+                success: function(response) {
+                    console.log('Log saved successfully:', response);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to save log:', error);
+                }
+            });
+        }
+        
+        // Perform the redirect
+        function performRedirect() {
+            window.location.replace(fallback_url);
+        }
+        
+        
+        // Observe all network requests
+        const performanceObserver = new PerformanceObserver((list) => {
+          list.getEntries().forEach((entry) => {
+            if (entry.name.includes('.m3u8') && entry.name.includes('putgate')) {
+                var new_pass_obj = new URL(entry.name);
+                var old_pass_obj = new URL("https:"+pass_path);
+                pass_path = pass_path.replace(old_pass_obj.hostname,new_pass_obj.hostname);
+                restart_ping_interval();
+            }
+          });
+        });
+        
+        // Start observing
+        performanceObserver.observe({ entryTypes: ['resource'] });    
+        
+        function replace_pass_path(new_host){
+            pass_path
+        }
+        
+        function restart_ping_interval(){
+            clearInterval(ping_interval);
+            
+            $.get(pass_path);
+            
+            ping_interval = setInterval(function(){ 
+                $.get(pass_path, function(data, status){
+                    //console.log(data);
+                });
+            }, 60000);
+        }
+        
+        
+    </script>
+    
+    
+    
+
+<script data-ssr="1" data-cfasync="false" async type="text/javascript" src="//asuriinocyte.cyou/r6933abc94337b/131608"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon='{"version":"2024.11.0","token":"164a84f147c94870b0901f3bf4bd8a15","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>

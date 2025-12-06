@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Five Nights at Freddy's (2023)</title>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="origin" />
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css" integrity="sha512-xh6O/CkQoPOWDdYTDqeRdPCVd1SpvCA9XXcUnZS2FmJNp1coAFzvtCN9BmamE+4aHK8yyUHUSCcJHgXloTyT2A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+<style>
+
+    /* scroll */
+    /* Hide the default scrollbar */
+    ::-webkit-scrollbar {
+      position: absolute;
+      width: 5px; /* Width of the scrollbar */
+    }
+    
+    
+    /* Track (the area on which the scrollbar is rendered) */
+    ::-webkit-scrollbar-track {
+      background: rgba(255,255,255,0); /* Track background color */
+    }
+    
+    /* Handle (the draggable part of the scrollbar) */
+    ::-webkit-scrollbar-thumb {
+      background: #888; /* Handle background color */
+      border-radius: 3px; /* Handle border radius */
+    }
+    
+    /* Handle on hover */
+    ::-webkit-scrollbar-thumb:hover {
+      background: #555; /* Handle background color on hover */
+    }
+    
+
+        
+    pjsdiv:has(> #player_parent_settings) {
+        box-shadow: 0 -1px 10px black;
+        border-top-left-radius: 5px !important;
+        border-bottom-left-radius: 5px !important;
+    }
+    
+    
+    .hidden {
+        display:none !important;
+    }
+    
+    
+    
+    #pjs_player_parent_subtitle {
+        display: block !important;
+    }
+    
+    
+    #player_parent , #player {
+        width: 100%;
+        height: 100%;
+    }
+    
+    
+    html {
+        margin:0;
+        width:100%;
+        height:100%;
+    }
+    body {
+        margin:0;
+        width:100%;
+        height:100%;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", "Liberation Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    }
+    
+    
+    :root {
+        --plyr-color-main: #e600e6;
+        --webkit-text-track-display: none;
+    }
+    
+    .plyr__menu__container div[role="menu"] {
+        max-height: calc(100vh - 100px) !important;
+        overflow-y: auto !important;
+    }
+    
+    .plyr {
+        height: 100%;
+    }
+    
+    .plyr--full-ui ::-webkit-media-text-track-container {
+        display: var(--webkit-text-track-display);
+    }
+    
+    .plyr__captions {
+        font-size: 21px !important;
+        font-family: Arial !important;
+    }
+    .plyr__controls{
+        z-index: 999999;
+    }
+    .plyr__progress {
+        z-index: 999999;
+    }
+    
+    #player_parent_control_showSubtitles {
+        display: none;
+    }
+    
+    #player_parent_control_unmute_button {
+        opacity: 0.8;
+    }
+    
+    #player_parent_control_unmute_button pjsdiv:nth-child(3) {
+        width:95px !important;
+    }
+    #player_parent_control_unmute_button:hover {
+        opacity: 1;
+    }
+    #player_parent_control_unmute_button::after {
+        content: " UNMUTE";
+        background: #000;
+        padding: 6px 5px 4px 5px;
+        margin-left: 12px;
+        font-size: 12px;
+        margin-top: -12px;
+        position: absolute;
+        border-radius: 3px;
+        font-weight: bold;
+        pointer-events: none;
+    }
+    
+    #subtitles_button img {
+        width: 100%;
+        height: 100%;
+    }
+    
+    
+    .reporting_window {
+        border-top-left-radius: 5px !important;
+        border-bottom-left-radius: 5px !important;
+        box-shadow: 0px -1px 7px black !important;
+        font-size:14px;
+        display: none;
+        color: white;
+        right: 0;
+        position: absolute;
+        width: 100%;
+        bottom: 60px;
+        z-index: 999;
+        overflow:hidden;
+        background: #333333;
+        max-width: 150px !important;
+    }
+    
+    .reporting_window .header {
+        width: 100%;
+        height: 30px;
+    }
+    
+    .reporting_window .header i {
+        font-size: 14px;
+        line-height: 30px;
+        padding: 0 10px;
+    }
+    .reporting_window .header i:hover {
+        cursor: pointer;
+    }
+    
+    
+    .reporting_window .header #close {
+        float: right;
+    }
+    
+    .reporting_window .content {
+        width: 100%;
+        height: calc(100% - 30px);
+        overflow: hidden;
+        overflow-y: auto;
+        font-size: 0.8rem;
+    }
+    
+    .reporting_window .content div {
+        color: white;
+        padding: 0px 5px;
+        overflow-wrap: anywhere;
+    }
+    
+    .reporting_window .content div:hover {
+        cursor: pointer;
+        background-color: #222222;
+    }
+    
+    .reporting_window .content * {
+        cursor: pointer;
+    }
+    
+    .reporting_window #sentReport {
+        margin: 10px;
+    }
+    
+    
+    
+    
+    .subtitles_window {
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", "Liberation Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+        border-top-left-radius: 5px !important;
+        border-bottom-left-radius: 5px !important;
+        box-shadow: 0px -1px 7px black !important;
+        font-size:14px;
+        display: none;
+        color: white;
+        right: 0;
+        position: absolute;
+        width: 100%;
+        height: calc(100% - 65px);
+        bottom: 60px;
+        z-index: 999;
+        overflow:hidden;
+        background: #333333;
+        max-width: 300px !important;
+    }
+    
+    .subtitles_loader {
+        position: absolute;
+        width: 100%;
+        height: calc(100% - 30px);
+        margin-top: 30px;
+        background: rgba(0,0,0,0.7);
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5em;
+        display: none;
+    }
+    .subtitles_loader::after {
+        content: 'Loading...';
+    }
+    
+    .subtitles_window .header {
+        width: 100%;
+        height: 30px;
+    }
+    
+    .subtitles_window .header i {
+        font-size: 14px;
+        line-height: 30px;
+        padding: 0 10px;
+    }
+    .subtitles_window .header i:hover {
+        cursor: pointer;
+    }
+    
+    .subtitles_window .header #back {
+        float: left;
+        display: none;
+    }
+    .subtitles_window .header #close {
+        float: right;
+    }
+    
+    .subtitles_window .header #title {
+        font-size: 14px;
+        line-height: 30px;
+        font-weight: bold;
+    }
+    
+    .subtitles_window .content {
+        width: 100%;
+        height: calc(100% - 30px);
+        overflow: hidden;
+        overflow-y: auto;
+        font-size: 0.8rem;
+    }
+    
+    .subtitles_window .content div {
+        color: white;
+        padding: 7px 10px;
+        overflow-wrap: anywhere;
+    }
+    
+    .subtitles_window .content div:hover {
+        cursor: pointer;
+        background-color: #222222;
+    } 
+    
+    
+    .subtitles_window .content .subtitle_active {
+        background-color: rgba(255, 255, 255, 0.2);
+    }
+    
+    .subtitles_window .content .lang {
+        font-weight: bold;
+    }
+    
+    
+    
+    #player_parent_control_player_logo svg {
+        width:56px !important;
+        height:22.75px !important;
+    }
+    
+    
+        
+    @media (max-width: 400px) {
+        
+        #player_parent_control_reportingButton {
+            display: none !important;
+        }
+        
+        #player_parent_control_player_logo {
+            display: none !important;
+        }
+    }
+    
+    .loader {
+        top: calc(50% - 24px);
+        left: calc(50% - 24px);
+        position: absolute;
+        width: 48px;
+        height: 48px;
+        border: 5px solid;
+        border-color: #e600e6 transparent;
+        border-radius: 50%;
+        display: none;
+        box-sizing: border-box;
+        animation: rotation 1s linear infinite;
+    }
+    
+    @keyframes rotation {
+        0% {
+            transform: rotate(0deg);
+        }
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+    
+    
+</style>
+
+</head>
+<body data-i="4589218"  >
+    
+    
+    <div id="player_parent">
+    </div>
+    
+    <div id="reporting_content" style="display: none;">
+                
+        
+        <div class='header'>
+            <i id="close" class="fa-solid fa-xmark"></i>
+        </div>
+        <div class='content'>
+            <div>
+                <input type="radio" id="reportError" name="problem" value="file_error" checked="checked">
+                <label for="reportError" >File Error</label><br>
+            </div>
+            <div>
+                <input type="radio" id="reportVideo" name="problem" value="wrong_video">
+                <label for="reportVideo">Wrong Video</label><br>
+            </div>
+            <div>
+                <input type="radio" id="reportAudio" name="problem" value="wrong_audio">
+                <label for="reportAudio">Wrong Audio</label><br>
+            </div>
+            
+            <div>
+                <input id="math" type="hidden" name="math" value="7-4" />
+                <p>
+                    7-4 = <input id="solution" type="number" name="solution" min="0" max="9"/>
+                </p>
+            </div>
+            
+            <button id="sentReport" data-hash="NjM4OWUyZDMwNjUyM2JjMzU3YWIyMzY1MzZhZmUwYjI6VGtGUGMzZzFSalk1V2pWVWJIZ3ZjV1IxYzA1S1prNW5NV0Z5YzFaa1UzSlJUbkpUZDJKUWVYbFVVRnBQU1ZVMmRrTnNiVUZuZFhST1EySXhabmw0WVhCUVJVNTZOQ3QzVEhCS1UwczNibVJrWmt4eFVtaEpXRFkzVTNSVGNHUnlNVlUxZGsxbE1UbDRZM0pKYjJaUGVEQklNM0UzUzJkNllWSnFWRVJJUlM4MGFIcEhOMHR4Y0haelVFUmlNRGxrTVc1MWRHVlBVelpxTlRONGVFWkNTaTlMUzJSTlJISjJOMko2T0VOaFRUbEZaVkEzVVcxa2FGWjNNRXRNVTIxclMwWlBRV3c0YWxsbE4xUkVMelpCVEcxVVlra3JUWFpvU1dSdmIzaG9jWE5NUm01MmJ6UnpWVWxqV0dwWVpHRlhMMVppUjJaNFozaHVZemwzZDNJMWVFOVBWVEZ6UTJGcVVqbFdTRlpoUWtzd2F6Rk9lSFJxY2pCeFNVdDFkUzlNV1U5bFZXNW9RV0pyV25KM1UwNHdNbFIzZURSeFJTdDJiSEkxVjBkMU5Hc3hTRzExVTBoVVozaHVWRTE2Y0VRelpsVkJNRVJzY1ZkMk0ybDBUMUlyYUhkblFrbDRWbVZsUWtZcmVWY3ZRMFV6SzFKTFFVVkdhbTFHTm5GSWQwRjZTSEI2ZEN0UFl6VnVNbVoyU0RoSGFEbHhjWGt6WTFVMlpERjVNM05uT1N0SFZ6aFpVMHhEVjFOck1IazRjRTEzZDJOMVZUSmthSEEwWnpFMlJFNXRkSElyVTBwT01qWm1WblprYXk4MGRVNVZlWEJEU1VScEsyczRLMkZwTkZSa09ESkxTa0pUWVhoVFR6SllabkJTTjJWVlVqY3hjREJoWW1STVFtdEpiRWR2Y1V0Nk9EZFlVRlptWldSVVV6QllORTh3UzBaaVQxSnJPVTV6WmtKeUswOUlMM0pzYjJobVJsWnVkelJKYjNvMWFGZDVOSFF4ZWxkb1VscEhkamxoY0ZBM09WRnlVR2RWUzBJdlZWSTRjR2RHZDJzelYyTm1hRmh1U2pSVE4ydzRObFEwVEVaMlJrZDRWWFJGZDFGTVVVSm9aV0ZJTVVNNE5WSTBWMWQ2UkhWM2N6WnNMMDFIZGxKUVNqWjFkak5pTW1sdWVYRTRZazFLZW1jdlZVeEdSaXR6Wm1KT1UzUmpkRWx1ZWpsbFRsUlNZemQwWW1GbkwzazNNRWRtVUROQ2MwWmhhVkJoY25KUFFYQkdVakJ4ZG1wcFVIUnZlVlI0TXpad1ZqaG1ZbTh3TkZsek4ySkRjREJSZUVGemFIWnBjVXRtU0hwTmEyOUpTRkpoZW1oRVkxSnlWRUZ4TkVGWmVWaE9kbEJXWTNwYVRrdDNSblZDZHpoUlRsRXpRbmg0Vm5GR1oyUllaa1YwWkhoTE5XVkVRVW8xYldSV1EwRkRLMEZsUjBSblpqVm9ZbUo1TTJsSGNtVTNaRmgwYVVGYVFYbE5TWGh1VVhKRWRrVlZZbmgwWldkUmVuVlRkak4zYzFaMFUwZE1Ta1EyVG1JemVVWmhRVk5MYlVOc1JtOU9iVGRxU1dOSWR6ZGljV0Y0WlV0dll5OVFjVEJ3Y2pKMVoxZDBPVVJGVmtGQ1JXTm5LMVZxYVhRM1kweGFiRXhZV0c1TFlWaDJPWFkyTmxnNFpWcG1RVmxQZVRsTFZFSkplRGhNVmxKT2RVaE1jV3AxV2pWb0szaHNkM3B1U201S2VtNVZMMFJwSzBKbWVsTlFUMmxGWlRCa2JXazBhSGQxUkhKTlNEVkZUak4wYjFGWFlUTnZiRzVvYWpsclJVeDNPRGNyZWtWbFp6WmtMek12YjFweU5tZE9lbXhrTTJ0blowcHBjRk5VVm1NcmIzQTFUVk5oUVVWSE0ycG5SbGxEYjFBMFZESk1WV3R0TjNNNWRFNXFTVEpCTHpCb2NDOVRURXhpY0d4bVEySnVZbWhFYlZObFF6ZGxMelZEZEUxUGJVWkJUeXR6YURKdWRYWlpOR1ZMZVVObVVGRjNibk5YZVUxdWFraHRkQ3Q2ZFRSV01sUkJWV0UyZEdNNE1sa3lWbHBWVFUxdFJXcENPRlE1VVV0Uk9IRmtPVVp2TjBaNFZHWnhabVJOY2pObFIyTTBjRlZaYTJORmMydEdTSGt4Y1RJdlVGTTJVekZVSzJjcmQyRjNXblpEY1ZKV1lXOTFhakpWT0Vwb1JuZElRMDlZVUZVMWFYcFZkbXgxTjNCSWNrbE9hR2xJYmtSaVRrdG1RVUo2VWxsU1dEUlFXRU5RVTJwTWRFWjJkSGswTUVWdFRFUTJkelUzVVRjdk56VnlkVk0yZVU1TE9FWlNibGxRWm5BNVZrUlhSVXMzVEc1NU4yVXZkalZ1WW05Q1l5OW5VRkZIT0Vwd2RtUnBVMEkwTlZKUWVXTXJWVFpHYnowPQ--">Sent report</button>
+        </div>
+    </div>
+    
+    
+    <div id="sXnL9MQIry" style="display:none;">141c170a30620b137b355c5d2f2b210c0917213a16523e09502f485b3a280839211c13740271126f6011292b1e28397a080728162e0933096d4a1b640b367c462527136e0e612c7d657d0616132a1b763f2116131952051c694a136d0f01692016397a4a01596c5765240f3b161f4c7308491e1f162f3f3b5f231b6c0d245326160e2d4532556350517f25011f293c0a0b33282f263c2b196817205d3901780f16640e0c061d6776627a581b1e27297132213007263c550a5e04315402260c262463310a0f1c0f126d10392916441f6339313c132f093b4565234c6b0b017d202561316d00701352650e345a2d2844763a4f30342b14053551172d660d240c2f206125610a59295652120f2416000b6f3d222c14233e113f6b211f530a34693c1763174c30611612681225382d3a2d500a32340d193e33446517295307246528213a256900603c1363032d261d373c083e3d12092e0b3b2f6c042c153b5a520d2661130a0d1d031e53380f001a1d1b67330a1e77282e1124654f211608275b3e20000e0a01712c7a6210073313292d5b0a201e7a19505e0060210f75051f61202a1c0f4d071a287b617d5c14171d200b382234082b2f3f025e041f540b34652d280d300e0e71071e51131b02222b356933071f3a230b373b60171f5d373768462c631f770b1c0277637f31142f011e07361516162f3e560b6c222916045b6d00261e7e52001d601c5010293b1f28397a3b2c4a35315156195f4f214e39020c0220611a0e1a63675678030b5d2d3b35423d16423b192e560f5e323815101f43402026714030632153620e35131c28397a3b2230072a3c2b376d22125c07297808160f13740271126f65013d031244357037071e19310b3b006c2e3d19083553432d101372006e16706c122d3c2e2848473f07257a263e2f1b6f32136a05355f40250c0b4a007e305b637f29332c00064709304538233c3b2468091f76035a7d302c001f710658167c640231281b1d215635320e101a572a466f092d5a0b377d273f262443321c0e78637a310a2d3917513d23201b2a51332f63311f5b08396841181d0b410347167f6c11075712381f6a20172d712f3f3b236c21134a3a26690424613170025430526d243158133a3d4b3f0b307a2b142f046e3e1b69071e6d0126002d753261025a611207362e463579072030382615370264230f6709586d1817620f7332601e476e1e3c581d381b640714022e2b2c180e6b3e20160a13792c2a0f240d07732c717b2717132d394c663e21247a23232e456033395038005f012827130a3e612077613428121b38447038321619243d3b28630940503735531c141e1b690e6028196c100b122e1d177138221e2b182e3e0f682140670a0061402d26240e321a12476d00291a183939753e204d3422150d0861092417101e692d250e1f7530583470650331341c0017503522453f182e5a4a6b20297c07296d0215641b0c3e606745507a0b07162807563e4f1617263c3b376d213c56103808022c0c130a0b721752511e315a1836354609163c30192f37085f0406581058610216611745077f631053243152054635492049137118570d376d213d640b367d30240f0b0f061d1f56647f29291c28397a3b2d2c08225033266f4d241706120c2c141f1a423e716f1c537c34131f431a433615303e29140d205c1424140d377d192b64290f031d341d532739152e281e0832494539243f2f077608315839246d3c283a1f4b0e1c0a7f6013285b1f373d4337173c3f2a093e0f624d1f6e081e4330210f31563071127f632558581a3a07513814450524153729643e1b78063665182a0e29753061681f65120b052f1e2d7937233009160b273f612f43120e296d41270f1b720a732060697a31571f2820080a15253f1950371e5d14395a37366919151f38010360164550270e561c3a1b7632142074272e15086d081b4a392779462d271b4f02472c1e687f07021f001b6b334e17772f57193e604f077103006125203a280a04613d566d100f251b27294a3606410d1852371b602e2d1437346009221e17550b1f066650262d032d3b1b6f35221f392e0937236f4a0f6c065a5b2c2938314e0b1f341c6f7c0b371d39355b0833301e181410446f17406a04587105202a1b680247066253393d58183a077a334e2c171a0909276c142d563a24794d161e0f540755635a6d0139341c3b3d0736172c2f270a110364201b723958710d18002d630c701f1e51135c272d011b5632200e0e25512b3d6204135207377d3c240f0b7c197f6853511329132d3a2943200a4a3f193308185c4f384b3b256146161c1200195567195112315d2c1d2847074c257117325e085c3f486d0e256538240f0b7c0271126f6011292b2d0d216b3f1728392a570d376d213c120a1e6522281f356e071d3d526d130b271a2b1f6e084c1e2c2e57053e6916297439000c06272775440744347f68265c222d4317620731240b183e0d3f6b33137239375b09142b7a43331f1e4561102c5b2e392152372230292f0a360e5f16385b395d784020637e65001a635f601e3920172b397a37224e3a1919270764314c720b5a4746296216010f70026d687d0f321c3b356e3e172075223e5a386d163d740a584721260e0a41076e0f1e531154271f4539493a0a1e05160a3b356b334c7b0f58532d2c2730453072346068391b3e1828256932200a0f2c3c09006c232968385a6100161f0f010a721e7c53033d012f383d7008202874220a3f006133257c0e035325261e250001631662630e2c591b371b743f15201f2b193a465d4d1259095865462b631a0d3158344464240b361600170a39300a14225237456e301b6a0f397846270f356900703c776d103d0a2f2a1707084e4530273c1926630821740525790121643168031d67506924305a1d283d753a312432191909076d23257907344642280f1e0d337320465c122538160d164732152c0b270a090e51202812035a693b2d621b64011f0a5051380e56131f1f6b3e204d3b2b3f3f45624c2d540927081e2663790f3270127f6111292b1e264348204f4d291852371d5f154c560f586c423c1d7e451a63301953022513181c4b4608304d3f192f2e46760803140f35070c161d3840006e0e576211292b1e28397a3b2230072a3f040f6e04317a0e00613824380b7c06610712603429242f1d3d0c0b4c160c293d2f3b6c3e2d7c08244f4c2a0f355d0f460250633935321600020a3e4f247b2a14331d6b234845075a7c401762766b3261065b657d0f262c0d2d643e222c052e0b37275f0825700f5a7d26201f7145006e026c6539293c1a29297a3e2d20292b193209644f3d4e09395f46151d25710744345d5c133d121c1d2c4237232835243d2b2451081b6f3a245f2c2c260b7f06703551511117212f2a0b660814202f2e3f271d5f4d314537007927252624420c73161d530317372d394c78394e30151a33333f5e211a5908395e4d2839254a0e1a12606c003d3b173b3975094c2438232d2b2e624c256d02376d322c62256e066134725c000734132824470b0b3c29220904475d301e150e1e002e143a13750f723452607c31171e454867073d2c2b23152f416421396b0f377928261d290c01620e50527a295a17451b4e3d212830273c2b05693013510e5d5f4627397a4c066e0a51692735381c453971332d2577292c371b5c2e215c0f260c4d141e31003e47286352133d391d3a444433152d3f262d270f6c302d790637691a140f1b7f0271126f7b1f5c19162b210c3221353a1b3333466b3f315839027107171c1743305429537b7f35192c4625433e2c417819092f4e764f3157105d5e4616642d7c0271126f6011292b1e2839093f49423827193f3a6f2139740b39713f220f124203596c56530317561c1e44693a222d76243c190451161b6e0501692c161f7a570c63165e6524071e221e3d52322d163b240b332768081356081e5f3f2d2a256403620b1f6d3439261e0d3d673721343f293333276e0431700f005e41243a1f5201441273601e385a162816423f201e39233c0c455e330f500a29684d150c2d493047291f647d29392f291f6a370b0a7a281419006023395a0b037d28200d7676001c6f5c6d123d27160d394532212816241511346e1729170f375b19181c174c0f720e43607a173b12451e423921200f310a51456b20396a3b376530253807630e730e516138315b2c3a256a3533452f282e3b2b6d4c255007137138291c29620f4602627b391314162a3c093e0a121e2f333f05604c065c09276d4d15391354331a0a526d020a5d11452d43083020042b092b2463211f5338004f46161c137c31733c5869340f132e39297a0a2d3c192309053e5e314c733b137008160d1f710e472c416239285b1b1e0b77344f4a711819272051231f45371f473b250c0b490e1a205d52132d361a44356b09492c1b272d3b2864231b680b007d3024017140337312575303391205004342082d13281b522e185d3221123925644c3f2b7e0a33720a195224381622462c42062c45381b225e3e6832256c0b367d30240f0b7c0271126f5334313d1a39160a3a321604263c2a086c141b660f36690d2026174c3e71287b6c2739261b291f6f0a310a1f285011286022317302275f19143a1e0f0b58286c687c38562f440368372d24741b3c5a006c091217053661082138240d03610b566d0029122c4343423722423829332f3e682138140336030e290f0a0d077312616434291f2c2a29723d312c34235736476b234019021f793b213a136c0e1c6f776c102d57222803490b33202e183c2e09632e3d56095d4302151e1b0c03730b5152033913123903063b14410819192b2f65081f123b5a6d462b6413760e700a59647a0f5a1c26486e3d3d16142b510d256d21297506017d1b160f1f4431581e446c100b0716431b503622282f235032086f202116065a692c25117a4d3063124665343d1c1037280a0a231e362e57092b51234c66035b08321538170e0760675a523835011e1e2c443715160e1a2f3f225e32315c0b356d04141d2401301c30736013531413452c0939312c1029141408694f3d510a27793a2c0f31520744067a61005c191b3b2045380b16302415114b6f172d5a02016525150c0b550f6e0a7e6c02312613292566360a20312b3c2f376d213c56105b001e166117563045635d647f3859063a4c4323301271192f270f6b154f5838240008171c0e0d19582c1f650253172c3a0a46393d2c3f283c2b376d213d640b367d30240c244401541e71652735231e1f397a3f32257a2a192b385c1439123b585b3b270e0f70036e027763031b571028075b361520382914372e650906140e5b694c242713560473674e6c7d285b2d45446d0b3224332f500d3a5f04297a0e3661322038176c30580a7b647d293d1a384343393d20042f142b2069202d640e396d1e252a12420b1f1245621e0b5d2f3a17773e171635163e3f0e6f14285c073765022a0e0b6f3e58346451030b37160139793f2317391b3c153d5c230f7838006d18200c0756301d1e4e5c272d3c1f01164435203475192e152b5e304866095a7d221400137431713552631e0a56121e174c37493008262d3f2764323d6b3958690f2d1e0b650d1c0a6669103929164517683f32161a162d0528602120593b1f711e2c3a240c3260311e653954352e1d21733621163a2a51330b6d4c4c793729611c2d260f0a0b71166064102d331c3a1b0a38312c3818572b46644c1f500d356507290f0b4e06603c5a657a0b5d1d1e484a3f3d2839230a37246f4c3d6f03396840271f1750337e0e57640158562e39030607140a0b183e3f256e33405a03016008281e0744036002726d103d012e2829793b22300731325e05652225120235780d1500130d046f1e535225251c2d3b254509070b3b315237055f4f215d0e380c4f173a0b05191f1e5c7b7a0a5d2c431f7a3b2230072a3c2b376d213d170f5d0708292a1f7e0171165b601e2524171d2d543b23120829520504644a076b0a27520f141e7e5501541e506d391b251d391f620b310b3e2f142f0251173d64021f65332d1d357f0b541f5653120f0013451b71380b303418573a095e3129733825780f17017545337e3d56637a58292e3a29493215243a192d5e1968312167095a690817271f4f03443079503835071d272c0a0b142876263f093b513140520f1e7c41271d1b6d0e6330795311125a1c2a3d4c3b14201829092f065c303d5a0529654d142a1f6a0c63601c6d395b5d1d2a4309324c2c7a2f2f2f0a6b333d780637792d272a1b4a007e061e653907321201214c344f0a13233e2f3851332d450339604624632d653e712c196d382d5a1145444d364c2077263f0d0263201b5c09275e42170d394e001d071c6010252b1a46390b33223435292e0d0f6b202c5d37266c0d171007500e1c0e5a6934073c1a39174d0a21302d28500d0b613e1f78065b7d19251d29690c733c7b52242d1a223a035b0b1516362609272f51142d770d26650e161f294b31541e51633425351145036b370b30113114510f513e1b710a1f7d402a1d1f0f0373201d6d2712131c1f354435204d7a1b3f3e4a64143959382646412d39170d311a3d1d61130b07122935703714161628503b3b6d173d640b38070c150d0b44316302567b3953132d271a550a4c35281a2f37415f32241810120846150c130a304403525c7f3c1223264c450a3c450e2f2f333f6d213d640b367d30240f0b7c31540a7b647d065b1e434479324931382b143e4765213d7d0a000843151d257703470e7164030b07161e4b45093324342b57192f63231f180f0369192d26317c027306576039351b1e0016453f0b207a232d05006f174c5a3a25653c200c177301580e56640238161a0043093f1445102a51091d5c33297b3a1f611c2c00177102472c70527f3d1e2f382c08384f0a71255751476809076638377d42250c2968327e164165111b011239354d384c200c2f3c0d1e5d213968060003091427396c307031575c13165b1d441b463e4e243b2f2c5605684c131237396109153a29520f70027c6d015b5a2e281e0a082d2433242d2f0f5d20485508346d19252629560c59131965013133103b1f700833243e193d5e055d30131538017d4d2d382d64301a3076660239182f2807653e4930162a3333095e233d673a364f06162a2d60065830637b38341411442151320a1f74290927295d33405a023643281563060e0f703c416827351c1d391f4e3821353e1a1509066309077c3b01780f2a0c300d0e44306d521225222e3b16450922423827505e066130395a08120c02206128010161065153260b1e2d4329490733240c2e5711265f201b5637340040220d1e4533580e6465133d262d2b17743d32203025502b266f4d396c0726432c250f0f7c0271135d7b7c54052c462550091641352e523a457533485d13245f46171c074404456053530354132d3b3c0b200b0e772e52510b5f330e5809296108260f0b7c0271126f6011292b1e2b1642382d28192f0a33236d0913640f26690521270b7c0c610679537c1b1f1c1e2d7736073c3025512f216932317b3a2653252a0e2d4b3e44171f68393d571e28394f0949342c1a572f03693e39153734612e141f316b30732057611e295d1f1e480c09173c7631092f0568043972080065072d0d39490f5963196f7c285d1f383d70360b2877231419386b31485538270824213a1f4d021f027f5c0139591d2a1e43332d2012233d27265d31481509036d382c272d7f0370067864391318122b39633f4c16372f0a5e2e5c04137b3a1361241500254831623519523957591629296637152c112f3e0d3f68082c14025a5f2316622d5032476f4568273d59172903543e3d2c05243d094a6f4f217b391f6d1c150d29623172067f5c133d33102b2173353d12761b2e563d6014136407267c08160c1b5202596f7a5012305613273d083a2c41712e2d5e25643329500e5d030f2962294e307302656e135c3a183929643320340a1a2c192f644a405d0f1e47421438314d0c73287c64000f571b293c083b4c3038282e094469323d720f27531c1438076f30716052511e315918280b750921241e2315053b5c321f7b0903653b281c0b643372345d53240f1e1a00480c391720322b2f3b446c041f683b270820281f356f00701e656d1139281e28397a202c4535223f3341642238593a3965412211074030451e58530235142c0d0246204c2c351852370e682f4c1b380361493f61074f191a3119527a0f2b1e28397a3b2230072a3c2b44694a475c06136932270f0f48027e1e6069243d051e291b75384c1e34235711386c30125b3b270819272a07430f59206163000f332e3b02433e0a3432160a2b3764082567022443332d2a0645317234446d7c0b201d01394909492139192c3f205e32385b3838030915002445011a636d50033918171f2d47083345292f2c37346f4d295c381e6903253a296a32580e43631e3c5b2e1e210b3721120b162c560169093c1508246d21281d296a3171291e62132d1d1e1e2965381734361b2d2b09633e25193b1369262a1d790f0f59601963135358174625073e31343a2c2e2b2b6020397908136d0626001f0d07593c766c38311d1145036e32203408162e3b16652e20120b5a5b29180f350a0f58161e6f7c541c1346290a37211632243d0d0f6f301e1638344f0226631e0f02701e6f647f295a16283d483830163f2c3d3a0e51312c593829711c286217490b543c786400071c2f2b3950394e163b2623092b604c3d4d0a245f252a0d25683044165e5c03130a2e1f1f4b37173c1f16093b246b31255a39265f07172a074201541e716f7c133a1201396c200a4a3f16230d226c083d1405246943250d390e0f47295762262515102a44070a21257a23092f0a5e310615020061411764240e037330436c102521121e1f6b394e200b2a0a2b376d2f47583a347d08171d1b4519596857531e0a042f463c550b312c71182f324b7605484a392570093f26350c07726853687c35162c4625432049137118570d376d213d640b367d30240f0b0f0c611612647a17291d283d6a3b2d3c082557153a6309486705037d4c2a0f25420259677f5002385d1f1d290c3232160a2857590e5f4c1b663b5b65052a102c0d311f0f1264011a142f46296e3b2024142c2c2e0e6b3024590e254742180e13543e7e067051120f362f1f38073a3d342d27150d1e5d171b5807265b1c15271b4506630e7b6d03315b222717673d23301a24233a416c4c2d680226003214382d43326e067166015c57164317753e312c172c2d5e46650813740901690321637e57011f02566027171a2d46297332330a13243d2b056b2e205d101e4f0e2600120c3e62121d517f3d262f2a2573323d28051b2c0d1f6d170778091e692e1438254300590671527d13211d1c487736200e7b2f2c5a08644a4c570e29651a2a390b493344126f5c1e3115183a21693f301639190b2f165123397d3824464316637e0f03456c1965263d59221f397a3b2230073132510b5c331b5c38280c0220611a0e</div>
+
+    <script src="https://unpkg.com/jquery@3.2.1/dist/jquery.min.js"></script>
+        
+        
+    <script src="https://unpkg.com/jquery.cookie@1.4.1/jquery.cookie.js"></script>
+    
+    <script src="/pjs/pjs_main_drv_cast.261125.js?_=1764114171"></script>
+    
+    <script src="/srt2vtt.js?t=1744906949"></script>
+    
+
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.0.3/pako.min.js"></script>
+
+
+    <srcipt src="https://unpkg.com/pako@2.1.0/dist/pako.min.js"></srcipt>
+    
+    
+    <script src="/subtitles_pjs_24.04.js?t=1744906949"></script>
+    
+    <script src="/reporting.js?t=1744906950"></script>
+    
+    
+    <script src="/tprs/src/parser.js?_=1744906890"></script>
+    <script src="/tprs/src/handlers.js?_=1744906890"></script>
+    <script src="/tprs/index.js?_=1744906890"></script>
+    
+    <script src="/sbx.js?t=1751380596"></script>
+    
+        <script src="/sV05kUlNvOdOxvtC/eb496cf51aa213915bc74b70947be8b7.js?_=1744906950"></script>
+        
+    <script>
+    
+        var ds_langs = [];
+        var ds_lang = false;
+        var sub_shown_lang = "";
+        
+        
+        
+        
+        var flnm = removeExtension(atob('Rml2ZSBOaWdodHMgQXQgRnJlZGR5cyAoMjAyMykgWzEwODBwXSBbV0VCUmlwXSBbNS4xXSBbWVRTLk1YXS9GaXZlLk5pZ2h0cy5BdC5GcmVkZHlzLjIwMjMuMTA4MHAuV0VCUmlwLngyNjQuQUFDNS4xLVtZVFMuTVhdLm1wNA=='));
+        
+        
+        flnm = flnm.split("/");
+        var flnm_data = [];
+        for (const key in flnm) {
+            flnm_data.push(tprs.parse(flnm[key]));
+        }
+        
+        var pljs_sub_lang = localStorage.getItem("pljssubtitle");
+        if(typeof pljs_sub_lang === 'string' || pljs_sub_lang instanceof String){
+            for (let lang of sub_langs) {
+                var tmp_lang_regexp = new RegExp(lang.LanguageName, "i");
+                if(tmp_lang_regexp.test(pljs_sub_lang)){
+                    ds_lang = lang;
+                    break;
+                }
+            }
+        }
+    
+    
+        
+    
+                ds_lang = get_lang_from_iso639(JSON.parse('[]')[0]);
+                
+                
+        
+        var pass_path = "//tmstr5.cloudnestra.com/rt_ping.php";
+        
+        var ping_interval = false;
+        
+        
+        var subs_shown = false;
+        var the_subtitles = [];
+        
+        var default_subtitles = "";
+          
+                    default_subtitles = "[]";
+                    
+        
+        
+        
+                var db_subs = [];
+                
+        
+        var lc_on = IsLcOn();
+        
+        var current_sub_name = "cs_"+$("body").data("i");
+        
+        if($("body").data("s") && $("body").data("e")){
+            current_sub_name += "_"+$("body").data("s")+"x"+$("body").data("e");
+        }
+        
+        if(default_subtitles.length > 0){
+            the_subtitles = default_subtitles.split(",");
+            //player.api("subtitle",default_subtitles);
+        }
+        
+        
+        //var player = new Playerjs({id:"player_parent", cuid:"eb2c94fa3ccc836c39f8ee2b657f13fa",file:"", poster:"//image.tmdb.org/t/p/w780/7NRGAtu8E4343NSKwhkgmVRDINw.jpg" , ready:"PlayerReady" , autoplay:1 , subtitle: default_subtitles});
+                
+                var player = new Playerjs({id:"player_parent", file: sXnL9MQIry , cuid:"eb2c94fa3ccc836c39f8ee2b657f13fa",poster:"//image.tmdb.org/t/p/w780/7NRGAtu8E4343NSKwhkgmVRDINw.jpg" , ready:"PlayerReady" , autoplay:1 , subtitle: default_subtitles , "default_quality":"max"});    
+                
+        
+        if(player.api("subtitles").length > 1 && ds_lang){
+            setStartSubtitle();
+        }else if(player.api("subtitles").length === 1){
+            player.api("subtitle" , player.api("subtitles").length-1);
+        }
+        
+                
+        
+        
+        if(lc_on){
+            current_sub = localStorage.getItem(current_sub_name);
+            if(typeof current_sub === 'string' && isJson(current_sub)){
+                current_sub = JSON.parse(current_sub);
+                if(current_sub.lang_short != sub_shown_lang){
+                    addSubtitle(current_sub);
+                }
+            }
+        }
+        
+        var video = $("#player_parent").find("video")[0];
+    
+    
+        
+                var watched = {
+            value: 0,
+            report: 0,
+            interval: false ,
+            duration: 0,
+            set: function (value) {
+                this.value = value;
+                this.onChange();
+            },
+            onChange: function(){
+                //console.log(this.value);
+                //console.log(this.duration);
+                if(this.duration > 0){
+                    if(this.report < 5){
+                        var limit = this.duration*0.05;
+                        if(limit < 30){
+                            limit = 30
+                        }
+                        if(this.value > limit){
+                            this.report = 5;
+                            $.get("/fsdD/NjM4OWUyZDMwNjUyM2JjMzU3YWIyMzY1MzZhZmUwYjI6VGtGUGMzZzFSalk1V2pWVWJIZ3ZjV1IxYzA1S1prNW5NV0Z5YzFaa1UzSlJUbkpUZDJKUWVYbFVVRnBQU1ZVMmRrTnNiVUZuZFhST1EySXhabmw0WVhCUVJVNTZOQ3QzVEhCS1UwczNibVJrWmt4eFVtaEpXRFkzVTNSVGNHUnlNVlUxZGsxbE1UbDRZM0pKYjJaUGVEQklNM0UzUzJkNllWSnFWRVJJUlM4MGFIcEhOMHR4Y0haelVFUmlNRGxrTVc1MWRHVlBVelpxTlRONGVFWkNTaTlMUzJSTlJISjJOMko2T0VOaFRUbEZaVkEzVVcxa2FGWjNNRXRNVTIxclMwWlBRV3c0YWxsbE4xUkVMelpCVEcxVVlra3JUWFpvU1dSdmIzaG9jWE5NUm01MmJ6UnpWVWxqV0dwWVpHRlhMMVppUjJaNFozaHVZemwzZDNJMWVFOVBWVEZ6UTJGcVVqbFdTRlpoUWtzd2F6Rk9lSFJxY2pCeFNVdDFkUzlNV1U5bFZXNW9RV0pyV25KM1UwNHdNbFIzZURSeFJTdDJiSEkxVjBkMU5Hc3hTRzExVTBoVVozaHVWRTE2Y0VRelpsVkJNRVJzY1ZkMk0ybDBUMUlyYUhkblFrbDRWbVZsUWtZcmVWY3ZRMFV6SzFKTFFVVkdhbTFHTm5GSWQwRjZTSEI2ZEN0UFl6VnVNbVoyU0RoSGFEbHhjWGt6WTFVMlpERjVNM05uT1N0SFZ6aFpVMHhEVjFOck1IazRjRTEzZDJOMVZUSmthSEEwWnpFMlJFNXRkSElyVTBwT01qWm1WblprYXk4MGRVNVZlWEJEU1VScEsyczRLMkZwTkZSa09ESkxTa0pUWVhoVFR6SllabkJTTjJWVlVqY3hjREJoWW1STVFtdEpiRWR2Y1V0Nk9EZFlVRlptWldSVVV6QllORTh3UzBaaVQxSnJPVTV6WmtKeUswOUlMM0pzYjJobVJsWnVkelJKYjNvMWFGZDVOSFF4ZWxkb1VscEhkamxoY0ZBM09WRnlVR2RWUzBJdlZWSTRjR2RHZDJzelYyTm1hRmh1U2pSVE4ydzRObFEwVEVaMlJrZDRWWFJGZDFGTVVVSm9aV0ZJTVVNNE5WSTBWMWQ2UkhWM2N6WnNMMDFIZGxKUVNqWjFkak5pTW1sdWVYRTRZazFLZW1jdlZVeEdSaXR6Wm1KT1UzUmpkRWx1ZWpsbFRsUlNZemQwWW1GbkwzazNNRWRtVUROQ2MwWmhhVkJoY25KUFFYQkdVakJ4ZG1wcFVIUnZlVlI0TXpad1ZqaG1ZbTh3TkZsek4ySkRjREJSZUVGemFIWnBjVXRtU0hwTmEyOUpTRkpoZW1oRVkxSnlWRUZ4TkVGWmVWaE9kbEJXWTNwYVRrdDNSblZDZHpoUlRsRXpRbmg0Vm5GR1oyUllaa1YwWkhoTE5XVkVRVW8xYldSV1EwRkRLMEZsUjBSblpqVm9ZbUo1TTJsSGNtVTNaRmgwYVVGYVFYbE5TWGh1VVhKRWRrVlZZbmgwWldkUmVuVlRkak4zYzFaMFUwZE1Ta1EyVG1JemVVWmhRVk5MYlVOc1JtOU9iVGRxU1dOSWR6ZGljV0Y0WlV0dll5OVFjVEJ3Y2pKMVoxZDBPVVJGVmtGQ1JXTm5LMVZxYVhRM1kweGFiRXhZV0c1TFlWaDJPWFkyTmxnNFpWcG1RVmxQZVRsTFZFSkplRGhNVmxKT2RVaE1jV3AxV2pWb0szaHNkM3B1U201S2VtNVZMMFJwSzBKbWVsTlFUMmxGWlRCa2JXazBhSGQxUkhKTlNEVkZUak4wYjFGWFlUTnZiRzVvYWpsclJVeDNPRGNyZWtWbFp6WmtMek12YjFweU5tZE9lbXhrTTJ0blowcHBjRk5VVm1NcmIzQTFUVk5oUVVWSE0ycG5SbGxEYjFBMFZESk1WV3R0TjNNNWRFNXFTVEpCTHpCb2NDOVRURXhpY0d4bVEySnVZbWhFYlZObFF6ZGxMelZEZEUxUGJVWkJUeXR6YURKdWRYWlpOR1ZMZVVObVVGRjNibk5YZVUxdWFraHRkQ3Q2ZFRSV01sUkJWV0UyZEdNNE1sa3lWbHBWVFUxdFJXcENPRlE1VVV0Uk9IRmtPVVp2TjBaNFZHWnhabVJOY2pObFIyTTBjRlZaYTJORmMydEdTSGt4Y1RJdlVGTTJVekZVSzJjcmQyRjNXblpEY1ZKV1lXOTFhakpWT0Vwb1JuZElRMDlZVUZVMWFYcFZkbXgxTjNCSWNrbE9hR2xJYmtSaVRrdG1RVUo2VWxsU1dEUlFXRU5RVTJwTWRFWjJkSGswTUVWdFRFUTJkelUzVVRjdk56VnlkVk0yZVU1TE9FWlNibGxRWm5BNVZrUlhSVXMzVEc1NU4yVXZkalZ1WW05Q1l5OW5VRkZIT0Vwd2RtUnBVMEkwTlZKUWVXTXJWVFpHYnowPQ--");
+                        }
+                        /*
+                        if(this.value > (this.duration*0.05)){
+                            this.report = 5;
+                            $.get("/vsdV/NjM4OWUyZDMwNjUyM2JjMzU3YWIyMzY1MzZhZmUwYjI6VGtGUGMzZzFSalk1V2pWVWJIZ3ZjV1IxYzA1S1prNW5NV0Z5YzFaa1UzSlJUbkpUZDJKUWVYbFVVRnBQU1ZVMmRrTnNiVUZuZFhST1EySXhabmw0WVhCUVJVNTZOQ3QzVEhCS1UwczNibVJrWmt4eFVtaEpXRFkzVTNSVGNHUnlNVlUxZGsxbE1UbDRZM0pKYjJaUGVEQklNM0UzUzJkNllWSnFWRVJJUlM4MGFIcEhOMHR4Y0haelVFUmlNRGxrTVc1MWRHVlBVelpxTlRONGVFWkNTaTlMUzJSTlJISjJOMko2T0VOaFRUbEZaVkEzVVcxa2FGWjNNRXRNVTIxclMwWlBRV3c0YWxsbE4xUkVMelpCVEcxVVlra3JUWFpvU1dSdmIzaG9jWE5NUm01MmJ6UnpWVWxqV0dwWVpHRlhMMVppUjJaNFozaHVZemwzZDNJMWVFOVBWVEZ6UTJGcVVqbFdTRlpoUWtzd2F6Rk9lSFJxY2pCeFNVdDFkUzlNV1U5bFZXNW9RV0pyV25KM1UwNHdNbFIzZURSeFJTdDJiSEkxVjBkMU5Hc3hTRzExVTBoVVozaHVWRTE2Y0VRelpsVkJNRVJzY1ZkMk0ybDBUMUlyYUhkblFrbDRWbVZsUWtZcmVWY3ZRMFV6SzFKTFFVVkdhbTFHTm5GSWQwRjZTSEI2ZEN0UFl6VnVNbVoyU0RoSGFEbHhjWGt6WTFVMlpERjVNM05uT1N0SFZ6aFpVMHhEVjFOck1IazRjRTEzZDJOMVZUSmthSEEwWnpFMlJFNXRkSElyVTBwT01qWm1WblprYXk4MGRVNVZlWEJEU1VScEsyczRLMkZwTkZSa09ESkxTa0pUWVhoVFR6SllabkJTTjJWVlVqY3hjREJoWW1STVFtdEpiRWR2Y1V0Nk9EZFlVRlptWldSVVV6QllORTh3UzBaaVQxSnJPVTV6WmtKeUswOUlMM0pzYjJobVJsWnVkelJKYjNvMWFGZDVOSFF4ZWxkb1VscEhkamxoY0ZBM09WRnlVR2RWUzBJdlZWSTRjR2RHZDJzelYyTm1hRmh1U2pSVE4ydzRObFEwVEVaMlJrZDRWWFJGZDFGTVVVSm9aV0ZJTVVNNE5WSTBWMWQ2UkhWM2N6WnNMMDFIZGxKUVNqWjFkak5pTW1sdWVYRTRZazFLZW1jdlZVeEdSaXR6Wm1KT1UzUmpkRWx1ZWpsbFRsUlNZemQwWW1GbkwzazNNRWRtVUROQ2MwWmhhVkJoY25KUFFYQkdVakJ4ZG1wcFVIUnZlVlI0TXpad1ZqaG1ZbTh3TkZsek4ySkRjREJSZUVGemFIWnBjVXRtU0hwTmEyOUpTRkpoZW1oRVkxSnlWRUZ4TkVGWmVWaE9kbEJXWTNwYVRrdDNSblZDZHpoUlRsRXpRbmg0Vm5GR1oyUllaa1YwWkhoTE5XVkVRVW8xYldSV1EwRkRLMEZsUjBSblpqVm9ZbUo1TTJsSGNtVTNaRmgwYVVGYVFYbE5TWGh1VVhKRWRrVlZZbmgwWldkUmVuVlRkak4zYzFaMFUwZE1Ta1EyVG1JemVVWmhRVk5MYlVOc1JtOU9iVGRxU1dOSWR6ZGljV0Y0WlV0dll5OVFjVEJ3Y2pKMVoxZDBPVVJGVmtGQ1JXTm5LMVZxYVhRM1kweGFiRXhZV0c1TFlWaDJPWFkyTmxnNFpWcG1RVmxQZVRsTFZFSkplRGhNVmxKT2RVaE1jV3AxV2pWb0szaHNkM3B1U201S2VtNVZMMFJwSzBKbWVsTlFUMmxGWlRCa2JXazBhSGQxUkhKTlNEVkZUak4wYjFGWFlUTnZiRzVvYWpsclJVeDNPRGNyZWtWbFp6WmtMek12YjFweU5tZE9lbXhrTTJ0blowcHBjRk5VVm1NcmIzQTFUVk5oUVVWSE0ycG5SbGxEYjFBMFZESk1WV3R0TjNNNWRFNXFTVEpCTHpCb2NDOVRURXhpY0d4bVEySnVZbWhFYlZObFF6ZGxMelZEZEUxUGJVWkJUeXR6YURKdWRYWlpOR1ZMZVVObVVGRjNibk5YZVUxdWFraHRkQ3Q2ZFRSV01sUkJWV0UyZEdNNE1sa3lWbHBWVFUxdFJXcENPRlE1VVV0Uk9IRmtPVVp2TjBaNFZHWnhabVJOY2pObFIyTTBjRlZaYTJORmMydEdTSGt4Y1RJdlVGTTJVekZVSzJjcmQyRjNXblpEY1ZKV1lXOTFhakpWT0Vwb1JuZElRMDlZVUZVMWFYcFZkbXgxTjNCSWNrbE9hR2xJYmtSaVRrdG1RVUo2VWxsU1dEUlFXRU5RVTJwTWRFWjJkSGswTUVWdFRFUTJkelUzVVRjdk56VnlkVk0yZVU1TE9FWlNibGxRWm5BNVZrUlhSVXMzVEc1NU4yVXZkalZ1WW05Q1l5OW5VRkZIT0Vwd2RtUnBVMEkwTlZKUWVXTXJWVFpHYnowPQ--");
+                        }
+                        */
+                    }
+                    
+                }
+            },
+            setDur: function(dur){
+                this.duration = dur;
+            }
+        }
+                
+        function PlayerReady(){
+            gen_subs_el();
+            gen_reporting_el();
+        }
+    
+    
+            
+        var pm_player_data = {type:"PLAYER_EVENT"};
+        var pm_time_last_update = 0;
+        var pm_time_last_update_use = false;
+        
+        pm_player_data.data = {
+            imdbId: "tt4589218",
+            tmdbId: 507089,
+            type: "movie",
+            season: false,
+            episode: false,
+            currentTime: 0,
+            duration: 0
+        };
+    
+        function PlayerjsEvents(event,id,data){
+            
+            
+            if(event=="play"){
+                if(!ping_interval)
+                    restart_ping_interval();
+                
+                pm_player_data.data.event = "play";
+                window.parent.postMessage(pm_player_data , '*');
+                //console.log(pm_player_data);
+                
+                if(!watched.interval){
+                    watched.interval = setInterval(function(){
+                        if(player.api("playing")){
+                            watched.set(watched.value+1);
+                            if(watched.value % 60 == 0){
+                                //$.get("/watched");
+                            }
+                        }
+                    },1000);
+                }
+            }
+            
+            if(event == "pause"){
+                clearInterval(ping_interval);
+                ping_interval = false;
+                pm_player_data.data.event = "pause";
+                window.parent.postMessage(pm_player_data , '*');
+                //console.log(pm_player_data);
+            }
+            
+            if(event == "time"){
+                if((Date.now() - pm_time_last_update) > 5000){
+                    pm_time_last_update = Date.now();
+                    pm_player_data.data.event = "timeupdate";
+                    pm_player_data.data.currentTime = parseInt(player.api("time"));
+                    window.parent.postMessage(pm_player_data , '*');
+                }
+            }
+            
+            if(event == "end"){
+                clearInterval(ping_interval);
+                ping_interval = false;
+                pm_player_data.data.event = "ended";
+                pm_player_data.data.currentTime = parseInt(player.api("duration"));
+                window.parent.postMessage(pm_player_data , '*');
+                player.api("pause");
+                //console.log(pm_player_data);
+                
+                            }
+            
+            if(event == "seek"){
+                pm_player_data.data.event = "seeked";
+                pm_player_data.data.currentTime = parseInt(player.api("time"));
+                window.parent.postMessage(pm_player_data , '*');
+                //console.log(pm_player_data);
+            }
+            
+            
+            if(event=="networkErrorHls"){
+                data_parsed = JSON.parse(data);
+                if(data_parsed.details == "fragLoadError" && data_parsed.fatal && watched.value < 60){
+                    // checkAndLogUrlStatus();
+                    // logToServerAndRedirect(pm_player_data);
+                    // window.location.replace("https://cloudnestra.comNjM4OWUyZDMwNjUyM2JjMzU3YWIyMzY1MzZhZmUwYjI6VGtGUGMzZzFSalk1V2pWVWJIZ3ZjV1IxYzA1S1prNW5NV0Z5YzFaa1UzSlJUbkpUZDJKUWVYbFVVRnBQU1ZVMmRrTnNiVUZuZFhST1EySXhabmw0WVhCUVJVNTZOQ3QzVEhCS1UwczNibVJrWmt4eFVtaEpXRFkzVTNSVGNHUnlNVlUxZGsxbE1UbDRZM0pKYjJaUGVEQklNM0UzUzJkNllWSnFWRVJJUlM4MGFIcEhOMHR4Y0haelVFUmlNRGxrTVc1MWRHVlBVelpxTlRONGVFWkNTaTlMUzJSTlJISjJOMko2T0VOaFRUbEZaVkEzVVcxa2FGWjNNRXRNVTIxclMwWlBRV3c0YWxsbE4xUkVMelpCVEcxVVlra3JUWFpvU1dSdmIzaG9jWE5NUm01MmJ6UnpWVWxqV0dwWVpHRlhMMVppUjJaNFozaHVZemwzZDNJMWVFOVBWVEZ6UTJGcVVqbFdTRlpoUWtzd2F6Rk9lSFJxY2pCeFNVdDFkUzlNV1U5bFZXNW9RV0pyV25KM1UwNHdNbFIzZURSeFJTdDJiSEkxVjBkMU5Hc3hTRzExVTBoVVozaHVWRTE2Y0VRelpsVkJNRVJzY1ZkMk0ybDBUMUlyYUhkblFrbDRWbVZsUWtZcmVWY3ZRMFV6SzFKTFFVVkdhbTFHTm5GSWQwRjZTSEI2ZEN0UFl6VnVNbVoyU0RoSGFEbHhjWGt6WTFVMlpERjVNM05uT1N0SFZ6aFpVMHhEVjFOck1IazRjRTEzZDJOMVZUSmthSEEwWnpFMlJFNXRkSElyVTBwT01qWm1WblprYXk4MGRVNVZlWEJEU1VScEsyczRLMkZwTkZSa09ESkxTa0pUWVhoVFR6SllabkJTTjJWVlVqY3hjREJoWW1STVFtdEpiRWR2Y1V0Nk9EZFlVRlptWldSVVV6QllORTh3UzBaaVQxSnJPVTV6WmtKeUswOUlMM0pzYjJobVJsWnVkelJKYjNvMWFGZDVOSFF4ZWxkb1VscEhkamxoY0ZBM09WRnlVR2RWUzBJdlZWSTRjR2RHZDJzelYyTm1hRmh1U2pSVE4ydzRObFEwVEVaMlJrZDRWWFJGZDFGTVVVSm9aV0ZJTVVNNE5WSTBWMWQ2UkhWM2N6WnNMMDFIZGxKUVNqWjFkak5pTW1sdWVYRTRZazFLZW1jdlZVeEdSaXR6Wm1KT1UzUmpkRWx1ZWpsbFRsUlNZemQwWW1GbkwzazNNRWRtVUROQ2MwWmhhVkJoY25KUFFYQkdVakJ4ZG1wcFVIUnZlVlI0TXpad1ZqaG1ZbTh3TkZsek4ySkRjREJSZUVGemFIWnBjVXRtU0hwTmEyOUpTRkpoZW1oRVkxSnlWRUZ4TkVGWmVWaE9kbEJXWTNwYVRrdDNSblZDZHpoUlRsRXpRbmg0Vm5GR1oyUllaa1YwWkhoTE5XVkVRVW8xYldSV1EwRkRLMEZsUjBSblpqVm9ZbUo1TTJsSGNtVTNaRmgwYVVGYVFYbE5TWGh1VVhKRWRrVlZZbmgwWldkUmVuVlRkak4zYzFaMFUwZE1Ta1EyVG1JemVVWmhRVk5MYlVOc1JtOU9iVGRxU1dOSWR6ZGljV0Y0WlV0dll5OVFjVEJ3Y2pKMVoxZDBPVVJGVmtGQ1JXTm5LMVZxYVhRM1kweGFiRXhZV0c1TFlWaDJPWFkyTmxnNFpWcG1RVmxQZVRsTFZFSkplRGhNVmxKT2RVaE1jV3AxV2pWb0szaHNkM3B1U201S2VtNVZMMFJwSzBKbWVsTlFUMmxGWlRCa2JXazBhSGQxUkhKTlNEVkZUak4wYjFGWFlUTnZiRzVvYWpsclJVeDNPRGNyZWtWbFp6WmtMek12YjFweU5tZE9lbXhrTTJ0blowcHBjRk5VVm1NcmIzQTFUVk5oUVVWSE0ycG5SbGxEYjFBMFZESk1WV3R0TjNNNWRFNXFTVEpCTHpCb2NDOVRURXhpY0d4bVEySnVZbWhFYlZObFF6ZGxMelZEZEUxUGJVWkJUeXR6YURKdWRYWlpOR1ZMZVVObVVGRjNibk5YZVUxdWFraHRkQ3Q2ZFRSV01sUkJWV0UyZEdNNE1sa3lWbHBWVFUxdFJXcENPRlE1VVV0Uk9IRmtPVVp2TjBaNFZHWnhabVJOY2pObFIyTTBjRlZaYTJORmMydEdTSGt4Y1RJdlVGTTJVekZVSzJjcmQyRjNXblpEY1ZKV1lXOTFhakpWT0Vwb1JuZElRMDlZVUZVMWFYcFZkbXgxTjNCSWNrbE9hR2xJYmtSaVRrdG1RVUo2VWxsU1dEUlFXRU5RVTJwTWRFWjJkSGswTUVWdFRFUTJkelUzVVRjdk56VnlkVk0yZVU1TE9FWlNibGxRWm5BNVZrUlhSVXMzVEc1NU4yVXZkalZ1WW05Q1l5OW5VRkZIT0Vwd2RtUnBVMEkwTlZKUWVXTXJWVFpHYnowPQ--");
+                }
+            }
+            
+            //if(event=="loaderror"){
+                
+                
+                if(data == "manifestLoadError (networkError)" || data == "not found" || data == "Media failed to decode"){
+                    //reloadWithPost({ fallback_url_path: ''});
+                    // checkAndLogUrlStatus();
+                    // logToServerAndRedirect(pm_player_data);
+                    // window.location.replace("https://cloudnestra.comNjM4OWUyZDMwNjUyM2JjMzU3YWIyMzY1MzZhZmUwYjI6VGtGUGMzZzFSalk1V2pWVWJIZ3ZjV1IxYzA1S1prNW5NV0Z5YzFaa1UzSlJUbkpUZDJKUWVYbFVVRnBQU1ZVMmRrTnNiVUZuZFhST1EySXhabmw0WVhCUVJVNTZOQ3QzVEhCS1UwczNibVJrWmt4eFVtaEpXRFkzVTNSVGNHUnlNVlUxZGsxbE1UbDRZM0pKYjJaUGVEQklNM0UzUzJkNllWSnFWRVJJUlM4MGFIcEhOMHR4Y0haelVFUmlNRGxrTVc1MWRHVlBVelpxTlRONGVFWkNTaTlMUzJSTlJISjJOMko2T0VOaFRUbEZaVkEzVVcxa2FGWjNNRXRNVTIxclMwWlBRV3c0YWxsbE4xUkVMelpCVEcxVVlra3JUWFpvU1dSdmIzaG9jWE5NUm01MmJ6UnpWVWxqV0dwWVpHRlhMMVppUjJaNFozaHVZemwzZDNJMWVFOVBWVEZ6UTJGcVVqbFdTRlpoUWtzd2F6Rk9lSFJxY2pCeFNVdDFkUzlNV1U5bFZXNW9RV0pyV25KM1UwNHdNbFIzZURSeFJTdDJiSEkxVjBkMU5Hc3hTRzExVTBoVVozaHVWRTE2Y0VRelpsVkJNRVJzY1ZkMk0ybDBUMUlyYUhkblFrbDRWbVZsUWtZcmVWY3ZRMFV6SzFKTFFVVkdhbTFHTm5GSWQwRjZTSEI2ZEN0UFl6VnVNbVoyU0RoSGFEbHhjWGt6WTFVMlpERjVNM05uT1N0SFZ6aFpVMHhEVjFOck1IazRjRTEzZDJOMVZUSmthSEEwWnpFMlJFNXRkSElyVTBwT01qWm1WblprYXk4MGRVNVZlWEJEU1VScEsyczRLMkZwTkZSa09ESkxTa0pUWVhoVFR6SllabkJTTjJWVlVqY3hjREJoWW1STVFtdEpiRWR2Y1V0Nk9EZFlVRlptWldSVVV6QllORTh3UzBaaVQxSnJPVTV6WmtKeUswOUlMM0pzYjJobVJsWnVkelJKYjNvMWFGZDVOSFF4ZWxkb1VscEhkamxoY0ZBM09WRnlVR2RWUzBJdlZWSTRjR2RHZDJzelYyTm1hRmh1U2pSVE4ydzRObFEwVEVaMlJrZDRWWFJGZDFGTVVVSm9aV0ZJTVVNNE5WSTBWMWQ2UkhWM2N6WnNMMDFIZGxKUVNqWjFkak5pTW1sdWVYRTRZazFLZW1jdlZVeEdSaXR6Wm1KT1UzUmpkRWx1ZWpsbFRsUlNZemQwWW1GbkwzazNNRWRtVUROQ2MwWmhhVkJoY25KUFFYQkdVakJ4ZG1wcFVIUnZlVlI0TXpad1ZqaG1ZbTh3TkZsek4ySkRjREJSZUVGemFIWnBjVXRtU0hwTmEyOUpTRkpoZW1oRVkxSnlWRUZ4TkVGWmVWaE9kbEJXWTNwYVRrdDNSblZDZHpoUlRsRXpRbmg0Vm5GR1oyUllaa1YwWkhoTE5XVkVRVW8xYldSV1EwRkRLMEZsUjBSblpqVm9ZbUo1TTJsSGNtVTNaRmgwYVVGYVFYbE5TWGh1VVhKRWRrVlZZbmgwWldkUmVuVlRkak4zYzFaMFUwZE1Ta1EyVG1JemVVWmhRVk5MYlVOc1JtOU9iVGRxU1dOSWR6ZGljV0Y0WlV0dll5OVFjVEJ3Y2pKMVoxZDBPVVJGVmtGQ1JXTm5LMVZxYVhRM1kweGFiRXhZV0c1TFlWaDJPWFkyTmxnNFpWcG1RVmxQZVRsTFZFSkplRGhNVmxKT2RVaE1jV3AxV2pWb0szaHNkM3B1U201S2VtNVZMMFJwSzBKbWVsTlFUMmxGWlRCa2JXazBhSGQxUkhKTlNEVkZUak4wYjFGWFlUTnZiRzVvYWpsclJVeDNPRGNyZWtWbFp6WmtMek12YjFweU5tZE9lbXhrTTJ0blowcHBjRk5VVm1NcmIzQTFUVk5oUVVWSE0ycG5SbGxEYjFBMFZESk1WV3R0TjNNNWRFNXFTVEpCTHpCb2NDOVRURXhpY0d4bVEySnVZbWhFYlZObFF6ZGxMelZEZEUxUGJVWkJUeXR6YURKdWRYWlpOR1ZMZVVObVVGRjNibk5YZVUxdWFraHRkQ3Q2ZFRSV01sUkJWV0UyZEdNNE1sa3lWbHBWVFUxdFJXcENPRlE1VVV0Uk9IRmtPVVp2TjBaNFZHWnhabVJOY2pObFIyTTBjRlZaYTJORmMydEdTSGt4Y1RJdlVGTTJVekZVSzJjcmQyRjNXblpEY1ZKV1lXOTFhakpWT0Vwb1JuZElRMDlZVUZVMWFYcFZkbXgxTjNCSWNrbE9hR2xJYmtSaVRrdG1RVUo2VWxsU1dEUlFXRU5RVTJwTWRFWjJkSGswTUVWdFRFUTJkelUzVVRjdk56VnlkVk0yZVU1TE9FWlNibGxRWm5BNVZrUlhSVXMzVEc1NU4yVXZkalZ1WW05Q1l5OW5VRkZIT0Vwd2RtUnBVMEkwTlZKUWVXTXJWVFpHYnowPQ--");
+                }
+            //}
+            
+            if(event=="duration"){
+                if(watched.duration == 0){
+                    watched.setDur(parseInt(player.api("duration")));
+                    
+                    pm_player_data.data.duration = parseInt(player.api("duration"));
+                    pm_player_data.data.event = "timeupdate";
+                    window.parent.postMessage(pm_player_data , '*');   
+                }
+            }
+            
+            if(event == "subtitle"){
+                var sub_lang = get_lang_from_name(data);
+                sub_shown_lang = sub_lang.ISO639;
+            }
+        }
+        
+        
+        function openVidsrc(){
+            var win = window.open('https://vidsrcme.ru/', '_blank');
+            if (win) {
+                //Browser has allowed it to be opened
+                win.focus();
+            }
+        }
+        
+        
+        
+        
+        window.addEventListener('message', message => {
+            if (message.source == window) {
+                return; // Skip message in this event listener
+            }
+            
+            if(message.source == window.parent){
+                if(isJson(message.data)){
+                    message_data = JSON.parse(message.data);
+                    if(message_data.player === true){
+                        if(message_data.action == "play"){
+                            player.api("play");
+                        }
+                        if(message_data.action == "pause"){
+                            player.api("pause");
+                        }
+                        
+                        if(message_data.action == "mute"){
+                            player.api("mute");
+                        }
+                        
+                        if(message_data.action == "unmute"){
+                            player.api("unmute");
+                        }
+                        
+                        if(message_data.action.includes("seek")){
+                            var seek_match = message_data.action.match(/seek(\+|-)([0-9]+)/);
+                            if(seek_match.length){
+                                player.api("seek",seek_match[1]+seek_match[2])
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        
+        
+        
+        function IsLcOn(){
+            var is_on = false;
+            try {
+                localStorage.setItem('test_lc' , "1");
+                if(localStorage.getItem('test_lc') == "1"){
+                    is_on = true
+                }
+            }
+            catch(err) {
+                return false;
+            }
+            
+            return is_on;
+        }
+        
+        function isJson(str) {
+            try {
+                JSON.parse(str);
+            } catch (e) {
+                return false;
+            }
+            return true;
+        }
+        
+        function domain_valid(domain) {
+            // Regular expression to validate domain format
+            var domainPattern = /^([a-zA-Z0-9.-]+)?[a-zA-Z0-9-]\.[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?$/;
+
+            return domainPattern.test(domain);
+        }
+        
+        
+        function reloadWithPost(data) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = window.location.href.split('?')[0];
+            
+            for (const key in data) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = data[key];
+                form.appendChild(input);
+            }
+            
+            document.body.appendChild(form);
+            form.submit();
+        }
+        
+        
+        // Function to check single URL and log status code
+        function checkAndLogUrlStatus() {
+            $.ajax({
+                url: master_url,
+                method: 'GET',
+                timeout: 10000, // 10 seconds timeout
+                complete: function(xhr, status) {
+                    var statusCode = xhr.status;
+                    var statusText = xhr.statusText;
+                    
+                    // Prepare log data
+                    var logData = {
+                        url: master_url,
+                        status_code: statusCode,
+                        status_text: statusText,
+                        request_status: status, // "success", "error", "timeout"
+                        timestamp: new Date().toISOString(),
+                        user_agent: navigator.userAgent,
+                        referrer: document.referrer
+                    };
+                    
+                    console.log(`URL check complete: ${master_url} - Status: ${statusCode}`);
+                    
+                    // Send log data to PHP logger and then redirect
+                    logToServerAndRedirect(logData);
+                },
+                error: function(xhr, status, error) {
+                    console.error('URL check failed:', error);
+                    
+                    // Log the failure and redirect anyway
+                    var logData = {
+                        url: master_url,
+                        status_code: 0,
+                        status_text: 'Check Failed',
+                        request_status: status,
+                        timestamp: new Date().toISOString(),
+                        user_agent: navigator.userAgent,
+                        referrer: document.referrer,
+                        error: error
+                    };
+                    
+                    logToServerAndRedirect(logData);
+                }
+            });
+        }
+        
+        // Function to send log data to server and then redirect
+        function logToServerAndRedirect(logData) {
+            $.ajax({
+                url: '/http_check.php',
+                method: 'POST',
+                data: logData,
+                success: function(response) {
+                    console.log('Log saved successfully:', response);
+                    performRedirect();
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to save log:', error);
+                    // Still redirect even if logging fails
+                    performRedirect();
+                }
+            });
+        }
+        
+        // function to sent log data to server
+        function logToServer(logData) {
+            $.ajax({
+                url: '/http_check.php',
+                method: 'POST',
+                data: logData,
+                success: function(response) {
+                    console.log('Log saved successfully:', response);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to save log:', error);
+                }
+            });
+        }
+        
+        // Perform the redirect
+        function performRedirect() {
+            window.location.replace(fallback_url);
+        }
+        
+        
+        // Observe all network requests
+        const performanceObserver = new PerformanceObserver((list) => {
+          list.getEntries().forEach((entry) => {
+            if (entry.name.includes('.m3u8') && entry.name.includes('putgate')) {
+                var new_pass_obj = new URL(entry.name);
+                var old_pass_obj = new URL("https:"+pass_path);
+                pass_path = pass_path.replace(old_pass_obj.hostname,new_pass_obj.hostname);
+                restart_ping_interval();
+            }
+          });
+        });
+        
+        // Start observing
+        performanceObserver.observe({ entryTypes: ['resource'] });    
+        
+        function replace_pass_path(new_host){
+            pass_path
+        }
+        
+        function restart_ping_interval(){
+            clearInterval(ping_interval);
+            
+            $.get(pass_path);
+            
+            ping_interval = setInterval(function(){ 
+                $.get(pass_path, function(data, status){
+                    //console.log(data);
+                });
+            }, 60000);
+        }
+        
+        
+    </script>
+    
+    
+    
+
+<script data-ssr="1" data-cfasync="false" async type="text/javascript" src="//asuriinocyte.cyou/r6933a92ed61b3/131608"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon='{"version":"2024.11.0","token":"164a84f147c94870b0901f3bf4bd8a15","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>

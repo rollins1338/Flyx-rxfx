@@ -1,0 +1,28 @@
+{
+  "contentId": "c4a7-KGm",
+  "episodes": {
+    "1": {
+      "1": {
+        "num": "1",
+        "eid": "cYu_-KCi",
+        "token": null,
+        "title": "Movie 1"
+      }
+    }
+  },
+  "servers": {
+    "default": {
+      "1": {
+        "sid": "3",
+        "lid": "doO486al6Q",
+        "name": "Server 1"
+      },
+      "2": {
+        "sid": "2",
+        "lid": "doO486al6A",
+        "name": "Server 2"
+      }
+    }
+  },
+  "embedUrl": "https://rapidairmax.site/e/2MvvbnGoWS2JcOLzFLpK7RXpCQ"
+}

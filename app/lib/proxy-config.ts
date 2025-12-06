@@ -1,14 +1,14 @@
 /**
  * Proxy Configuration
  * 
- * Provides proxy URLs that can be configured to use either:
- * - Vercel Edge (default, uses /api/* routes)
- * - Cloudflare Workers (set NEXT_PUBLIC_CF_*_PROXY_URL env vars)
+ * REQUIRES Cloudflare Workers for stream proxying.
+ * Set NEXT_PUBLIC_CF_STREAM_PROXY_URL and NEXT_PUBLIC_CF_TV_PROXY_URL env vars.
  * 
- * Cloudflare Workers are much cheaper for bandwidth-heavy operations.
+ * No fallback to Vercel Edge - Cloudflare Workers are required for proper
+ * stream proxying with correct headers and CORS handling.
  */
 
-// Stream proxy for HLS streams (2embed, etc.)
+// Stream proxy for HLS streams (2embed, moviesapi, etc.)
 export function getStreamProxyUrl(
   url: string,
   source: string = '2embed',
@@ -16,64 +16,46 @@ export function getStreamProxyUrl(
 ): string {
   const cfProxyUrl = process.env.NEXT_PUBLIC_CF_STREAM_PROXY_URL;
   
-  if (cfProxyUrl) {
-    // Use Cloudflare Worker
-    return `${cfProxyUrl}/?url=${encodeURIComponent(url)}&source=${source}&referer=${encodeURIComponent(referer)}`;
+  if (!cfProxyUrl) {
+    console.error('[proxy-config] NEXT_PUBLIC_CF_STREAM_PROXY_URL is not set! Cloudflare Worker is required.');
+    throw new Error('Stream proxy not configured. Set NEXT_PUBLIC_CF_STREAM_PROXY_URL environment variable.');
   }
   
-  // Fallback to Vercel Edge
-  return `/api/stream-proxy?url=${encodeURIComponent(url)}&source=${source}&referer=${encodeURIComponent(referer)}`;
+  return `${cfProxyUrl}/?url=${encodeURIComponent(url)}&source=${source}&referer=${encodeURIComponent(referer)}`;
 }
 
 // TV proxy base URL for DLHD live streams
 export function getTvProxyBaseUrl(): string {
   const cfProxyUrl = process.env.NEXT_PUBLIC_CF_TV_PROXY_URL;
   
-  if (cfProxyUrl) {
-    return cfProxyUrl;
+  if (!cfProxyUrl) {
+    console.error('[proxy-config] NEXT_PUBLIC_CF_TV_PROXY_URL is not set! Cloudflare Worker is required.');
+    throw new Error('TV proxy not configured. Set NEXT_PUBLIC_CF_TV_PROXY_URL environment variable.');
   }
   
-  // Fallback to Vercel Edge - return empty string to use relative URLs
-  return '';
+  return cfProxyUrl;
 }
 
 // Get TV playlist URL
 export function getTvPlaylistUrl(channel: string): string {
   const baseUrl = getTvProxyBaseUrl();
-  
-  if (baseUrl) {
-    // Cloudflare Worker
-    return `${baseUrl}/?channel=${channel}`;
-  }
-  
-  // Vercel Edge
-  return `/api/dlhd-proxy?channel=${channel}`;
+  return `${baseUrl}/?channel=${channel}`;
 }
 
 // Get TV key proxy URL
 export function getTvKeyProxyUrl(keyUrl: string): string {
   const baseUrl = getTvProxyBaseUrl();
-  
-  if (baseUrl) {
-    return `${baseUrl}/key?url=${encodeURIComponent(keyUrl)}`;
-  }
-  
-  return `/api/dlhd-proxy/key?url=${encodeURIComponent(keyUrl)}`;
+  return `${baseUrl}/key?url=${encodeURIComponent(keyUrl)}`;
 }
 
 // Get TV segment proxy URL
 export function getTvSegmentProxyUrl(segmentUrl: string): string {
   const baseUrl = getTvProxyBaseUrl();
-  
-  if (baseUrl) {
-    return `${baseUrl}/segment?url=${encodeURIComponent(segmentUrl)}`;
-  }
-  
-  return `/api/livetv/segment?url=${encodeURIComponent(segmentUrl)}`;
+  return `${baseUrl}/segment?url=${encodeURIComponent(segmentUrl)}`;
 }
 
-// Check if using Cloudflare Workers
-export function isUsingCloudflareProxy(): {
+// Check if Cloudflare Workers are configured (required)
+export function isCloudflareProxyConfigured(): {
   stream: boolean;
   tv: boolean;
 } {

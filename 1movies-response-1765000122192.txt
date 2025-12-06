@@ -1,0 +1,3 @@
+URL: https://1movies.bz/ajax/links/list?eid=cYu_-KCi&_=VU7EzW-r3IptzPzkwFi43K6fMXG1W-twXRnEcr7jYlM2mi6oJS6lmg
+
+{"status":200,"result":"<span>If the current server is not working, please try switching to other servers.</span><div class=\"super-wnav\"> <div class=\"server wnav-item\" data-sid=\"3\" data-lid=\"doO486al6Q\"> <span>Server 1</span> </div> <div class=\"server wnav-item\" data-sid=\"2\" data-lid=\"doO486al6A\"> <span>Server 2</span> </div> </div>"}
