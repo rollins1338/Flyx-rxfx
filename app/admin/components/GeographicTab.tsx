@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import GeographicHeatmap from './GeographicHeatmap';
+import WorldMap from './WorldMap';
 
 interface GeographicData {
     country: string;
@@ -49,7 +49,7 @@ export default function GeographicTab() {
 
     return (
         <div>
-            <GeographicHeatmap data={data} />
+            <WorldMap data={data} />
         </div>
     );
 }
