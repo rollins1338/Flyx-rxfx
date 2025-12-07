@@ -217,7 +217,8 @@ export default function LiveActivityTracker() {
 
       {stats && (
         <>
-          {/* Summary Stats */}
+          {/* Summary Stats - Note: These are activity counts, not unique users */}
+          {/* For unique user counts, use the unified stats from StatsContext */}
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
@@ -238,7 +239,7 @@ export default function LiveActivityTracker() {
                 <div style={{ fontSize: '1.75rem', fontWeight: '700', color: '#f8fafc' }}>
                   {stats.totalActive}
                 </div>
-                <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Active Users</div>
+                <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Active Sessions</div>
               </div>
             </div>
 

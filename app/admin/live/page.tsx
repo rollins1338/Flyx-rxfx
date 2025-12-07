@@ -153,14 +153,14 @@ export default function AdminLivePage() {
         </div>
       </div>
 
-      {/* Live Stats Cards - Using unified stats for consistency */}
+      {/* Live Stats Cards - Using unified stats for UNIQUE user counts */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-        <StatCard title="Active Now" value={unifiedStats.liveUsers || stats?.totalActive || 0} icon="👥" color="#10b981" pulse />
-        <StatCard title="Watching VOD" value={unifiedStats.liveWatching || stats?.watching || 0} icon="▶️" color="#7877c6" />
-        <StatCard title="Live TV" value={unifiedStats.liveTVViewers || stats?.livetv || 0} icon="📺" color="#f59e0b" />
-        <StatCard title="Browsing" value={unifiedStats.liveBrowsing || stats?.browsing || 0} icon="🔍" color="#3b82f6" />
+        <StatCard title="Active Now" value={unifiedStats.liveUsers} icon="👥" color="#10b981" pulse />
+        <StatCard title="Watching VOD" value={unifiedStats.liveWatching} icon="▶️" color="#7877c6" />
+        <StatCard title="Live TV" value={unifiedStats.liveTVViewers} icon="📺" color="#f59e0b" />
+        <StatCard title="Browsing" value={unifiedStats.liveBrowsing} icon="🔍" color="#3b82f6" />
         <StatCard title="Peak Today" value={peakToday} icon="📈" color="#ec4899" />
-        <StatCard title="Countries" value={unifiedStats.topCountries.length || Object.keys(stats?.byCountry || {}).length} icon="🌍" color="#8b5cf6" />
+        <StatCard title="Countries" value={unifiedStats.topCountries.length} icon="🌍" color="#8b5cf6" />
       </div>
 
       {/* Mini Activity Chart */}

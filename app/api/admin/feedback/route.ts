@@ -1,25 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { neon } from '@neondatabase/serverless';
 import { cookies } from 'next/headers';
+import jwt from 'jsonwebtoken';
 
 const sql = neon(process.env.DATABASE_URL || '');
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const ADMIN_COOKIE = 'admin_token';
 
-// Verify admin authentication
+// Verify admin authentication using JWT (matches /api/admin/auth)
 async function verifyAdmin() {
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('admin_session')?.value;
+  const token = cookieStore.get(ADMIN_COOKIE)?.value;
   
-  if (!sessionId) return null;
+  if (!token) return null;
   
   try {
-    const result = await sql`
-      SELECT a.id, a.username, a.role 
-      FROM admin_sessions s
-      JOIN admins a ON s.admin_id = a.id
-      WHERE s.session_id = ${sessionId}
-      AND s.expires_at > NOW()
-    `;
-    return result[0] || null;
+    const decoded = jwt.verify(token, JWT_SECRET) as { id: number; username: string };
+    return decoded;
   } catch {
     return null;
   }

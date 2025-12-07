@@ -55,14 +55,52 @@ const metrics = {
   startTime: Date.now(),
 };
 
+// CORS headers for all responses
+function getCorsHeaders(origin?: string | null): Record<string, string> {
+  const ALLOWED_ORIGINS = [
+    'https://tv.vynx.cc',
+    'https://flyx.tv',
+    'https://www.flyx.tv',
+    'http://localhost:3000',
+    'http://localhost:3001',
+  ];
+  
+  const isAllowed = origin && ALLOWED_ORIGINS.some(allowed => {
+    if (allowed.includes('localhost')) return origin.includes('localhost');
+    try {
+      const allowedHost = new URL(allowed).hostname;
+      const originHost = new URL(origin).hostname;
+      return originHost === allowedHost || originHost.endsWith(`.${allowedHost}`);
+    } catch { return false; }
+  });
+  
+  return {
+    'Access-Control-Allow-Origin': isAllowed ? origin! : '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Range, Content-Type, X-Request-ID, Authorization',
+    'Access-Control-Expose-Headers': 'Content-Length, Content-Range',
+    'Access-Control-Max-Age': '86400',
+  };
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
     const logLevel = (env.LOG_LEVEL || 'debug') as LogLevel;
     const logger = createLogger(request, logLevel);
+    const requestOrigin = request.headers.get('origin');
 
     metrics.requests++;
+
+    // Handle CORS preflight for ALL routes
+    if (request.method === 'OPTIONS') {
+      logger.info('CORS preflight request', { path, origin: requestOrigin });
+      return new Response(null, {
+        status: 204,
+        headers: getCorsHeaders(requestOrigin),
+      });
+    }
 
     // Health check endpoint
     if (path === '/health' || path === '/health/') {

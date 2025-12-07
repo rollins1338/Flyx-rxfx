@@ -101,20 +101,29 @@ export async function GET(request: NextRequest) {
       console.log('[Live Activity] Cleaned up', cleaned, 'stale activities');
     }
 
-    // Calculate summary stats
+    // Calculate summary stats using UNIQUE user_ids to avoid duplicates
+    const uniqueUsers = new Set(activities.map(a => a.user_id));
+    const watchingUsers = new Set(activities.filter(a => a.activity_type === 'watching').map(a => a.user_id));
+    const browsingUsers = new Set(activities.filter(a => a.activity_type === 'browsing').map(a => a.user_id));
+    const livetvUsers = new Set(activities.filter(a => a.activity_type === 'livetv').map(a => a.user_id));
+    
     const stats = {
-      totalActive: activities.length,
-      watching: activities.filter(a => a.activity_type === 'watching').length,
-      browsing: activities.filter(a => a.activity_type === 'browsing').length,
-      livetv: activities.filter(a => a.activity_type === 'livetv').length,
+      totalActive: uniqueUsers.size,
+      watching: watchingUsers.size,
+      browsing: browsingUsers.size,
+      livetv: livetvUsers.size,
       byDevice: activities.reduce((acc: any, a) => {
         const device = a.device_type || 'unknown';
-        acc[device] = (acc[device] || 0) + 1;
+        // Count unique users per device
+        if (!acc[device]) acc[device] = new Set();
+        acc[device].add(a.user_id);
         return acc;
       }, {}),
       byCountry: activities.reduce((acc: any, a) => {
         const country = a.country || 'unknown';
-        acc[country] = (acc[country] || 0) + 1;
+        // Count unique users per country
+        if (!acc[country]) acc[country] = new Set();
+        acc[country].add(a.user_id);
         return acc;
       }, {}),
       topContent: activities
@@ -126,16 +135,33 @@ export async function GET(request: NextRequest) {
               contentId: a.content_id,
               contentTitle: a.content_title,
               contentType: a.content_type,
-              count: 0,
+              users: new Set(),
             };
           }
-          acc[key].count++;
+          acc[key].users.add(a.user_id);
           return acc;
         }, {}),
     };
+    
+    // Convert Sets to counts for JSON serialization
+    const byDeviceCounts: Record<string, number> = {};
+    for (const [device, users] of Object.entries(stats.byDevice)) {
+      byDeviceCounts[device] = (users as Set<string>).size;
+    }
+    
+    const byCountryCounts: Record<string, number> = {};
+    for (const [country, users] of Object.entries(stats.byCountry)) {
+      byCountryCounts[country] = (users as Set<string>).size;
+    }
 
-    // Convert topContent to array and sort
+    // Convert topContent to array and sort by unique viewer count
     const topContentArray = Object.values(stats.topContent)
+      .map((content: any) => ({
+        contentId: content.contentId,
+        contentTitle: content.contentTitle,
+        contentType: content.contentType,
+        count: content.users.size,
+      }))
       .sort((a: any, b: any) => b.count - a.count)
       .slice(0, 10);
 
@@ -143,7 +169,12 @@ export async function GET(request: NextRequest) {
       success: true,
       activities,
       stats: {
-        ...stats,
+        totalActive: stats.totalActive,
+        watching: stats.watching,
+        browsing: stats.browsing,
+        livetv: stats.livetv,
+        byDevice: byDeviceCounts,
+        byCountry: byCountryCounts,
         topContent: topContentArray,
       },
     });

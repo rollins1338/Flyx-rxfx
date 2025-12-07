@@ -45,7 +45,7 @@ LOG_LEVEL = "debug"  # debug, info, warn, error
 #   - 24-hour blacklisting for violators
 #   - Trust score system
 #
-PROTECTION_MODE = "quantum"
+PROTECTION_MODE = "none"
 
 # Legacy setting (use PROTECTION_MODE instead)
 # ENABLE_ANTI_LEECH = "false"
