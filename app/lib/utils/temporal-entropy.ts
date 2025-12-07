@@ -125,8 +125,8 @@ export class TemporalEntropyAnalyzer {
     // Check for programmatic patterns
     const programmaticScore = this.detectProgrammaticPatterns(intervals);
     
-    // Check distribution shape
-    const _distributionAnalysis = this.analyzeDistribution(intervals, stats);
+    // Check distribution shape (method modifies stats as side effect)
+    this.analyzeDistribution(intervals, stats);
     
     // Check autocorrelation (rhythm detection)
     const autocorr = this.calculateAutocorrelation(intervals);
