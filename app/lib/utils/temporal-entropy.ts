@@ -286,12 +286,12 @@ export class TemporalEntropyAnalyzer {
     const total = intervals.length;
     let entropy = 0;
     
-    for (const count of bins.values()) {
+    Array.from(bins.values()).forEach((count) => {
       const p = count / total;
       if (p > 0) {
         entropy -= p * Math.log2(p);
       }
-    }
+    });
     
     return entropy;
   }
