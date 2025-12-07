@@ -164,7 +164,7 @@ export async function initQuantumSessionV2(): Promise<Session> {
   }
 
   session = await response.json();
-  console.log('[QuantumClient] Session initialized:', session.sessionId, 'Trust:', session.trustScore);
+  console.log('[QuantumClient] Session initialized:', session?.sessionId, 'Trust:', session?.trustScore);
   
   // Start behavioral collection
   startBehavioralCollection();

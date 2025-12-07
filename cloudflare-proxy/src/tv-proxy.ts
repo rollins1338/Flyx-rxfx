@@ -25,6 +25,8 @@ const ALLOWED_ORIGINS = [
   'https://www.flyx.tv',
   'http://localhost:3000',
   'http://localhost:3001',
+  // Allow any origin for testing - remove in production
+  '*',
 ];
 
 const PLAYER_DOMAINS = ['epicplayplay.cfd', 'daddyhd.com'];
@@ -112,6 +114,7 @@ export default {
       return jsonResponse({
         error: 'Proxy error',
         details: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
       }, 500);
     }
   },
@@ -353,6 +356,10 @@ function generateProxiedM3U8(originalM3U8: string, keyUrl: string | null, proxyO
 }
 
 function isAllowedOrigin(origin: string | null, referer: string | null): boolean {
+  // Allow all origins for now - the TV proxy is public
+  // TODO: Re-enable origin checking in production if needed
+  if (ALLOWED_ORIGINS.includes('*')) return true;
+  
   const checkOrigin = (o: string): boolean => {
     return ALLOWED_ORIGINS.some(allowed => {
       if (allowed.includes('localhost')) return o.includes('localhost');
