@@ -7,14 +7,21 @@
  * GET /?url=<encoded_url>&source=2embed&referer=<encoded_referer>
  */
 
+import { Logger, createLogger, type LogLevel } from './logger';
+
 export interface Env {
   API_KEY?: string;
+  LOG_LEVEL?: string;
 }
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    const logLevel = (env.LOG_LEVEL || 'debug') as LogLevel;
+    const logger = createLogger(request, logLevel);
+
     // Handle CORS preflight
     if (request.method === 'OPTIONS') {
+      logger.info('CORS preflight request');
       return new Response(null, {
         status: 200,
         headers: corsHeaders(),
@@ -22,7 +29,8 @@ export default {
     }
 
     if (request.method !== 'GET') {
-      return jsonResponse({ error: 'Method not allowed' }, 405);
+      logger.warn('Method not allowed', { method: request.method });
+      return jsonResponse({ error: 'Method not allowed' }, 405, logger);
     }
 
     try {
@@ -32,10 +40,16 @@ export default {
       const referer = url.searchParams.get('referer') || 'https://www.2embed.cc';
 
       if (!targetUrl) {
-        return jsonResponse({ error: 'Missing url parameter' }, 400);
+        logger.warn('Missing url parameter');
+        return jsonResponse({ error: 'Missing url parameter' }, 400, logger);
       }
 
       const decodedUrl = decodeURIComponent(targetUrl);
+      logger.info('Proxying request', { 
+        targetUrl: decodedUrl.substring(0, 150),
+        source,
+        referer: referer.substring(0, 100),
+      });
 
       // Fetch with proper headers
       const headers: HeadersInit = {
@@ -46,37 +60,68 @@ export default {
         'Origin': new URL(referer).origin,
       };
 
-      let response = await fetch(decodedUrl, {
-        headers,
-        redirect: 'manual',
-      });
+      const fetchStart = Date.now();
+      logger.fetchStart(decodedUrl, { headers });
+
+      let response: Response;
+      try {
+        response = await fetch(decodedUrl, {
+          headers,
+          redirect: 'manual',
+        });
+      } catch (fetchError) {
+        logger.fetchError(decodedUrl, fetchError as Error);
+        return jsonResponse({ 
+          error: 'Upstream fetch failed',
+          details: fetchError instanceof Error ? fetchError.message : String(fetchError),
+        }, 502, logger);
+      }
+
+      logger.fetchEnd(decodedUrl, response.status, Date.now() - fetchStart);
 
       // Handle redirects
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get('location');
+        logger.info('Following redirect', { status: response.status, location });
+        
         if (location) {
           const redirectUrl = new URL(location, decodedUrl).toString();
-          response = await fetch(redirectUrl, { headers, redirect: 'follow' });
+          const redirectStart = Date.now();
           
-          if (!response.ok) {
-            return jsonResponse({ error: `Redirect target error: ${response.status}` }, response.status);
+          try {
+            response = await fetch(redirectUrl, { headers, redirect: 'follow' });
+            logger.fetchEnd(redirectUrl, response.status, Date.now() - redirectStart);
+          } catch (redirectError) {
+            logger.fetchError(redirectUrl, redirectError as Error);
+            return jsonResponse({ error: 'Redirect fetch failed' }, 502, logger);
           }
           
-          return handleStreamResponse(response, decodedUrl, source, referer, url.origin);
+          if (!response.ok) {
+            logger.error('Redirect target error', { status: response.status });
+            return jsonResponse({ error: `Redirect target error: ${response.status}` }, response.status, logger);
+          }
+          
+          return handleStreamResponse(response, decodedUrl, source, referer, url.origin, logger);
         }
       }
 
       if (!response.ok) {
-        return jsonResponse({ error: `Upstream error: ${response.status}` }, response.status);
+        logger.error('Upstream error', { 
+          status: response.status, 
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers),
+        });
+        return jsonResponse({ error: `Upstream error: ${response.status}` }, response.status, logger);
       }
 
-      return handleStreamResponse(response, decodedUrl, source, referer, url.origin);
+      return handleStreamResponse(response, decodedUrl, source, referer, url.origin, logger);
 
     } catch (error) {
+      logger.error('Proxy error', error as Error);
       return jsonResponse({
         error: 'Proxy error',
         details: error instanceof Error ? error.message : String(error),
-      }, 500);
+      }, 500, logger);
     }
   },
 };
@@ -86,10 +131,23 @@ async function handleStreamResponse(
   decodedUrl: string,
   source: string,
   referer: string,
-  proxyOrigin: string
+  proxyOrigin: string,
+  logger: Logger
 ): Promise<Response> {
   const contentType = response.headers.get('content-type') || '';
-  const arrayBuffer = await response.arrayBuffer();
+  
+  let arrayBuffer: ArrayBuffer;
+  try {
+    arrayBuffer = await response.arrayBuffer();
+  } catch (bufferError) {
+    logger.error('Failed to read response body', bufferError as Error);
+    return jsonResponse({ error: 'Failed to read upstream response' }, 502, logger);
+  }
+
+  logger.debug('Response body read', { 
+    size: arrayBuffer.byteLength,
+    contentType,
+  });
   
   // Check if this is video data
   const firstBytes = new Uint8Array(arrayBuffer.slice(0, 4));
@@ -104,11 +162,23 @@ async function handleStreamResponse(
     (contentType.includes('text') && !decodedUrl.includes('.html'))
   );
 
+  logger.debug('Content type detection', {
+    isPlaylist,
+    isVideoData,
+    isMpegTs,
+    isFmp4,
+    contentType,
+    urlHint: decodedUrl.includes('.m3u8') ? 'm3u8' : decodedUrl.includes('.ts') ? 'ts' : 'other',
+  });
+
   if (isPlaylist) {
     const text = new TextDecoder().decode(arrayBuffer);
-    const rewrittenPlaylist = rewritePlaylistUrls(text, decodedUrl, source, referer, proxyOrigin);
+    const lineCount = text.split('\n').length;
+    logger.info('Processing playlist', { lineCount, size: arrayBuffer.byteLength });
     
-    return new Response(rewrittenPlaylist, {
+    const rewrittenPlaylist = rewritePlaylistUrls(text, decodedUrl, source, referer, proxyOrigin, logger);
+    
+    const res = new Response(rewrittenPlaylist, {
       status: 200,
       headers: {
         'Content-Type': 'application/vnd.apple.mpegurl',
@@ -116,6 +186,9 @@ async function handleStreamResponse(
         'Cache-Control': 'public, max-age=300',
       },
     });
+    
+    logger.requestEnd(res);
+    return res;
   }
 
   // Return video segment
@@ -123,7 +196,12 @@ async function handleStreamResponse(
   if (isMpegTs) actualContentType = 'video/mp2t';
   else if (isFmp4) actualContentType = 'video/mp4';
 
-  return new Response(arrayBuffer, {
+  logger.info('Returning video segment', { 
+    type: actualContentType, 
+    size: arrayBuffer.byteLength,
+  });
+
+  const res = new Response(arrayBuffer, {
     status: 200,
     headers: {
       'Content-Type': actualContentType,
@@ -132,18 +210,22 @@ async function handleStreamResponse(
       'Content-Length': arrayBuffer.byteLength.toString(),
     },
   });
-}
 
+  logger.requestEnd(res);
+  return res;
+}
 
 function rewritePlaylistUrls(
   playlist: string,
   baseUrl: string,
   source: string,
   referer: string,
-  proxyOrigin: string
+  proxyOrigin: string,
+  logger: Logger
 ): string {
   const lines = playlist.split('\n');
   const rewritten: string[] = [];
+  let urlsRewritten = 0;
   
   const base = new URL(baseUrl);
   const basePath = base.pathname.substring(0, base.pathname.lastIndexOf('/') + 1);
@@ -159,8 +241,7 @@ function rewritePlaylistUrls(
       absoluteUrl = `${base.origin}${basePath}${url}`;
     }
     
-    // proxyOrigin is the worker's origin (e.g., https://media-proxy.xxx.workers.dev)
-    // We need to include /stream/ path since that's how the main router routes to us
+    urlsRewritten++;
     return `${proxyOrigin}/stream/?url=${encodeURIComponent(absoluteUrl)}&source=${source}&referer=${encodeURIComponent(referer)}`;
   };
   
@@ -198,6 +279,11 @@ function rewritePlaylistUrls(
     }
   }
 
+  logger.debug('Playlist rewritten', { 
+    originalLines: lines.length, 
+    urlsRewritten,
+  });
+
   return rewritten.join('\n');
 }
 
@@ -205,16 +291,23 @@ function corsHeaders(): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Access-Control-Allow-Headers': 'Range, Content-Type',
+    'Access-Control-Allow-Headers': 'Range, Content-Type, X-Request-ID',
+    'Access-Control-Expose-Headers': 'Content-Length, Content-Range',
   };
 }
 
-function jsonResponse(data: object, status: number): Response {
-  return new Response(JSON.stringify(data), {
+function jsonResponse(data: object, status: number, logger?: Logger): Response {
+  const res = new Response(JSON.stringify(data), {
     status,
     headers: {
       'Content-Type': 'application/json',
       ...corsHeaders(),
     },
   });
+  
+  if (logger) {
+    logger.requestEnd(res);
+  }
+  
+  return res;
 }

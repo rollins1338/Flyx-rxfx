@@ -1,168 +1,193 @@
 # Cloudflare Media Proxy
 
-Cloudflare Workers for proxying HLS streams and live TV. Much cheaper than Vercel Edge for bandwidth-heavy operations.
+A Cloudflare Worker that proxies HLS streams and live TV with proper headers and CORS support.
 
-## Why Cloudflare Workers?
+## Features
 
-| Feature | Vercel Edge | Cloudflare Workers |
-|---------|-------------|-------------------|
-| Bandwidth | $0.15/GB after 100GB | **Unlimited** |
-| Requests | 1M/month free | 100K/day free |
-| Paid tier | $20/mo + bandwidth | **$5/mo flat** |
+- **Stream Proxy** (`/stream/`) - Proxies HLS streams for 2embed/vidsrc
+- **TV Proxy** (`/tv/`) - Proxies DLHD live TV streams
+- **Decoder Sandbox** (`/decode`) - Isolated script execution environment
+- **Health Check** (`/health`) - Status and metrics endpoint
+- **Full Observability** - Structured JSON logging with request tracing
 
-For video streaming, bandwidth costs add up fast. A single 1080p movie can be 5-10GB!
-
-## Routes
-
-| Route | Description |
-|-------|-------------|
-| `/stream/?url=<url>&source=<source>&referer=<referer>` | HLS stream proxy (2embed, etc.) |
-| `/tv/?channel=<id>` | DLHD live TV M3U8 playlist |
-| `/tv/key?url=<url>` | Encryption key proxy |
-| `/tv/segment?url=<url>` | Video segment proxy |
-| `/decode` | **Isolated decoder sandbox** (POST) |
-
-## Security: Decoder Sandbox
-
-The `/decode` endpoint provides **true V8 isolate separation** for executing untrusted decoder scripts from streaming sites. This prevents site owners from injecting malicious code (RATs, crypto miners, data exfiltration) into your application.
-
-### Why is this needed?
-
-VidSrc and similar sites serve obfuscated JavaScript that decodes stream URLs. Without isolation, this code runs in your application's context with access to:
-- Network APIs (fetch, WebSocket)
-- Storage (localStorage, cookies)
-- Your application's memory
-
-### Security Model
-
-1. **V8 Isolate Separation** - Each request runs in a fresh Cloudflare Worker isolate
-2. **No Network Access** - fetch/WebSocket blocked at the isolate level
-3. **No Storage Access** - localStorage/sessionStorage unavailable
-4. **Pattern Validation** - Defense-in-depth blocklist for suspicious patterns
-5. **Output Validation** - Decoded URLs checked against domain allowlist
-6. **Resource Limits** - CPU/memory enforced by Cloudflare
-
-### Usage
+## Deployment
 
 ```bash
-POST /decode
-Content-Type: application/json
-X-API-Key: your-api-key (optional)
+# Install dependencies
+npm install
 
-{
-  "script": "// decoder script from site",
-  "divId": "abc123",
-  "encodedContent": "base64-encoded-data"
-}
+# Deploy to Cloudflare
+npx wrangler deploy
+
+# Deploy to production
+npx wrangler deploy --env production
 ```
 
-Response:
+## Observability & Logging
+
+### Real-time Log Streaming
+
+Stream logs in real-time to your terminal:
+
+```bash
+# Tail logs from production worker
+npx wrangler tail media-proxy
+
+# With filters
+npx wrangler tail media-proxy --status error
+npx wrangler tail media-proxy --search "stream"
+npx wrangler tail media-proxy --format json
+```
+
+### Cloudflare Dashboard
+
+1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com)
+2. Navigate to **Workers & Pages** → **media-proxy**
+3. Click **Logs** tab to view recent logs
+4. Use **Real-time Logs** for live streaming
+
+### Log Levels
+
+Set `LOG_LEVEL` in `wrangler.toml` or via environment variable:
+
+- `debug` - All logs including detailed request/response info
+- `info` - Standard operational logs
+- `warn` - Warnings and potential issues
+- `error` - Errors only
+
+### Log Format
+
+All logs are structured JSON for easy parsing:
+
 ```json
 {
-  "success": true,
-  "decodedUrl": "https://stream.example.com/video.m3u8"
+  "timestamp": "2024-12-06T17:30:00.000Z",
+  "level": "info",
+  "message": "Request completed",
+  "context": {
+    "requestId": "abc123",
+    "method": "GET",
+    "path": "/stream/",
+    "url": "https://media-proxy.xxx.workers.dev/stream/?url=..."
+  },
+  "data": {
+    "status": 200,
+    "contentType": "application/vnd.apple.mpegurl",
+    "contentLength": "1234"
+  },
+  "duration": 150
 }
 ```
 
-## Quick Start
-
-### 1. Install Dependencies
+### Health Check
 
 ```bash
-cd cloudflare-proxy
-npm install
+curl https://media-proxy.xxx.workers.dev/health
 ```
 
-### 2. Login to Cloudflare
+Returns:
+```json
+{
+  "status": "healthy",
+  "uptime": "3600s",
+  "metrics": {
+    "totalRequests": 1000,
+    "errors": 5,
+    "streamRequests": 800,
+    "tvRequests": 195,
+    "decodeRequests": 5
+  }
+}
+```
+
+## API Routes
+
+### Stream Proxy
+
+```
+GET /stream/?url=<encoded_url>&source=<source>&referer=<encoded_referer>
+```
+
+Parameters:
+- `url` (required) - URL-encoded target stream URL
+- `source` - Source identifier (default: `2embed`)
+- `referer` - URL-encoded referer header
+
+### TV Proxy
+
+```
+GET /tv/?channel=<id>
+GET /tv/key?url=<encoded_url>
+GET /tv/segment?url=<encoded_url>
+```
+
+### Decoder Sandbox
+
+```
+POST /decode
+Content-Type: application/json
+
+{
+  "script": "<decoder script>",
+  "divId": "player",
+  "encodedContent": "<base64 content>"
+}
+```
+
+## Configuration
+
+### Environment Variables
+
+Set via `wrangler secret` or Cloudflare Dashboard:
 
 ```bash
-npx wrangler login
+# Optional: RPI proxy for geo-restricted content
+wrangler secret put RPI_PROXY_URL
+wrangler secret put RPI_PROXY_KEY
+
+# Optional: API key protection
+wrangler secret put API_KEY
 ```
 
-### 3. Deploy
-
-```bash
-npm run deploy
-```
-
-Your worker will be available at: `https://media-proxy.<your-subdomain>.workers.dev`
-
-### 4. Configure Your App
-
-Add these to your `.env.local`:
-
-```bash
-NEXT_PUBLIC_CF_STREAM_PROXY_URL=https://media-proxy.your-subdomain.workers.dev/stream
-NEXT_PUBLIC_CF_TV_PROXY_URL=https://media-proxy.your-subdomain.workers.dev/tv
-
-# SECURITY: Decoder sandbox for VidSrc extraction
-DECODER_SANDBOX_URL=https://media-proxy.your-subdomain.workers.dev
-DECODER_SANDBOX_API_KEY=your-secret-key  # Optional but recommended
-```
-
-That's it! Your app will automatically use Cloudflare Workers for proxying and secure decoder execution.
-
-## Configure Secrets
-
-### For decoder sandbox (recommended):
-
-```bash
-npx wrangler secret put API_KEY
-# Enter: your-secret-key (protects /decode endpoint)
-```
-
-### For TV proxy (required for DLHD CDN bypass):
-
-```bash
-npx wrangler secret put RPI_PROXY_URL
-# Enter: https://your-rpi-proxy.com
-
-npx wrangler secret put RPI_PROXY_KEY
-# Enter: your-api-key
-```
-
-## Local Development
-
-```bash
-# Copy example env file
-cp .dev.vars.example .dev.vars
-
-# Edit .dev.vars with your secrets
-
-# Start local dev server
-npm run dev
-```
-
-## Custom Domain (Optional)
-
-To use a custom domain instead of `*.workers.dev`:
-
-1. Add your domain to Cloudflare
-2. Update `wrangler.toml`:
+### wrangler.toml
 
 ```toml
-[env.production]
-routes = [{ pattern = "proxy.yourdomain.com/*", zone_name = "yourdomain.com" }]
+[vars]
+LOG_LEVEL = "debug"  # debug, info, warn, error
+
+[observability]
+enabled = true
 ```
-
-3. Deploy: `npm run deploy:prod`
-
-## Pricing Comparison
-
-### Scenario: 1000 users watching 2-hour movies (avg 5GB each)
-
-| Provider | Cost |
-|----------|------|
-| Vercel Edge | ~$750/month (5TB bandwidth) |
-| Cloudflare Workers | **$5/month** |
 
 ## Troubleshooting
 
-### "Error: You must be logged in"
-Run `npx wrangler login` and authenticate with your Cloudflare account.
+### CORS Errors
 
-### "Error: Could not find wrangler.toml"
-Make sure you're in the `cloudflare-proxy` directory.
+If you see CORS errors in the browser:
+1. Check that the worker is deployed with latest code
+2. Verify the request is going to the correct worker URL
+3. Check logs for upstream errors
 
-### TV streams not working
-Make sure you've set the RPI_PROXY_URL and RPI_PROXY_KEY secrets.
+### Stream Not Loading
+
+1. Check `/health` endpoint for worker status
+2. Tail logs: `npx wrangler tail media-proxy`
+3. Look for upstream fetch errors in logs
+4. Verify the source URL is accessible
+
+### Debugging
+
+```bash
+# Local development
+npx wrangler dev
+
+# Test specific endpoint
+curl -v "https://media-proxy.xxx.workers.dev/stream/?url=..."
+
+# Check worker status
+curl https://media-proxy.xxx.workers.dev/health
+```
+
+## License
+
+MIT

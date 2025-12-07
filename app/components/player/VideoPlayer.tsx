@@ -635,6 +635,9 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                   for (let i = currentIdx + 1; i < currentSources.length; i++) {
                     const nextSource = currentSources[i];
                     
+                    // Skip null/undefined sources
+                    if (!nextSource) continue;
+                    
                     // If source has a URL, use it directly
                     if (nextSource.url && nextSource.url !== '') {
                       console.log(`[VideoPlayer] Trying source ${i}: ${nextSource.title} (has URL)`);
@@ -1259,10 +1262,13 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     setError(null);
     setIsLoading(true);
     fetchSources(provider, true).then(sources => {
-      if (sources && sources.length > 0) {
+      if (sources && sources.length > 0 && sources[0]?.url) {
         setAvailableSources(sources);
         setCurrentSourceIndex(0);
         setStreamUrl(sources[0].url);
+      } else {
+        setError('No valid sources found');
+        setIsLoading(false);
       }
     });
   };
@@ -1811,7 +1817,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                       Loading sources...
                     </div>
                   ) : sourcesCache[menuProvider] && sourcesCache[menuProvider].length > 0 ? (
-                    sourcesCache[menuProvider].map((source, index) => (
+                    sourcesCache[menuProvider].filter(s => s != null).map((source, index) => (
                       <button
                         key={index}
                         className={`${styles.settingsOption} ${provider === menuProvider && currentSourceIndex === index ? styles.active : ''}`}
