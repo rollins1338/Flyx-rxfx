@@ -33,3 +33,5 @@ yarn-error.log*
 
 /cloudflare-proxy/node_modules
 /cloudflare-proxy/.wrangler
+mac-scan-tested.json
+mac-scan-tested.json
