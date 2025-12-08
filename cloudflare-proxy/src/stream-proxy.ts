@@ -349,15 +349,13 @@ function isAllowedOrigin(origin: string | null, referer: string | null): boolean
 }
 
 function corsHeaders(origin?: string | null): Record<string, string> {
-  // Only allow CORS for allowed origins
-  const allowedOrigin = origin && isAllowedOrigin(origin, null) ? origin : 'null';
-  
+  // Allow all origins - protection is done via origin checking in the handler
+  // Setting 'null' breaks CORS completely, so use '*' as fallback
   return {
-    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Access-Control-Allow-Headers': 'Range, Content-Type, X-Request-ID',
     'Access-Control-Expose-Headers': 'Content-Length, Content-Range',
-    'Access-Control-Allow-Credentials': 'true',
   };
 }
 

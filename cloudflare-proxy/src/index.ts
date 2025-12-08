@@ -57,25 +57,10 @@ const metrics = {
 
 // CORS headers for all responses
 function getCorsHeaders(origin?: string | null): Record<string, string> {
-  const ALLOWED_ORIGINS = [
-    'https://tv.vynx.cc',
-    'https://flyx.tv',
-    'https://www.flyx.tv',
-    'http://localhost:3000',
-    'http://localhost:3001',
-  ];
-  
-  const isAllowed = origin && ALLOWED_ORIGINS.some(allowed => {
-    if (allowed.includes('localhost')) return origin.includes('localhost');
-    try {
-      const allowedHost = new URL(allowed).hostname;
-      const originHost = new URL(origin).hostname;
-      return originHost === allowedHost || originHost.endsWith(`.${allowedHost}`);
-    } catch { return false; }
-  });
-  
+  // Always allow all origins for stream proxy - CORS is handled by the browser
+  // The anti-leech protection is done via tokens, not CORS
   return {
-    'Access-Control-Allow-Origin': isAllowed ? origin! : '*',
+    'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Range, Content-Type, X-Request-ID, Authorization',
     'Access-Control-Expose-Headers': 'Content-Length, Content-Range',

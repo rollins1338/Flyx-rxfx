@@ -86,6 +86,8 @@
     "crypto-js": "^4.2.0",
     "eslint": "^8",
     "eslint-config-next": "14.2.0",
+    "http-proxy-agent": "^7.0.2",
+    "https-proxy-agent": "^7.0.6",
     "postcss": "^8.4.32",
     "tailwindcss": "^3.4.0",
     "typescript": "^5.3.3"
