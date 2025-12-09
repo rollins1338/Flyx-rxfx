@@ -14,7 +14,8 @@ import {
     BarChart3,
     MousePointerClick,
     TrendingUp,
-    MessageSquare
+    MessageSquare,
+    Tv
 } from 'lucide-react';
 
 export default function AdminSidebar() {
@@ -31,6 +32,7 @@ export default function AdminSidebar() {
         { icon: History, label: 'Sessions', href: '/admin/sessions' },
         { icon: Activity, label: 'Real-time', href: '/admin/live' },
         { icon: MessageSquare, label: 'Feedback', href: '/admin/feedback' },
+        { icon: Tv, label: 'IPTV Debug', href: '/admin/iptv-debug' },
         { icon: Settings, label: 'Settings', href: '/admin/settings' },
     ];
 
