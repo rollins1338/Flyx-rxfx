@@ -1,0 +1,14 @@
+{
+  "name": "vps-proxy",
+  "version": "1.0.0",
+  "description": "Simple VPS proxy for DLHD live TV streams",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": ">=18"
+  }
+}
