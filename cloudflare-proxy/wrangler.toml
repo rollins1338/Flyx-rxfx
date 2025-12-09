@@ -55,6 +55,15 @@ PROTECTION_MODE = "none"
 # =============================================================================
 # wrangler secret put SIGNING_SECRET      # Required for all modes except 'none'
 # wrangler secret put WATERMARK_SECRET    # Required for quantum mode (watermarks video)
+#
+# OXYLABS RESIDENTIAL PROXY (for DLHD streaming)
+# wrangler secret put OXYLABS_USERNAME    # Your Oxylabs username
+# wrangler secret put OXYLABS_PASSWORD    # Your Oxylabs password
+#
+# Optional Oxylabs settings (set in [vars] section):
+# OXYLABS_ENDPOINT = "https://realtime.oxylabs.io/v1/queries"
+# OXYLABS_COUNTRY = "us"                  # Target country (us, uk, de, etc.)
+# OXYLABS_CITY = "new_york"               # Target city (optional)
 
 # =============================================================================
 # KV NAMESPACE BINDINGS

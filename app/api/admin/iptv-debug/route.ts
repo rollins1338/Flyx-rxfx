@@ -43,7 +43,11 @@ async function performHandshake(portalUrl: string, macAddress: string): Promise<
     });
     clearTimeout(timeoutId);
     
-    const data = await response.json();
+    const text = await response.text();
+    // Handle secure JSON wrapper
+    const clean = text.replace(/^\/\*-secure-\s*/, '').replace(/\s*\*\/$/, '');
+    const data = JSON.parse(clean);
+    
     if (data?.js?.token) {
       return data.js.token;
     }
@@ -77,7 +81,10 @@ async function getProfile(portalUrl: string, macAddress: string, token: string):
     });
     clearTimeout(timeoutId);
     
-    const data = await response.json();
+    const text = await response.text();
+    const clean = text.replace(/^\/\*-secure-\s*/, '').replace(/\s*\*\/$/, '');
+    const data = JSON.parse(clean);
+    
     if (data?.js) {
       return data.js;
     }
@@ -109,7 +116,9 @@ async function getContentCount(portalUrl: string, macAddress: string, token: str
     });
     clearTimeout(timeoutId);
     
-    const data = await response.json();
+    const text = await response.text();
+    const clean = text.replace(/^\/\*-secure-\s*/, '').replace(/\s*\*\/$/, '');
+    const data = JSON.parse(clean);
     return data?.js?.total_items ?? 0;
   } catch {
     clearTimeout(timeoutId);
@@ -134,11 +143,23 @@ async function getGenres(portalUrl: string, macAddress: string, token: string, c
     });
     clearTimeout(timeoutId);
     
-    const data = await response.json();
+    const text = await response.text();
+    const clean = text.replace(/^\/\*-secure-\s*/, '').replace(/\s*\*\/$/, '');
+    const data = JSON.parse(clean);
     return data?.js || [];
   } catch {
     clearTimeout(timeoutId);
     return [];
+  }
+}
+
+// Parse Stalker's secure JSON wrapper
+function parseSecureJson(text: string): any {
+  const clean = text.replace(/^\/\*-secure-\s*/, '').replace(/\s*\*\/$/, '');
+  try {
+    return JSON.parse(clean);
+  } catch {
+    return null;
   }
 }
 
@@ -161,16 +182,36 @@ async function getChannels(portalUrl: string, macAddress: string, token: string,
     });
     clearTimeout(timeoutId);
     
-    const data = await response.json();
+    const text = await response.text();
+    const data = parseSecureJson(text);
     return data?.js || { data: [], total_items: 0 };
-  } catch {
+  } catch (e) {
     clearTimeout(timeoutId);
+    console.error('getChannels error:', e);
     return { data: [], total_items: 0 };
   }
 }
 
+// Extract URL from ffmpeg/ffrt command format
+function extractUrlFromCmd(cmd: string): string {
+  let url = cmd;
+  // Remove various ffmpeg prefixes
+  const prefixes = ['ffmpeg ', 'ffrt ', 'ffrt2 ', 'ffrt3 ', 'ffrt4 '];
+  for (const prefix of prefixes) {
+    if (url.startsWith(prefix)) {
+      url = url.substring(prefix.length);
+      break;
+    }
+  }
+  return url.trim();
+}
+
 // Get stream URL for a channel
 async function getStreamUrl(portalUrl: string, macAddress: string, token: string, cmd: string): Promise<{ streamUrl: string | null; rawResponse: any; requestUrl: string }> {
+  // The cmd from channel list is the full command - we need to pass it as-is
+  // Some portals expect "ffmpeg http://..." format, others just the URL
+  // We'll try the original cmd first
+  
   const url = new URL('/portal.php', portalUrl);
   url.searchParams.set('type', 'itv');
   url.searchParams.set('action', 'create_link');
@@ -207,15 +248,18 @@ async function getStreamUrl(portalUrl: string, macAddress: string, token: string
     
     // Extract actual URL from ffmpeg command format
     if (streamUrl) {
-      // Remove "ffmpeg " prefix if present
-      if (streamUrl.startsWith('ffmpeg ')) {
-        streamUrl = streamUrl.replace('ffmpeg ', '');
-      }
-      // Remove "ffrt " prefix if present  
-      if (streamUrl.startsWith('ffrt ')) {
-        streamUrl = streamUrl.replace('ffrt ', '');
-      }
+      streamUrl = extractUrlFromCmd(streamUrl);
     }
+    
+    // Check if the returned URL has empty stream parameter - if so, use original cmd URL
+    if (streamUrl && streamUrl.includes('stream=&')) {
+      console.log('Portal returned empty stream param, using original cmd URL');
+      streamUrl = extractUrlFromCmd(cmd);
+    }
+    
+    console.log('Stream URL extracted:', streamUrl);
+    console.log('Original cmd:', cmd);
+    console.log('Response cmd:', data?.js?.cmd);
     
     return { streamUrl, rawResponse: data, requestUrl };
   } catch (e) {

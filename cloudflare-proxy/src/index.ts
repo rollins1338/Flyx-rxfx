@@ -25,6 +25,8 @@ import quantumShieldV2 from './quantum-shield-v2';
 import quantumShieldV3 from './quantum-shield-v3';
 import tvProxy from './tv-proxy';
 import decoderSandbox from './decoder-sandbox';
+import { handleIPTVRequest } from './iptv-proxy';
+import { handleDLHDRequest } from './dlhd-proxy';
 import { createLogger, generateRequestId, type LogLevel } from './logger';
 
 export interface Env {
@@ -43,6 +45,12 @@ export interface Env {
   PROTECTION_MODE?: string;
   // Legacy - kept for backwards compatibility
   ENABLE_ANTI_LEECH?: string;
+  // Oxylabs proxy settings
+  OXYLABS_USERNAME?: string;
+  OXYLABS_PASSWORD?: string;
+  OXYLABS_ENDPOINT?: string;
+  OXYLABS_COUNTRY?: string;
+  OXYLABS_CITY?: string;
 }
 
 // Simple in-memory metrics (resets on worker restart)
@@ -51,6 +59,7 @@ const metrics = {
   errors: 0,
   streamRequests: 0,
   tvRequests: 0,
+  dlhdRequests: 0,
   decodeRequests: 0,
   startTime: Date.now(),
 };
@@ -100,6 +109,7 @@ export default {
           errors: metrics.errors,
           streamRequests: metrics.streamRequests,
           tvRequests: metrics.tvRequests,
+          dlhdRequests: metrics.dlhdRequests,
           decodeRequests: metrics.decodeRequests,
         },
         timestamp: new Date().toISOString(),
@@ -200,6 +210,33 @@ export default {
       return await quantumShield.fetch(request, env as any);
     }
 
+    // Route to DLHD proxy (Oxylabs residential IPs)
+    if (path.startsWith('/dlhd')) {
+      metrics.dlhdRequests++;
+      logger.info('Routing to DLHD proxy (Oxylabs)', { path });
+      
+      try {
+        return await handleDLHDRequest(request, env);
+      } catch (error) {
+        metrics.errors++;
+        logger.error('DLHD proxy error', error as Error);
+        return errorResponse('DLHD proxy error', 500);
+      }
+    }
+
+    // Route to IPTV proxy (Stalker portals)
+    if (path.startsWith('/iptv')) {
+      logger.info('Routing to IPTV proxy', { path });
+      
+      try {
+        return await handleIPTVRequest(request, env);
+      } catch (error) {
+        metrics.errors++;
+        logger.error('IPTV proxy error', error as Error);
+        return errorResponse('IPTV proxy error', 500);
+      }
+    }
+
     // Route to TV proxy
     if (path.startsWith('/tv')) {
       metrics.tvRequests++;
@@ -273,12 +310,31 @@ export default {
         },
         tv: {
           path: '/tv/',
-          description: 'DLHD live TV proxy',
+          description: 'DLHD live TV proxy (direct/RPI fallback)',
           usage: '/tv/?channel=<id>',
           subRoutes: {
             key: '/tv/key?url=<encoded_url>',
             segment: '/tv/segment?url=<encoded_url>',
           },
+        },
+        dlhd: {
+          path: '/dlhd/',
+          description: 'DLHD proxy with Oxylabs residential IP rotation',
+          usage: '/dlhd?channel=<id>',
+          subRoutes: {
+            key: '/dlhd/key?url=<encoded_url>',
+            segment: '/dlhd/segment?url=<encoded_url>',
+            health: '/dlhd/health',
+          },
+          config: {
+            oxylabs: !!(env.OXYLABS_USERNAME && env.OXYLABS_PASSWORD) ? 'configured' : 'not configured',
+            country: env.OXYLABS_COUNTRY || 'auto',
+          },
+        },
+        iptv: {
+          path: '/iptv/',
+          description: 'IPTV Stalker portal stream proxy',
+          usage: '/iptv/stream?url=<encoded_url>&mac=<mac>&token=<token>',
         },
         decode: {
           path: '/decode',

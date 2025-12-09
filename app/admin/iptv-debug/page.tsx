@@ -17,6 +17,11 @@ import {
   Trash2
 } from 'lucide-react';
 import Hls from 'hls.js';
+import mpegts from 'mpegts.js';
+
+// Cloudflare Worker proxy URL for IPTV streams
+// This bypasses CORS and SSL issues that browsers have with IPTV CDNs
+const CF_PROXY_URL = process.env.NEXT_PUBLIC_CF_PROXY_URL || 'https://media-proxy.vynx.workers.dev';
 
 interface SavedAccount {
   portal: string;
@@ -67,8 +72,10 @@ export default function IPTVDebugPage() {
   const [rawStreamUrl, setRawStreamUrl] = useState<string | null>(null);
   const [streamDebug, setStreamDebug] = useState<any>(null);
   const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>([]);
+  const [playerError, setPlayerError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const mpegtsRef = useRef<mpegts.Player | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load saved accounts from localStorage on mount
@@ -184,19 +191,31 @@ export default function IPTVDebugPage() {
     });
   }, [testResult, portalUrl, macAddress]);
 
-  // Setup HLS player when stream URL changes
+  // Setup player when stream URL changes
   useEffect(() => {
     if (!streamUrl || !videoRef.current) return;
 
-    // Cleanup previous HLS instance
+    // Cleanup previous instances
     if (hlsRef.current) {
       hlsRef.current.destroy();
       hlsRef.current = null;
     }
+    if (mpegtsRef.current) {
+      mpegtsRef.current.destroy();
+      mpegtsRef.current = null;
+    }
+    setPlayerError(null);
 
     const video = videoRef.current;
+    
+    // Check if this is an HLS stream (m3u8) or raw TS stream
+    const isHLS = streamUrl.includes('.m3u8') || streamUrl.includes('m3u8');
+    const isTS = streamUrl.includes('extension=ts') || streamUrl.endsWith('.ts') || streamUrl.includes('live.php');
+    
+    console.log('Stream type detection:', { isHLS, isTS, streamUrl });
 
-    if (Hls.isSupported()) {
+    if (isHLS && Hls.isSupported()) {
+      // Use HLS.js for m3u8 streams
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: true,
@@ -214,6 +233,7 @@ export default function IPTVDebugPage() {
       
       hls.on(Hls.Events.ERROR, (_event, data) => {
         console.error('HLS error:', data);
+        setPlayerError(`HLS Error: ${data.type} - ${data.details}`);
         if (data.fatal) {
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
@@ -233,10 +253,69 @@ export default function IPTVDebugPage() {
       });
       
       hlsRef.current = hls;
+    } else if (isTS && mpegts.isSupported()) {
+      // Use mpegts.js for MPEG-TS streams (IPTV)
+      console.log('Using mpegts.js for TS stream');
+      
+      // Use Cloudflare Worker proxy to bypass CORS/SSL issues
+      // The raw stream URL goes through our CF worker which handles the SSL/CORS
+      const rawUrl = rawStreamUrl || streamUrl;
+      const cfProxyUrl = `${CF_PROXY_URL}/iptv/stream?url=${encodeURIComponent(rawUrl)}`;
+      
+      console.log('mpegts using CF proxy URL:', cfProxyUrl);
+      
+      const player = mpegts.createPlayer({
+        type: 'mpegts',
+        isLive: true,
+        url: cfProxyUrl,
+      }, {
+        enableWorker: false, // Disable worker to avoid URL parsing issues
+        enableStashBuffer: false,
+        stashInitialSize: 128,
+        liveBufferLatencyChasing: true,
+        liveBufferLatencyMaxLatency: 1.5,
+        liveBufferLatencyMinRemain: 0.3,
+      });
+      
+      player.attachMediaElement(video);
+      player.load();
+      
+      player.on(mpegts.Events.ERROR, (errorType: string, errorDetail: string) => {
+        console.error('mpegts error:', errorType, errorDetail);
+        // Check for common errors
+        if (errorDetail.includes('403') || errorDetail.includes('HttpStatusCodeInvalid')) {
+          setPlayerError(`Portal blocked cloud IP (403). IPTV providers block datacenter IPs. Use VLC with the URL below.`);
+        } else if (errorDetail.includes('SSL') || errorDetail.includes('fetch') || errorDetail.includes('Network')) {
+          setPlayerError(`Network Error: Stream may have expired. Click Refresh and try VLC.`);
+        } else {
+          setPlayerError(`MPEG-TS Error: ${errorType}. Use VLC to play this stream.`);
+        }
+      });
+      
+      player.on(mpegts.Events.LOADING_COMPLETE, () => {
+        console.log('mpegts loading complete');
+      });
+      
+      // Try to play
+      video.play().catch((err) => {
+        console.error('Play failed:', err);
+        setPlayerError(`Play failed: ${err.message}`);
+      });
+      
+      mpegtsRef.current = player;
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       // Native HLS support (Safari)
       video.src = streamUrl;
       video.play().catch(console.error);
+    } else {
+      // Fallback - try direct playback
+      console.log('Attempting direct playback');
+      setPlayerError('Browser may not support this stream format. Use VLC instead.');
+      video.src = streamUrl;
+      video.play().catch((err) => {
+        console.error('Direct playback failed:', err);
+        setPlayerError(`Playback failed: ${err.message}. Use VLC to play this stream.`);
+      });
     }
 
     return () => {
@@ -244,8 +323,50 @@ export default function IPTVDebugPage() {
         hlsRef.current.destroy();
         hlsRef.current = null;
       }
+      if (mpegtsRef.current) {
+        mpegtsRef.current.destroy();
+        mpegtsRef.current = null;
+      }
     };
-  }, [streamUrl]);
+  }, [streamUrl, rawStreamUrl]);
+
+  // Load channels - accepts optional token override for immediate use after connection
+  const loadChannels = useCallback(async (genre: string = '*', page: number = 0, tokenOverride?: string) => {
+    const token = tokenOverride || testResult?.token;
+    if (!token) return;
+    
+    setLoadingChannels(true);
+    setSelectedGenre(genre);
+    setCurrentPage(page);
+    
+    try {
+      const response = await fetch('/api/admin/iptv-debug', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          action: 'channels', 
+          portalUrl, 
+          macAddress, 
+          token,
+          genre,
+          page
+        })
+      });
+      
+      const data = await response.json();
+      console.log('Channels response:', data);
+      if (data.success) {
+        setChannels(data.channels?.data || []);
+        setTotalChannels(data.channels?.total_items || 0);
+      } else {
+        console.error('Failed to load channels:', data);
+      }
+    } catch (error) {
+      console.error('Failed to load channels:', error);
+    } finally {
+      setLoadingChannels(false);
+    }
+  }, [testResult?.token, portalUrl, macAddress]);
 
   const testConnection = useCallback(async () => {
     if (!portalUrl || !macAddress) return;
@@ -277,46 +398,16 @@ export default function IPTVDebugPage() {
         if (genresData.success) {
           setGenres(genresData.genres || []);
         }
+        
+        // Auto-load first page of all channels
+        await loadChannels('*', 0, data.token);
       }
     } catch (error: any) {
       setTestResult({ success: false, error: error.message });
     } finally {
       setLoading(false);
     }
-  }, [portalUrl, macAddress]);
-
-  const loadChannels = useCallback(async (genre: string = '*', page: number = 0) => {
-    if (!testResult?.token) return;
-    
-    setLoadingChannels(true);
-    setSelectedGenre(genre);
-    setCurrentPage(page);
-    
-    try {
-      const response = await fetch('/api/admin/iptv-debug', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          action: 'channels', 
-          portalUrl, 
-          macAddress, 
-          token: testResult.token,
-          genre,
-          page
-        })
-      });
-      
-      const data = await response.json();
-      if (data.success) {
-        setChannels(data.channels.data || []);
-        setTotalChannels(data.channels.total_items || 0);
-      }
-    } catch (error) {
-      console.error('Failed to load channels:', error);
-    } finally {
-      setLoadingChannels(false);
-    }
-  }, [testResult?.token, portalUrl, macAddress]);
+  }, [portalUrl, macAddress, loadChannels]);
 
   const getStream = useCallback(async (channel: Channel) => {
     if (!testResult?.token) return;
@@ -988,7 +1079,8 @@ export default function IPTVDebugPage() {
                 borderRadius: '12px',
                 overflow: 'hidden',
                 marginBottom: '16px',
-                aspectRatio: '16/9'
+                aspectRatio: '16/9',
+                position: 'relative'
               }}>
                 <video
                   ref={videoRef}
@@ -997,6 +1089,21 @@ export default function IPTVDebugPage() {
                   playsInline
                   style={{ width: '100%', height: '100%' }}
                 />
+                {playerError && (
+                  <div style={{
+                    position: 'absolute',
+                    bottom: '10px',
+                    left: '10px',
+                    right: '10px',
+                    background: 'rgba(239, 68, 68, 0.9)',
+                    color: '#fff',
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    fontSize: '12px'
+                  }}>
+                    {playerError}
+                  </div>
+                )}
               </div>
 
               <div style={{ 
@@ -1019,6 +1126,27 @@ export default function IPTVDebugPage() {
                   {rawStreamUrl || streamUrl}
                 </code>
                 <div style={{ display: 'flex', gap: '8px' }}>
+                  {selectedChannel && (
+                    <button
+                      onClick={() => getStream(selectedChannel)}
+                      disabled={loadingStream}
+                      style={{
+                        background: 'rgba(34, 197, 94, 0.2)',
+                        border: 'none',
+                        color: '#22c55e',
+                        cursor: loadingStream ? 'not-allowed' : 'pointer',
+                        padding: '8px',
+                        borderRadius: '6px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontSize: '12px'
+                      }}
+                      title="Get fresh stream URL with new token"
+                    >
+                      {loadingStream ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : '🔄'} Refresh
+                    </button>
+                  )}
                   <button
                     onClick={() => copyToClipboard(rawStreamUrl || streamUrl || '')}
                     style={{
@@ -1066,10 +1194,79 @@ export default function IPTVDebugPage() {
                 padding: '12px 16px',
                 marginTop: '12px'
               }}>
-                <p style={{ color: '#fbbf24', fontSize: '12px', margin: 0 }}>
-                  ⚠️ Note: Stream playback may fail with 444 error if the portal blocks requests from server IPs. 
-                  The raw URL can be copied and used in VLC or another player on your local machine.
+                <p style={{ color: '#fbbf24', fontSize: '13px', margin: '0 0 8px 0', fontWeight: '500' }}>
+                  ⚠️ Stream not playing? This is normal for IPTV streams!
                 </p>
+                <p style={{ color: '#d4a', fontSize: '12px', margin: '0 0 8px 0' }}>
+                  Most IPTV portals serve raw MPEG-TS streams which browsers cannot play directly.
+                </p>
+                <ol style={{ color: '#fbbf24', fontSize: '12px', margin: 0, paddingLeft: '20px' }}>
+                  <li style={{ marginBottom: '4px' }}><strong>Use VLC:</strong> Copy the URL and paste into VLC (File → Open Network Stream)</li>
+                  <li style={{ marginBottom: '4px' }}><strong>Use the VLC command:</strong> Click "Copy VLC Command" below and paste in terminal</li>
+                  <li>The stream URL is valid - it just needs a proper MPEG-TS player</li>
+                </ol>
+                {rawStreamUrl && (
+                  <div style={{ marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => {
+                        // Copy URL to clipboard
+                        navigator.clipboard.writeText(rawStreamUrl);
+                        alert('URL copied! Paste into VLC: File → Open Network Stream\n\nNote: Tokens expire quickly - paste immediately!');
+                      }}
+                      style={{
+                        padding: '8px 16px',
+                        background: 'rgba(34, 197, 94, 0.3)',
+                        border: '1px solid rgba(34, 197, 94, 0.5)',
+                        borderRadius: '6px',
+                        color: '#22c55e',
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                        fontWeight: '600'
+                      }}
+                    >
+                      📋 Copy URL for VLC (Recommended)
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Generate VLC command
+                        const vlcCmd = `vlc "${rawStreamUrl}"`;
+                        navigator.clipboard.writeText(vlcCmd);
+                        alert('VLC command copied!\n\nPaste in terminal immediately - tokens expire fast!');
+                      }}
+                      style={{
+                        padding: '8px 16px',
+                        background: 'rgba(251, 191, 36, 0.2)',
+                        border: '1px solid rgba(251, 191, 36, 0.4)',
+                        borderRadius: '6px',
+                        color: '#fbbf24',
+                        fontSize: '12px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Copy VLC Command
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Try playing directly without proxy
+                        if (videoRef.current && hlsRef.current) {
+                          hlsRef.current.destroy();
+                        }
+                        setStreamUrl(rawStreamUrl);
+                      }}
+                      style={{
+                        padding: '8px 16px',
+                        background: 'rgba(100, 100, 100, 0.2)',
+                        border: '1px solid rgba(100, 100, 100, 0.4)',
+                        borderRadius: '6px',
+                        color: '#94a3b8',
+                        fontSize: '12px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Try Direct (Usually Fails)
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Stream Debug Info */}
