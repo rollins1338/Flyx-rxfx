@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { verifyAdminAuth } from '@/lib/utils/admin-auth';
 
 const REQUEST_TIMEOUT = 15000;
 
@@ -23,13 +23,6 @@ function buildHeaders(macAddress: string, token?: string): Record<string, string
   }
   
   return headers;
-}
-
-// Verify admin authentication
-async function verifyAdmin(): Promise<boolean> {
-  const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get('admin_session');
-  return !!sessionCookie?.value;
 }
 
 // Perform handshake to get authentication token
@@ -233,7 +226,8 @@ function normalizePortalUrl(portalUrl: string): string {
 
 export async function POST(request: NextRequest) {
   // Verify admin authentication
-  if (!await verifyAdmin()) {
+  const authResult = await verifyAdminAuth(request);
+  if (!authResult.success) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
