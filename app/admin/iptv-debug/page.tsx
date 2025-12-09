@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { 
   Wifi, 
   Play, 
@@ -13,6 +13,7 @@ import {
   Copy,
   ExternalLink
 } from 'lucide-react';
+import Hls from 'hls.js';
 
 interface TestResult {
   success: boolean;
@@ -51,6 +52,72 @@ export default function IPTVDebugPage() {
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [loadingStream, setLoadingStream] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
+  const [rawStreamUrl, setRawStreamUrl] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const hlsRef = useRef<Hls | null>(null);
+
+  // Setup HLS player when stream URL changes
+  useEffect(() => {
+    if (!streamUrl || !videoRef.current) return;
+
+    // Cleanup previous HLS instance
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+
+    const video = videoRef.current;
+
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        xhrSetup: (xhr) => {
+          xhr.withCredentials = true;
+        },
+      });
+      
+      hls.loadSource(streamUrl);
+      hls.attachMedia(video);
+      
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        video.play().catch(console.error);
+      });
+      
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        console.error('HLS error:', data);
+        if (data.fatal) {
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              console.log('Network error, trying to recover...');
+              hls.startLoad();
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              console.log('Media error, trying to recover...');
+              hls.recoverMediaError();
+              break;
+            default:
+              console.log('Fatal error, destroying HLS instance');
+              hls.destroy();
+              break;
+          }
+        }
+      });
+      
+      hlsRef.current = hls;
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // Native HLS support (Safari)
+      video.src = streamUrl;
+      video.play().catch(console.error);
+    }
+
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
+  }, [streamUrl]);
 
   const testConnection = useCallback(async () => {
     if (!portalUrl || !macAddress) return;
@@ -129,6 +196,7 @@ export default function IPTVDebugPage() {
     setLoadingStream(true);
     setSelectedChannel(channel);
     setStreamUrl(null);
+    setRawStreamUrl(null);
     
     try {
       const response = await fetch('/api/admin/iptv-debug', {
@@ -150,7 +218,13 @@ export default function IPTVDebugPage() {
         if (url.startsWith('ffmpeg ')) {
           url = url.replace('ffmpeg ', '');
         }
-        setStreamUrl(url);
+        
+        // Save raw URL for display/copy
+        setRawStreamUrl(url);
+        
+        // Create proxied URL through our API
+        const proxiedUrl = `/api/admin/iptv-debug/stream?url=${encodeURIComponent(url)}&mac=${encodeURIComponent(macAddress)}&token=${encodeURIComponent(testResult.token)}`;
+        setStreamUrl(proxiedUrl);
       }
     } catch (error) {
       console.error('Failed to get stream:', error);
@@ -648,13 +722,11 @@ export default function IPTVDebugPage() {
                 aspectRatio: '16/9'
               }}>
                 <video
-                  src={streamUrl}
+                  ref={videoRef}
                   controls
                   autoPlay
+                  playsInline
                   style={{ width: '100%', height: '100%' }}
-                  onError={() => {
-                    console.log('Video playback error - stream may require HLS player');
-                  }}
                 />
               </div>
 
@@ -675,11 +747,11 @@ export default function IPTVDebugPage() {
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap'
                 }}>
-                  {streamUrl}
+                  {rawStreamUrl || streamUrl}
                 </code>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button
-                    onClick={() => copyToClipboard(streamUrl)}
+                    onClick={() => copyToClipboard(rawStreamUrl || streamUrl || '')}
                     style={{
                       background: 'rgba(120, 119, 198, 0.2)',
                       border: 'none',
@@ -696,7 +768,7 @@ export default function IPTVDebugPage() {
                     <Copy size={14} /> Copy
                   </button>
                   <a
-                    href={streamUrl}
+                    href={rawStreamUrl || streamUrl || ''}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{
