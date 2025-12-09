@@ -37,12 +37,16 @@ export function useDlhdProxy(): boolean {
 
 // TV proxy base URL for DLHD live streams
 export function getTvProxyBaseUrl(): string {
-  const cfProxyUrl = process.env.NEXT_PUBLIC_CF_TV_PROXY_URL;
+  let cfProxyUrl = process.env.NEXT_PUBLIC_CF_TV_PROXY_URL;
   
   if (!cfProxyUrl) {
     console.error('[proxy-config] NEXT_PUBLIC_CF_TV_PROXY_URL is not set! Cloudflare Worker is required.');
     throw new Error('TV proxy not configured. Set NEXT_PUBLIC_CF_TV_PROXY_URL environment variable.');
   }
+  
+  // Strip trailing /tv or /dlhd if present (for backwards compatibility)
+  // The route is now determined by NEXT_PUBLIC_USE_DLHD_PROXY
+  cfProxyUrl = cfProxyUrl.replace(/\/(tv|dlhd)\/?$/, '');
   
   return cfProxyUrl;
 }
