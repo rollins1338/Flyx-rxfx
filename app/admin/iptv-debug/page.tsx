@@ -16,8 +16,8 @@ import {
   Star,
   Trash2
 } from 'lucide-react';
-import Hls from 'hls.js';
-import mpegts from 'mpegts.js';
+import type Hls from 'hls.js';
+import type mpegts from 'mpegts.js';
 
 // Cloudflare Worker proxy URL for IPTV streams
 // This bypasses CORS and SSL issues that browsers have with IPTV CDNs
@@ -192,6 +192,7 @@ export default function IPTVDebugPage() {
   }, [testResult, portalUrl, macAddress]);
 
   // Setup player when stream URL changes
+  // Setup player when stream URL changes
   useEffect(() => {
     if (!streamUrl || !videoRef.current) return;
 
@@ -214,109 +215,130 @@ export default function IPTVDebugPage() {
     
     console.log('Stream type detection:', { isHLS, isTS, streamUrl });
 
-    if (isHLS && Hls.isSupported()) {
-      // Use HLS.js for m3u8 streams
-      const hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: true,
-        xhrSetup: (xhr) => {
-          xhr.withCredentials = true;
-        },
-      });
-      
-      hls.loadSource(streamUrl);
-      hls.attachMedia(video);
-      
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        video.play().catch(console.error);
-      });
-      
-      hls.on(Hls.Events.ERROR, (_event, data) => {
-        console.error('HLS error:', data);
-        setPlayerError(`HLS Error: ${data.type} - ${data.details}`);
-        if (data.fatal) {
-          switch (data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
-              console.log('Network error, trying to recover...');
-              hls.startLoad();
-              break;
-            case Hls.ErrorTypes.MEDIA_ERROR:
-              console.log('Media error, trying to recover...');
-              hls.recoverMediaError();
-              break;
-            default:
-              console.log('Fatal error, destroying HLS instance');
-              hls.destroy();
-              break;
-          }
+    // Dynamic import and setup
+    const setupPlayer = async () => {
+      if (isHLS) {
+        // Dynamically import HLS.js
+        const HlsModule = await import('hls.js');
+        const Hls = HlsModule.default;
+        
+        if (Hls.isSupported()) {
+          const hls = new Hls({
+            enableWorker: true,
+            lowLatencyMode: true,
+            xhrSetup: (xhr) => {
+              xhr.withCredentials = true;
+            },
+          });
+          
+          hls.loadSource(streamUrl);
+          hls.attachMedia(video);
+          
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            video.play().catch(console.error);
+          });
+          
+          hls.on(Hls.Events.ERROR, (_event, data) => {
+            console.error('HLS error:', data);
+            setPlayerError(`HLS Error: ${data.type} - ${data.details}`);
+            if (data.fatal) {
+              switch (data.type) {
+                case Hls.ErrorTypes.NETWORK_ERROR:
+                  console.log('Network error, trying to recover...');
+                  hls.startLoad();
+                  break;
+                case Hls.ErrorTypes.MEDIA_ERROR:
+                  console.log('Media error, trying to recover...');
+                  hls.recoverMediaError();
+                  break;
+                default:
+                  console.log('Fatal error, destroying HLS instance');
+                  hls.destroy();
+                  break;
+              }
+            }
+          });
+          
+          hlsRef.current = hls;
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          // Native HLS support (Safari)
+          video.src = streamUrl;
+          video.play().catch(console.error);
         }
-      });
-      
-      hlsRef.current = hls;
-    } else if (isTS && mpegts.isSupported()) {
-      // Use mpegts.js for MPEG-TS streams (IPTV)
-      console.log('Using mpegts.js for TS stream');
-      
-      // Use Cloudflare Worker proxy to bypass CORS/SSL issues
-      // The raw stream URL goes through our CF worker which handles the SSL/CORS
-      const rawUrl = rawStreamUrl || streamUrl;
-      const cfProxyUrl = `${CF_PROXY_URL}/iptv/stream?url=${encodeURIComponent(rawUrl)}`;
-      
-      console.log('mpegts using CF proxy URL:', cfProxyUrl);
-      
-      const player = mpegts.createPlayer({
-        type: 'mpegts',
-        isLive: true,
-        url: cfProxyUrl,
-      }, {
-        enableWorker: false, // Disable worker to avoid URL parsing issues
-        enableStashBuffer: false,
-        stashInitialSize: 128,
-        liveBufferLatencyChasing: true,
-        liveBufferLatencyMaxLatency: 1.5,
-        liveBufferLatencyMinRemain: 0.3,
-      });
-      
-      player.attachMediaElement(video);
-      player.load();
-      
-      player.on(mpegts.Events.ERROR, (errorType: string, errorDetail: string) => {
-        console.error('mpegts error:', errorType, errorDetail);
-        // Check for common errors
-        if (errorDetail.includes('403') || errorDetail.includes('HttpStatusCodeInvalid')) {
-          setPlayerError(`Portal blocked cloud IP (403). IPTV providers block datacenter IPs. Use VLC with the URL below.`);
-        } else if (errorDetail.includes('SSL') || errorDetail.includes('fetch') || errorDetail.includes('Network')) {
-          setPlayerError(`Network Error: Stream may have expired. Click Refresh and try VLC.`);
+      } else if (isTS) {
+        // Dynamically import mpegts.js
+        const mpegtsModule = await import('mpegts.js');
+        const mpegtsLib = mpegtsModule.default;
+        
+        if (mpegtsLib.isSupported()) {
+          console.log('Using mpegts.js for TS stream');
+          
+          // Use Cloudflare Worker proxy to bypass CORS/SSL issues
+          const rawUrl = rawStreamUrl || streamUrl;
+          const cfProxyUrl = `${CF_PROXY_URL}/iptv/stream?url=${encodeURIComponent(rawUrl)}`;
+          
+          console.log('mpegts using CF proxy URL:', cfProxyUrl);
+          
+          const player = mpegtsLib.createPlayer({
+            type: 'mpegts',
+            isLive: true,
+            url: cfProxyUrl,
+          }, {
+            enableWorker: false,
+            enableStashBuffer: false,
+            stashInitialSize: 128,
+            liveBufferLatencyChasing: true,
+            liveBufferLatencyMaxLatency: 1.5,
+            liveBufferLatencyMinRemain: 0.3,
+          });
+          
+          player.attachMediaElement(video);
+          player.load();
+          
+          player.on(mpegtsLib.Events.ERROR, (errorType: string, errorDetail: string) => {
+            console.error('mpegts error:', errorType, errorDetail);
+            if (errorDetail.includes('403') || errorDetail.includes('HttpStatusCodeInvalid')) {
+              setPlayerError(`Portal blocked cloud IP (403). IPTV providers block datacenter IPs. Use VLC with the URL below.`);
+            } else if (errorDetail.includes('SSL') || errorDetail.includes('fetch') || errorDetail.includes('Network')) {
+              setPlayerError(`Network Error: Stream may have expired. Click Refresh and try VLC.`);
+            } else {
+              setPlayerError(`MPEG-TS Error: ${errorType}. Use VLC to play this stream.`);
+            }
+          });
+          
+          player.on(mpegtsLib.Events.LOADING_COMPLETE, () => {
+            console.log('mpegts loading complete');
+          });
+          
+          video.play().catch((err) => {
+            console.error('Play failed:', err);
+            setPlayerError(`Play failed: ${err.message}`);
+          });
+          
+          mpegtsRef.current = player;
         } else {
-          setPlayerError(`MPEG-TS Error: ${errorType}. Use VLC to play this stream.`);
+          setPlayerError('Browser does not support MPEG-TS playback. Use VLC instead.');
         }
-      });
-      
-      player.on(mpegts.Events.LOADING_COMPLETE, () => {
-        console.log('mpegts loading complete');
-      });
-      
-      // Try to play
-      video.play().catch((err) => {
-        console.error('Play failed:', err);
-        setPlayerError(`Play failed: ${err.message}`);
-      });
-      
-      mpegtsRef.current = player;
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      // Native HLS support (Safari)
-      video.src = streamUrl;
-      video.play().catch(console.error);
-    } else {
-      // Fallback - try direct playback
-      console.log('Attempting direct playback');
-      setPlayerError('Browser may not support this stream format. Use VLC instead.');
-      video.src = streamUrl;
-      video.play().catch((err) => {
-        console.error('Direct playback failed:', err);
-        setPlayerError(`Playback failed: ${err.message}. Use VLC to play this stream.`);
-      });
-    }
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        // Native HLS support (Safari)
+        video.src = streamUrl;
+        video.play().catch(console.error);
+      } else {
+        // Fallback - try direct playback
+        console.log('Attempting direct playback');
+        setPlayerError('Browser may not support this stream format. Use VLC instead.');
+        video.src = streamUrl;
+        video.play().catch((err) => {
+          console.error('Direct playback failed:', err);
+          setPlayerError(`Playback failed: ${err.message}. Use VLC to play this stream.`);
+        });
+      }
+    };
+
+    setupPlayer().catch((err) => {
+      console.error('Failed to setup player:', err);
+      setPlayerError(`Failed to load player: ${err.message}`);
+    })
 
     return () => {
       if (hlsRef.current) {
