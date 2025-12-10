@@ -346,10 +346,12 @@ export default function IPTVDebugPage() {
     const video = videoRef.current;
     
     // Check if this is an HLS stream (m3u8) or raw TS stream
-    const isHLS = streamUrl.includes('.m3u8') || streamUrl.includes('m3u8');
-    const isTS = streamUrl.includes('extension=ts') || streamUrl.endsWith('.ts') || streamUrl.includes('live.php');
+    // Use rawStreamUrl for detection since streamUrl is the proxied URL
+    const urlToCheck = rawStreamUrl || streamUrl;
+    const isHLS = urlToCheck.includes('.m3u8') || urlToCheck.includes('m3u8');
+    const isTS = urlToCheck.includes('extension=ts') || urlToCheck.endsWith('.ts') || urlToCheck.includes('live.php') || urlToCheck.includes('/play/');
     
-    console.log('Stream type detection:', { isHLS, isTS, streamUrl });
+    console.log('Stream type detection:', { isHLS, isTS, urlToCheck, streamUrl });
 
     // Dynamic import and setup
     const setupPlayer = async () => {
@@ -489,14 +491,56 @@ export default function IPTVDebugPage() {
         video.src = streamUrl;
         video.play().catch(console.error);
       } else {
-        // Fallback - try direct playback
-        console.log('Attempting direct playback');
-        setPlayerError('Browser may not support this stream format. Use VLC instead.');
-        video.src = streamUrl;
-        video.play().catch((err) => {
-          console.error('Direct playback failed:', err);
-          setPlayerError(`Playback failed: ${err.message}. Use VLC to play this stream.`);
-        });
+        // Fallback - try mpegts.js for unknown stream types (most IPTV streams are TS)
+        console.log('Unknown stream type, trying mpegts.js as fallback');
+        
+        const mpegtsModule = await import('mpegts.js');
+        const mpegtsLib = mpegtsModule.default;
+        
+        if (mpegtsLib.isSupported()) {
+          // Use RPi proxy for residential IP
+          const rawUrl = rawStreamUrl || streamUrl;
+          let proxyUrl: string;
+          
+          const proxyParams = new URLSearchParams({ url: rawUrl });
+          if (macAddress) proxyParams.set('mac', macAddress);
+          
+          if (RPI_PROXY_URL) {
+            if (RPI_PROXY_KEY) proxyParams.set('key', RPI_PROXY_KEY);
+            proxyUrl = `${RPI_PROXY_URL}/iptv/stream?${proxyParams.toString()}`;
+            console.log('Fallback mpegts using RPi proxy:', proxyUrl.substring(0, 100));
+          } else {
+            proxyUrl = `${CF_PROXY_URL}/iptv/stream?${proxyParams.toString()}`;
+            console.log('Fallback mpegts using CF proxy:', proxyUrl.substring(0, 100));
+          }
+          
+          const player = mpegtsLib.createPlayer({
+            type: 'mpegts',
+            isLive: true,
+            url: proxyUrl,
+          }, {
+            enableWorker: true,
+            enableStashBuffer: true,
+            stashInitialSize: 384 * 1024,
+          });
+          
+          player.attachMediaElement(video);
+          player.load();
+          
+          player.on(mpegtsLib.Events.ERROR, (errorType: string, errorDetail: string) => {
+            console.error('Fallback mpegts error:', { errorType, errorDetail });
+            setPlayerError(`Stream Error: ${errorType} - ${errorDetail}. Try VLC.`);
+          });
+          
+          video.play().catch((err) => {
+            console.error('Fallback play failed:', err);
+            setPlayerError(`Play failed: ${err.message}. Use VLC.`);
+          });
+          
+          mpegtsRef.current = player;
+        } else {
+          setPlayerError('Browser does not support this stream format. Use VLC instead.');
+        }
       }
     };
 

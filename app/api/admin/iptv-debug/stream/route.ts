@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdminAuth } from '@/lib/utils/admin-auth';
 
-// STB Device Headers
+// RPi proxy configuration - REQUIRED for IPTV streams (datacenter IPs get blocked)
+const RPI_PROXY_URL = process.env.RPI_PROXY_URL;
+const RPI_PROXY_KEY = process.env.RPI_PROXY_KEY;
+
+// STB Device Headers (only used as fallback if no RPi proxy)
 const STB_USER_AGENT = 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3';
 
 function buildStreamHeaders(macAddress: string, token: string, referer?: string): Record<string, string> {
@@ -41,11 +45,34 @@ export async function GET(request: NextRequest) {
     const urlObj = new URL(decodedUrl);
     const referer = `${urlObj.protocol}//${urlObj.host}/`;
 
-    const response = await fetch(decodedUrl, {
-      headers: buildStreamHeaders(mac, token, referer),
-    });
+    let response: Response;
+
+    // Use RPi proxy if available (REQUIRED for production - datacenter IPs get blocked)
+    if (RPI_PROXY_URL && RPI_PROXY_KEY) {
+      console.log('[IPTV Stream] Using RPi proxy for residential IP');
+      const rpiParams = new URLSearchParams({
+        url: decodedUrl,
+        mac: mac,
+        token: token,
+        key: RPI_PROXY_KEY,
+      });
+      
+      response = await fetch(`${RPI_PROXY_URL}/iptv/stream?${rpiParams.toString()}`, {
+        headers: {
+          'X-API-Key': RPI_PROXY_KEY,
+        },
+      });
+    } else {
+      // Fallback to direct fetch (will likely fail in production due to IP blocking)
+      console.warn('[IPTV Stream] No RPi proxy configured - direct fetch may be blocked');
+      response = await fetch(decodedUrl, {
+        headers: buildStreamHeaders(mac, token, referer),
+      });
+    }
 
     if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      console.error(`[IPTV Stream] Fetch failed: ${response.status}`, errorText.substring(0, 200));
       return new NextResponse(`Stream fetch failed: ${response.status}`, { status: response.status });
     }
 
@@ -78,7 +105,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error: any) {
-    console.error('Stream proxy error:', error);
+    console.error('[IPTV Stream] Proxy error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
