@@ -34,6 +34,9 @@ export interface Env {
   RPI_PROXY_URL?: string;
   RPI_PROXY_KEY?: string;
   LOG_LEVEL?: string;
+  // Hetzner VPS proxy (PRIMARY for IPTV)
+  HETZNER_PROXY_URL?: string;
+  HETZNER_PROXY_KEY?: string;
   // Anti-leech settings
   ALLOWED_ORIGINS?: string;
   SIGNING_SECRET?: string;
@@ -237,10 +240,18 @@ export default {
     }
 
     // Route to IPTV proxy (Stalker portals)
-    if (path.startsWith('/iptv')) {
+    // Handle both /iptv/* and /tv/iptv/* (legacy path from NEXT_PUBLIC_CF_TV_PROXY_URL)
+    if (path.startsWith('/iptv') || path.startsWith('/tv/iptv')) {
       logger.info('Routing to IPTV proxy', { path });
       
       try {
+        // If path starts with /tv/iptv, strip the /tv prefix for the handler
+        if (path.startsWith('/tv/iptv')) {
+          const newUrl = new URL(request.url);
+          newUrl.pathname = path.replace(/^\/tv/, '');
+          const newRequest = new Request(newUrl.toString(), request);
+          return await handleIPTVRequest(newRequest, env);
+        }
         return await handleIPTVRequest(request, env);
       } catch (error) {
         metrics.errors++;
@@ -249,7 +260,7 @@ export default {
       }
     }
 
-    // Route to TV proxy
+    // Route to TV proxy (DLHD streams - NOT IPTV)
     if (path.startsWith('/tv')) {
       metrics.tvRequests++;
       logger.info('Routing to TV proxy', { path });

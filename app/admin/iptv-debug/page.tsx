@@ -709,6 +709,118 @@ export default function IPTVDebugPage() {
     navigator.clipboard.writeText(text);
   };
 
+  // Get stream URL via Cloudflare proxy (direct, no RPi)
+  // This tests if CF can access the portal directly now that free tier limits are resolved
+  const getStreamViaCF = useCallback(async (channel: Channel) => {
+    if (!portalUrl || !macAddress) return;
+    
+    setLoadingStream(true);
+    setSelectedChannel(channel);
+    setStreamUrl(null);
+    setRawStreamUrl(null);
+    setStreamDebug(null);
+    
+    try {
+      // Normalize portal URL
+      let baseUrl = portalUrl.trim();
+      if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+        baseUrl = 'http://' + baseUrl;
+      }
+      baseUrl = baseUrl.replace(/\/+$/, '');
+      if (baseUrl.endsWith('/c')) baseUrl = baseUrl.slice(0, -2);
+      
+      // Step 1: Get token via CF proxy (handshake)
+      const handshakeUrl = new URL('/portal.php', baseUrl);
+      handshakeUrl.searchParams.set('type', 'stb');
+      handshakeUrl.searchParams.set('action', 'handshake');
+      handshakeUrl.searchParams.set('token', '');
+      handshakeUrl.searchParams.set('JsHttpRequest', '1-xml');
+      
+      const cfBaseUrl = CF_PROXY_URL.replace(/\/tv\/?$/, '').replace(/\/+$/, '');
+      
+      console.log('[CF Stream] Step 1: Getting token via CF proxy');
+      const tokenParams = new URLSearchParams({ url: handshakeUrl.toString(), mac: macAddress });
+      const tokenRes = await fetch(`${cfBaseUrl}/iptv/api?${tokenParams.toString()}`);
+      const tokenText = await tokenRes.text();
+      const tokenClean = tokenText.replace(/^\/\*-secure-\s*/, '').replace(/\s*\*\/$/, '');
+      const tokenData = JSON.parse(tokenClean);
+      
+      if (!tokenData?.js?.token) {
+        throw new Error('Failed to get token from CF proxy');
+      }
+      
+      const cfToken = tokenData.js.token;
+      console.log('[CF Stream] Got token:', cfToken.substring(0, 20) + '...');
+      
+      // Step 2: Get stream URL via CF proxy (create_link)
+      const createLinkUrl = new URL('/portal.php', baseUrl);
+      createLinkUrl.searchParams.set('type', 'itv');
+      createLinkUrl.searchParams.set('action', 'create_link');
+      createLinkUrl.searchParams.set('cmd', channel.cmd);
+      createLinkUrl.searchParams.set('series', '');
+      createLinkUrl.searchParams.set('forced_storage', 'undefined');
+      createLinkUrl.searchParams.set('disable_ad', '0');
+      createLinkUrl.searchParams.set('download', '0');
+      createLinkUrl.searchParams.set('JsHttpRequest', '1-xml');
+      
+      console.log('[CF Stream] Step 2: Getting stream URL via CF proxy');
+      const streamParams = new URLSearchParams({ 
+        url: createLinkUrl.toString(), 
+        mac: macAddress,
+        token: cfToken
+      });
+      const streamRes = await fetch(`${cfBaseUrl}/iptv/api?${streamParams.toString()}`);
+      const streamText = await streamRes.text();
+      const streamClean = streamText.replace(/^\/\*-secure-\s*/, '').replace(/\s*\*\/$/, '');
+      const streamData = JSON.parse(streamClean);
+      
+      // Extract URL from ffmpeg command format
+      let streamUrl = streamData?.js?.cmd || null;
+      if (streamUrl) {
+        const prefixes = ['ffmpeg ', 'ffrt ', 'ffrt2 ', 'ffrt3 ', 'ffrt4 '];
+        for (const prefix of prefixes) {
+          if (streamUrl.startsWith(prefix)) {
+            streamUrl = streamUrl.substring(prefix.length);
+            break;
+          }
+        }
+        streamUrl = streamUrl.trim();
+      }
+      
+      const usedMethod = streamRes.headers.get('X-Used-Method') || 'unknown';
+      
+      setStreamDebug({ 
+        success: !!streamUrl,
+        streamUrl,
+        channelCmd: channel.cmd, 
+        channelName: channel.name,
+        cfToken: cfToken.substring(0, 20) + '...',
+        usedMethod,
+        rawResponse: streamData,
+        note: 'Stream obtained via Cloudflare proxy (direct)'
+      });
+      
+      if (streamUrl) {
+        // Save raw URL for display/copy
+        setRawStreamUrl(streamUrl);
+        
+        // Create proxied URL through CF worker for playback
+        const playbackParams = new URLSearchParams({ url: streamUrl, mac: macAddress });
+        const proxiedUrl = `${cfBaseUrl}/iptv/stream?${playbackParams.toString()}`;
+        console.log('[CF Stream] Setting proxied stream URL:', proxiedUrl.substring(0, 100));
+        setStreamUrl(proxiedUrl);
+      } else {
+        console.error('[CF Stream] No stream URL returned:', streamData);
+        setStreamDebug((prev: any) => ({ ...prev, error: 'No stream URL in response' }));
+      }
+    } catch (error) {
+      console.error('[CF Stream] Failed:', error);
+      setStreamDebug({ error: String(error), note: 'CF stream test failed' });
+    } finally {
+      setLoadingStream(false);
+    }
+  }, [portalUrl, macAddress]);
+
   // Debug which IP sources work for this portal
   const debugSources = useCallback(async () => {
     if (!portalUrl || !macAddress) return;
@@ -1692,7 +1804,6 @@ export default function IPTVDebugPage() {
                 {channels.map((channel) => (
                   <div
                     key={channel.id}
-                    onClick={() => getStream(channel)}
                     style={{
                       background: selectedChannel?.id === channel.id 
                         ? 'rgba(120, 119, 198, 0.2)' 
@@ -1702,7 +1813,6 @@ export default function IPTVDebugPage() {
                         : '1px solid rgba(255, 255, 255, 0.1)',
                       borderRadius: '12px',
                       padding: '12px 16px',
-                      cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '12px',
@@ -1736,7 +1846,46 @@ export default function IPTVDebugPage() {
                         #{channel.number}
                       </div>
                     </div>
-                    <Play size={16} color="#7877c6" />
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); getStream(channel); }}
+                        disabled={loadingStream}
+                        title="Play via Vercel API"
+                        style={{
+                          padding: '6px 10px',
+                          background: 'rgba(120, 119, 198, 0.2)',
+                          border: '1px solid rgba(120, 119, 198, 0.3)',
+                          borderRadius: '6px',
+                          color: '#7877c6',
+                          fontSize: '11px',
+                          cursor: loadingStream ? 'not-allowed' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        <Play size={12} /> API
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); getStreamViaCF(channel); }}
+                        disabled={loadingStream}
+                        title="Play via Cloudflare (direct)"
+                        style={{
+                          padding: '6px 10px',
+                          background: 'rgba(249, 115, 22, 0.2)',
+                          border: '1px solid rgba(249, 115, 22, 0.3)',
+                          borderRadius: '6px',
+                          color: '#f97316',
+                          fontSize: '11px',
+                          cursor: loadingStream ? 'not-allowed' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        <Zap size={12} /> CF
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -2045,30 +2194,74 @@ export default function IPTVDebugPage() {
 
               {/* Stream Debug Info */}
               {streamDebug && (
-                <details style={{ marginTop: '12px' }}>
-                  <summary style={{ 
-                    color: '#94a3b8', 
-                    cursor: 'pointer', 
-                    padding: '8px',
-                    background: 'rgba(30, 41, 59, 0.3)',
-                    borderRadius: '6px',
-                    fontSize: '12px'
-                  }}>
-                    View Stream API Response
-                  </summary>
-                  <pre style={{
-                    background: 'rgba(15, 23, 42, 0.6)',
-                    padding: '12px',
-                    borderRadius: '0 0 6px 6px',
-                    overflow: 'auto',
-                    maxHeight: '200px',
-                    color: '#94a3b8',
-                    fontSize: '11px',
-                    margin: 0
-                  }}>
-                    {JSON.stringify(streamDebug, null, 2)}
-                  </pre>
-                </details>
+                <div style={{ marginTop: '12px' }}>
+                  {/* Method indicator */}
+                  {streamDebug.usedMethod && (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      marginBottom: '8px',
+                      padding: '8px 12px',
+                      background: streamDebug.usedMethod === 'direct' 
+                        ? 'rgba(249, 115, 22, 0.1)' 
+                        : 'rgba(120, 119, 198, 0.1)',
+                      border: `1px solid ${streamDebug.usedMethod === 'direct' ? 'rgba(249, 115, 22, 0.3)' : 'rgba(120, 119, 198, 0.3)'}`,
+                      borderRadius: '6px'
+                    }}>
+                      <Zap size={14} color={streamDebug.usedMethod === 'direct' ? '#f97316' : '#7877c6'} />
+                      <span style={{ 
+                        color: streamDebug.usedMethod === 'direct' ? '#f97316' : '#7877c6', 
+                        fontSize: '12px', 
+                        fontWeight: '500' 
+                      }}>
+                        Stream via: {streamDebug.usedMethod === 'direct' ? 'Cloudflare (Direct)' : streamDebug.usedMethod}
+                      </span>
+                      {streamDebug.cfToken && (
+                        <span style={{ color: '#64748b', fontSize: '11px', marginLeft: 'auto' }}>
+                          CF Token: {streamDebug.cfToken}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {streamDebug.note && (
+                    <div style={{
+                      padding: '8px 12px',
+                      background: 'rgba(34, 197, 94, 0.1)',
+                      border: '1px solid rgba(34, 197, 94, 0.3)',
+                      borderRadius: '6px',
+                      marginBottom: '8px',
+                      color: '#22c55e',
+                      fontSize: '12px'
+                    }}>
+                      💡 {streamDebug.note}
+                    </div>
+                  )}
+                  <details>
+                    <summary style={{ 
+                      color: '#94a3b8', 
+                      cursor: 'pointer', 
+                      padding: '8px',
+                      background: 'rgba(30, 41, 59, 0.3)',
+                      borderRadius: '6px',
+                      fontSize: '12px'
+                    }}>
+                      View Stream API Response
+                    </summary>
+                    <pre style={{
+                      background: 'rgba(15, 23, 42, 0.6)',
+                      padding: '12px',
+                      borderRadius: '0 0 6px 6px',
+                      overflow: 'auto',
+                      maxHeight: '200px',
+                      color: '#94a3b8',
+                      fontSize: '11px',
+                      margin: 0
+                    }}>
+                      {JSON.stringify(streamDebug, null, 2)}
+                    </pre>
+                  </details>
+                </div>
               )}
             </>
           ) : null}

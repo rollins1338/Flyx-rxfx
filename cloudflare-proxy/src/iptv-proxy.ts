@@ -210,11 +210,11 @@ async function handleApiProxy(url: URL, env: Env, logger: any, origin: string | 
     let response: Response;
     let usedMethod = 'direct';
 
-    // Priority order for IPTV API calls:
-    // 1. Hetzner VPS proxy (PRIMARY - working, cheap bandwidth ~€1/TB)
-    // 2. RPi proxy (residential IP - backup, currently broken tunnel)
-    // 3. Oxylabs (residential IP - paid but reliable)
-    // 4. Direct from CF worker (often rate-limited by portals)
+    // Priority order for IPTV API calls (UPDATED - direct first!):
+    // 1. Direct from CF worker (now that free tier limits are resolved)
+    // 2. RPi proxy (residential IP - backup)
+    // 3. Hetzner VPS proxy (datacenter IP - last resort)
+    // 4. Oxylabs (residential IP - paid, expensive)
 
     const hasHetzner = env.HETZNER_PROXY_URL && env.HETZNER_PROXY_KEY;
     const hasRpi = env.RPI_PROXY_URL && env.RPI_PROXY_KEY;
@@ -240,125 +240,125 @@ async function handleApiProxy(url: URL, env: Env, logger: any, origin: string | 
       return fetch(rpiUrl, { signal: AbortSignal.timeout(15000) });
     };
 
-    if (!forceDirect && hasHetzner) {
-      // Try Hetzner proxy FIRST (primary)
-      logger.info('Trying Hetzner proxy for IPTV API (primary)');
-      
-      try {
-        response = await tryHetzner();
-        usedMethod = 'hetzner';
-        
-        if (response.ok) {
-          logger.info('Hetzner proxy succeeded');
-        } else {
-          logger.warn('Hetzner proxy returned error', { status: response.status });
-          throw new Error(`Hetzner returned ${response.status}`);
-        }
-      } catch (hetznerError) {
-        logger.warn('Hetzner proxy failed', { error: String(hetznerError) });
-        
-        // Try RPi as first fallback
-        if (hasRpi) {
-          try {
-            response = await tryRpi();
-            usedMethod = 'rpi';
-            if (!response.ok) throw new Error(`RPi returned ${response.status}`);
-            logger.info('RPi proxy succeeded');
-          } catch (rpiError) {
-            logger.warn('RPi also failed', { error: String(rpiError) });
-            // Try Oxylabs
-            if (hasOxylabs) {
-              try {
-                response = await fetchViaOxylabs(decodedUrl, headers, env, logger);
-                usedMethod = 'oxylabs';
-              } catch (oxError) {
-                logger.warn('Oxylabs also failed', { error: String(oxError) });
-                response = await fetch(decodedUrl, { headers });
-                usedMethod = 'direct-fallback';
-              }
-            } else {
-              response = await fetch(decodedUrl, { headers });
-              usedMethod = 'direct-fallback';
-            }
-          }
-        } else if (hasOxylabs) {
-          try {
-            logger.info('Falling back to Oxylabs residential proxy');
-            response = await fetchViaOxylabs(decodedUrl, headers, env, logger);
-            usedMethod = 'oxylabs';
-          } catch (oxError) {
-            logger.warn('Oxylabs also failed', { error: String(oxError) });
-            response = await fetch(decodedUrl, { headers });
-            usedMethod = 'direct-fallback';
-          }
-        } else {
-          // No fallbacks, go direct
-          response = await fetch(decodedUrl, { headers });
-          usedMethod = 'direct-fallback';
-        }
-      }
-    } else if (!forceDirect && hasRpi) {
-      // No Hetzner but have RPi - try it
-      logger.info('Using RPi proxy (no Hetzner configured)');
-      try {
-        response = await tryRpi();
-        usedMethod = 'rpi';
-        if (!response.ok) throw new Error(`RPi returned ${response.status}`);
-      } catch (rpiError) {
-        logger.warn('RPi failed', { error: String(rpiError) });
-        if (hasOxylabs) {
-          try {
-            response = await fetchViaOxylabs(decodedUrl, headers, env, logger);
-            usedMethod = 'oxylabs';
-          } catch (oxError) {
-            response = await fetch(decodedUrl, { headers });
-            usedMethod = 'direct-fallback';
-          }
-        } else {
-          response = await fetch(decodedUrl, { headers });
-          usedMethod = 'direct-fallback';
-        }
-      }
-    } else if (!forceDirect && hasOxylabs) {
-      // No Hetzner/RPi but have Oxylabs - use it directly
-      logger.info('Using Oxylabs residential proxy (no Hetzner/RPi configured)');
-      try {
-        response = await fetchViaOxylabs(decodedUrl, headers, env, logger);
-        usedMethod = 'oxylabs';
-      } catch (oxError) {
-        logger.warn('Oxylabs failed', { error: String(oxError) });
-        response = await fetch(decodedUrl, { headers });
-        usedMethod = 'direct-fallback';
-      }
-    } else {
-      // Direct fetch from Cloudflare (may get rate-limited)
-      logger.info('Direct fetch from Cloudflare Worker');
-      response = await fetch(decodedUrl, { headers });
+    // Helper to try direct fetch
+    const tryDirect = async (): Promise<Response> => {
+      logger.info('Trying direct fetch from Cloudflare Worker');
+      return fetch(decodedUrl, { headers, signal: AbortSignal.timeout(10000) });
+    };
+
+    // NEW STRATEGY: Try direct FIRST, then fall back to proxies if blocked
+    logger.info('Attempting direct fetch first (free tier limits resolved)');
+    
+    try {
+      response = await tryDirect();
       usedMethod = 'direct';
       
-      // If rate-limited, try fallbacks
-      if (response.status === 429) {
-        if (hasHetzner) {
-          logger.warn('Got 429, trying Hetzner');
-          try {
-            response = await tryHetzner();
-            usedMethod = 'hetzner-retry';
-          } catch { /* ignore */ }
+      // Check if we got blocked (403) or rate-limited (429)
+      if (response.status === 403 || response.status === 429) {
+        logger.warn('Direct fetch blocked/rate-limited', { status: response.status });
+        throw new Error(`Direct blocked with ${response.status}`);
+      }
+      
+      // Check for empty or error response that might indicate blocking
+      const contentType = response.headers.get('content-type') || '';
+      if (response.ok && contentType.includes('json')) {
+        // Clone to check content without consuming
+        const cloned = response.clone();
+        const text = await cloned.text();
+        
+        // Check for portal error responses
+        if (text.includes('"error"') || text.includes('"status":"ERROR"')) {
+          logger.warn('Direct fetch returned error in body', { preview: text.substring(0, 100) });
+          // Don't throw - some errors are legitimate (e.g., invalid channel)
         }
-        if (response.status === 429 && hasRpi) {
-          logger.warn('Still 429, trying RPi');
-          try {
-            response = await tryRpi();
-            usedMethod = 'rpi-retry';
-          } catch { /* ignore */ }
+        
+        // Recreate response with the text we already read
+        response = new Response(text, {
+          status: response.status,
+          headers: response.headers,
+        });
+      }
+      
+      logger.info('Direct fetch succeeded', { status: response.status });
+      
+    } catch (directError) {
+      logger.warn('Direct fetch failed', { error: String(directError) });
+      
+      // Fallback chain: RPi (residential) > Hetzner (datacenter) > Oxylabs (paid)
+      if (!forceDirect && hasRpi) {
+        try {
+          logger.info('Falling back to RPi proxy (residential IP)');
+          response = await tryRpi();
+          usedMethod = 'rpi';
+          if (!response.ok) throw new Error(`RPi returned ${response.status}`);
+          logger.info('RPi proxy succeeded');
+        } catch (rpiError) {
+          logger.warn('RPi proxy failed', { error: String(rpiError) });
+          
+          if (hasHetzner) {
+            try {
+              logger.info('Falling back to Hetzner proxy');
+              response = await tryHetzner();
+              usedMethod = 'hetzner';
+              if (!response.ok) throw new Error(`Hetzner returned ${response.status}`);
+              logger.info('Hetzner proxy succeeded');
+            } catch (hetznerError) {
+              logger.warn('Hetzner proxy failed', { error: String(hetznerError) });
+              
+              if (hasOxylabs) {
+                try {
+                  response = await fetchViaOxylabs(decodedUrl, headers, env, logger);
+                  usedMethod = 'oxylabs';
+                } catch (oxError) {
+                  // All failed - return the last error
+                  throw new Error('All proxy methods failed');
+                }
+              } else {
+                throw new Error('All proxy methods failed');
+              }
+            }
+          } else if (hasOxylabs) {
+            try {
+              response = await fetchViaOxylabs(decodedUrl, headers, env, logger);
+              usedMethod = 'oxylabs';
+            } catch (oxError) {
+              throw new Error('All proxy methods failed');
+            }
+          } else {
+            throw new Error('Direct failed and no proxies available');
+          }
         }
-        if (response.status === 429 && hasOxylabs) {
-          logger.warn('Still 429, trying Oxylabs');
-          try {
-            response = await fetchViaOxylabs(decodedUrl, headers, env, logger);
-            usedMethod = 'oxylabs-retry';
-          } catch { /* ignore */ }
+      } else if (!forceDirect && hasHetzner) {
+        try {
+          logger.info('Falling back to Hetzner proxy (no RPi configured)');
+          response = await tryHetzner();
+          usedMethod = 'hetzner';
+          if (!response.ok) throw new Error(`Hetzner returned ${response.status}`);
+        } catch (hetznerError) {
+          logger.warn('Hetzner proxy failed', { error: String(hetznerError) });
+          
+          if (hasOxylabs) {
+            try {
+              response = await fetchViaOxylabs(decodedUrl, headers, env, logger);
+              usedMethod = 'oxylabs';
+            } catch (oxError) {
+              throw new Error('All proxy methods failed');
+            }
+          } else {
+            throw new Error('Direct and Hetzner failed');
+          }
         }
+      } else if (!forceDirect && hasOxylabs) {
+        try {
+          logger.info('Falling back to Oxylabs (no RPi/Hetzner configured)');
+          response = await fetchViaOxylabs(decodedUrl, headers, env, logger);
+          usedMethod = 'oxylabs';
+        } catch (oxError) {
+          throw new Error('Direct and Oxylabs failed');
+        }
+      } else {
+        // No fallbacks available
+        throw directError;
       }
     }
 
@@ -373,6 +373,8 @@ async function handleApiProxy(url: URL, env: Env, logger: any, origin: string | 
         'Content-Type': contentType,
         'X-Used-Rpi': usedMethod === 'rpi' ? 'true' : 'false',
         'X-Used-Method': usedMethod,
+        'X-Hetzner-Configured': env.HETZNER_PROXY_URL ? 'true' : 'false',
+        'X-Rpi-Configured': env.RPI_PROXY_URL ? 'true' : 'false',
         ...corsHeaders(origin),
       },
     });
@@ -442,43 +444,11 @@ async function handleStreamProxy(url: URL, env: Env, logger: any, origin: string
       return params;
     };
 
-    // Priority: Hetzner (PRIMARY) > RPi (backup) > Direct
-    // Hetzner has cheap bandwidth (~€1/TB), RPi tunnel is currently broken
-    if (env.HETZNER_PROXY_URL && env.HETZNER_PROXY_KEY) {
-      logger.info('Using Hetzner proxy for IPTV stream (primary)');
-      const params = buildProxyParams();
-      params.set('key', env.HETZNER_PROXY_KEY);
-      const hetznerUrl = `${env.HETZNER_PROXY_URL}/iptv/stream?${params.toString()}`;
-      
-      try {
-        response = await fetch(hetznerUrl);
-        usedProxy = 'hetzner';
-        if (!response.ok && env.RPI_PROXY_URL) {
-          throw new Error(`Hetzner returned ${response.status}`);
-        }
-      } catch (hetznerErr) {
-        logger.warn('Hetzner stream failed, trying RPi', { error: String(hetznerErr) });
-        if (env.RPI_PROXY_URL && env.RPI_PROXY_KEY) {
-          const rpiParams = buildProxyParams();
-          rpiParams.set('key', env.RPI_PROXY_KEY);
-          const rpiUrl = `${env.RPI_PROXY_URL}/iptv/stream?${rpiParams.toString()}`;
-          response = await fetch(rpiUrl);
-          usedProxy = 'rpi';
-        } else {
-          response = await fetch(decodedUrl, { headers });
-          usedProxy = 'direct-fallback';
-        }
-      }
-    } else if (env.RPI_PROXY_URL && env.RPI_PROXY_KEY) {
-      logger.info('Using RPi proxy for IPTV stream (no Hetzner configured)');
-      const params = buildProxyParams();
-      params.set('key', env.RPI_PROXY_KEY);
-      const rpiUrl = `${env.RPI_PROXY_URL}/iptv/stream?${params.toString()}`;
-      response = await fetch(rpiUrl);
-      usedProxy = 'rpi';
-    } else {
-      // Direct fetch (will likely get blocked by IPTV providers)
-      logger.warn('No proxy configured - direct fetch may be blocked');
+    // NEW STRATEGY: Try direct FIRST for streams (matching API proxy behavior)
+    // Priority: Direct > RPi (backup) > Hetzner (last resort)
+    logger.info('Attempting direct stream fetch first');
+    
+    try {
       response = await fetch(decodedUrl, {
         headers,
         // @ts-ignore - Cloudflare Workers support this
@@ -487,6 +457,54 @@ async function handleStreamProxy(url: URL, env: Env, logger: any, origin: string
           cacheEverything: false,
         },
       });
+      usedProxy = 'direct';
+      
+      // Check if blocked
+      if (response.status === 403 || response.status === 429) {
+        logger.warn('Direct stream blocked', { status: response.status });
+        throw new Error(`Direct blocked with ${response.status}`);
+      }
+      
+      logger.info('Direct stream fetch succeeded', { status: response.status });
+      
+    } catch (directErr) {
+      logger.warn('Direct stream failed, trying fallbacks', { error: String(directErr) });
+      
+      // Fallback: RPi > Hetzner
+      if (env.RPI_PROXY_URL && env.RPI_PROXY_KEY) {
+        logger.info('Falling back to RPi proxy for stream');
+        const params = buildProxyParams();
+        params.set('key', env.RPI_PROXY_KEY);
+        const rpiUrl = `${env.RPI_PROXY_URL}/iptv/stream?${params.toString()}`;
+        
+        try {
+          response = await fetch(rpiUrl);
+          usedProxy = 'rpi';
+          if (!response.ok) throw new Error(`RPi returned ${response.status}`);
+        } catch (rpiErr) {
+          logger.warn('RPi stream failed', { error: String(rpiErr) });
+          
+          if (env.HETZNER_PROXY_URL && env.HETZNER_PROXY_KEY) {
+            logger.info('Falling back to Hetzner proxy for stream');
+            const hetznerParams = buildProxyParams();
+            hetznerParams.set('key', env.HETZNER_PROXY_KEY);
+            const hetznerUrl = `${env.HETZNER_PROXY_URL}/iptv/stream?${hetznerParams.toString()}`;
+            response = await fetch(hetznerUrl);
+            usedProxy = 'hetzner';
+          } else {
+            throw rpiErr;
+          }
+        }
+      } else if (env.HETZNER_PROXY_URL && env.HETZNER_PROXY_KEY) {
+        logger.info('Falling back to Hetzner proxy for stream (no RPi)');
+        const params = buildProxyParams();
+        params.set('key', env.HETZNER_PROXY_KEY);
+        const hetznerUrl = `${env.HETZNER_PROXY_URL}/iptv/stream?${params.toString()}`;
+        response = await fetch(hetznerUrl);
+        usedProxy = 'hetzner';
+      } else {
+        throw directErr;
+      }
     }
 
     if (!response.ok) {

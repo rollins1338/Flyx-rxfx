@@ -1,210 +1,367 @@
 /**
- * 1movies/yflix Video Extractor Service
+ * 1movies/yflix Extractor - Primary Video Source
  * 
- * Uses enc-dec.app API for encryption/decryption
+ * Uses the videasy.net API with the 1movies endpoint for reliable extraction.
+ * The videasy API handles all the complexity internally and returns m3u8 directly.
  * 
  * Flow:
- * 1. Search by title -> get content ID
- * 2. Get episodes (for TV) -> get episode ID
- * 3. Get servers -> get server link IDs
- * 4. Get embed URLs from servers
+ * 1. Get TMDB info (title, year)
+ * 2. Call videasy API: api.videasy.net/1movies/sources-with-title
+ * 3. Decrypt response via enc-dec.app/api/dec-videasy
+ * 4. Return m3u8 URL
  * 
- * Note: The embed URLs point to rapidairmax.site/rapidshare.cc which require
- * browser-based extraction to get the actual m3u8 stream URL.
+ * Response format from dec-videasy:
+ * {
+ *   "sources": [{ "url": "https://rrr.swift38path.site/.../list.m3u8" }],
+ *   "tracks": [{ "file": "https://z78.rapidshare.cc/.../thumbnails.vtt", "kind": "thumbnails" }]
+ * }
  */
 
+interface StreamSource {
+  quality: string;
+  title: string;
+  url: string;
+  type: 'hls';
+  referer: string;
+  requiresSegmentProxy: boolean;
+  status: 'working' | 'down' | 'unknown';
+  language: string;
+}
+
+interface ExtractionResult {
+  success: boolean;
+  sources: StreamSource[];
+  subtitles?: Array<{ label: string; url: string; language: string }>;
+  error?: string;
+}
+
+interface VideasySource {
+  file?: string;
+  url?: string;
+  type?: string;
+  label?: string;
+  quality?: string;
+}
+
+interface VideasyResponse {
+  sources?: VideasySource[];
+  subtitles?: Array<{ file?: string; url?: string; label?: string; lang?: string }>;
+  tracks?: Array<{ file?: string; url?: string; label?: string; kind?: string }>;
+}
+
+// API Configuration
+const VIDEASY_API_BASE = 'https://api.videasy.net';
+const DECRYPTION_API = 'https://enc-dec.app/api';
+
 const HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+  'Accept': 'application/json, text/plain, */*',
+  'Connection': 'keep-alive',
 };
 
-const ENC_DEC_API = 'https://enc-dec.app/api';
-const YFLIX_BASE = 'https://yflix.to';
-
-export interface OneMoviesResult {
-  title: string;
-  contentId: string;
-  slug: string;
-  type: 'movie' | 'tv' | 'unknown';
-  servers: {
-    name: string;
-    embedUrl: string;
-  }[];
-  subtitles?: {
-    file: string;
-    label: string;
-  }[];
-}
-
-// Encryption/Decryption helpers
-async function encrypt(text: string): Promise<string> {
-  const res = await fetch(`${ENC_DEC_API}/enc-movies-flix?text=${encodeURIComponent(text)}`, { headers: HEADERS });
-  const data = await res.json();
-  return data.result;
-}
-
-async function decrypt(text: string): Promise<any> {
-  const res = await fetch(`${ENC_DEC_API}/dec-movies-flix`, {
-    method: 'POST',
-    headers: { ...HEADERS, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text })
-  });
-  const data = await res.json();
-  return data.result;
-}
-
-async function parseHtml(html: string): Promise<any> {
-  const res = await fetch(`${ENC_DEC_API}/parse-html`, {
-    method: 'POST',
-    headers: { ...HEADERS, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: html })
-  });
-  const data = await res.json();
-  return data.result;
-}
-
-// Search for content
-async function searchContent(query: string): Promise<{ contentId: string; slug: string; title: string } | null> {
-  const searchUrl = `${YFLIX_BASE}/browser?keyword=${encodeURIComponent(query)}`;
-  const res = await fetch(searchUrl, { headers: HEADERS });
-  const html = await res.text();
-  
-  const tipMatch = html.match(/data-tip="([a-zA-Z0-9_-]+)"/);
-  const slugMatch = html.match(/href="\/watch\/([^"]+)"/);
-  const titleMatch = html.match(/class="title">([^<]+)</);
-  
-  if (tipMatch && slugMatch) {
-    return {
-      contentId: tipMatch[1],
-      slug: slugMatch[1],
-      title: titleMatch ? titleMatch[1].replace(/&#039;/g, "'") : 'Unknown'
-    };
-  }
-  return null;
-}
-
-// Get episodes for TV show
-async function getEpisodes(contentId: string): Promise<any> {
-  const encId = await encrypt(contentId);
-  const url = `${YFLIX_BASE}/ajax/episodes/list?id=${contentId}&_=${encId}`;
-  const res = await fetch(url, { headers: HEADERS });
-  const data = await res.json();
-  
-  if (data.result) {
-    return await parseHtml(data.result);
-  }
-  return null;
-}
-
-// Get servers for episode/movie
-async function getServers(eid: string): Promise<any[]> {
-  const encEid = await encrypt(eid);
-  const url = `${YFLIX_BASE}/ajax/links/list?eid=${eid}&_=${encEid}`;
-  const res = await fetch(url, { headers: HEADERS });
-  const data = await res.json();
-  
-  if (data.result) {
-    const parsed = await parseHtml(data.result);
-    return Object.values(parsed.default || parsed);
-  }
-  return [];
-}
-
-// Get embed URL from server
-async function getEmbed(lid: string): Promise<string | null> {
-  const encLid = await encrypt(lid);
-  const url = `${YFLIX_BASE}/ajax/links/view?id=${lid}&_=${encLid}`;
-  const res = await fetch(url, { headers: HEADERS });
-  const data = await res.json();
-  
-  if (data.result) {
-    const decrypted = await decrypt(data.result);
-    if (typeof decrypted === 'object' && decrypted.url) {
-      return decrypted.url;
-    }
-  }
-  return null;
-}
-
-// Get subtitles
-async function getSubtitles(episodeId: number): Promise<{ file: string; label: string }[]> {
-  const url = `${YFLIX_BASE}/ajax/episode/${episodeId}/subtitles`;
+/**
+ * Fetch encrypted data from Videasy API (1movies endpoint)
+ */
+async function fetchFrom1Movies(
+  tmdbId: string,
+  title: string,
+  year: string,
+  type: 'movie' | 'tv',
+  season?: number,
+  episode?: number
+): Promise<string | null> {
   try {
-    const res = await fetch(url, { headers: HEADERS });
-    const data = await res.json();
-    return data.map((s: any) => ({ file: s.file, label: s.label }));
-  } catch {
-    return [];
+    // Build URL for 1movies endpoint
+    let url = `${VIDEASY_API_BASE}/1movies/sources-with-title?title=${encodeURIComponent(title)}&mediaType=${type}&year=${year}&tmdbId=${tmdbId}`;
+    
+    if (type === 'tv' && season !== undefined && episode !== undefined) {
+      url += `&seasonId=${season}&episodeId=${episode}`;
+    }
+
+    console.log(`[1movies] Fetching: ${url}`);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
+
+    const response = await fetch(url, {
+      headers: HEADERS,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      console.log(`[1movies] HTTP ${response.status}`);
+      return null;
+    }
+
+    const text = await response.text();
+    
+    if (!text || text.trim() === '' || text.includes('error') || text.includes('Error')) {
+      console.log(`[1movies] Empty or error response`);
+      return null;
+    }
+
+    console.log(`[1movies] Got encrypted response (${text.length} chars)`);
+    return text;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.log(`[1movies] Timeout`);
+    } else {
+      console.log(`[1movies] Error:`, error);
+    }
+    return null;
   }
 }
 
 /**
- * Extract video sources from 1movies/yflix
+ * Decrypt Videasy response using enc-dec.app/api/dec-videasy
  */
-export async function extractOneMovies(
-  query: string,
-  options?: { season?: number; episode?: number }
-): Promise<OneMoviesResult | null> {
-  // Search for content
-  const content = await searchContent(query);
-  if (!content) return null;
-  
-  const isTvShow = content.slug.startsWith('tv-');
-  const isMovie = content.slug.startsWith('movie-');
-  const type = isTvShow ? 'tv' : isMovie ? 'movie' : 'unknown';
-  
-  let eid = content.contentId;
-  let episodeDbId: number | null = null;
-  
-  // For TV shows, get episodes
-  if (isTvShow) {
-    const episodes = await getEpisodes(content.contentId);
-    if (episodes) {
-      const seasons = Object.keys(episodes);
-      const season = options?.season || parseInt(seasons[0]);
-      const episodeNum = options?.episode || 1;
-      
-      if (episodes[season]?.[episodeNum]) {
-        eid = episodes[season][episodeNum].eid;
-        // Extract episode DB ID from embed URL for subtitles
-      }
+async function decryptVideasyResponse(encryptedText: string, tmdbId: string): Promise<VideasyResponse | null> {
+  try {
+    console.log(`[1movies] Decrypting response via dec-videasy...`);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    const response = await fetch(`${DECRYPTION_API}/dec-videasy`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...HEADERS,
+      },
+      body: JSON.stringify({
+        text: encryptedText,
+        id: tmdbId,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      console.log(`[1movies] Decryption failed: HTTP ${response.status}`);
+      return null;
     }
-  }
-  
-  // Get servers
-  const servers = await getServers(eid);
-  const serverResults: { name: string; embedUrl: string }[] = [];
-  
-  for (const server of servers) {
-    const embedUrl = await getEmbed(server.lid);
-    if (embedUrl) {
-      serverResults.push({
-        name: server.name || `Server ${server.sid}`,
-        embedUrl
-      });
-      
-      // Extract episode ID from embed URL for subtitles
-      const episodeMatch = embedUrl.match(/episode%2F(\d+)%2F/);
-      if (episodeMatch) {
-        episodeDbId = parseInt(episodeMatch[1]);
-      }
+
+    const json = await response.json();
+    
+    if (!json.result) {
+      console.log('[1movies] Decryption returned no result');
+      return null;
     }
+
+    // Parse the decrypted result
+    let decrypted: VideasyResponse;
+    if (typeof json.result === 'string') {
+      try {
+        decrypted = JSON.parse(json.result);
+      } catch {
+        console.log('[1movies] Failed to parse decrypted JSON');
+        return null;
+      }
+    } else {
+      decrypted = json.result;
+    }
+
+    console.log('[1movies] Decryption successful');
+    return decrypted;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.log('[1movies] Decryption timeout');
+    } else {
+      console.log('[1movies] Decryption error:', error);
+    }
+    return null;
   }
-  
-  // Get subtitles if we have episode ID
-  let subtitles: { file: string; label: string }[] = [];
-  if (episodeDbId) {
-    subtitles = await getSubtitles(episodeDbId);
+}
+
+/**
+ * Get TMDB info (title and year)
+ */
+async function getTmdbInfo(tmdbId: string, type: 'movie' | 'tv'): Promise<{ title: string; year: string } | null> {
+  try {
+    const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY;
+    if (!apiKey) {
+      console.error('[1movies] TMDB API key not configured');
+      return null;
+    }
+
+    const url = `https://api.themoviedb.org/3/${type}/${tmdbId}?api_key=${apiKey}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    const response = await fetch(url, {
+      signal: controller.signal,
+      next: { revalidate: 86400 },
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      console.log(`[1movies] TMDB lookup failed: HTTP ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+
+    const title = type === 'movie' ? data.title : data.name;
+    const dateStr = type === 'movie' ? data.release_date : data.first_air_date;
+    const year = dateStr ? dateStr.split('-')[0] : '';
+
+    if (!title) {
+      console.log('[1movies] Missing title from TMDB');
+      return null;
+    }
+
+    return { title, year };
+  } catch (error) {
+    console.log('[1movies] TMDB lookup error:', error);
+    return null;
   }
-  
-  return {
-    title: content.title,
-    contentId: content.contentId,
-    slug: content.slug,
+}
+
+/**
+ * Main extraction function for 1movies/yflix
+ */
+export async function extractOneMoviesStreams(
+  tmdbId: string,
+  type: 'movie' | 'tv',
+  season?: number,
+  episode?: number
+): Promise<ExtractionResult> {
+  console.log(`[1movies] Extracting ${type} ID ${tmdbId}${type === 'tv' ? ` S${season}E${episode}` : ''}...`);
+
+  // Get title from TMDB
+  const tmdbInfo = await getTmdbInfo(tmdbId, type);
+  if (!tmdbInfo) {
+    return {
+      success: false,
+      sources: [],
+      error: 'Failed to get title from TMDB',
+    };
+  }
+
+  console.log(`[1movies] Title: "${tmdbInfo.title}", Year: ${tmdbInfo.year}`);
+
+  // Fetch encrypted data from videasy 1movies endpoint
+  const encryptedData = await fetchFrom1Movies(
+    tmdbId,
+    tmdbInfo.title,
+    tmdbInfo.year,
     type,
-    servers: serverResults,
-    subtitles
+    season,
+    episode
+  );
+
+  if (!encryptedData) {
+    return {
+      success: false,
+      sources: [],
+      error: 'Failed to fetch from 1movies endpoint',
+    };
+  }
+
+  // Decrypt the response
+  const decrypted = await decryptVideasyResponse(encryptedData, tmdbId);
+
+  if (!decrypted) {
+    return {
+      success: false,
+      sources: [],
+      error: 'Failed to decrypt 1movies response',
+    };
+  }
+
+  // Extract stream URL
+  let streamUrl = '';
+  if (decrypted.sources && decrypted.sources.length > 0) {
+    streamUrl = decrypted.sources[0].url || decrypted.sources[0].file || '';
+  }
+
+  if (!streamUrl) {
+    return {
+      success: false,
+      sources: [],
+      error: 'No stream URL in 1movies response',
+    };
+  }
+
+  console.log(`[1movies] ✓ Got stream URL: ${streamUrl.substring(0, 80)}...`);
+
+  // Build sources array
+  const sources: StreamSource[] = [{
+    quality: 'auto',
+    title: '1movies',
+    url: streamUrl,
+    type: 'hls',
+    referer: 'https://videasy.net/',
+    requiresSegmentProxy: true,
+    status: 'working',
+    language: 'en',
+  }];
+
+  // Extract subtitles
+  const subtitles: Array<{ label: string; url: string; language: string }> = [];
+  
+  if (decrypted.subtitles && decrypted.subtitles.length > 0) {
+    for (const sub of decrypted.subtitles) {
+      const subUrl = sub.url || sub.file;
+      if (subUrl) {
+        subtitles.push({
+          label: sub.label || sub.lang || 'Unknown',
+          url: subUrl,
+          language: sub.lang || 'en',
+        });
+      }
+    }
+  }
+  
+  if (decrypted.tracks) {
+    for (const track of decrypted.tracks) {
+      if (track.kind === 'captions' || track.kind === 'subtitles' || !track.kind) {
+        const trackUrl = track.url || track.file;
+        if (trackUrl && !subtitles.find(s => s.url === trackUrl)) {
+          subtitles.push({
+            label: track.label || 'Unknown',
+            url: trackUrl,
+            language: 'en',
+          });
+        }
+      }
+    }
+  }
+
+  console.log(`[1movies] Returning 1 working source${subtitles.length > 0 ? ` + ${subtitles.length} subtitles` : ''}`);
+
+  return {
+    success: true,
+    sources,
+    subtitles: subtitles.length > 0 ? subtitles : undefined,
   };
 }
 
-// Export for testing
-export { searchContent, getEpisodes, getServers, getEmbed, getSubtitles };
+/**
+ * Fetch a specific 1movies source (for manual selection)
+ */
+export async function fetchOneMoviesSourceByName(
+  _serverName: string,
+  tmdbId: string,
+  type: 'movie' | 'tv',
+  season?: number,
+  episode?: number
+): Promise<StreamSource | null> {
+  console.log(`[1movies] Fetching source for ${type} ID ${tmdbId}`);
+
+  const result = await extractOneMoviesStreams(tmdbId, type, season, episode);
+  
+  if (result.success && result.sources.length > 0) {
+    return result.sources[0];
+  }
+
+  return null;
+}
+
+// Export enabled flag
+export const ONEMOVIES_ENABLED = true;
