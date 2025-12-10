@@ -1339,34 +1339,18 @@ export default function IPTVDebugPage() {
                       transition: 'all 0.2s ease'
                     }}
                   >
-                    {channel.logo ? (
-                      <img 
-                        src={channel.logo} 
-                        alt="" 
-                        style={{ 
-                          width: '40px', 
-                          height: '40px', 
-                          borderRadius: '8px',
-                          objectFit: 'contain',
-                          background: 'rgba(255,255,255,0.1)'
-                        }}
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                        }}
-                      />
-                    ) : (
-                      <div style={{
-                        width: '40px',
-                        height: '40px',
-                        borderRadius: '8px',
-                        background: 'rgba(120, 119, 198, 0.2)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}>
-                        <Tv size={20} color="#7877c6" />
-                      </div>
-                    )}
+                    {/* Skip HTTP logos to avoid mixed content warnings */}
+                    <div style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '8px',
+                      background: 'rgba(120, 119, 198, 0.2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      <Tv size={20} color="#7877c6" />
+                    </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ 
                         color: '#f8fafc', 
