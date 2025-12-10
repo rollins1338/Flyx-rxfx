@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test Portal CORS</title>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #1a1a2e; color: #eee; }
+    input, button { padding: 10px; margin: 5px; font-size: 14px; }
+    input { width: 300px; background: #16213e; border: 1px solid #0f3460; color: #eee; }
+    button { background: #e94560; border: none; color: white; cursor: pointer; }
+    pre { background: #16213e; padding: 15px; overflow: auto; max-height: 400px; }
+    .success { color: #4ade80; }
+    .error { color: #f87171; }
+  </style>
+</head>
+<body>
+  <h1>🔍 Test Portal CORS (Direct Browser Request)</h1>
+  <p>This tests if your browser can directly call the Stalker portal API.</p>
+  <p>If this works, we don't need any proxy for API calls!</p>
+  
+  <div>
+    <input type="text" id="portal" placeholder="Portal URL (e.g., http://example.com/c)" />
+    <input type="text" id="mac" placeholder="MAC Address (e.g., 00:1A:79:XX:XX:XX)" />
+    <button onclick="testHandshake()">Test Handshake</button>
+  </div>
+  
+  <h3>Results:</h3>
+  <pre id="output">Click "Test Handshake" to start...</pre>
+
+  <script>
+    const STB_USER_AGENT = 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3';
+    
+    function log(msg, isError = false) {
+      const output = document.getElementById('output');
+      const className = isError ? 'error' : 'success';
+      output.innerHTML += `<span class="${className}">${new Date().toISOString().substr(11, 8)} ${msg}</span>\n`;
+      output.scrollTop = output.scrollHeight;
+    }
+    
+    function normalizePortalUrl(url) {
+      let normalized = url.trim();
+      if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
+        normalized = 'http://' + normalized;
+      }
+      normalized = normalized.replace(/\/+$/, '');
+      if (normalized.endsWith('/c')) {
+        normalized = normalized.slice(0, -2);
+      }
+      return normalized;
+    }
+    
+    async function testHandshake() {
+      const portal = document.getElementById('portal').value;
+      const mac = document.getElementById('mac').value;
+      
+      if (!portal || !mac) {
+        log('Please enter portal URL and MAC address', true);
+        return;
+      }
+      
+      document.getElementById('output').innerHTML = '';
+      log('Starting CORS test...');
+      
+      const baseUrl = normalizePortalUrl(portal);
+      const encodedMac = encodeURIComponent(mac);
+      
+      // Build handshake URL
+      const handshakeUrl = `${baseUrl}/portal.php?type=stb&action=handshake&token=&JsHttpRequest=1-xml`;
+      
+      log(`Portal: ${baseUrl}`);
+      log(`MAC: ${mac}`);
+      log(`Handshake URL: ${handshakeUrl}`);
+      log('');
+      log('Attempting direct fetch from browser...');
+      
+      try {
+        // Try with no-cors mode first (won't give us response body but tests connectivity)
+        log('Test 1: fetch with mode="no-cors" (connectivity test)');
+        const noCorsRes = await fetch(handshakeUrl, {
+          method: 'GET',
+          mode: 'no-cors',
+        });
+        log(`  Response type: ${noCorsRes.type} (opaque = CORS blocked but request sent)`);
+        
+        // Try with cors mode (will fail if portal doesn't have CORS headers)
+        log('');
+        log('Test 2: fetch with mode="cors" (full access test)');
+        try {
+          const corsRes = await fetch(handshakeUrl, {
+            method: 'GET',
+            mode: 'cors',
+            headers: {
+              'Accept': '*/*',
+            },
+          });
+          
+          log(`  Status: ${corsRes.status}`);
+          const text = await corsRes.text();
+          log(`  Response length: ${text.length} bytes`);
+          
+          // Try to parse
+          const clean = text.replace(/^\/\*-secure-\s*/, '').replace(/\s*\*\/$/, '');
+          try {
+            const data = JSON.parse(clean);
+            if (data?.js?.token) {
+              log('');
+              log('✅ SUCCESS! Portal allows CORS!', false);
+              log(`Token: ${data.js.token.substring(0, 30)}...`);
+              log('');
+              log('This means we can make API calls directly from the browser!');
+              log('The token will be bound to YOUR IP, and streaming will work!');
+            } else {
+              log('  Parsed but no token found');
+              log(`  Data: ${JSON.stringify(data).substring(0, 200)}`);
+            }
+          } catch (parseErr) {
+            log(`  Parse error: ${parseErr.message}`, true);
+            log(`  Raw: ${text.substring(0, 200)}`);
+          }
+        } catch (corsErr) {
+          log(`  CORS Error: ${corsErr.message}`, true);
+          log('');
+          log('❌ Portal blocks CORS - direct browser requests won\'t work');
+          log('We need to use a proxy (CF Worker or RPi)');
+        }
+        
+      } catch (err) {
+        log(`Error: ${err.message}`, true);
+      }
+    }
+  </script>
+</body>
+</html>

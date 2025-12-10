@@ -538,40 +538,68 @@ export async function POST(request: NextRequest) {
           };
         }
         
-        // 2. Test through Cloudflare Worker (if configured)
+        // 2. Test through Cloudflare Worker (normal mode - will use RPi if configured)
         const cfProxyUrl = process.env.NEXT_PUBLIC_CF_TV_PROXY_URL;
         if (cfProxyUrl) {
           try {
             const startCf = Date.now();
-            // Use the IPTV API endpoint on CF worker
+            // Test CF worker's normal flow (will route through RPi if configured in CF worker)
             const cfParams = new URLSearchParams({ url: testUrl, mac: macAddress });
             const cfFullUrl = `${cfProxyUrl}/iptv/api?${cfParams.toString()}`;
-            console.log('[Debug Sources] Testing CF worker:', cfFullUrl.substring(0, 100));
+            console.log('[Debug Sources] Testing CF worker (normal):', cfFullUrl.substring(0, 100));
             
             const cfRes = await fetch(cfFullUrl, {
-              signal: AbortSignal.timeout(10000),
+              signal: AbortSignal.timeout(15000),
             });
             const cfText = await cfRes.text();
+            console.log('[Debug Sources] CF response:', cfRes.status, cfText.substring(0, 200));
+            
             const cfClean = cfText.replace(/^\/\*-secure-\s*/, '').replace(/\s*\*\/$/, '');
             let cfData;
             try { cfData = JSON.parse(cfClean); } catch { cfData = null; }
             
+            // Check X-Used-Rpi header to see if it went through RPi
+            const usedRpi = cfRes.headers.get('X-Used-Rpi');
+            
+            // Determine error source
+            let errorSource = null;
+            if (!cfRes.ok) {
+              if (cfRes.status === 429) {
+                errorSource = usedRpi === 'true' 
+                  ? 'Portal rate-limiting (even through RPi)' 
+                  : 'Portal rate-limiting CF worker IP - set RPI_PROXY_URL secret in CF worker';
+              } else if (cfRes.status === 403) {
+                errorSource = usedRpi === 'true'
+                  ? 'Portal blocking RPi IP'
+                  : 'Portal blocking CF worker IP - set RPI_PROXY_URL secret in CF worker';
+              } else if (cfRes.status === 400) {
+                errorSource = 'Bad request - check CF worker /iptv/api endpoint';
+              } else if (cfRes.status === 502 || cfRes.status === 504) {
+                errorSource = 'CF worker failed to reach portal or RPi proxy';
+              } else {
+                errorSource = `HTTP ${cfRes.status}`;
+              }
+            }
+            
             results.cloudflare = {
-              source: 'Cloudflare Worker (Datacenter)',
+              source: 'Cloudflare Worker',
               status: cfRes.status,
               success: cfRes.ok && cfData?.js?.token,
               token: cfData?.js?.token ? cfData.js.token.substring(0, 20) + '...' : null,
               latency: Date.now() - startCf,
-              error: !cfRes.ok ? `HTTP ${cfRes.status}` : (!cfData?.js?.token ? 'No token in response' : null),
+              error: errorSource || (!cfData?.js?.token ? 'No token in response' : null),
               rawResponse: cfText.substring(0, 300),
+              usedRpi: usedRpi === 'true',
+              rpiConfigured: usedRpi !== null,
               testedUrl: cfFullUrl.substring(0, 80) + '...',
+              hint: usedRpi === 'true' ? 'CF routed through RPi proxy' : 'CF made direct request (RPI_PROXY_URL not set in CF worker)',
             };
           } catch (e: any) {
             console.error('[Debug Sources] CF worker error:', e);
             results.cloudflare = {
-              source: 'Cloudflare Worker (Datacenter)',
+              source: 'Cloudflare Worker',
               success: false,
-              error: e.name === 'TimeoutError' ? 'Request timed out (10s)' : (e.message || String(e)),
+              error: e.name === 'TimeoutError' ? 'Request timed out (15s)' : (e.message || String(e)),
             };
           }
         } else {
@@ -584,6 +612,18 @@ export async function POST(request: NextRequest) {
         
         // 3. Test through RPi proxy (residential IP)
         if (RPI_PROXY_URL && RPI_PROXY_KEY) {
+          // First, test if RPi proxy is reachable via health endpoint
+          let rpiHealthy = false;
+          try {
+            const healthRes = await fetch(`${RPI_PROXY_URL}/health`, {
+              signal: AbortSignal.timeout(5000),
+            });
+            rpiHealthy = healthRes.ok;
+            console.log('[Debug Sources] RPi health check:', healthRes.status);
+          } catch (healthErr: any) {
+            console.error('[Debug Sources] RPi health check failed:', healthErr.message);
+          }
+          
           try {
             const startRpi = Date.now();
             const rpiParams = new URLSearchParams({
@@ -591,13 +631,34 @@ export async function POST(request: NextRequest) {
               mac: macAddress,
               key: RPI_PROXY_KEY,
             });
-            const rpiRes = await fetch(`${RPI_PROXY_URL}/iptv/api?${rpiParams.toString()}`, {
+            const rpiFullUrl = `${RPI_PROXY_URL}/iptv/api?${rpiParams.toString()}`;
+            console.log('[Debug Sources] Testing RPi proxy:', rpiFullUrl.substring(0, 100));
+            
+            const rpiRes = await fetch(rpiFullUrl, {
               signal: AbortSignal.timeout(10000),
             });
             const rpiText = await rpiRes.text();
+            console.log('[Debug Sources] RPi response:', rpiRes.status, rpiText.substring(0, 200));
+            
             const rpiClean = rpiText.replace(/^\/\*-secure-\s*/, '').replace(/\s*\*\/$/, '');
             let rpiData;
             try { rpiData = JSON.parse(rpiClean); } catch { rpiData = null; }
+            
+            // Determine error source
+            let errorSource = null;
+            if (!rpiRes.ok) {
+              if (rpiRes.status === 401) {
+                errorSource = 'RPi proxy auth failed (check API key)';
+              } else if (rpiRes.status === 403) {
+                errorSource = 'Portal returned 403 to residential IP';
+              } else if (rpiRes.status === 429) {
+                errorSource = 'Portal rate-limiting residential IP';
+              } else if (rpiRes.status === 502 || rpiRes.status === 504) {
+                errorSource = 'RPi proxy failed to reach portal';
+              } else {
+                errorSource = `HTTP ${rpiRes.status}`;
+              }
+            }
             
             results.rpiProxy = {
               source: 'RPi Proxy (Residential IP)',
@@ -605,15 +666,17 @@ export async function POST(request: NextRequest) {
               success: rpiRes.ok && rpiData?.js?.token,
               token: rpiData?.js?.token ? rpiData.js.token.substring(0, 20) + '...' : null,
               latency: Date.now() - startRpi,
-              error: !rpiRes.ok ? `HTTP ${rpiRes.status}` : (!rpiData?.js?.token ? 'No token in response' : null),
+              error: errorSource || (!rpiData?.js?.token ? 'No token in response' : null),
               rawResponse: rpiText.substring(0, 500),
+              rpiHealthy,
               rpiUrl: `${RPI_PROXY_URL}/iptv/api?url=...&mac=${macAddress}&key=***`,
             };
           } catch (e: any) {
             results.rpiProxy = {
               source: 'RPi Proxy (Residential IP)',
               success: false,
-              error: e.message || String(e),
+              error: e.name === 'TimeoutError' ? 'Request timed out (10s)' : (e.message || String(e)),
+              rpiHealthy,
             };
           }
         } else {
@@ -624,18 +687,38 @@ export async function POST(request: NextRequest) {
           };
         }
         
-        // Summary
+        // Summary and recommendation
+        // Key insight: Stream tokens are IP-bound, so ALL API calls must come from the same IP that will stream
+        const cfUsedRpi = results.cloudflare?.usedRpi === true;
+        const cfRpiConfigured = results.cloudflare?.rpiConfigured === true;
+        
+        let recommendation = '';
+        if (results.rpiProxy?.success) {
+          recommendation = 'RPi proxy works! Use it for all IPTV requests (stream tokens are IP-bound)';
+        } else if (results.cloudflare?.success && cfUsedRpi) {
+          recommendation = 'CF Worker → RPi works! Streaming should work through this path.';
+        } else if (results.cloudflare?.success && !cfRpiConfigured) {
+          recommendation = 'CF Worker works directly but RPi not configured. Set RPI_PROXY_URL and RPI_PROXY_KEY secrets in CF worker for streaming.';
+        } else if (results.vercel?.success) {
+          if (!results.rpiProxy?.success && results.rpiProxy?.rpiHealthy) {
+            recommendation = 'Vercel works, RPi is reachable but portal returns error. Portal may block this residential IP range.';
+          } else if (!results.rpiProxy?.rpiHealthy) {
+            recommendation = 'Vercel works but RPi unreachable. Check: 1) RPi proxy running, 2) cloudflared tunnel active';
+          } else {
+            recommendation = 'Vercel works. For streaming, configure RPi proxy or Oxylabs in CF worker.';
+          }
+        } else {
+          recommendation = 'All sources failed - check portal URL and MAC address';
+        }
+        
         const summary = {
           vercelBlocked: !results.vercel?.success,
           cloudflareBlocked: !results.cloudflare?.success,
           rpiWorks: results.rpiProxy?.success === true,
-          recommendation: results.rpiProxy?.success 
-            ? 'Use RPi proxy for all IPTV requests (residential IP required)'
-            : results.cloudflare?.success 
-              ? 'Cloudflare Worker works - portal may not block datacenter IPs'
-              : results.vercel?.success
-                ? 'Direct Vercel works - portal does not block datacenter IPs'
-                : 'All sources failed - check portal URL and MAC address',
+          cfUsedRpi,
+          cfRpiConfigured,
+          recommendation,
+          note: 'Stream tokens are bound to the requesting IP. For streaming to work, ALL API calls (handshake, create_link) must come from the same IP that will stream.',
         };
         
         return NextResponse.json({ success: true, results, summary, testUrl });

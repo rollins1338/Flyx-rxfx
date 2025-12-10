@@ -211,12 +211,13 @@ function proxyIPTVApi(targetUrl, mac, token, res) {
   const url = new URL(targetUrl);
   const client = url.protocol === 'https:' ? https : http;
   
-  // STB Device Headers
+  // STB Device Headers - must match exactly what works from Vercel
   const encodedMac = mac ? encodeURIComponent(mac) : '';
   const headers = {
     'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3',
     'X-User-Agent': 'Model: MAG250; Link: WiFi',
     'Accept': '*/*',
+    'Accept-Encoding': 'gzip, deflate',
     'Accept-Language': 'en-US,en;q=0.9',
     'Connection': 'keep-alive',
     'Referer': `${url.protocol}//${url.host}/`,
@@ -228,6 +229,8 @@ function proxyIPTVApi(targetUrl, mac, token, res) {
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
+  
+  console.log(`[IPTV API] Headers:`, JSON.stringify(headers, null, 2));
 
   const options = {
     hostname: url.hostname,
@@ -294,11 +297,13 @@ function proxyIPTVStream(targetUrl, mac, token, res, redirectCount = 0) {
   const client = url.protocol === 'https:' ? https : http;
   
   // STB Device Headers - Required for Stalker Portal authentication
+  // Must match exactly what works from Vercel
   const encodedMac = mac ? encodeURIComponent(mac) : '';
   const headers = {
     'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3',
     'X-User-Agent': 'Model: MAG250; Link: WiFi',
     'Accept': '*/*',
+    'Accept-Encoding': 'gzip, deflate',
     'Accept-Language': 'en-US,en;q=0.9',
     'Connection': 'keep-alive',
     'Referer': `${url.protocol}//${url.host}/`,
@@ -322,6 +327,7 @@ function proxyIPTVStream(targetUrl, mac, token, res, redirectCount = 0) {
   };
 
   console.log(`[IPTV Stream] ${targetUrl.substring(0, 80)}...`);
+  console.log(`[IPTV Stream] Headers:`, JSON.stringify(headers, null, 2));
 
   const proxyReq = client.request(options, (proxyRes) => {
     const contentType = proxyRes.headers['content-type'] || 'video/mp2t';

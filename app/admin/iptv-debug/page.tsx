@@ -732,6 +732,106 @@ export default function IPTVDebugPage() {
     }
   }, [portalUrl, macAddress]);
 
+  // Test client IP forwarding mode - makes CF worker forward YOUR IP to the portal
+  // If this works, the token is bound to YOUR IP and you can stream directly!
+  const testClientIpMode = useCallback(async () => {
+    if (!portalUrl || !macAddress) return;
+    
+    setDebugSourcesLoading(true);
+    
+    // Normalize portal URL
+    let baseUrl = portalUrl.trim();
+    if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+      baseUrl = 'http://' + baseUrl;
+    }
+    baseUrl = baseUrl.replace(/\/+$/, '');
+    if (baseUrl.endsWith('/c')) baseUrl = baseUrl.slice(0, -2);
+    
+    // Build handshake URL
+    const handshakeUrl = new URL('/portal.php', baseUrl);
+    handshakeUrl.searchParams.set('type', 'stb');
+    handshakeUrl.searchParams.set('action', 'handshake');
+    handshakeUrl.searchParams.set('token', '');
+    handshakeUrl.searchParams.set('JsHttpRequest', '1-xml');
+    
+    const testUrl = handshakeUrl.toString();
+    
+    try {
+      // Test through CF worker with forward_ip=true
+      const cfParams = new URLSearchParams({ 
+        url: testUrl, 
+        mac: macAddress, 
+        forward_ip: 'true'  // This tells CF worker to forward our IP!
+      });
+      const cfFullUrl = `${CF_PROXY_URL}/iptv/api?${cfParams.toString()}`;
+      
+      console.log('[Client IP Test] Testing:', cfFullUrl.substring(0, 100));
+      
+      const startTime = Date.now();
+      const cfRes = await fetch(cfFullUrl);
+      const cfText = await cfRes.text();
+      const latency = Date.now() - startTime;
+      
+      console.log('[Client IP Test] Response:', cfRes.status, cfText.substring(0, 200));
+      
+      // Parse response
+      const cfClean = cfText.replace(/^\/\*-secure-\s*/, '').replace(/\s*\*\/$/, '');
+      let cfData;
+      try { cfData = JSON.parse(cfClean); } catch { cfData = null; }
+      
+      const usedMethod = cfRes.headers.get('X-Used-Method');
+      
+      if (cfRes.ok && cfData?.js?.token) {
+        setDebugSourcesResult({
+          success: true,
+          results: {
+            clientIpMode: {
+              source: 'CF Worker (Client IP Forwarding)',
+              status: cfRes.status,
+              success: true,
+              token: cfData.js.token.substring(0, 20) + '...',
+              latency,
+              usedMethod,
+              hint: '🎉 Token is bound to YOUR IP! You can stream directly without proxy!',
+            }
+          },
+          summary: {
+            recommendation: 'Client IP forwarding works! The token is bound to your IP. Try streaming directly.',
+            note: 'If streaming works, this is the best mode - no proxy bandwidth costs!',
+          },
+          testUrl,
+        });
+      } else {
+        setDebugSourcesResult({
+          success: false,
+          results: {
+            clientIpMode: {
+              source: 'CF Worker (Client IP Forwarding)',
+              status: cfRes.status,
+              success: false,
+              latency,
+              usedMethod,
+              error: !cfRes.ok ? `HTTP ${cfRes.status}` : 'No token in response',
+              rawResponse: cfText.substring(0, 300),
+              hint: 'Portal may not respect X-Forwarded-For headers. Try RPi proxy instead.',
+            }
+          },
+          summary: {
+            recommendation: 'Client IP forwarding failed. Portal ignores forwarded IP headers.',
+          },
+          testUrl,
+        });
+      }
+    } catch (error) {
+      setDebugSourcesResult({ 
+        error: String(error),
+        summary: { recommendation: 'Test failed - check CF worker URL' }
+      });
+    } finally {
+      setDebugSourcesLoading(false);
+    }
+  }, [portalUrl, macAddress]);
+
   return (
     <div>
       <div style={{
@@ -855,6 +955,27 @@ export default function IPTVDebugPage() {
               {debugSourcesLoading ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> : <Server size={18} />}
               Debug Sources
             </button>
+            <button
+              onClick={testClientIpMode}
+              disabled={debugSourcesLoading || !portalUrl || !macAddress}
+              style={{
+                padding: '12px 16px',
+                background: debugSourcesLoading ? 'rgba(34, 197, 94, 0.3)' : 'rgba(34, 197, 94, 0.2)',
+                border: '1px solid rgba(34, 197, 94, 0.3)',
+                borderRadius: '8px',
+                color: '#22c55e',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: debugSourcesLoading ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+              title="Test if portal respects X-Forwarded-For - if yes, token binds to YOUR IP!"
+            >
+              {debugSourcesLoading ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> : <Zap size={18} />}
+              Test Client IP
+            </button>
           </div>
         </div>
       </div>
@@ -897,11 +1018,18 @@ export default function IPTVDebugPage() {
               color: '#f8fafc',
               fontSize: '14px'
             }}>
-              <strong>Recommendation:</strong> {debugSourcesResult.summary.recommendation}
+              <div style={{ marginBottom: '8px' }}>
+                <strong>Recommendation:</strong> {debugSourcesResult.summary.recommendation}
+              </div>
+              {debugSourcesResult.summary.note && (
+                <div style={{ color: '#94a3b8', fontSize: '12px', fontStyle: 'italic' }}>
+                  ⚠️ {debugSourcesResult.summary.note}
+                </div>
+              )}
             </div>
           )}
           
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '12px' }}>
             {debugSourcesResult.results && Object.entries(debugSourcesResult.results).map(([key, result]: [string, any]) => (
               <div 
                 key={key}
@@ -922,6 +1050,11 @@ export default function IPTVDebugPage() {
                     {result.success ? '✓ Works' : '✗ Blocked'}
                   </span>
                 </div>
+                {result.status && (
+                  <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>
+                    HTTP Status: {result.status}
+                  </div>
+                )}
                 {result.latency && (
                   <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>
                     Latency: {result.latency}ms
@@ -933,9 +1066,46 @@ export default function IPTVDebugPage() {
                   </div>
                 )}
                 {result.token && (
-                  <div style={{ color: '#22c55e', fontSize: '11px', fontFamily: 'monospace' }}>
+                  <div style={{ color: '#22c55e', fontSize: '11px', fontFamily: 'monospace', marginBottom: '4px' }}>
                     Token: {result.token}
                   </div>
+                )}
+                {result.usedRpi !== undefined && (
+                  <div style={{ color: '#94a3b8', fontSize: '11px', marginBottom: '4px' }}>
+                    Used RPi: {result.usedRpi ? 'Yes' : 'No (direct)'}
+                  </div>
+                )}
+                {result.rpiHealthy !== undefined && (
+                  <div style={{ color: result.rpiHealthy ? '#22c55e' : '#ef4444', fontSize: '11px', marginBottom: '4px' }}>
+                    RPi Health: {result.rpiHealthy ? '✓ Reachable' : '✗ Unreachable'}
+                  </div>
+                )}
+                {result.hint && (
+                  <div style={{ color: '#fbbf24', fontSize: '11px', marginBottom: '4px' }}>
+                    💡 {result.hint}
+                  </div>
+                )}
+                {result.rawResponse && (
+                  <details style={{ marginTop: '8px' }}>
+                    <summary style={{ color: '#64748b', fontSize: '11px', cursor: 'pointer' }}>
+                      Raw Response
+                    </summary>
+                    <pre style={{ 
+                      color: '#94a3b8', 
+                      fontSize: '10px', 
+                      fontFamily: 'monospace',
+                      background: 'rgba(0,0,0,0.3)',
+                      padding: '8px',
+                      borderRadius: '4px',
+                      marginTop: '4px',
+                      overflow: 'auto',
+                      maxHeight: '100px',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-all'
+                    }}>
+                      {result.rawResponse}
+                    </pre>
+                  </details>
                 )}
               </div>
             ))}
