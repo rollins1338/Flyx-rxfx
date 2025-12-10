@@ -68,6 +68,11 @@ export async function handleIPTVRequest(request: Request, env: Env): Promise<Res
     });
   }
 
+  // Route: /iptv/api - Proxy Stalker portal API calls
+  if (path === '/iptv/api' || path === '/iptv/api/') {
+    return handleApiProxy(url, env, logger, origin);
+  }
+
   // Route: /iptv/stream - Proxy IPTV stream
   if (path === '/iptv/stream' || path === '/iptv/stream/') {
     return handleStreamProxy(url, env, logger, origin);
@@ -76,12 +81,86 @@ export async function handleIPTVRequest(request: Request, env: Env): Promise<Res
   return new Response(JSON.stringify({
     error: 'Not found',
     routes: {
+      api: '/iptv/api?url=<encoded_url>&mac=<mac>&token=<token>',
       stream: '/iptv/stream?url=<encoded_url>&mac=<mac>&token=<token>',
     },
   }), {
     status: 404,
     headers: { 'Content-Type': 'application/json', ...corsHeaders(origin) },
   });
+}
+
+async function handleApiProxy(url: URL, env: Env, logger: any, origin: string | null): Promise<Response> {
+  const apiUrl = url.searchParams.get('url');
+  const mac = url.searchParams.get('mac');
+  const token = url.searchParams.get('token');
+
+  if (!apiUrl) {
+    return new Response(JSON.stringify({ error: 'Missing url parameter' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders(origin) },
+    });
+  }
+
+  try {
+    const decodedUrl = decodeURIComponent(apiUrl);
+    logger.info('IPTV API proxy request', { url: decodedUrl.substring(0, 100) });
+
+    // Build STB headers
+    const headers = buildStreamHeaders(mac || '', token || undefined);
+
+    let response: Response;
+
+    // If RPi proxy is configured, route through it for residential IP
+    if (env.RPI_PROXY_URL && env.RPI_PROXY_KEY) {
+      logger.info('Using RPi proxy for IPTV API', { rpiProxy: env.RPI_PROXY_URL });
+      
+      const rpiParams = new URLSearchParams({ url: decodedUrl, key: env.RPI_PROXY_KEY });
+      if (mac) rpiParams.set('mac', mac);
+      if (token) rpiParams.set('token', token);
+      
+      const rpiUrl = `${env.RPI_PROXY_URL}/iptv/api?${rpiParams.toString()}`;
+      
+      response = await fetch(rpiUrl, {
+        signal: AbortSignal.timeout(15000),
+      });
+    } else {
+      // Direct fetch from Cloudflare (datacenter IP - may be blocked)
+      logger.warn('No RPi proxy configured - direct fetch may be blocked');
+      
+      response = await fetch(decodedUrl, {
+        headers,
+        // @ts-ignore - Cloudflare Workers support this
+        cf: {
+          cacheTtl: 0,
+          cacheEverything: false,
+        },
+      });
+    }
+
+    const contentType = response.headers.get('content-type') || 'application/json';
+    const text = await response.text();
+
+    logger.info('IPTV API response', { status: response.status, length: text.length });
+
+    return new Response(text, {
+      status: response.status,
+      headers: {
+        'Content-Type': contentType,
+        ...corsHeaders(origin),
+      },
+    });
+
+  } catch (error) {
+    logger.error('IPTV API proxy error', error as Error);
+    return new Response(JSON.stringify({ 
+      error: 'API proxy error', 
+      details: error instanceof Error ? error.message : String(error) 
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders(origin) },
+    });
+  }
 }
 
 async function handleStreamProxy(url: URL, env: Env, logger: any, origin: string | null): Promise<Response> {

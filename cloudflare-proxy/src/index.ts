@@ -345,8 +345,11 @@ export default {
         },
         iptv: {
           path: '/iptv/',
-          description: 'IPTV Stalker portal stream proxy',
-          usage: '/iptv/stream?url=<encoded_url>&mac=<mac>&token=<token>',
+          description: 'IPTV Stalker portal proxy',
+          subRoutes: {
+            api: '/iptv/api?url=<encoded_url>&mac=<mac>&token=<token>',
+            stream: '/iptv/stream?url=<encoded_url>&mac=<mac>&token=<token>',
+          },
         },
         decode: {
           path: '/decode',

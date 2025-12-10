@@ -592,7 +592,8 @@ export async function POST(request: NextRequest) {
               token: rpiData?.js?.token ? rpiData.js.token.substring(0, 20) + '...' : null,
               latency: Date.now() - startRpi,
               error: !rpiRes.ok ? `HTTP ${rpiRes.status}` : (!rpiData?.js?.token ? 'No token in response' : null),
-              rawResponse: rpiText.substring(0, 200),
+              rawResponse: rpiText.substring(0, 500),
+              rpiUrl: `${RPI_PROXY_URL}/iptv/api?url=...&mac=${macAddress}&key=***`,
             };
           } catch (e: any) {
             results.rpiProxy = {
