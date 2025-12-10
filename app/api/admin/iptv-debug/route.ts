@@ -30,6 +30,7 @@ function buildHeaders(macAddress: string, token?: string): Record<string, string
 }
 
 // Perform handshake to get authentication token
+// MUST use RPi proxy so token is bound to residential IP (same IP that will stream)
 async function performHandshake(portalUrl: string, macAddress: string): Promise<string> {
   const url = new URL('/portal.php', portalUrl);
   url.searchParams.set('type', 'stb');
@@ -37,14 +38,33 @@ async function performHandshake(portalUrl: string, macAddress: string): Promise<
   url.searchParams.set('token', '');
   url.searchParams.set('JsHttpRequest', '1-xml');
 
+  const requestUrl = url.toString();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
   try {
-    const response = await fetch(url.toString(), { 
-      signal: controller.signal,
-      headers: buildHeaders(macAddress),
-    });
+    let response: Response;
+    
+    // Use RPi proxy if available - CRITICAL for token to be bound to residential IP
+    if (RPI_PROXY_URL && RPI_PROXY_KEY) {
+      console.log('[Handshake] Using RPi proxy for residential IP');
+      const rpiParams = new URLSearchParams({
+        url: requestUrl,
+        mac: macAddress,
+        key: RPI_PROXY_KEY,
+      });
+      
+      response = await fetch(`${RPI_PROXY_URL}/iptv/api?${rpiParams.toString()}`, {
+        signal: controller.signal,
+      });
+    } else {
+      // Direct fetch (token will be bound to server IP - streaming may fail)
+      console.warn('[Handshake] No RPi proxy - token will be bound to datacenter IP');
+      response = await fetch(requestUrl, { 
+        signal: controller.signal,
+        headers: buildHeaders(macAddress),
+      });
+    }
     clearTimeout(timeoutId);
     
     const text = await response.text();
@@ -65,7 +85,7 @@ async function performHandshake(portalUrl: string, macAddress: string): Promise<
   }
 }
 
-// Get account profile
+// Get account profile - uses RPi proxy if available
 async function getProfile(portalUrl: string, macAddress: string, token: string): Promise<any> {
   const url = new URL('/portal.php', portalUrl);
   url.searchParams.set('type', 'stb');
@@ -75,14 +95,29 @@ async function getProfile(portalUrl: string, macAddress: string, token: string):
   url.searchParams.set('stb_type', 'MAG250');
   url.searchParams.set('JsHttpRequest', '1-xml');
 
+  const requestUrl = url.toString();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
   try {
-    const response = await fetch(url.toString(), { 
-      signal: controller.signal,
-      headers: buildHeaders(macAddress, token),
-    });
+    let response: Response;
+    
+    if (RPI_PROXY_URL && RPI_PROXY_KEY) {
+      const rpiParams = new URLSearchParams({
+        url: requestUrl,
+        mac: macAddress,
+        token: token,
+        key: RPI_PROXY_KEY,
+      });
+      response = await fetch(`${RPI_PROXY_URL}/iptv/api?${rpiParams.toString()}`, {
+        signal: controller.signal,
+      });
+    } else {
+      response = await fetch(requestUrl, { 
+        signal: controller.signal,
+        headers: buildHeaders(macAddress, token),
+      });
+    }
     clearTimeout(timeoutId);
     
     const text = await response.text();
@@ -102,7 +137,7 @@ async function getProfile(portalUrl: string, macAddress: string, token: string):
   }
 }
 
-// Get content count
+// Get content count - uses RPi proxy if available
 async function getContentCount(portalUrl: string, macAddress: string, token: string, contentType: string): Promise<number> {
   const url = new URL('/portal.php', portalUrl);
   url.searchParams.set('type', contentType);
@@ -110,14 +145,29 @@ async function getContentCount(portalUrl: string, macAddress: string, token: str
   url.searchParams.set('p', '0');
   url.searchParams.set('JsHttpRequest', '1-xml');
 
+  const requestUrl = url.toString();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
   try {
-    const response = await fetch(url.toString(), { 
-      signal: controller.signal,
-      headers: buildHeaders(macAddress, token),
-    });
+    let response: Response;
+    
+    if (RPI_PROXY_URL && RPI_PROXY_KEY) {
+      const rpiParams = new URLSearchParams({
+        url: requestUrl,
+        mac: macAddress,
+        token: token,
+        key: RPI_PROXY_KEY,
+      });
+      response = await fetch(`${RPI_PROXY_URL}/iptv/api?${rpiParams.toString()}`, {
+        signal: controller.signal,
+      });
+    } else {
+      response = await fetch(requestUrl, { 
+        signal: controller.signal,
+        headers: buildHeaders(macAddress, token),
+      });
+    }
     clearTimeout(timeoutId);
     
     const text = await response.text();
@@ -130,21 +180,36 @@ async function getContentCount(portalUrl: string, macAddress: string, token: str
   }
 }
 
-// Get genres/categories
+// Get genres/categories - uses RPi proxy if available
 async function getGenres(portalUrl: string, macAddress: string, token: string, contentType: string): Promise<any[]> {
   const url = new URL('/portal.php', portalUrl);
   url.searchParams.set('type', contentType);
   url.searchParams.set('action', 'get_genres');
   url.searchParams.set('JsHttpRequest', '1-xml');
 
+  const requestUrl = url.toString();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
   try {
-    const response = await fetch(url.toString(), { 
-      signal: controller.signal,
-      headers: buildHeaders(macAddress, token),
-    });
+    let response: Response;
+    
+    if (RPI_PROXY_URL && RPI_PROXY_KEY) {
+      const rpiParams = new URLSearchParams({
+        url: requestUrl,
+        mac: macAddress,
+        token: token,
+        key: RPI_PROXY_KEY,
+      });
+      response = await fetch(`${RPI_PROXY_URL}/iptv/api?${rpiParams.toString()}`, {
+        signal: controller.signal,
+      });
+    } else {
+      response = await fetch(requestUrl, { 
+        signal: controller.signal,
+        headers: buildHeaders(macAddress, token),
+      });
+    }
     clearTimeout(timeoutId);
     
     const text = await response.text();
@@ -167,7 +232,7 @@ function parseSecureJson(text: string): any {
   }
 }
 
-// Get channels list
+// Get channels list - uses RPi proxy if available
 async function getChannels(portalUrl: string, macAddress: string, token: string, genre: string = '*', page: number = 0, pageSize: number = 14): Promise<any> {
   const url = new URL('/portal.php', portalUrl);
   url.searchParams.set('type', 'itv');
@@ -180,14 +245,29 @@ async function getChannels(portalUrl: string, macAddress: string, token: string,
   }
   url.searchParams.set('JsHttpRequest', '1-xml');
 
+  const requestUrl = url.toString();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
   try {
-    const response = await fetch(url.toString(), { 
-      signal: controller.signal,
-      headers: buildHeaders(macAddress, token),
-    });
+    let response: Response;
+    
+    if (RPI_PROXY_URL && RPI_PROXY_KEY) {
+      const rpiParams = new URLSearchParams({
+        url: requestUrl,
+        mac: macAddress,
+        token: token,
+        key: RPI_PROXY_KEY,
+      });
+      response = await fetch(`${RPI_PROXY_URL}/iptv/api?${rpiParams.toString()}`, {
+        signal: controller.signal,
+      });
+    } else {
+      response = await fetch(requestUrl, { 
+        signal: controller.signal,
+        headers: buildHeaders(macAddress, token),
+      });
+    }
     clearTimeout(timeoutId);
     
     const text = await response.text();
@@ -393,7 +473,157 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Token and cmd required' }, { status: 400 });
         }
         const { streamUrl, rawResponse, requestUrl, usedRpiProxy } = await getStreamUrl(normalizedUrl, macAddress, token, cmd);
+        
+        // Return success only if we got a valid stream URL
+        if (!streamUrl) {
+          return NextResponse.json({ 
+            success: false, 
+            error: 'No stream URL returned from portal',
+            rawResponse, 
+            cmd, 
+            requestUrl, 
+            usedRpiProxy 
+          });
+        }
+        
         return NextResponse.json({ success: true, streamUrl, rawResponse, cmd, requestUrl, usedRpiProxy });
+      }
+
+      case 'debug_sources': {
+        // Test handshake from different sources to see which IPs are blocked
+        const results: Record<string, any> = {};
+        
+        const handshakeUrl = new URL('/portal.php', normalizedUrl);
+        handshakeUrl.searchParams.set('type', 'stb');
+        handshakeUrl.searchParams.set('action', 'handshake');
+        handshakeUrl.searchParams.set('token', '');
+        handshakeUrl.searchParams.set('JsHttpRequest', '1-xml');
+        const testUrl = handshakeUrl.toString();
+        
+        // 1. Test direct from Vercel (datacenter IP)
+        try {
+          const startVercel = Date.now();
+          const vercelRes = await fetch(testUrl, {
+            headers: buildHeaders(macAddress),
+            signal: AbortSignal.timeout(10000),
+          });
+          const vercelText = await vercelRes.text();
+          const vercelClean = vercelText.replace(/^\/\*-secure-\s*/, '').replace(/\s*\*\/$/, '');
+          let vercelData;
+          try { vercelData = JSON.parse(vercelClean); } catch { vercelData = null; }
+          
+          results.vercel = {
+            source: 'Vercel (Datacenter)',
+            status: vercelRes.status,
+            success: vercelRes.ok && vercelData?.js?.token,
+            token: vercelData?.js?.token ? vercelData.js.token.substring(0, 20) + '...' : null,
+            latency: Date.now() - startVercel,
+            error: !vercelRes.ok ? `HTTP ${vercelRes.status}` : (!vercelData?.js?.token ? 'No token in response' : null),
+            rawResponse: vercelText.substring(0, 200),
+          };
+        } catch (e: any) {
+          results.vercel = {
+            source: 'Vercel (Datacenter)',
+            success: false,
+            error: e.message || String(e),
+          };
+        }
+        
+        // 2. Test through Cloudflare Worker (if configured)
+        const cfProxyUrl = process.env.NEXT_PUBLIC_CF_TV_PROXY_URL;
+        if (cfProxyUrl) {
+          try {
+            const startCf = Date.now();
+            // Use the IPTV API endpoint on CF worker
+            const cfParams = new URLSearchParams({ url: testUrl, mac: macAddress });
+            const cfRes = await fetch(`${cfProxyUrl}/iptv/api?${cfParams.toString()}`, {
+              signal: AbortSignal.timeout(10000),
+            });
+            const cfText = await cfRes.text();
+            const cfClean = cfText.replace(/^\/\*-secure-\s*/, '').replace(/\s*\*\/$/, '');
+            let cfData;
+            try { cfData = JSON.parse(cfClean); } catch { cfData = null; }
+            
+            results.cloudflare = {
+              source: 'Cloudflare Worker (Datacenter)',
+              status: cfRes.status,
+              success: cfRes.ok && cfData?.js?.token,
+              token: cfData?.js?.token ? cfData.js.token.substring(0, 20) + '...' : null,
+              latency: Date.now() - startCf,
+              error: !cfRes.ok ? `HTTP ${cfRes.status}` : (!cfData?.js?.token ? 'No token in response' : null),
+              rawResponse: cfText.substring(0, 200),
+            };
+          } catch (e: any) {
+            results.cloudflare = {
+              source: 'Cloudflare Worker (Datacenter)',
+              success: false,
+              error: e.message || String(e),
+            };
+          }
+        } else {
+          results.cloudflare = {
+            source: 'Cloudflare Worker',
+            success: false,
+            error: 'Not configured (NEXT_PUBLIC_CF_TV_PROXY_URL not set)',
+          };
+        }
+        
+        // 3. Test through RPi proxy (residential IP)
+        if (RPI_PROXY_URL && RPI_PROXY_KEY) {
+          try {
+            const startRpi = Date.now();
+            const rpiParams = new URLSearchParams({
+              url: testUrl,
+              mac: macAddress,
+              key: RPI_PROXY_KEY,
+            });
+            const rpiRes = await fetch(`${RPI_PROXY_URL}/iptv/api?${rpiParams.toString()}`, {
+              signal: AbortSignal.timeout(10000),
+            });
+            const rpiText = await rpiRes.text();
+            const rpiClean = rpiText.replace(/^\/\*-secure-\s*/, '').replace(/\s*\*\/$/, '');
+            let rpiData;
+            try { rpiData = JSON.parse(rpiClean); } catch { rpiData = null; }
+            
+            results.rpiProxy = {
+              source: 'RPi Proxy (Residential IP)',
+              status: rpiRes.status,
+              success: rpiRes.ok && rpiData?.js?.token,
+              token: rpiData?.js?.token ? rpiData.js.token.substring(0, 20) + '...' : null,
+              latency: Date.now() - startRpi,
+              error: !rpiRes.ok ? `HTTP ${rpiRes.status}` : (!rpiData?.js?.token ? 'No token in response' : null),
+              rawResponse: rpiText.substring(0, 200),
+            };
+          } catch (e: any) {
+            results.rpiProxy = {
+              source: 'RPi Proxy (Residential IP)',
+              success: false,
+              error: e.message || String(e),
+            };
+          }
+        } else {
+          results.rpiProxy = {
+            source: 'RPi Proxy (Residential IP)',
+            success: false,
+            error: 'Not configured (RPI_PROXY_URL or RPI_PROXY_KEY not set)',
+          };
+        }
+        
+        // Summary
+        const summary = {
+          vercelBlocked: !results.vercel?.success,
+          cloudflareBlocked: !results.cloudflare?.success,
+          rpiWorks: results.rpiProxy?.success === true,
+          recommendation: results.rpiProxy?.success 
+            ? 'Use RPi proxy for all IPTV requests (residential IP required)'
+            : results.cloudflare?.success 
+              ? 'Cloudflare Worker works - portal may not block datacenter IPs'
+              : results.vercel?.success
+                ? 'Direct Vercel works - portal does not block datacenter IPs'
+                : 'All sources failed - check portal URL and MAC address',
+        };
+        
+        return NextResponse.json({ success: true, results, summary, testUrl });
       }
 
       default:

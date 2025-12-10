@@ -17,7 +17,8 @@ import {
   Trash2,
   RotateCcw,
   Square,
-  Zap
+  Zap,
+  Server
 } from 'lucide-react';
 import type Hls from 'hls.js';
 import type mpegts from 'mpegts.js';
@@ -93,6 +94,8 @@ export default function IPTVDebugPage() {
   const [autoCycleResults, setAutoCycleResults] = useState<AutoCycleResult[]>([]);
   const [autoCycleProgress, setAutoCycleProgress] = useState({ current: 0, total: 0, currentAccount: '' });
   const [testStreamDuringCycle, setTestStreamDuringCycle] = useState(false);
+  const [debugSourcesResult, setDebugSourcesResult] = useState<any>(null);
+  const [debugSourcesLoading, setDebugSourcesLoading] = useState(false);
   const autoCycleAbortRef = useRef(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -702,6 +705,33 @@ export default function IPTVDebugPage() {
     navigator.clipboard.writeText(text);
   };
 
+  // Debug which IP sources work for this portal
+  const debugSources = useCallback(async () => {
+    if (!portalUrl || !macAddress) return;
+    
+    setDebugSourcesLoading(true);
+    setDebugSourcesResult(null);
+    
+    try {
+      const response = await fetch('/api/admin/iptv-debug', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          action: 'debug_sources', 
+          portalUrl, 
+          macAddress 
+        })
+      });
+      
+      const data = await response.json();
+      setDebugSourcesResult(data);
+    } catch (error) {
+      setDebugSourcesResult({ error: String(error) });
+    } finally {
+      setDebugSourcesLoading(false);
+    }
+  }, [portalUrl, macAddress]);
+
   return (
     <div>
       <div style={{
@@ -783,7 +813,7 @@ export default function IPTVDebugPage() {
             />
           </div>
           
-          <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
             <button
               onClick={testConnection}
               disabled={loading || !portalUrl || !macAddress}
@@ -804,9 +834,114 @@ export default function IPTVDebugPage() {
               {loading ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> : <Wifi size={18} />}
               {loading ? 'Testing...' : 'Test Connection'}
             </button>
+            <button
+              onClick={debugSources}
+              disabled={debugSourcesLoading || !portalUrl || !macAddress}
+              style={{
+                padding: '12px 16px',
+                background: debugSourcesLoading ? 'rgba(251, 191, 36, 0.3)' : 'rgba(251, 191, 36, 0.2)',
+                border: '1px solid rgba(251, 191, 36, 0.3)',
+                borderRadius: '8px',
+                color: '#fbbf24',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: debugSourcesLoading ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+              title="Test which IP sources (Vercel, Cloudflare, RPi) can connect to this portal"
+            >
+              {debugSourcesLoading ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> : <Server size={18} />}
+              Debug Sources
+            </button>
           </div>
         </div>
       </div>
+
+      {/* Debug Sources Results */}
+      {debugSourcesResult && (
+        <div style={{
+          background: 'rgba(30, 41, 59, 0.5)',
+          borderRadius: '16px',
+          padding: '24px',
+          marginBottom: '24px',
+          border: '1px solid rgba(251, 191, 36, 0.3)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ color: '#fbbf24', margin: 0, fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Server size={18} />
+              IP Source Debug Results
+            </h3>
+            <button
+              onClick={() => setDebugSourcesResult(null)}
+              style={{
+                padding: '4px 8px',
+                background: 'transparent',
+                border: 'none',
+                color: '#64748b',
+                cursor: 'pointer',
+                fontSize: '18px'
+              }}
+            >
+              ×
+            </button>
+          </div>
+          
+          {debugSourcesResult.summary && (
+            <div style={{
+              background: 'rgba(0, 0, 0, 0.2)',
+              padding: '12px 16px',
+              borderRadius: '8px',
+              marginBottom: '16px',
+              color: '#f8fafc',
+              fontSize: '14px'
+            }}>
+              <strong>Recommendation:</strong> {debugSourcesResult.summary.recommendation}
+            </div>
+          )}
+          
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
+            {debugSourcesResult.results && Object.entries(debugSourcesResult.results).map(([key, result]: [string, any]) => (
+              <div 
+                key={key}
+                style={{
+                  background: result.success ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                  border: `1px solid ${result.success ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                  borderRadius: '8px',
+                  padding: '12px 16px'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ color: '#f8fafc', fontWeight: '600', fontSize: '13px' }}>{result.source}</span>
+                  <span style={{ 
+                    color: result.success ? '#22c55e' : '#ef4444',
+                    fontSize: '12px',
+                    fontWeight: '600'
+                  }}>
+                    {result.success ? '✓ Works' : '✗ Blocked'}
+                  </span>
+                </div>
+                {result.latency && (
+                  <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>
+                    Latency: {result.latency}ms
+                  </div>
+                )}
+                {result.error && (
+                  <div style={{ color: '#ef4444', fontSize: '12px', marginBottom: '4px' }}>
+                    Error: {result.error}
+                  </div>
+                )}
+                {result.token && (
+                  <div style={{ color: '#22c55e', fontSize: '11px', fontFamily: 'monospace' }}>
+                    Token: {result.token}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Saved Accounts */}
       <div style={{
