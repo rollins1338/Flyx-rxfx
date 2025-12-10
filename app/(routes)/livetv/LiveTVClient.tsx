@@ -653,7 +653,6 @@ function LiveTVPlayer({
 
     try {
       let streamUrl: string;
-      let usingStalker = false;
       
       // First, check if there's a Stalker IPTV mapping for this channel
       try {
@@ -663,7 +662,6 @@ function LiveTVPlayer({
         if (stalkerData.success && stalkerData.streamUrl) {
           console.log('[LiveTV] Using Stalker IPTV stream:', stalkerData.mapping?.stalkerChannelName);
           streamUrl = stalkerData.streamUrl;
-          usingStalker = true;
           setStreamSource('stalker');
         } else {
           // Fall back to DLHD stream
