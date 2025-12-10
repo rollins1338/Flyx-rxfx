@@ -454,6 +454,55 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: true, channels });
       }
 
+      case 'all_channels': {
+        // Fetch ALL channels from ALL genres at once
+        if (!token) {
+          return NextResponse.json({ error: 'Token required' }, { status: 400 });
+        }
+        
+        console.log('[All Channels] Starting to fetch all channels...');
+        const allChannels: any[] = [];
+        const pageSize = 500; // Request large pages to minimize requests
+        
+        // First, get total count
+        const firstPage = await getChannels(normalizedUrl, macAddress, token, '*', 0, pageSize);
+        const totalItems = firstPage.total_items || 0;
+        
+        if (firstPage.data) {
+          allChannels.push(...firstPage.data);
+        }
+        
+        console.log(`[All Channels] Total items: ${totalItems}, got ${allChannels.length} from first page`);
+        
+        // Fetch remaining pages
+        const totalPages = Math.ceil(totalItems / pageSize);
+        for (let p = 1; p < totalPages && p < 20; p++) { // Cap at 20 pages (10000 channels)
+          try {
+            const pageData = await getChannels(normalizedUrl, macAddress, token, '*', p, pageSize);
+            if (pageData.data && pageData.data.length > 0) {
+              allChannels.push(...pageData.data);
+              console.log(`[All Channels] Page ${p + 1}/${totalPages}: got ${pageData.data.length}, total now ${allChannels.length}`);
+            } else {
+              break; // No more data
+            }
+          } catch (pageErr) {
+            console.error(`[All Channels] Error fetching page ${p}:`, pageErr);
+            break;
+          }
+          // Small delay to avoid rate limiting
+          await new Promise(r => setTimeout(r, 100));
+        }
+        
+        console.log(`[All Channels] Finished: ${allChannels.length} channels total`);
+        
+        return NextResponse.json({ 
+          success: true, 
+          channels: allChannels,
+          total: allChannels.length,
+          portalTotal: totalItems
+        });
+      }
+
       case 'stream': {
         if (!token || !cmd) {
           return NextResponse.json({ error: 'Token and cmd required' }, { status: 400 });

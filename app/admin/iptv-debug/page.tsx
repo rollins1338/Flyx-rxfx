@@ -79,8 +79,6 @@ export default function IPTVDebugPage() {
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [genres, setGenres] = useState<Genre[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
-  const [selectedGenre, setSelectedGenre] = useState<string>('*');
-  const [currentPage, setCurrentPage] = useState(0);
   const [totalChannels, setTotalChannels] = useState(0);
   const [loadingChannels, setLoadingChannels] = useState(false);
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
@@ -600,39 +598,36 @@ export default function IPTVDebugPage() {
     };
   }, [streamUrl, rawStreamUrl, macAddress]);
 
-  // Load channels - accepts optional token override for immediate use after connection
-  const loadChannels = useCallback(async (genre: string = '*', page: number = 0, tokenOverride?: string) => {
+  // Load ALL channels at once - fetches from all pages
+  const loadAllChannels = useCallback(async (tokenOverride?: string) => {
     const token = tokenOverride || testResult?.token;
     if (!token) return;
     
     setLoadingChannels(true);
-    setSelectedGenre(genre);
-    setCurrentPage(page);
+    setChannels([]);
     
     try {
       const response = await fetch('/api/admin/iptv-debug', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          action: 'channels', 
+          action: 'all_channels', 
           portalUrl, 
           macAddress, 
-          token,
-          genre,
-          page
+          token
         })
       });
       
       const data = await response.json();
-      console.log('Channels response:', data);
+      console.log('All channels response:', data);
       if (data.success) {
-        setChannels(data.channels?.data || []);
-        setTotalChannels(data.channels?.total_items || 0);
+        setChannels(data.channels || []);
+        setTotalChannels(data.total || 0);
       } else {
-        console.error('Failed to load channels:', data);
+        console.error('Failed to load all channels:', data);
       }
     } catch (error) {
-      console.error('Failed to load channels:', error);
+      console.error('Failed to load all channels:', error);
     } finally {
       setLoadingChannels(false);
     }
@@ -669,15 +664,15 @@ export default function IPTVDebugPage() {
           setGenres(genresData.genres || []);
         }
         
-        // Auto-load first page of all channels
-        await loadChannels('*', 0, data.token);
+        // Auto-load ALL channels at once (not paginated)
+        await loadAllChannels(data.token);
       }
     } catch (error: any) {
       setTestResult({ success: false, error: error.message });
     } finally {
       setLoading(false);
     }
-  }, [portalUrl, macAddress, loadChannels]);
+  }, [portalUrl, macAddress, loadAllChannels]);
 
   const getStream = useCallback(async (channel: Channel) => {
     if (!testResult?.token) return;
@@ -1754,8 +1749,8 @@ export default function IPTVDebugPage() {
         </div>
       )}
 
-      {/* Genres & Channels Browser */}
-      {testResult?.success && genres.length > 0 && (
+      {/* Channels Browser - Shows ALL channels loaded at once */}
+      {testResult?.success && (
         <div style={{
           background: 'rgba(30, 41, 59, 0.5)',
           borderRadius: '16px',
@@ -1764,47 +1759,36 @@ export default function IPTVDebugPage() {
           border: '1px solid rgba(255, 255, 255, 0.1)'
         }}>
           <h3 style={{ color: '#f8fafc', margin: '0 0 20px 0', fontSize: '16px' }}>
-            Channel Browser
+            Channel Browser ({totalChannels} channels loaded)
           </h3>
 
-          {/* Genre Selector */}
+          {/* Reload button */}
           <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', color: '#94a3b8', fontSize: '14px', marginBottom: '8px' }}>
-              Category
-            </label>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              <button
-                onClick={() => loadChannels('*', 0)}
-                style={{
-                  padding: '8px 16px',
-                  background: selectedGenre === '*' ? 'rgba(120, 119, 198, 0.3)' : 'rgba(15, 23, 42, 0.6)',
-                  border: selectedGenre === '*' ? '1px solid #7877c6' : '1px solid rgba(255, 255, 255, 0.1)',
-                  borderRadius: '8px',
-                  color: selectedGenre === '*' ? '#fff' : '#94a3b8',
-                  fontSize: '13px',
-                  cursor: 'pointer'
-                }}
-              >
-                All ({testResult.content?.itv || 0})
-              </button>
-              {genres.map((genre) => (
-                <button
-                  key={genre.id}
-                  onClick={() => loadChannels(genre.id, 0)}
-                  style={{
-                    padding: '8px 16px',
-                    background: selectedGenre === genre.id ? 'rgba(120, 119, 198, 0.3)' : 'rgba(15, 23, 42, 0.6)',
-                    border: selectedGenre === genre.id ? '1px solid #7877c6' : '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: '8px',
-                    color: selectedGenre === genre.id ? '#fff' : '#94a3b8',
-                    fontSize: '13px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {genre.title}
-                </button>
-              ))}
-            </div>
+            <button
+              onClick={() => loadAllChannels()}
+              disabled={loadingChannels}
+              style={{
+                padding: '8px 16px',
+                background: loadingChannels ? 'rgba(120, 119, 198, 0.3)' : 'rgba(120, 119, 198, 0.2)',
+                border: '1px solid rgba(120, 119, 198, 0.3)',
+                borderRadius: '8px',
+                color: '#7877c6',
+                fontSize: '13px',
+                cursor: loadingChannels ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              {loadingChannels ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <RotateCcw size={14} />}
+              {loadingChannels ? 'Loading all channels...' : 'Reload All Channels'}
+            </button>
+            {/* Genre info - just for display */}
+            {genres.length > 0 && (
+              <div style={{ marginTop: '8px', color: '#64748b', fontSize: '12px' }}>
+                Categories: {genres.map(g => g.title).join(', ')}
+              </div>
+            )}
           </div>
 
           {/* Channel Filters */}
@@ -1974,60 +1958,12 @@ export default function IPTVDebugPage() {
                   </div>
                 ))}
               </div>
-
-              {/* Pagination */}
-              {totalChannels > 14 && (
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'center', 
-                  gap: '8px', 
-                  marginTop: '16px' 
-                }}>
-                  <button
-                    onClick={() => loadChannels(selectedGenre, Math.max(0, currentPage - 1))}
-                    disabled={currentPage === 0}
-                    style={{
-                      padding: '8px 16px',
-                      background: 'rgba(15, 23, 42, 0.6)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      borderRadius: '8px',
-                      color: currentPage === 0 ? '#475569' : '#94a3b8',
-                      fontSize: '13px',
-                      cursor: currentPage === 0 ? 'not-allowed' : 'pointer'
-                    }}
-                  >
-                    Previous
-                  </button>
-                  <span style={{ 
-                    padding: '8px 16px', 
-                    color: '#94a3b8', 
-                    fontSize: '13px' 
-                  }}>
-                    Page {currentPage + 1} of {Math.ceil(totalChannels / 14)}
-                  </span>
-                  <button
-                    onClick={() => loadChannels(selectedGenre, currentPage + 1)}
-                    disabled={(currentPage + 1) * 14 >= totalChannels}
-                    style={{
-                      padding: '8px 16px',
-                      background: 'rgba(15, 23, 42, 0.6)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      borderRadius: '8px',
-                      color: (currentPage + 1) * 14 >= totalChannels ? '#475569' : '#94a3b8',
-                      fontSize: '13px',
-                      cursor: (currentPage + 1) * 14 >= totalChannels ? 'not-allowed' : 'pointer'
-                    }}
-                  >
-                    Next
-                  </button>
-                </div>
-              )}
             </>
               );
             })()
           ) : (
             <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
-              Select a category to browse channels
+              {loadingChannels ? 'Loading all channels...' : 'Click "Reload All Channels" to load channels'}
             </div>
           )}
         </div>
