@@ -1,0 +1,12 @@
+{
+  "name": "hetzner-iptv-proxy",
+  "version": "1.0.0",
+  "description": "IPTV Stalker portal proxy for Hetzner VPS",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["iptv", "proxy", "stalker"],
+  "license": "MIT"
+}

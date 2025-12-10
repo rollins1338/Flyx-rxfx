@@ -3,9 +3,11 @@ import { verifyAdminAuth } from '@/lib/utils/admin-auth';
 
 const REQUEST_TIMEOUT = 15000;
 
-// RPi proxy configuration for residential IP requests
+// Proxy configurations
 const RPI_PROXY_URL = process.env.RPI_PROXY_URL;
 const RPI_PROXY_KEY = process.env.RPI_PROXY_KEY;
+const HETZNER_PROXY_URL = process.env.HETZNER_PROXY_URL;
+const HETZNER_PROXY_KEY = process.env.HETZNER_PROXY_KEY;
 
 // STB Device Headers - Required for Stalker Portal authentication
 const STB_USER_AGENT = 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3';
@@ -687,6 +689,78 @@ export async function POST(request: NextRequest) {
           };
         }
         
+        // 4. Test through Hetzner VPS proxy (if configured)
+        if (HETZNER_PROXY_URL && HETZNER_PROXY_KEY) {
+          let hetznerHealthy = false;
+          try {
+            const healthRes = await fetch(`${HETZNER_PROXY_URL}/health`, {
+              signal: AbortSignal.timeout(5000),
+            });
+            hetznerHealthy = healthRes.ok;
+            console.log('[Debug Sources] Hetzner health check:', healthRes.status);
+          } catch (healthErr: any) {
+            console.error('[Debug Sources] Hetzner health check failed:', healthErr.message);
+          }
+          
+          try {
+            const startHetzner = Date.now();
+            const hetznerParams = new URLSearchParams({
+              url: testUrl,
+              mac: macAddress,
+              key: HETZNER_PROXY_KEY,
+            });
+            const hetznerFullUrl = `${HETZNER_PROXY_URL}/iptv/api?${hetznerParams.toString()}`;
+            console.log('[Debug Sources] Testing Hetzner proxy:', hetznerFullUrl.substring(0, 100));
+            
+            const hetznerRes = await fetch(hetznerFullUrl, {
+              signal: AbortSignal.timeout(10000),
+            });
+            const hetznerText = await hetznerRes.text();
+            console.log('[Debug Sources] Hetzner response:', hetznerRes.status, hetznerText.substring(0, 200));
+            
+            const hetznerClean = hetznerText.replace(/^\/\*-secure-\s*/, '').replace(/\s*\*\/$/, '');
+            let hetznerData;
+            try { hetznerData = JSON.parse(hetznerClean); } catch { hetznerData = null; }
+            
+            let errorSource = null;
+            if (!hetznerRes.ok) {
+              if (hetznerRes.status === 401) {
+                errorSource = 'Hetzner proxy auth failed (check API key)';
+              } else if (hetznerRes.status === 403) {
+                errorSource = 'Portal returned 403 to Hetzner IP';
+              } else if (hetznerRes.status === 429) {
+                errorSource = 'Portal rate-limiting Hetzner IP';
+              } else {
+                errorSource = `HTTP ${hetznerRes.status}`;
+              }
+            }
+            
+            results.hetznerProxy = {
+              source: 'Hetzner VPS (Germany)',
+              status: hetznerRes.status,
+              success: hetznerRes.ok && hetznerData?.js?.token,
+              token: hetznerData?.js?.token ? hetznerData.js.token.substring(0, 20) + '...' : null,
+              latency: Date.now() - startHetzner,
+              error: errorSource || (!hetznerData?.js?.token ? 'No token in response' : null),
+              rawResponse: hetznerText.substring(0, 500),
+              hetznerHealthy,
+            };
+          } catch (e: any) {
+            results.hetznerProxy = {
+              source: 'Hetzner VPS (Germany)',
+              success: false,
+              error: e.name === 'TimeoutError' ? 'Request timed out (10s)' : (e.message || String(e)),
+              hetznerHealthy,
+            };
+          }
+        } else {
+          results.hetznerProxy = {
+            source: 'Hetzner VPS (Germany)',
+            success: false,
+            error: 'Not configured (HETZNER_PROXY_URL or HETZNER_PROXY_KEY not set)',
+          };
+        }
+        
         // Summary and recommendation
         // Key insight: Stream tokens are IP-bound, so ALL API calls must come from the same IP that will stream
         const cfUsedRpi = results.cloudflare?.usedRpi === true;
@@ -695,17 +769,19 @@ export async function POST(request: NextRequest) {
         let recommendation = '';
         if (results.rpiProxy?.success) {
           recommendation = 'RPi proxy works! Use it for all IPTV requests (stream tokens are IP-bound)';
+        } else if (results.hetznerProxy?.success) {
+          recommendation = 'Hetzner VPS works! Use it for IPTV requests. Set HETZNER_PROXY_URL/KEY in CF worker.';
         } else if (results.cloudflare?.success && cfUsedRpi) {
           recommendation = 'CF Worker → RPi works! Streaming should work through this path.';
         } else if (results.cloudflare?.success && !cfRpiConfigured) {
-          recommendation = 'CF Worker works directly but RPi not configured. Set RPI_PROXY_URL and RPI_PROXY_KEY secrets in CF worker for streaming.';
+          recommendation = 'CF Worker works directly but no proxy configured. Set proxy secrets in CF worker for streaming.';
         } else if (results.vercel?.success) {
-          if (!results.rpiProxy?.success && results.rpiProxy?.rpiHealthy) {
-            recommendation = 'Vercel works, RPi is reachable but portal returns error. Portal may block this residential IP range.';
+          if (results.hetznerProxy?.hetznerHealthy === false) {
+            recommendation = 'Vercel works. Hetzner proxy unreachable - check if server is running.';
           } else if (!results.rpiProxy?.rpiHealthy) {
-            recommendation = 'Vercel works but RPi unreachable. Check: 1) RPi proxy running, 2) cloudflared tunnel active';
+            recommendation = 'Vercel works but RPi unreachable. Try Hetzner VPS or check RPi tunnel.';
           } else {
-            recommendation = 'Vercel works. For streaming, configure RPi proxy or Oxylabs in CF worker.';
+            recommendation = 'Vercel works. For streaming, configure Hetzner or RPi proxy in CF worker.';
           }
         } else {
           recommendation = 'All sources failed - check portal URL and MAC address';
@@ -715,6 +791,7 @@ export async function POST(request: NextRequest) {
           vercelBlocked: !results.vercel?.success,
           cloudflareBlocked: !results.cloudflare?.success,
           rpiWorks: results.rpiProxy?.success === true,
+          hetznerWorks: results.hetznerProxy?.success === true,
           cfUsedRpi,
           cfRpiConfigured,
           recommendation,

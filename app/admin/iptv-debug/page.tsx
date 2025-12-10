@@ -438,7 +438,9 @@ export default function IPTVDebugPage() {
             proxyUrl = `${RPI_PROXY_URL}/iptv/stream?${proxyParams.toString()}`;
             console.log('mpegts using RPi proxy (residential IP):', proxyUrl.substring(0, 100));
           } else {
-            proxyUrl = `${CF_PROXY_URL}/iptv/stream?${proxyParams.toString()}`;
+            // CF_PROXY_URL might have /tv suffix, strip it for /iptv routes
+            const cfBase = CF_PROXY_URL.replace(/\/tv\/?$/, '').replace(/\/+$/, '');
+            proxyUrl = `${cfBase}/iptv/stream?${proxyParams.toString()}`;
             console.log('mpegts using CF proxy (may get 403):', proxyUrl.substring(0, 100));
           }
           
@@ -523,7 +525,9 @@ export default function IPTVDebugPage() {
             proxyUrl = `${RPI_PROXY_URL}/iptv/stream?${proxyParams.toString()}`;
             console.log('Fallback mpegts using RPi proxy:', proxyUrl.substring(0, 100));
           } else {
-            proxyUrl = `${CF_PROXY_URL}/iptv/stream?${proxyParams.toString()}`;
+            // CF_PROXY_URL might have /tv suffix, strip it for /iptv routes
+            const cfBase = CF_PROXY_URL.replace(/\/tv\/?$/, '').replace(/\/+$/, '');
+            proxyUrl = `${cfBase}/iptv/stream?${proxyParams.toString()}`;
             console.log('Fallback mpegts using CF proxy:', proxyUrl.substring(0, 100));
           }
           
@@ -758,12 +762,15 @@ export default function IPTVDebugPage() {
     
     try {
       // Test through CF worker with forward_ip=true
+      // CF_PROXY_URL might have /tv suffix, we need base URL for /iptv/api
+      let cfBaseUrl = CF_PROXY_URL.replace(/\/tv\/?$/, '').replace(/\/+$/, '');
+      
       const cfParams = new URLSearchParams({ 
         url: testUrl, 
         mac: macAddress, 
         forward_ip: 'true'  // This tells CF worker to forward our IP!
       });
-      const cfFullUrl = `${CF_PROXY_URL}/iptv/api?${cfParams.toString()}`;
+      const cfFullUrl = `${cfBaseUrl}/iptv/api?${cfParams.toString()}`;
       
       console.log('[Client IP Test] Testing:', cfFullUrl.substring(0, 100));
       
