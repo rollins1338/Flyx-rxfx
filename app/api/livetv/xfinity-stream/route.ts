@@ -151,6 +151,13 @@ export async function GET(request: NextRequest) {
     const preferWest = searchParams.get('coast') === 'west';
     const checkOnly = searchParams.get('check') === 'true';
     
+    // Get the REAL client IP to pass to CF proxy for token binding
+    // This is critical - without it, the token gets bound to Vercel's IP!
+    const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+                     request.headers.get('x-real-ip') ||
+                     request.ip ||
+                     'unknown';
+    
     if (!channelId) {
       return NextResponse.json({ error: 'Channel ID required' }, { status: 400 });
     }
@@ -200,6 +207,7 @@ export async function GET(request: NextRequest) {
     console.log(`[xfinity-stream] Using ${accountId ? 'DB account' : 'fallback'}: ${macAddress.substring(0, 14)}... for channel ${channelId} -> stalker ${finalStalkerChannelId}`);
     
     // Call CF worker single endpoint - it does handshake + create_link + token creation all in one
+    // IMPORTANT: Pass the real client IP so the token gets bound to the USER's IP, not Vercel's!
     const cfResponse = await fetch(`${CF_PROXY_URL}/iptv/channel`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -209,6 +217,7 @@ export async function GET(request: NextRequest) {
         stalkerChannelId: finalStalkerChannelId,
         channelId: channelId,
         channelName: mapping.name,
+        clientIp: clientIp, // Pass real client IP for token binding!
       }),
     });
     

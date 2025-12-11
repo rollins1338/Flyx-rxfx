@@ -51,8 +51,10 @@ interface StreamTokenData {
   boundIp?: string;
 }
 
-// Token expiration time (5 minutes - streams are fetched immediately)
-const TOKEN_TTL_SECONDS = 300;
+// Token expiration time (60 seconds - stream URL must be used immediately)
+// Portal play_tokens typically last 60-120 seconds, so we store the URL directly
+// for faster streaming (no need to re-fetch on every stream request)
+const TOKEN_TTL_SECONDS = 60;
 
 // Generate a random token
 function generateToken(): string {
@@ -191,6 +193,7 @@ async function handleChannelRequest(
       stalkerChannelId: string;
       channelId?: string;
       channelName?: string;
+      clientIp?: string; // Real client IP passed from Vercel/caller
     };
 
     if (!body.portal || !body.mac || !body.stalkerChannelId) {
@@ -204,7 +207,10 @@ async function handleChannelRequest(
     const portalBase = portal.replace(/\/c\/?$/, '').replace(/\/+$/, '');
 
     // Get client IP for token binding (prevents restreaming)
-    const clientIp = request.headers.get('CF-Connecting-IP') || 
+    // PRIORITY: Use clientIp from request body (passed by Vercel with real user IP)
+    // Fallback to headers only for direct CF worker calls
+    const clientIp = body.clientIp || 
+                     request.headers.get('CF-Connecting-IP') || 
                      request.headers.get('X-Real-IP') ||
                      request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim() ||
                      'unknown';
@@ -214,6 +220,7 @@ async function handleChannelRequest(
       mac: mac.substring(0, 14) + '...', 
       stalkerChannelId,
       clientIp: clientIp.substring(0, 20) + '...',
+      clientIpSource: body.clientIp ? 'request-body' : 'headers',
     });
 
     // Step 1: Handshake to get portal token
@@ -281,16 +288,15 @@ async function handleChannelRequest(
 
     logger.info('Got stream URL', { url: streamUrl.substring(0, 60) + '...' });
 
-    // Step 3: Create token and store PORTAL CREDENTIALS in KV (not the stream URL!)
-    // The portal's play_token expires quickly and is single-use, so we need to
-    // fetch a fresh stream URL when the client actually requests the stream
+    // Step 3: Create token and store the STREAM URL directly for fast access
+    // We use a short TTL (60s) since portal play_tokens expire quickly
+    // This avoids re-doing handshake+create_link on every stream request!
     if (env.STREAM_TOKENS) {
       const token = generateToken();
       const now = Date.now();
       const tokenData: StreamTokenData = {
-        // Store portal credentials for on-demand stream URL generation
-        portal: portalBase,
-        stalkerChannelId: stalkerChannelId,
+        // Store stream URL directly for instant streaming (no re-fetch needed)
+        url: streamUrl,
         mac: mac,
         channelId: channelId,
         channelName: channelName,
@@ -304,11 +310,11 @@ async function handleChannelRequest(
         expirationTtl: TOKEN_TTL_SECONDS,
       });
 
-      logger.info('Created stream token (IP-bound)', { 
+      logger.info('Created stream token (IP-bound, URL stored)', { 
         token: token.substring(0, 8) + '...',
-        portal: portalBase,
-        stalkerChannelId,
+        urlPreview: streamUrl.substring(0, 60) + '...',
         boundIp: clientIp.substring(0, 20) + '...',
+        ttl: TOKEN_TTL_SECONDS,
       });
 
       const workerUrl = new URL(request.url);
@@ -826,98 +832,17 @@ async function handleStreamProxy(request: Request, url: URL, env: Env, logger: a
 
       mac = tokenData.mac;
       
-      // Check if we have portal credentials (new format) or pre-stored URL (old format)
-      if (tokenData.portal && tokenData.stalkerChannelId) {
-        // NEW FORMAT: Fetch fresh stream URL on demand
-        logger.info('Token has portal credentials, fetching fresh stream URL', {
-          token: streamToken.substring(0, 8) + '...',
-          portal: tokenData.portal,
-          stalkerChannelId: tokenData.stalkerChannelId,
-          channelName: tokenData.channelName,
-        });
-        
-        try {
-          // Step 1: Handshake to get portal token
-          const handshakeUrl = `${tokenData.portal}/portal.php?type=stb&action=handshake&token=&JsHttpRequest=1-xml`;
-          const handshakeHeaders = buildStreamHeaders(mac);
-          
-          const handshakeRes = await fetch(handshakeUrl, { headers: handshakeHeaders });
-          const handshakeText = await handshakeRes.text();
-          const handshakeClean = handshakeText.replace(/^\/\*-secure-\s*/, '').replace(/\s*\*\/$/, '');
-          
-          let portalToken: string;
-          try {
-            const handshakeData = JSON.parse(handshakeClean);
-            portalToken = handshakeData?.js?.token;
-            if (!portalToken) throw new Error('No token in response');
-          } catch (e) {
-            logger.error('Handshake failed during stream fetch', { error: String(e) });
-            return new Response(JSON.stringify({ error: 'Portal handshake failed' }), {
-              status: 502,
-              headers: { 'Content-Type': 'application/json', ...corsHeaders(origin) },
-            });
-          }
-          
-          logger.info('Fresh handshake succeeded', { token: portalToken.substring(0, 20) + '...' });
-          
-          // Step 2: Create link to get fresh stream URL
-          const cmd = `ffrt http://localhost/ch/${tokenData.stalkerChannelId}`;
-          const createLinkUrl = new URL(`${tokenData.portal}/portal.php`);
-          createLinkUrl.searchParams.set('type', 'itv');
-          createLinkUrl.searchParams.set('action', 'create_link');
-          createLinkUrl.searchParams.set('cmd', cmd);
-          createLinkUrl.searchParams.set('series', '');
-          createLinkUrl.searchParams.set('forced_storage', 'undefined');
-          createLinkUrl.searchParams.set('disable_ad', '0');
-          createLinkUrl.searchParams.set('download', '0');
-          createLinkUrl.searchParams.set('JsHttpRequest', '1-xml');
-          
-          const createLinkHeaders = buildStreamHeaders(mac, portalToken);
-          const createLinkRes = await fetch(createLinkUrl.toString(), { headers: createLinkHeaders });
-          const createLinkText = await createLinkRes.text();
-          const createLinkClean = createLinkText.replace(/^\/\*-secure-\s*/, '').replace(/\s*\*\/$/, '');
-          
-          try {
-            const createLinkData = JSON.parse(createLinkClean);
-            streamUrl = createLinkData?.js?.cmd;
-            if (!streamUrl) throw new Error('No stream URL in response');
-            
-            // Extract URL from ffmpeg command format
-            const prefixes = ['ffmpeg ', 'ffrt ', 'ffrt2 ', 'ffrt3 ', 'ffrt4 '];
-            for (const prefix of prefixes) {
-              if (streamUrl.startsWith(prefix)) {
-                streamUrl = streamUrl.substring(prefix.length);
-                break;
-              }
-            }
-            streamUrl = streamUrl.trim();
-          } catch (e) {
-            logger.error('Create link failed during stream fetch', { error: String(e) });
-            return new Response(JSON.stringify({ error: 'Failed to get fresh stream URL' }), {
-              status: 502,
-              headers: { 'Content-Type': 'application/json', ...corsHeaders(origin) },
-            });
-          }
-          
-          logger.info('Got fresh stream URL', { url: streamUrl.substring(0, 80) + '...' });
-          
-        } catch (e) {
-          logger.error('Failed to fetch fresh stream URL', e as Error);
-          return new Response(JSON.stringify({ error: 'Failed to fetch fresh stream URL' }), {
-            status: 502,
-            headers: { 'Content-Type': 'application/json', ...corsHeaders(origin) },
-          });
-        }
-      } else if (tokenData.url) {
-        // OLD FORMAT: Use pre-stored URL (may fail due to token expiry)
+      // Use the pre-stored stream URL (fast path - no re-fetch needed!)
+      if (tokenData.url) {
         streamUrl = tokenData.url;
-        logger.info('Token has pre-stored URL (legacy format)', { 
+        logger.info('Using stored stream URL from token (fast path)', { 
           token: streamToken.substring(0, 8) + '...', 
           url: streamUrl.substring(0, 80) + '...',
+          channelName: tokenData.channelName,
         });
       } else {
-        logger.error('Token data missing both portal credentials and URL');
-        return new Response(JSON.stringify({ error: 'Invalid token data format' }), {
+        logger.error('Token data missing stream URL');
+        return new Response(JSON.stringify({ error: 'Invalid token - no stream URL stored' }), {
           status: 500,
           headers: { 'Content-Type': 'application/json', ...corsHeaders(origin) },
         });
@@ -990,23 +915,28 @@ async function handleStreamProxy(request: Request, url: URL, env: Env, logger: a
 
     // NEW STRATEGY: Try direct FIRST for streams (matching API proxy behavior)
     // Priority: Direct > RPi (backup) > Hetzner (last resort)
-    logger.info('STREAM FETCH DEBUG', { 
-      FULL_URL: decodedUrl,
-      MAC: mac,
+    const fetchStartTime = Date.now();
+    logger.info('STREAM FETCH START', { 
+      url: decodedUrl.substring(0, 100) + '...',
+      mac: mac?.substring(0, 14) + '...',
       viaToken: !!streamToken,
-      viaBase64: !!encodedUrl,
-      viaLegacy: !!url.searchParams.get('url'),
-      headers: headers,
     });
     
     try {
+      // Add timeout to prevent hanging - IPTV streams should respond quickly
       response = await fetch(decodedUrl, {
         headers,
+        signal: AbortSignal.timeout(15000), // 15 second timeout
         // @ts-ignore - Cloudflare Workers support this
         cf: {
           cacheTtl: 0,
           cacheEverything: false,
         },
+      });
+      
+      logger.info('STREAM FETCH COMPLETE', { 
+        elapsed: Date.now() - fetchStartTime,
+        status: response.status,
       });
       usedProxy = 'direct';
       
