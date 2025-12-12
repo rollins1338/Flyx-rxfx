@@ -167,12 +167,12 @@ export default function IPTVManagerPage() {
     }
   };
 
-  // Verify a single account - returns result
+  // Verify a single account - just check if we can get a token (fast verification)
   const verifyAccount = async (account: IPTVAccount): Promise<typeof verifyResults[0]> => {
     const maskedMac = account.mac_address.substring(0, 11) + '**:**:**';
     
     try {
-      // Step 1: Test connection (handshake) - 15s timeout
+      // Only test handshake/token - that's all we need to verify the account works
       const testRes = await fetchWithTimeout('/api/admin/iptv-debug', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -181,86 +181,20 @@ export default function IPTVManagerPage() {
           portalUrl: account.portal_url, 
           macAddress: account.mac_address 
         })
-      }, 15000);
+      }, 8000);
       const testData = await testRes.json();
       
       if (!testData.success || !testData.token) {
         return { accountId: account.id, mac: maskedMac, status: 'invalid', error: testData.error || 'Handshake failed' };
       }
       
-      // Step 2: Get a channel to test - 15s timeout
-      const channelsRes = await fetchWithTimeout('/api/admin/iptv-debug', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          action: 'channels', 
-          portalUrl: account.portal_url, 
-          macAddress: account.mac_address,
-          token: testData.token,
-          genre: '*',
-          page: 0,
-          pageSize: 5
-        })
-      }, 15000);
-      const channelsData = await channelsRes.json();
-      
-      if (!channelsData.success || !channelsData.channels?.data?.length) {
-        return { accountId: account.id, mac: maskedMac, status: 'invalid', error: 'No channels available' };
-      }
-      
-      // Step 3: Try to get a stream URL for the first channel - 15s timeout
-      const testChannel = channelsData.channels.data[0];
-      const streamRes = await fetchWithTimeout('/api/admin/iptv-debug', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          action: 'stream', 
-          portalUrl: account.portal_url, 
-          macAddress: account.mac_address,
-          token: testData.token,
-          cmd: testChannel.cmd
-        })
-      }, 15000);
-      const streamData = await streamRes.json();
-      
-      if (!streamData.success || !streamData.streamUrl) {
-        return { accountId: account.id, mac: maskedMac, status: 'invalid', error: streamData.error || 'Failed to get stream URL' };
-      }
-      
-      // Step 4: Actually fetch the stream to verify it works - 10s timeout
-      const CF_PROXY_URL = process.env.NEXT_PUBLIC_CF_TV_PROXY_URL || process.env.NEXT_PUBLIC_CF_PROXY_URL || 'https://media-proxy.vynx.workers.dev';
-      const cfBase = CF_PROXY_URL.replace(/\/tv\/?$/, '').replace(/\/+$/, '');
-      const proxyParams = new URLSearchParams({ url: streamData.streamUrl, mac: account.mac_address });
-      const proxyUrl = `${cfBase}/iptv/stream?${proxyParams.toString()}`;
-      
-      try {
-        const streamTestRes = await fetchWithTimeout(proxyUrl, {
-          method: 'GET',
-          headers: { 'Range': 'bytes=0-1023' },
-        }, 10000);
-        
-        if (streamTestRes.ok) {
-          const contentType = streamTestRes.headers.get('content-type') || '';
-          const contentLength = streamTestRes.headers.get('content-length');
-          
-          if (contentType.includes('video') || contentType.includes('mpegts') || contentType.includes('octet-stream') || (contentLength && parseInt(contentLength) > 0)) {
-            return { 
-              accountId: account.id, 
-              mac: maskedMac, 
-              status: 'valid', 
-              channelsTested: parseInt(channelsData.channels.total_items || '0')
-            };
-          } else {
-            return { accountId: account.id, mac: maskedMac, status: 'invalid', error: `Unexpected content: ${contentType}` };
-          }
-        } else if (streamTestRes.status === 403 || streamTestRes.status === 458 || streamTestRes.status === 456) {
-          return { accountId: account.id, mac: maskedMac, status: 'invalid', error: `Stream blocked (${streamTestRes.status})` };
-        } else {
-          return { accountId: account.id, mac: maskedMac, status: 'invalid', error: `Stream error: ${streamTestRes.status}` };
-        }
-      } catch (fetchErr: any) {
-        return { accountId: account.id, mac: maskedMac, status: 'invalid', error: `Stream fetch failed: ${fetchErr.message}` };
-      }
+      // Token obtained = account is valid for streaming
+      return { 
+        accountId: account.id, 
+        mac: maskedMac, 
+        status: 'valid', 
+        channelsTested: testData.content?.itv || 0
+      };
       
     } catch (err: any) {
       return { accountId: account.id, mac: maskedMac, status: 'error', error: err.message };
@@ -291,8 +225,8 @@ export default function IPTVManagerPage() {
     let errors = 0;
     let completed = 0;
     
-    // Process 3 at a time
-    const CONCURRENCY = 3;
+    // Process 10 at a time (fast token-only verification)
+    const CONCURRENCY = 10;
     
     const processAccount = async (account: IPTVAccount, index: number) => {
       // Verify this account
@@ -500,7 +434,7 @@ export default function IPTVManagerPage() {
 
   // Import accounts from JSON
   // Scanner output format: [{ portal, mac, success, profile: { playback_limit, name }, content: { itv } }]
-  // Only imports accounts from line.protv.cc (our mapped portal)
+  // Accepts all portal domains
   const handleImportAccounts = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -517,18 +451,13 @@ export default function IPTVManagerPage() {
         }
 
         // Normalize and filter accounts - match scanner output format
+        // Accept all portal domains
         const accountsToImport = rawAccounts
           .filter((acc: any) => {
             // Must be successful scan with portal and mac
             if (!acc.portal || !acc.mac) return false;
             if (acc.success === false) return false;
-            
-            // Only allow line.protv.cc accounts (our mapped portal)
-            const isProTV = acc.portal.includes('line.protv.cc');
-            if (!isProTV) {
-              console.log(`Skipping non-ProTV account: ${acc.portal}`);
-            }
-            return isProTV;
+            return true;
           })
           .map((acc: any) => ({
             portal_url: acc.portal,
@@ -541,8 +470,7 @@ export default function IPTVManagerPage() {
 
         if (accountsToImport.length === 0) {
           const totalScanned = rawAccounts.length;
-          const protvCount = rawAccounts.filter((a: any) => a.portal?.includes('line.protv.cc')).length;
-          alert(`No valid line.protv.cc accounts found.\n\nScanned: ${totalScanned} accounts\nProTV accounts: ${protvCount}\n\nOnly successful accounts from line.protv.cc are supported.`);
+          alert(`No valid accounts found.\n\nScanned: ${totalScanned} accounts\n\nMake sure accounts have portal URL, MAC address, and success=true.`);
           return;
         }
 
@@ -557,7 +485,7 @@ export default function IPTVManagerPage() {
         
         let message = `✓ Imported ${result.imported} accounts`;
         if (skipped > 0) {
-          message += `\n(${skipped} skipped - failed or not line.protv.cc)`;
+          message += `\n(${skipped} skipped - failed or missing portal/mac)`;
         }
         alert(message);
         fetchAccounts();

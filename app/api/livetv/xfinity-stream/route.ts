@@ -25,11 +25,27 @@ interface StalkerAccount {
 }
 
 // Get an available account from the database for a specific channel
-async function getAvailableAccountForChannel(channelId: string): Promise<{ portalUrl: string; macAddress: string; accountId?: string; stalkerChannelId?: string } | null> {
+// excludeAccountIds: array of account IDs to skip (failed accounts)
+async function getAvailableAccountForChannel(channelId: string, excludeAccountIds: string[] = []): Promise<{ portalUrl: string; macAddress: string; accountId?: string; stalkerChannelId?: string; remainingAccounts: number } | null> {
   try {
     await initializeDB();
     const db = getDB().getAdapter();
     const isNeon = process.env.DATABASE_URL?.includes('neon.tech');
+    
+    // Build exclusion clause
+    let excludeClause = '';
+    const excludeParams: string[] = [];
+    if (excludeAccountIds.length > 0) {
+      if (isNeon) {
+        const placeholders = excludeAccountIds.map((_, i) => `$${i + 2}`).join(', ');
+        excludeClause = `AND a.id NOT IN (${placeholders})`;
+        excludeParams.push(...excludeAccountIds);
+      } else {
+        const placeholders = excludeAccountIds.map(() => '?').join(', ');
+        excludeClause = `AND a.id NOT IN (${placeholders})`;
+        excludeParams.push(...excludeAccountIds);
+      }
+    }
     
     // First, try to get an account that has a mapping for this channel
     // Join channel_mappings with iptv_accounts to find available accounts for this channel
@@ -41,6 +57,7 @@ async function getAvailableAccountForChannel(channelId: string): Promise<{ porta
          AND m.is_active = true
          AND a.status = 'active'
          AND a.active_streams < a.stream_limit
+         ${excludeClause}
          ORDER BY m.priority DESC, m.success_count DESC, m.failure_count ASC, a.active_streams ASC, a.last_used ASC NULLS FIRST
          LIMIT 1`
       : `SELECT a.*, m.stalker_channel_id, m.stalker_channel_cmd
@@ -50,39 +67,75 @@ async function getAvailableAccountForChannel(channelId: string): Promise<{ porta
          AND m.is_active = 1
          AND a.status = 'active'
          AND a.active_streams < a.stream_limit
+         ${excludeClause}
          ORDER BY m.priority DESC, m.success_count DESC, m.failure_count ASC, a.active_streams ASC, a.last_used ASC
          LIMIT 1`;
     
-    const mappedAccounts = await db.query(mappingQuery, [channelId]) as (StalkerAccount & { stalker_channel_id: string })[];
+    const mappedAccounts = await db.query(mappingQuery, [channelId, ...excludeParams]) as (StalkerAccount & { stalker_channel_id: string })[];
+    
+    // Count remaining accounts for this channel
+    const countQuery = isNeon
+      ? `SELECT COUNT(*) as count FROM channel_mappings m
+         JOIN iptv_accounts a ON m.stalker_account_id = a.id
+         WHERE m.our_channel_id = $1 AND m.is_active = true AND a.status = 'active'
+         ${excludeClause}`
+      : `SELECT COUNT(*) as count FROM channel_mappings m
+         JOIN iptv_accounts a ON m.stalker_account_id = a.id
+         WHERE m.our_channel_id = ? AND m.is_active = 1 AND a.status = 'active'
+         ${excludeClause}`;
+    
+    const countResult = await db.query(countQuery, [channelId, ...excludeParams]) as { count: number }[];
+    const remainingAccounts = Number(countResult[0]?.count || 0);
     
     if (mappedAccounts.length > 0) {
       const account = mappedAccounts[0];
-      console.log(`[xfinity-stream] Found mapped account for channel ${channelId}: ${account.mac_address.substring(0, 14)}...`);
+      console.log(`[xfinity-stream] Found mapped account for channel ${channelId}: ${account.mac_address.substring(0, 14)}... (${remainingAccounts} remaining)`);
       return {
         portalUrl: account.portal_url,
         macAddress: account.mac_address,
         accountId: account.id,
         stalkerChannelId: account.stalker_channel_id,
+        remainingAccounts,
       };
     }
     
-    // Fallback: Get any active account for line.protv.cc (no specific mapping)
+    // Fallback: Get any active account (no specific mapping)
     console.log(`[xfinity-stream] No mapped account found for channel ${channelId}, trying any available account`);
+    
+    // Build exclusion for fallback query
+    let fallbackExcludeClause = '';
+    if (excludeAccountIds.length > 0) {
+      if (isNeon) {
+        const placeholders = excludeAccountIds.map((_, i) => `$${i + 1}`).join(', ');
+        fallbackExcludeClause = `AND id NOT IN (${placeholders})`;
+      } else {
+        const placeholders = excludeAccountIds.map(() => '?').join(', ');
+        fallbackExcludeClause = `AND id NOT IN (${placeholders})`;
+      }
+    }
+    
     const fallbackQuery = isNeon
       ? `SELECT * FROM iptv_accounts 
          WHERE status = 'active' 
-         AND portal_url LIKE '%line.protv.cc%'
          AND active_streams < stream_limit
+         ${fallbackExcludeClause}
          ORDER BY priority DESC, active_streams ASC, last_used ASC NULLS FIRST
          LIMIT 1`
       : `SELECT * FROM iptv_accounts 
          WHERE status = 'active' 
-         AND portal_url LIKE '%line.protv.cc%'
          AND active_streams < stream_limit
+         ${fallbackExcludeClause}
          ORDER BY priority DESC, active_streams ASC, last_used ASC
          LIMIT 1`;
     
-    const accounts = await db.query(fallbackQuery) as StalkerAccount[];
+    const accounts = await db.query(fallbackQuery, excludeAccountIds) as StalkerAccount[];
+    
+    // Count remaining fallback accounts
+    const fallbackCountQuery = isNeon
+      ? `SELECT COUNT(*) as count FROM iptv_accounts WHERE status = 'active' ${fallbackExcludeClause}`
+      : `SELECT COUNT(*) as count FROM iptv_accounts WHERE status = 'active' ${fallbackExcludeClause}`;
+    const fallbackCountResult = await db.query(fallbackCountQuery, excludeAccountIds) as { count: number }[];
+    const fallbackRemaining = Number(fallbackCountResult[0]?.count || 0);
     
     if (accounts.length > 0) {
       const account = accounts[0];
@@ -90,13 +143,36 @@ async function getAvailableAccountForChannel(channelId: string): Promise<{ porta
         portalUrl: account.portal_url,
         macAddress: account.mac_address,
         accountId: account.id,
+        remainingAccounts: fallbackRemaining,
       };
     }
+    
+    return { portalUrl: '', macAddress: '', remainingAccounts: 0 };
   } catch (error) {
     console.log('[xfinity-stream] Database not available, using fallback:', error);
   }
   
   return null;
+}
+
+// Delete an account from the database (called when account is confirmed invalid)
+async function deleteInvalidAccount(accountId: string): Promise<boolean> {
+  try {
+    const db = getDB().getAdapter();
+    const isNeon = process.env.DATABASE_URL?.includes('neon.tech');
+    
+    // Delete the account (cascade will remove mappings)
+    await db.execute(
+      isNeon ? `DELETE FROM iptv_accounts WHERE id = $1` : `DELETE FROM iptv_accounts WHERE id = ?`,
+      [accountId]
+    );
+    
+    console.log(`[xfinity-stream] Deleted invalid account: ${accountId}`);
+    return true;
+  } catch (error) {
+    console.error('[xfinity-stream] Failed to delete account:', error);
+    return false;
+  }
 }
 
 // Update account usage stats and channel mapping stats
@@ -150,6 +226,9 @@ export async function GET(request: NextRequest) {
     const channelId = searchParams.get('channelId');
     const preferWest = searchParams.get('coast') === 'west';
     const checkOnly = searchParams.get('check') === 'true';
+    // Comma-separated list of account IDs to exclude (failed accounts)
+    const excludeAccountsParam = searchParams.get('excludeAccounts');
+    const excludeAccountIds = excludeAccountsParam ? excludeAccountsParam.split(',').filter(Boolean) : [];
     
     // Get the REAL client IP to pass to CF proxy for token binding
     // This is critical - without it, the token gets bound to Vercel's IP!
@@ -196,10 +275,23 @@ export async function GET(request: NextRequest) {
     }
     
     // Get account from database that's mapped to this channel, or use fallback
-    const account = await getAvailableAccountForChannel(channelId);
-    const portalUrl = account?.portalUrl || FALLBACK_PORTAL_URL;
-    const macAddress = account?.macAddress || FALLBACK_MAC_ADDRESS;
-    const accountId = account?.accountId;
+    // Pass excluded accounts to skip ones that already failed
+    const account = await getAvailableAccountForChannel(channelId, excludeAccountIds);
+    
+    // No accounts available
+    if (!account || (!account.accountId && !account.portalUrl)) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'No available accounts for this channel',
+        channelId,
+        noAccountsLeft: true,
+      }, { status: 503 });
+    }
+    
+    const portalUrl = account.portalUrl || FALLBACK_PORTAL_URL;
+    const macAddress = account.macAddress || FALLBACK_MAC_ADDRESS;
+    const accountId = account.accountId;
+    const remainingAccounts = account.remainingAccounts;
     
     // Use stalker channel ID from mapping if available, otherwise use static mapping
     const finalStalkerChannelId = account?.stalkerChannelId || stalkerChannelId;
@@ -248,6 +340,7 @@ export async function GET(request: NextRequest) {
         id: accountId || 'fallback',
         mac: maskedMac,
         isFromDb: !!accountId,
+        remainingAccounts: remainingAccounts ?? 0,
       },
       // Debug info - shows what IP was passed and bound
       debug: {
@@ -265,12 +358,33 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// POST handler for deleting invalid accounts
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { action, accountId } = body;
+    
+    if (action === 'deleteInvalid' && accountId) {
+      const deleted = await deleteInvalidAccount(accountId);
+      return NextResponse.json({ 
+        success: deleted, 
+        message: deleted ? 'Account removed' : 'Failed to remove account' 
+      });
+    }
+    
+    return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+  } catch (error: any) {
+    console.error('Xfinity stream POST error:', error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}
+
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 200,
     headers: {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
     },
   });

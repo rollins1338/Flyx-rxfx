@@ -308,11 +308,13 @@ function LiveTVPlayer({
   const [showControls, setShowControls] = useState(true);
   const [bufferingStatus, setBufferingStatus] = useState<string | null>(null);
   const [isCastOverlayVisible, setIsCastOverlayVisible] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
-  const [retryStatus, setRetryStatus] = useState<string | null>(null);
-  const [currentAccount, setCurrentAccount] = useState<string | null>(null);
-  const retryCountRef = React.useRef(0); // Ref to track retry count in closures
-  const MAX_RETRIES = 10;
+  
+  // Account cycling state (internal - not displayed to user)
+  const [isCycling, setIsCycling] = useState(false);
+  const [currentAccountId, setCurrentAccountId] = useState<string | null>(null);
+  const [failedAccounts, setFailedAccounts] = useState<string[]>([]); // Just IDs
+  const [remainingAccounts, setRemainingAccounts] = useState<number>(0);
+  const failedAccountsRef = React.useRef<string[]>([]); // Track failed account IDs for API calls
 
   const cast = useCast({
     onConnect: () => console.log('[LiveTV] Cast connected'),
@@ -369,7 +371,14 @@ function LiveTVPlayer({
       }
       endLiveTVSession();
       if (playerRef.current) {
-        playerRef.current.destroy();
+        try {
+          playerRef.current.pause();
+          playerRef.current.unload();
+          playerRef.current.detachMediaElement();
+          playerRef.current.destroy();
+        } catch (e) {
+          // Ignore cleanup errors
+        }
         playerRef.current = null;
       }
       if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
@@ -377,23 +386,52 @@ function LiveTVPlayer({
     };
   }, [channel.streamId]);
 
+  // Delete an invalid account from the database
+  const deleteInvalidAccount = async (accountId: string) => {
+    try {
+      await fetch('/api/livetv/xfinity-stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deleteInvalid', accountId }),
+      });
+      console.log('[LiveTV] Deleted invalid account:', accountId);
+    } catch (err) {
+      console.error('[LiveTV] Failed to delete account:', err);
+    }
+  };
+
   const loadStream = async (isRetry = false) => {
     if (!videoRef.current) return;
     
+    // Reset state on fresh load
     if (!isRetry) {
-      setRetryCount(0);
-      retryCountRef.current = 0;
-      setRetryStatus(null);
-      setCurrentAccount(null);
+      setFailedAccounts([]);
+      failedAccountsRef.current = [];
+      setCurrentAccountId(null);
+      setRemainingAccounts(0);
+      setIsCycling(false);
     }
     
     setIsLoading(true);
     setError(null);
 
-    // Cleanup previous player
+    // Cleanup previous player safely
     if (playerRef.current) {
-      playerRef.current.destroy();
+      try {
+        playerRef.current.pause();
+        playerRef.current.unload();
+        playerRef.current.detachMediaElement();
+        playerRef.current.destroy();
+      } catch (e) {
+        // Ignore cleanup errors
+      }
       playerRef.current = null;
+    }
+    
+    // Reset video element
+    if (videoRef.current) {
+      videoRef.current.removeAttribute('src');
+      videoRef.current.load();
     }
 
     try {
@@ -401,9 +439,22 @@ function LiveTVPlayer({
       const [channelId, coastPart] = channel.streamId.split(':');
       const coastParam = coastPart === 'west' ? '&coast=west' : '';
       
-      // Get stream URL from our Xfinity/Stalker API (returns tokenized CF proxy URL)
-      const response = await fetch(`/api/livetv/xfinity-stream?channelId=${channelId}${coastParam}`);
+      // Build exclude parameter from failed accounts
+      const excludeParam = failedAccountsRef.current.length > 0 
+        ? `&excludeAccounts=${failedAccountsRef.current.join(',')}` 
+        : '';
+      
+      // Get stream URL from our Xfinity/Stalker API
+      const response = await fetch(`/api/livetv/xfinity-stream?channelId=${channelId}${coastParam}${excludeParam}`);
       const data = await response.json();
+      
+      // No accounts left
+      if (data.noAccountsLeft) {
+        setIsCycling(false);
+        setIsLoading(false);
+        setError('No available sources for this channel');
+        return;
+      }
       
       if (!data.success || !data.streamUrl) {
         throw new Error(data.error || 'Failed to get stream');
@@ -411,13 +462,19 @@ function LiveTVPlayer({
 
       const streamUrl = data.streamUrl;
       
-      // Update account display
+      // Track account internally (not displayed)
       if (data.account) {
-        setCurrentAccount(data.account.mac);
+        setCurrentAccountId(data.account.id);
+        setRemainingAccounts(data.account.remainingAccounts || 0);
+        if (isRetry) {
+          setIsCycling(true);
+        }
       }
-      console.log('[LiveTV] Loading stream:', channel.name, streamUrl.substring(0, 80), isRetry ? `(retry ${retryCount + 1})` : '');
+      
+      console.log('[LiveTV] Loading stream:', channel.name, 
+        isRetry ? `(attempt ${failedAccountsRef.current.length + 1})` : '');
 
-      // Use mpegts.js for MPEG-TS streams (IPTV uses raw TS format)
+      // Use mpegts.js for MPEG-TS streams
       const mpegtsModule = await import('mpegts.js');
       const mpegts = mpegtsModule.default;
 
@@ -432,24 +489,73 @@ function LiveTVPlayer({
         isLive: true,
         url: streamUrl,
       }, {
+        // Worker for better performance (offloads demuxing to separate thread)
         enableWorker: true,
+        
+        // Stash buffer - larger buffer for smoother playback
         enableStashBuffer: true,
-        stashInitialSize: 384 * 1024,
-        liveBufferLatencyChasing: false,
-        liveBufferLatencyMaxLatency: 5.0,
-        liveBufferLatencyMinRemain: 1.0,
+        stashInitialSize: 1024 * 1024, // 1MB initial buffer (was 384KB)
+        
+        // Live stream latency settings - prioritize smoothness over low latency
+        liveBufferLatencyChasing: true, // Enable latency chasing to prevent drift
+        liveBufferLatencyMaxLatency: 8.0, // Allow up to 8 seconds behind live (was 5)
+        liveBufferLatencyMinRemain: 3.0, // Keep at least 3 seconds buffered (was 1)
+        liveSync: true, // Sync to live edge
+        liveSyncMaxLatency: 10.0, // Max latency before seeking to live
+        
+        // Lazy loading disabled for live streams
         lazyLoad: false,
         lazyLoadMaxDuration: 3 * 60,
         lazyLoadRecoverDuration: 30,
+        
+        // Source buffer management
         autoCleanupSourceBuffer: true,
-        autoCleanupMaxBackwardDuration: 3 * 60,
-        autoCleanupMinBackwardDuration: 2 * 60,
+        autoCleanupMaxBackwardDuration: 60, // Keep 1 min of backward buffer (was 3 min)
+        autoCleanupMinBackwardDuration: 30, // Start cleanup after 30 sec (was 2 min)
+        
+        // Fix audio/video sync issues
+        fixAudioTimestampGap: true,
+        
+        // Accurate seek for better playback
+        accurateSeek: true,
+        
+        // Seek type for live streams
+        seekType: 'range',
+        
+        // Range load - fetch more data at once
+        rangeLoadZeroStart: false,
       });
 
+      // Optimize video element for live streaming
+      videoRef.current.preload = 'auto';
+      
       player.attachMediaElement(videoRef.current);
       player.load();
+      
+      // Listen for statistics to monitor buffer health
+      player.on(mpegts.Events.STATISTICS_INFO, (stats: any) => {
+        // If buffer is getting low, show buffering indicator
+        if (stats.decodedFrames > 0 && stats.droppedFrames / stats.decodedFrames > 0.1) {
+          console.log('[LiveTV] High frame drop rate:', (stats.droppedFrames / stats.decodedFrames * 100).toFixed(1) + '%');
+        }
+      });
 
-      player.on(mpegts.Events.ERROR, (errorType: string, errorDetail: string) => {
+      // Track current account for error handler closure
+      const accountAtLoad = data.account ? { id: data.account.id, mac: data.account.mac } : null;
+      
+      // Flag to prevent handling errors after cleanup
+      let isDestroyed = false;
+
+      player.on(mpegts.Events.ERROR, async (errorType: string, errorDetail: string) => {
+        // Ignore errors after player has been destroyed (SourceBuffer cleanup errors)
+        if (isDestroyed) return;
+        
+        // Ignore SourceBuffer removal errors - these happen during normal cleanup
+        if (errorDetail.includes('SourceBuffer') || errorDetail.includes('removed from the parent')) {
+          console.log('[LiveTV] Ignoring SourceBuffer cleanup error');
+          return;
+        }
+        
         console.error('[LiveTV] mpegts error:', errorType, errorDetail);
         
         const isAccountError = errorDetail.includes('403') || 
@@ -457,36 +563,44 @@ function LiveTVPlayer({
                                errorDetail.includes('458') ||
                                errorDetail.includes('456');
         
-        // Use ref for accurate count in closure
-        const currentRetry = retryCountRef.current;
-        
-        if (isAccountError && currentRetry < MAX_RETRIES) {
-          // Auto-retry with different account
-          const newRetryCount = currentRetry + 1;
-          retryCountRef.current = newRetryCount;
-          setRetryCount(newRetryCount);
-          setRetryStatus(`Trying source ${newRetryCount + 1} of ${MAX_RETRIES + 1}...`);
-          setError(null);
+        if (isAccountError && accountAtLoad) {
+          isDestroyed = true; // Mark as destroyed before cleanup
+          // Add to failed accounts list
+          setFailedAccounts(prev => [...prev, accountAtLoad.id]);
           
-          // Cleanup current player before retry
+          // Add to ref (for API calls)
+          if (!failedAccountsRef.current.includes(accountAtLoad.id)) {
+            failedAccountsRef.current.push(accountAtLoad.id);
+          }
+          
+          // Delete the invalid account from database
+          deleteInvalidAccount(accountAtLoad.id);
+          
+          // Cleanup current player before retry (safely)
           if (playerRef.current) {
-            playerRef.current.destroy();
+            try {
+              playerRef.current.pause();
+              playerRef.current.unload();
+              playerRef.current.detachMediaElement();
+              playerRef.current.destroy();
+            } catch (e) {
+              // Ignore cleanup errors
+            }
             playerRef.current = null;
           }
           
-          // Wait a moment then retry
+          // Try next account after a brief delay
           setTimeout(() => {
             loadStream(true);
-          }, 1000);
+          }, 800);
           return;
         }
         
-        // Max retries reached or non-recoverable error
-        setRetryStatus(null);
+        // Non-account error
+        setIsCycling(false);
         setIsLoading(false);
-        if (isAccountError) {
-          setError(`Channel unavailable after trying ${MAX_RETRIES + 1} sources. Please try again later.`);
-        } else if (errorDetail.includes('Network') || errorDetail.includes('fetch')) {
+        
+        if (errorDetail.includes('Network') || errorDetail.includes('fetch')) {
           setBufferingStatus('Reconnecting...');
         } else {
           setError(`Stream error: ${errorDetail}`);
@@ -501,13 +615,15 @@ function LiveTVPlayer({
       });
 
       player.on(mpegts.Events.LOADING_COMPLETE, () => {
+        // This fires when stream data stops - only log it, don't auto-reconnect
+        // The video 'ended' event will handle actual stream end
         console.log('[LiveTV] Loading complete');
       });
 
       player.on(mpegts.Events.MEDIA_INFO, () => {
-        console.log('[LiveTV] Media info received');
+        console.log('[LiveTV] Media info received - stream playing!');
+        setIsCycling(false);
         setIsLoading(false);
-        setRetryStatus(null);
         setBufferingStatus(null);
         videoRef.current?.play().catch(() => {});
       });
@@ -517,23 +633,23 @@ function LiveTVPlayer({
     } catch (err: any) {
       console.error('[LiveTV] Stream load error:', err);
       
-      // Use ref for accurate count in closure
-      const currentRetry = retryCountRef.current;
-      
-      // Auto-retry on API errors
-      if (currentRetry < MAX_RETRIES) {
-        const newRetryCount = currentRetry + 1;
-        retryCountRef.current = newRetryCount;
-        setRetryCount(newRetryCount);
-        setRetryStatus(`Trying source ${newRetryCount + 1} of ${MAX_RETRIES + 1}...`);
+      // If we have a current account, mark it as failed and try next
+      if (currentAccountId && currentAccountId !== 'fallback') {
+        setFailedAccounts(prev => [...prev, currentAccountId]);
+        
+        if (!failedAccountsRef.current.includes(currentAccountId)) {
+          failedAccountsRef.current.push(currentAccountId);
+        }
+        
+        await deleteInvalidAccount(currentAccountId);
         
         setTimeout(() => {
           loadStream(true);
-        }, 1000);
+        }, 800);
         return;
       }
       
-      setRetryStatus(null);
+      setIsCycling(false);
       setError(err.message || 'Failed to load stream');
       setIsLoading(false);
     }
@@ -598,30 +714,96 @@ function LiveTVPlayer({
       setIsMuted(video.muted);
     };
     
+    // Debounce buffering status to avoid flickering
+    let bufferingTimeout: NodeJS.Timeout | null = null;
+    
     const onWaiting = () => {
-      setBufferingStatus('Buffering...');
-      recordLiveTVBuffer();
-      trackLiveTVEvent({
-        action: 'buffer',
-        channelId: channel.streamId,
-        channelName: channel.name,
-      });
+      // Only show buffering after 500ms to avoid flicker on brief pauses
+      if (bufferingTimeout) clearTimeout(bufferingTimeout);
+      bufferingTimeout = setTimeout(() => {
+        setBufferingStatus('Buffering...');
+        recordLiveTVBuffer();
+        trackLiveTVEvent({
+          action: 'buffer',
+          channelId: channel.streamId,
+          channelName: channel.name,
+        });
+      }, 500);
     };
     
-    const onPlaying = () => setBufferingStatus(null);
+    const onPlaying = () => {
+      if (bufferingTimeout) {
+        clearTimeout(bufferingTimeout);
+        bufferingTimeout = null;
+      }
+      setBufferingStatus(null);
+    };
+    
+    const onCanPlay = () => {
+      if (bufferingTimeout) {
+        clearTimeout(bufferingTimeout);
+        bufferingTimeout = null;
+      }
+      setBufferingStatus(null);
+    };
+    
+    // Handle stalled streams - just show status, don't auto-reconnect
+    const onStalled = () => {
+      console.log('[LiveTV] Stream stalled');
+      // Don't auto-reconnect on stall - it's often temporary
+    };
+    
+    // Handle stream ended - auto reconnect for live streams
+    // This only fires when the MediaSource actually ends
+    const onEnded = () => {
+      console.log('[LiveTV] Video ended - reconnecting...');
+      setBufferingStatus('Reconnecting...');
+      setTimeout(() => {
+        loadStream(false);
+      }, 2000);
+    };
+    
+    // Handle errors at video element level
+    const onError = (e: Event) => {
+      const videoEl = e.target as HTMLVideoElement;
+      // Only reconnect on actual media errors, not on cleanup
+      if (videoEl.error && videoEl.error.code !== MediaError.MEDIA_ERR_ABORTED) {
+        console.log('[LiveTV] Video element error:', videoEl.error?.message);
+        setBufferingStatus('Reconnecting...');
+        setTimeout(() => {
+          loadStream(false);
+        }, 2000);
+      }
+    };
+    
+    // Track playback time - for future monitoring if needed
+    const onTimeUpdate = () => {
+      // Currently just a placeholder - can add monitoring later
+    };
     
     video.addEventListener('play', onPlay);
     video.addEventListener('pause', onPause);
     video.addEventListener('volumechange', onVolumeChange);
     video.addEventListener('waiting', onWaiting);
     video.addEventListener('playing', onPlaying);
+    video.addEventListener('canplay', onCanPlay);
+    video.addEventListener('stalled', onStalled);
+    video.addEventListener('ended', onEnded);
+    video.addEventListener('error', onError);
+    video.addEventListener('timeupdate', onTimeUpdate);
     
     return () => {
+      if (bufferingTimeout) clearTimeout(bufferingTimeout);
       video.removeEventListener('play', onPlay);
       video.removeEventListener('pause', onPause);
       video.removeEventListener('volumechange', onVolumeChange);
       video.removeEventListener('waiting', onWaiting);
       video.removeEventListener('playing', onPlaying);
+      video.removeEventListener('canplay', onCanPlay);
+      video.removeEventListener('stalled', onStalled);
+      video.removeEventListener('ended', onEnded);
+      video.removeEventListener('error', onError);
+      video.removeEventListener('timeupdate', onTimeUpdate);
     };
   }, []);
 
@@ -658,22 +840,36 @@ function LiveTVPlayer({
   const resetControlsTimeout = useCallback(() => {
     setShowControls(true);
     if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+    // Always set timeout to hide, regardless of play state
     controlsTimeoutRef.current = setTimeout(() => {
-      if (isPlaying) setShowControls(false);
+      setShowControls(false);
     }, CONTROLS_HIDE_DELAY);
-  }, [isPlaying]);
+  }, []);
 
-  const handleMouseMove = useCallback(() => resetControlsTimeout(), [resetControlsTimeout]);
+  const handleMouseMove = useCallback(() => {
+    resetControlsTimeout();
+  }, [resetControlsTimeout]);
+  
   const handleMouseLeave = useCallback(() => {
-    if (isPlaying) {
-      if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-      controlsTimeoutRef.current = setTimeout(() => setShowControls(false), 1000);
-    }
-  }, [isPlaying]);
-  const handleMouseEnter = useCallback(() => resetControlsTimeout(), [resetControlsTimeout]);
+    // Hide faster when mouse leaves
+    if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+    controlsTimeoutRef.current = setTimeout(() => setShowControls(false), 800);
+  }, []);
+  
+  const handleMouseEnter = useCallback(() => {
+    resetControlsTimeout();
+  }, [resetControlsTimeout]);
 
+  // Auto-hide controls when playing starts or after inactivity
   useEffect(() => {
-    if (!isPlaying) {
+    if (isPlaying) {
+      // Start hide timer when playback begins
+      if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+      controlsTimeoutRef.current = setTimeout(() => {
+        setShowControls(false);
+      }, CONTROLS_HIDE_DELAY);
+    } else {
+      // Show controls when paused
       setShowControls(true);
       if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
     }
@@ -709,7 +905,15 @@ function LiveTVPlayer({
           <span className={styles.sourceTag} title="IPTV Source">📡 IPTV</span>
         </div>
 
-        <video ref={videoRef} className={styles.video} playsInline onClick={togglePlay} />
+        <video 
+          ref={videoRef} 
+          className={styles.video} 
+          playsInline 
+          onClick={togglePlay}
+          autoPlay
+          muted={false}
+          preload="auto"
+        />
 
         <div className={styles.customControls}>
           <button className={styles.controlBtn} onClick={togglePlay} type="button">
@@ -751,18 +955,35 @@ function LiveTVPlayer({
           </button>
         </div>
 
-        {(isLoading || retryStatus) && (
-          <div className={styles.playerOverlay}>
-            <div className={styles.loadingSpinner} />
-            <p className={styles.loadingText}>
-              {retryStatus || `Loading ${channel.name}...`}
+        {/* Loading/Cycling UI - Simple progress bar */}
+        {(isLoading || isCycling) && (
+          <div className={styles.cyclingOverlay}>
+            <div className={styles.cyclingSpinner} />
+            
+            <h3 className={styles.cyclingTitle}>
+              Loading {channel.name}...
+            </h3>
+            
+            {/* Progress bar - shows checked/total ratio */}
+            <div className={styles.cyclingProgress}>
+              <div className={styles.cyclingProgressBar}>
+                <div 
+                  className={styles.cyclingProgressFill}
+                  style={{ 
+                    width: failedAccounts.length === 0 
+                      ? '10%' 
+                      : `${Math.min((failedAccounts.length / Math.max(remainingAccounts + failedAccounts.length, 1)) * 100, 95)}%` 
+                  }}
+                />
+              </div>
+            </div>
+            
+            <p className={styles.cyclingHint}>
+              {failedAccounts.length === 0 
+                ? 'Connecting to stream...'
+                : 'Finding best available source...'
+              }
             </p>
-            {currentAccount && (
-              <p className={styles.accountText}>Account: {currentAccount}</p>
-            )}
-            {retryStatus && (
-              <p className={styles.retrySubtext}>Finding best available source</p>
-            )}
           </div>
         )}
 
@@ -774,23 +995,32 @@ function LiveTVPlayer({
         )}
 
         {error && (
-          <div className={styles.playerOverlay}>
-            <p className={styles.errorText}>{error}</p>
-            {error.includes('report') && (
-              <p className={styles.errorSubtext}>
-                Tried {MAX_RETRIES} sources without success
-              </p>
-            )}
+          <div className={styles.noAccountsOverlay}>
+            <div className={styles.noAccountsIcon}>📡</div>
+            <h3 className={styles.noAccountsTitle}>
+              {error.includes('No available') ? 'Channel Unavailable' : 'Stream Error'}
+            </h3>
+            <p className={styles.noAccountsText}>
+              {error.includes('No available') 
+                ? 'This channel is temporarily unavailable. Please try again later or select a different channel.'
+                : error
+              }
+            </p>
+            
             <div className={styles.errorActions}>
-              <button onClick={() => loadStream()} className={styles.retryBtn}>Try Again</button>
-              {error.includes('report') && (
-                <button 
-                  onClick={() => window.open(`mailto:support@flyx.tv?subject=Channel Down: ${channel.name}&body=The channel "${channel.name}" appears to be down. I tried watching it on ${new Date().toLocaleString()}.`, '_blank')}
-                  className={styles.feedbackBtn}
-                >
-                  Report Issue
-                </button>
-              )}
+              <button onClick={() => {
+                setFailedAccounts([]);
+                failedAccountsRef.current = [];
+                loadStream();
+              }} className={styles.retryBtn}>
+                Try Again
+              </button>
+              <button 
+                onClick={() => window.open(`mailto:support@flyx.tv?subject=Channel Issue: ${channel.name}&body=The channel "${channel.name}" had issues on ${new Date().toLocaleString()}.`, '_blank')}
+                className={styles.feedbackBtn}
+              >
+                Report Issue
+              </button>
               <button onClick={onClose} className={styles.closeErrorBtn}>Close</button>
             </div>
           </div>
