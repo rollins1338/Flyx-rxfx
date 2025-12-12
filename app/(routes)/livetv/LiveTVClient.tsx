@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { Navigation } from '@/components/layout/Navigation';
 import { Footer } from '@/components/layout/Footer';
 import { useAnalytics } from '@/components/analytics/AnalyticsProvider';
@@ -39,6 +39,41 @@ interface XfinityCategory {
   icon: string;
   count: number;
 }
+
+// Memoized channel card to prevent re-renders
+const ChannelCard = memo(function ChannelCard({ 
+  channel, 
+  preferWestCoast, 
+  onSelect 
+}: { 
+  channel: XfinityChannel; 
+  preferWestCoast: boolean; 
+  onSelect: (channel: XfinityChannel) => void;
+}) {
+  return (
+    <button
+      className={styles.channelCard}
+      onClick={() => onSelect(channel)}
+    >
+      <div className={styles.channelLogo}>
+        <span>{channel.name.charAt(0)}</span>
+        {channel.isHD && <span className={styles.hdBadge}>HD</span>}
+      </div>
+      <div className={styles.channelInfo}>
+        <span className={styles.channelName}>{channel.name}</span>
+        <span className={styles.channelMeta}>
+          {channel.categoryInfo.icon} {channel.categoryInfo.name}
+        </span>
+        {channel.hasEast && channel.hasWest && channel.eastName !== channel.westName && (
+          <span className={styles.coastIndicator}>
+            {preferWestCoast ? '🌄 West' : '🌅 East'}
+          </span>
+        )}
+      </div>
+      <span className={styles.playIcon}>▶</span>
+    </button>
+  );
+});
 
 export default function LiveTVClient() {
   const { 
@@ -120,11 +155,24 @@ export default function LiveTVClient() {
 
   const totalChannels = xfinityCategories.reduce((sum, cat) => sum + cat.count, 0);
 
+  // Memoize the channel list to prevent re-renders when player state changes
+  const channelList = useMemo(() => (
+    xfinityChannels.map((channel) => (
+      <ChannelCard
+        key={channel.id}
+        channel={channel}
+        preferWestCoast={preferWestCoast}
+        onSelect={handleChannelSelect}
+      />
+    ))
+  ), [xfinityChannels, preferWestCoast, handleChannelSelect]);
+
   return (
     <div className={styles.container}>
       <Navigation />
 
-      <div className={styles.layout}>
+      {/* Hide layout when player is open to save resources */}
+      <div className={styles.layout} style={{ display: selectedChannel ? 'none' : undefined }}>
         {/* Sidebar */}
         <aside className={styles.sidebar}>
           <div className={styles.sidebarHeader}>
@@ -203,32 +251,7 @@ export default function LiveTVClient() {
                 <div className={styles.noResults}>
                   <p>No channels found</p>
                 </div>
-              ) : (
-                xfinityChannels.map((channel) => (
-                  <button
-                    key={channel.id}
-                    className={styles.channelCard}
-                    onClick={() => handleChannelSelect(channel)}
-                  >
-                    <div className={styles.channelLogo}>
-                      <span>{channel.name.charAt(0)}</span>
-                      {channel.isHD && <span className={styles.hdBadge}>HD</span>}
-                    </div>
-                    <div className={styles.channelInfo}>
-                      <span className={styles.channelName}>{channel.name}</span>
-                      <span className={styles.channelMeta}>
-                        {channel.categoryInfo.icon} {channel.categoryInfo.name}
-                      </span>
-                      {channel.hasEast && channel.hasWest && channel.eastName !== channel.westName && (
-                        <span className={styles.coastIndicator}>
-                          {preferWestCoast ? '🌄 West' : '🌅 East'}
-                        </span>
-                      )}
-                    </div>
-                    <span className={styles.playIcon}>▶</span>
-                  </button>
-                ))
-              )}
+              ) : channelList}
             </div>
           )}
         </main>
