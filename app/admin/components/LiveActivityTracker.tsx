@@ -108,25 +108,28 @@ export default function LiveActivityTracker() {
   }, []);
 
   useEffect(() => {
-    fetchLiveActivity();
+    fetchLiveActivity(true); // Initial fetch with loading state
     fetchLiveTVStats();
 
     if (autoRefresh) {
       // Reduced from 5s to 10s to decrease server load while maintaining responsiveness
       const interval = setInterval(() => {
-        fetchLiveActivity();
+        fetchLiveActivity(false); // Subsequent fetches without loading state
         fetchLiveTVStats();
       }, 10000);
       return () => clearInterval(interval);
     }
-  }, [autoRefresh]);
+  }, [autoRefresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const fetchLiveActivity = async () => {
+  const fetchLiveActivity = async (isInitial = false) => {
     try {
       // Save scroll position before updating
       saveScrollPosition();
       
-      setRefreshing(true);
+      // Only show refreshing indicator, not full loading
+      if (!isInitial) {
+        setRefreshing(true);
+      }
       const response = await fetch('/api/analytics/live-activity?maxAge=5');
       const data = await response.json();
 
@@ -141,7 +144,9 @@ export default function LiveActivityTracker() {
     } catch (error) {
       console.error('Failed to fetch live activity:', error);
     } finally {
-      setLoading(false);
+      if (isInitial) {
+        setLoading(false);
+      }
       setRefreshing(false);
     }
   };
@@ -228,7 +233,7 @@ export default function LiveActivityTracker() {
           {autoRefresh ? '⏸ Pause' : '▶ Resume'} Auto-refresh
         </button>
         <button
-          onClick={fetchLiveActivity}
+          onClick={() => fetchLiveActivity(false)}
           disabled={refreshing}
           style={{
             padding: '0.5rem 1rem',

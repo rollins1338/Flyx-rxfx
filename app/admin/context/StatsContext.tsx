@@ -121,8 +121,11 @@ export function StatsProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
-  const fetchAllStats = useCallback(async () => {
-    setLoading(true);
+  const fetchAllStats = useCallback(async (isInitial = false) => {
+    // Only show loading on initial fetch, not on refreshes
+    if (isInitial) {
+      setLoading(true);
+    }
     setError(null);
     
     try {
@@ -193,7 +196,7 @@ export function StatsProvider({ children }: { children: ReactNode }) {
 
   // Initial fetch
   useEffect(() => {
-    fetchAllStats();
+    fetchAllStats(true);
   }, [fetchAllStats]);
 
   // Auto-refresh every 30 seconds
