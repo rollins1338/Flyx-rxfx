@@ -15,18 +15,36 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"],
-      "@/components/*": ["./app/components/*"],
-      "@/lib/*": ["./app/lib/*"],
-      "@/types/*": ["./app/types/*"],
-      "@/styles/*": ["./app/styles/*"],
-      "@/utils/*": ["./app/utils/*"],
-      "@/hooks/*": ["./app/hooks/*"],
-      "@/services/*": ["./app/services/*"],
-      "@/data/*": ["./data/*"]
+      "@/*": [
+        "./*"
+      ],
+      "@/components/*": [
+        "./app/components/*"
+      ],
+      "@/lib/*": [
+        "./app/lib/*"
+      ],
+      "@/types/*": [
+        "./app/types/*"
+      ],
+      "@/styles/*": [
+        "./app/styles/*"
+      ],
+      "@/utils/*": [
+        "./app/utils/*"
+      ],
+      "@/hooks/*": [
+        "./app/hooks/*"
+      ],
+      "@/services/*": [
+        "./app/services/*"
+      ],
+      "@/data/*": [
+        "./data/*"
+      ]
     },
     "plugins": [
       {
@@ -36,13 +54,15 @@
     "forceConsistentCasingInFileNames": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "target": "ES2017"
   },
   "include": [
     "next-env.d.ts",
     ".next/types/**/*.ts",
     "**/*.ts",
-    "**/*.tsx"
+    "**/*.tsx",
+    ".next/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
