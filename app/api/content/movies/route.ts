@@ -6,8 +6,7 @@ export async function GET(request: NextRequest) {
   const region = searchParams.get('region') || '';
 
   try {
-    const regionParam = region ? { with_origin_country: region } : {};
-    const regionParamDiscover = region ? { with_origin_country: region } : {};
+    const regionParamDiscover: Record<string, string> = region ? { with_origin_country: region } : {};
 
     const [
       popular, topRated, nowPlaying,
