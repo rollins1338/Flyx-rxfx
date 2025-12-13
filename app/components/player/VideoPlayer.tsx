@@ -139,6 +139,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
   const [providerAvailability, setProviderAvailability] = useState<Record<string, boolean>>({
     vidsrc: true, // Primary provider - enabled by default
     videasy: true, // Fallback provider - always enabled
+    animekai: true, // Anime-specific provider - auto-selected for anime content
   });
   const [highlightServerButton, setHighlightServerButton] = useState(false);
 
@@ -147,13 +148,13 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
   const [currentHlsLevel, setCurrentHlsLevel] = useState<number>(-1); // -1 = auto
   const [currentResolution, setCurrentResolution] = useState<string>('');
 
-  const controlsTimeoutRef = useRef<NodeJS.Timeout>();
+  const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastFetchedKey = useRef('');
-  const volumeIndicatorTimeoutRef = useRef<NodeJS.Timeout>();
+  const volumeIndicatorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Pinch-to-zoom for mobile
   const [showZoomIndicator, setShowZoomIndicator] = useState(false);
-  const zoomIndicatorTimeoutRef = useRef<NodeJS.Timeout>();
+  const zoomIndicatorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleZoomChange = useCallback((scale: number) => {
     if (scale !== 1) {
@@ -423,9 +424,10 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
 
     const initializePlayer = async () => {
       // First fetch provider availability
-      let availability = {
+      let availability: Record<string, boolean> = {
         vidsrc: true, // Primary provider - enabled by default
         videasy: true, // Fallback provider - always enabled
+        animekai: true, // Anime-specific provider
       };
 
       try {
@@ -434,6 +436,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
         availability = {
           videasy: data.providers?.videasy?.enabled ?? true,
           vidsrc: data.providers?.vidsrc?.enabled ?? false,
+          animekai: data.providers?.animekai?.enabled ?? true,
         };
         setProviderAvailability(availability);
       } catch (err) {

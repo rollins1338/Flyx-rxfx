@@ -2,20 +2,20 @@
  * Stream Extract API - Multi-Provider Stream Extraction
  * 
  * Provider Priority:
- * 1. 1movies/yflix (via enc-dec.app/api/dec-rapid) - PRIMARY
- * 2. VidSrc (vidsrc-embed.ru → cloudnestra.com) - Fallback
- * 3. Videasy (videasy.net with external decryption) - Fallback (multi-language support)
+ * - For ANIME content: AnimeKai (PRIMARY) → Videasy (fallback)
+ * - For other content: 1movies (PRIMARY) → VidSrc → Videasy (fallback)
  * 
  * GET /api/stream/extract?tmdbId=550&type=movie
  * GET /api/stream/extract?tmdbId=1396&type=tv&season=1&episode=1
  * GET /api/stream/extract?tmdbId=507089&type=movie&provider=videasy
- * GET /api/stream/extract?tmdbId=507089&type=movie&provider=1movies
+ * GET /api/stream/extract?tmdbId=507089&type=movie&provider=animekai
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { extractOneMoviesStreams, fetchOneMoviesSourceByName, ONEMOVIES_ENABLED } from '@/app/lib/services/onemovies-extractor';
 import { extractVidSrcStreams, VIDSRC_ENABLED } from '@/app/lib/services/vidsrc-extractor';
 import { extractVideasyStreams, fetchVideasySourceByName } from '@/app/lib/services/videasy-extractor';
+import { extractAnimeKaiStreams, fetchAnimeKaiSourceByName, isAnimeContent, ANIMEKAI_ENABLED } from '@/app/lib/services/animekai-extractor';
 import { performanceMonitor } from '@/app/lib/utils/performance-monitor';
 import { getStreamProxyUrl } from '@/app/lib/proxy-config';
 
@@ -110,7 +110,10 @@ export async function GET(request: NextRequest) {
       let usedProvider = provider;
       
       // Try to fetch from the appropriate provider
-      if (sourceName.includes('1movies') || provider === '1movies') {
+      if (sourceName.includes('AnimeKai') || provider === 'animekai') {
+        source = await fetchAnimeKaiSourceByName(sourceName, tmdbId, type, season, episode);
+        usedProvider = 'animekai';
+      } else if (sourceName.includes('1movies') || provider === '1movies') {
         source = await fetchOneMoviesSourceByName(sourceName, tmdbId, type, season, episode);
         usedProvider = '1movies';
       } else if (provider === 'videasy' || sourceName.includes('(')) {
@@ -129,7 +132,7 @@ export async function GET(request: NextRequest) {
           type: source.type,
           requiresSegmentProxy: source.requiresSegmentProxy,
           status: 'working',
-          language: source.language || 'en',
+          language: source.language || 'ja',
         };
         
         return NextResponse.json({
@@ -226,8 +229,52 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Check if this is anime content (for automatic provider selection)
+    let isAnime = false;
+    if (provider !== 'animekai') {
+      // Only check if not explicitly requesting animekai
+      isAnime = await isAnimeContent(tmdbId, type);
+      if (isAnime) {
+        console.log('[EXTRACT] Detected ANIME content - will use AnimeKai as primary');
+      }
+    }
+
     // Create extraction based on provider preference
     const extractionPromise = (async () => {
+      // If explicitly requesting animekai OR content is anime, use AnimeKai first
+      if (provider === 'animekai' || isAnime) {
+        console.log('[EXTRACT] Using AnimeKai (primary for anime)...');
+        if (ANIMEKAI_ENABLED) {
+          try {
+            const animekaiResult = await extractAnimeKaiStreams(tmdbId, type, season, episode);
+            
+            if (animekaiResult.sources.length > 0) {
+              const workingSources = animekaiResult.sources.filter(s => s.status === 'working');
+              
+              if (workingSources.length > 0) {
+                console.log(`[EXTRACT] ✓ AnimeKai: ${workingSources.length} working, ${animekaiResult.sources.length} total`);
+                return { sources: animekaiResult.sources, provider: 'animekai' };
+              }
+            }
+            console.log(`[EXTRACT] AnimeKai failed: ${animekaiResult.error || 'No working sources'}`);
+          } catch (animekaiError) {
+            console.warn('[EXTRACT] AnimeKai error:', animekaiError instanceof Error ? animekaiError.message : animekaiError);
+          }
+        }
+        
+        // Fallback to Videasy for anime if AnimeKai fails
+        console.log('[EXTRACT] Falling back to Videasy for anime...');
+        const videasyResult = await extractVideasyStreams(tmdbId, type, season, episode, true);
+        const workingSources = videasyResult.sources.filter(s => s.status === 'working');
+        
+        if (workingSources.length > 0) {
+          console.log(`[EXTRACT] ✓ Videasy (anime fallback): ${workingSources.length} working`);
+          return { sources: videasyResult.sources, provider: 'videasy' };
+        }
+        
+        throw new Error(videasyResult.error || 'All anime sources failed');
+      }
+      
       // If explicitly requesting 1movies, use it directly
       if (provider === '1movies') {
         console.log('[EXTRACT] Using 1movies (primary)...');
