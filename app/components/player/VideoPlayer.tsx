@@ -130,17 +130,18 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
   useEffect(() => { showNextEpisodeButtonRef.current = showNextEpisodeButton; }, [showNextEpisodeButton]);
   useEffect(() => { autoPlayCountdownRef.current = autoPlayCountdown; }, [autoPlayCountdown]);
   
-  const [provider, setProvider] = useState('vidsrc'); // Default to vidsrc (primary provider)
-  const [menuProvider, setMenuProvider] = useState('vidsrc');
+  const [provider, setProvider] = useState('videasy'); // Default to Videasy (primary provider with multi-language support)
+  const [menuProvider, setMenuProvider] = useState('videasy');
   const [showServerMenu, setShowServerMenu] = useState(false);
   const [sourcesCache, setSourcesCache] = useState<Record<string, any[]>>({});
   const [loadingProviders, setLoadingProviders] = useState<Record<string, boolean>>({});
   const [isCastOverlayVisible, setIsCastOverlayVisible] = useState(false);
   const [providerAvailability, setProviderAvailability] = useState<Record<string, boolean>>({
-    vidsrc: true, // Primary provider - enabled by default
-    videasy: true, // Fallback provider - always enabled
+    vidsrc: false, // VidSrc is disabled by default (requires ENABLE_VIDSRC_PROVIDER=true)
+    videasy: true, // Videasy is always enabled (primary provider with multi-language support)
     animekai: true, // Anime-specific provider - auto-selected for anime content
   });
+  const [isAnimeContent, setIsAnimeContent] = useState(false); // Track if current content is anime
   const [highlightServerButton, setHighlightServerButton] = useState(false);
 
   // HLS quality levels
@@ -331,9 +332,11 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
       }
 
       if (sources.length > 0) {
-        console.log(`[VideoPlayer] Found ${sources.length} sources for ${providerName}`);
+        const actualProvider = data.provider || providerName;
+        console.log(`[VideoPlayer] Found ${sources.length} sources for ${providerName} (actual: ${actualProvider})`);
 
-        // Cache the sources for this provider
+        // Cache the sources under the REQUESTED provider name (so each tab has its own sources)
+        // This prevents VidSrc tab from being overwritten by Videasy sources when VidSrc falls back
         setSourcesCache(prev => ({
           ...prev,
           [providerName]: sources
@@ -350,6 +353,14 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
       }
     } catch (err) {
       console.error(`[VideoPlayer] Error fetching sources for ${providerName}:`, err);
+      
+      // Cache empty array for this provider so UI shows "No sources available"
+      // This prevents the tab from showing Videasy sources when the provider fails
+      setSourcesCache(prev => ({
+        ...prev,
+        [providerName]: [] // Empty array indicates provider has no sources
+      }));
+      
       // Only set error if this is the active provider
       if (providerName === provider) {
         setError(err instanceof Error ? err.message : 'Failed to load video');
@@ -384,8 +395,10 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
       const data = await response.json();
 
       if (data.sources && data.sources.length > 0) {
-        console.log(`[VideoPlayer] ${providerName} returned ${data.sources.length} sources`);
-        return { sources: data.sources, provider: providerName };
+        // Use the actual provider from response (may differ due to fallback)
+        const actualProvider = data.provider || providerName;
+        console.log(`[VideoPlayer] ${providerName} returned ${data.sources.length} sources (actual provider: ${actualProvider})`);
+        return { sources: data.sources, provider: actualProvider };
       }
       
       console.log(`[VideoPlayer] ${providerName} failed: ${data.error || 'No sources'}`);
@@ -413,6 +426,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     setError(null);
     setHighlightServerButton(false);
     setStreamUrl(null);
+    setIsAnimeContent(false); // Reset anime detection for new content
     
     // Reset next episode state when content changes (prevents auto-skip bug)
     setShowNextEpisodeButton(false);
@@ -425,8 +439,8 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     const initializePlayer = async () => {
       // First fetch provider availability
       let availability: Record<string, boolean> = {
-        vidsrc: true, // Primary provider - enabled by default
-        videasy: true, // Fallback provider - always enabled
+        vidsrc: false, // VidSrc is disabled by default (requires ENABLE_VIDSRC_PROVIDER=true)
+        videasy: true, // Videasy is always enabled (primary provider with multi-language support)
         animekai: true, // Anime-specific provider
       };
 
@@ -443,10 +457,27 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
         console.warn('[VideoPlayer] Failed to fetch provider availability:', err);
       }
 
-      // Build provider priority list - VidSrc FIRST (primary), Videasy as fallback
+      // Check if this is anime content by calling the API
+      let isAnime = false;
+      try {
+        const animeCheckRes = await fetch(`/api/content/check-anime?tmdbId=${tmdbId}&type=${mediaType}`);
+        if (animeCheckRes.ok) {
+          const animeData = await animeCheckRes.json();
+          isAnime = animeData.isAnime === true;
+        }
+      } catch (err) {
+        console.warn('[VideoPlayer] Failed to check anime status:', err);
+      }
+      setIsAnimeContent(isAnime);
+      console.log(`[VideoPlayer] Content type: ${isAnime ? 'ANIME' : 'regular'}`);
+
+      // Build provider priority list based on content type
       const providerOrder: string[] = [];
-      if (availability.vidsrc) providerOrder.push('vidsrc'); // VidSrc as primary
-      providerOrder.push('videasy'); // Videasy as fallback (multi-language support)
+      if (isAnime && availability.animekai) {
+        providerOrder.push('animekai'); // AnimeKai as primary for anime
+      }
+      providerOrder.push('videasy'); // Videasy as primary/fallback (multi-language support)
+      if (availability.vidsrc) providerOrder.push('vidsrc'); // VidSrc as optional fallback
 
       console.log(`[VideoPlayer] Provider order: ${providerOrder.join(' → ')}`);
 
@@ -2587,6 +2618,18 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                 <div className={styles.settingsLabel}>Server Selection</div>
 
                 <div className={styles.tabsContainer}>
+                  {/* Show AnimeKai tab for anime content */}
+                  {isAnimeContent && providerAvailability.animekai && (
+                    <button
+                      className={`${styles.tab} ${menuProvider === 'animekai' ? styles.active : ''}`}
+                      onClick={() => {
+                        setMenuProvider('animekai');
+                        fetchSources('animekai');
+                      }}
+                    >
+                      AnimeKai
+                    </button>
+                  )}
                   <button
                     className={`${styles.tab} ${menuProvider === 'videasy' ? styles.active : ''}`}
                     onClick={() => {
@@ -2621,19 +2664,19 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                         className={`${styles.settingsOption} ${provider === menuProvider && currentSourceIndex === index ? styles.active : ''}`}
                         onClick={async () => {
                           // If source has "unknown" status (not yet fetched), fetch it first
-                          if (source.status === 'unknown' && menuProvider === 'videasy') {
-                            console.log(`[VideoPlayer] Fetching unknown source: ${source.title}`);
+                          if (source.status === 'unknown' && (menuProvider === 'videasy' || menuProvider === 'animekai')) {
+                            console.log(`[VideoPlayer] Fetching unknown source: ${source.title} from ${menuProvider}`);
                             setIsLoading(true);
                             setShowServerMenu(false);
                             
-                            // Extract source name from title (e.g., "Neon (English)" -> "Neon")
+                            // Extract source name from title (e.g., "Neon (English)" -> "Neon", "Yuki (AnimeKai)" -> "Yuki")
                             const sourceName = source.title?.split(' (')[0] || source.title;
                             
                             try {
                               const params = new URLSearchParams({
                                 tmdbId,
                                 type: mediaType,
-                                provider: 'videasy',
+                                provider: menuProvider,
                                 source: sourceName,
                               });
                               if (mediaType === 'tv' && season && episode) {
@@ -2730,7 +2773,9 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                     ))
                   ) : (
                     <div style={{ padding: '1rem', textAlign: 'center', color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem' }}>
-                      {loadingProviders[menuProvider] ? 'Loading sources...' : 'No sources available'}
+                      {loadingProviders[menuProvider] ? 'Loading sources...' : 
+                       sourcesCache[menuProvider]?.length === 0 ? `No sources from ${menuProvider === 'animekai' ? 'AnimeKai' : menuProvider === 'vidsrc' ? 'VidSrc' : 'Videasy'}` :
+                       'Click to load sources'}
                     </div>
                   )}
                 </div>

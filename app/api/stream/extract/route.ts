@@ -3,7 +3,7 @@
  * 
  * Provider Priority:
  * - For ANIME content: AnimeKai (PRIMARY) → Videasy (fallback)
- * - For other content: 1movies (PRIMARY) → VidSrc → Videasy (fallback)
+ * - For other content: Videasy (PRIMARY with multi-language) → 1movies → VidSrc (optional)
  * 
  * GET /api/stream/extract?tmdbId=550&type=movie
  * GET /api/stream/extract?tmdbId=1396&type=tv&season=1&episode=1
@@ -20,6 +20,18 @@ import { performanceMonitor } from '@/app/lib/utils/performance-monitor';
 import { getStreamProxyUrl } from '@/app/lib/proxy-config';
 
 // Node.js runtime (default) - required for fetch
+
+// Helper to conditionally proxy URLs based on requiresSegmentProxy flag
+// MegaUp CDN URLs MUST be proxied with noreferer mode because browser adds Origin header
+function maybeProxyUrl(source: any, provider: string): string {
+  if (!source.url) return '';
+  // Only proxy if requiresSegmentProxy is true (default behavior for most sources)
+  if (source.requiresSegmentProxy === false) {
+    return source.url; // Return direct URL - browser will fetch directly
+  }
+  // Pass skipOrigin flag for MegaUp CDN - proxy will NOT send Origin/Referer headers
+  return getStreamProxyUrl(source.url, provider, source.referer, source.skipOrigin || false);
+}
 
 // Enhanced in-memory cache with LRU eviction
 const cache = new Map<string, { sources: any[]; timestamp: number; hits: number }>();
@@ -126,7 +138,7 @@ export async function GET(request: NextRequest) {
         const proxiedSource = {
           quality: source.quality,
           title: source.title,
-          url: getStreamProxyUrl(source.url, usedProvider, source.referer),
+          url: maybeProxyUrl(source, usedProvider),
           directUrl: source.url,
           referer: source.referer,
           type: source.type,
@@ -172,7 +184,7 @@ export async function GET(request: NextRequest) {
       const sources = cached.sources.map((source: any) => ({
         quality: source.quality,
         title: source.title || source.quality,
-        url: source.url ? getStreamProxyUrl(source.url, provider, source.referer) : '',
+        url: maybeProxyUrl(source, provider),
         directUrl: source.url || '',
         referer: source.referer,
         type: source.type,
@@ -206,7 +218,7 @@ export async function GET(request: NextRequest) {
       const proxiedSources = sources.map((source: any) => ({
         quality: source.quality,
         title: source.title || source.quality,
-        url: source.url ? getStreamProxyUrl(source.url, provider, source.referer) : '',
+        url: maybeProxyUrl(source, provider),
         directUrl: source.url || '',
         referer: source.referer,
         type: source.type,
@@ -241,9 +253,26 @@ export async function GET(request: NextRequest) {
 
     // Create extraction based on provider preference
     const extractionPromise = (async () => {
-      // If explicitly requesting animekai OR content is anime, use AnimeKai first
-      if (provider === 'animekai' || isAnime) {
-        console.log('[EXTRACT] Using AnimeKai (primary for anime)...');
+      // If explicitly requesting animekai, use it directly (no fallback to preserve tab separation)
+      if (provider === 'animekai') {
+        console.log('[EXTRACT] Using AnimeKai (explicit request)...');
+        if (!ANIMEKAI_ENABLED) {
+          throw new Error('AnimeKai provider is disabled');
+        }
+        
+        const animekaiResult = await extractAnimeKaiStreams(tmdbId, type, season, episode);
+        
+        if (animekaiResult.sources.length > 0) {
+          console.log(`[EXTRACT] ✓ AnimeKai: ${animekaiResult.sources.length} sources`);
+          return { sources: animekaiResult.sources, provider: 'animekai' };
+        }
+        
+        throw new Error(animekaiResult.error || 'AnimeKai returned no sources');
+      }
+      
+      // If content is anime (auto-detected) and not explicitly requesting a provider, try AnimeKai first
+      if (isAnime) {
+        console.log('[EXTRACT] Detected ANIME - trying AnimeKai first...');
         if (ANIMEKAI_ENABLED) {
           try {
             const animekaiResult = await extractAnimeKaiStreams(tmdbId, type, season, episode);
@@ -262,7 +291,7 @@ export async function GET(request: NextRequest) {
           }
         }
         
-        // Fallback to Videasy for anime if AnimeKai fails
+        // Fallback to Videasy for anime if AnimeKai fails (only for auto-detected anime, not explicit requests)
         console.log('[EXTRACT] Falling back to Videasy for anime...');
         const videasyResult = await extractVideasyStreams(tmdbId, type, season, episode, true);
         const workingSources = videasyResult.sources.filter(s => s.status === 'working');
@@ -275,38 +304,21 @@ export async function GET(request: NextRequest) {
         throw new Error(videasyResult.error || 'All anime sources failed');
       }
       
-      // If explicitly requesting 1movies, use it directly
+      // If explicitly requesting 1movies, use it directly (no fallback to preserve tab separation)
       if (provider === '1movies') {
-        console.log('[EXTRACT] Using 1movies (primary)...');
-        if (ONEMOVIES_ENABLED) {
-          try {
-            const onemoviesResult = await extractOneMoviesStreams(tmdbId, type, season, episode);
-            
-            if (onemoviesResult.sources.length > 0) {
-              const workingSources = onemoviesResult.sources.filter(s => s.status === 'working');
-              
-              if (workingSources.length > 0) {
-                console.log(`[EXTRACT] ✓ 1movies: ${workingSources.length} working, ${onemoviesResult.sources.length} total`);
-                return { sources: onemoviesResult.sources, provider: '1movies' };
-              }
-            }
-            console.log(`[EXTRACT] 1movies failed: ${onemoviesResult.error || 'No working sources'}`);
-          } catch (onemoviesError) {
-            console.warn('[EXTRACT] 1movies error:', onemoviesError instanceof Error ? onemoviesError.message : onemoviesError);
-          }
+        if (!ONEMOVIES_ENABLED) {
+          throw new Error('1movies provider is disabled');
         }
         
-        // Fallback to Videasy if 1movies fails
-        console.log('[EXTRACT] Falling back to Videasy...');
-        const videasyResult = await extractVideasyStreams(tmdbId, type, season, episode, true);
-        const workingSources = videasyResult.sources.filter(s => s.status === 'working');
+        console.log('[EXTRACT] Using 1movies (explicit request)...');
+        const onemoviesResult = await extractOneMoviesStreams(tmdbId, type, season, episode);
         
-        if (workingSources.length > 0) {
-          console.log(`[EXTRACT] ✓ Videasy (fallback): ${workingSources.length} working`);
-          return { sources: videasyResult.sources, provider: 'videasy' };
+        if (onemoviesResult.sources.length > 0) {
+          console.log(`[EXTRACT] ✓ 1movies: ${onemoviesResult.sources.length} sources`);
+          return { sources: onemoviesResult.sources, provider: '1movies' };
         }
         
-        throw new Error(videasyResult.error || 'All sources failed');
+        throw new Error(onemoviesResult.error || '1movies returned no sources');
       }
       
       // If explicitly requesting videasy, use it directly
@@ -331,56 +343,43 @@ export async function GET(request: NextRequest) {
         throw new Error(videasyResult.error || 'Videasy returned no sources');
       }
       
-      // If explicitly requesting vidsrc, use it directly (if enabled)
+      // If explicitly requesting vidsrc, use it directly (no fallback to preserve tab separation)
       if (provider === 'vidsrc') {
         if (!VIDSRC_ENABLED) {
-          console.log('[EXTRACT] VidSrc is DISABLED, falling back to 1movies...');
-          if (ONEMOVIES_ENABLED) {
-            const onemoviesResult = await extractOneMoviesStreams(tmdbId, type, season, episode);
-            const workingSources = onemoviesResult.sources.filter(s => s.status === 'working');
-            
-            if (workingSources.length > 0) {
-              console.log(`[EXTRACT] ✓ 1movies (fallback): ${workingSources.length} working`);
-              return { sources: onemoviesResult.sources, provider: '1movies' };
-            }
-          }
-          
-          const videasyResult = await extractVideasyStreams(tmdbId, type, season, episode, true);
-          const workingSources = videasyResult.sources.filter(s => s.status === 'working');
-          
-          if (workingSources.length > 0) {
-            console.log(`[EXTRACT] ✓ Videasy (fallback): ${workingSources.length} working`);
-            return { sources: videasyResult.sources, provider: 'videasy' };
-          }
-          
-          throw new Error(videasyResult.error || 'All fallback sources failed');
+          throw new Error('VidSrc provider is disabled. Set ENABLE_VIDSRC_PROVIDER=true to enable.');
         }
         
         console.log('[EXTRACT] Using VidSrc (explicit request)...');
         const vidsrcResult = await extractVidSrcStreams(tmdbId, type, season, episode);
         
         if (vidsrcResult.sources.length > 0) {
-          const workingSources = vidsrcResult.sources.filter(s => s.status === 'working');
-          
-          if (workingSources.length > 0) {
-            console.log(`[EXTRACT] ✓ VidSrc: ${workingSources.length} working, ${vidsrcResult.sources.length} total`);
-            return { sources: vidsrcResult.sources, provider: 'vidsrc' };
-          }
-        }
-        
-        if (vidsrcResult.sources.length > 0) {
-          console.log(`[EXTRACT] VidSrc: ${vidsrcResult.sources.length} sources (none working)`);
+          console.log(`[EXTRACT] ✓ VidSrc: ${vidsrcResult.sources.length} sources`);
           return { sources: vidsrcResult.sources, provider: 'vidsrc' };
         }
         
         throw new Error(vidsrcResult.error || 'VidSrc returned no sources');
       }
       
-      // Default behavior: 1movies FIRST (primary), then VidSrc, then Videasy as fallback
+      // Default behavior: Videasy FIRST (primary with multi-language), then 1movies, then VidSrc
       
-      // Try 1movies first - it's the primary source
+      // Try Videasy first - it's the primary source with multi-language support
+      console.log('[EXTRACT] Trying PRIMARY source: Videasy (multi-language)...');
+      try {
+        const videasyResult = await extractVideasyStreams(tmdbId, type, season, episode, true);
+        const workingVideasy = videasyResult.sources.filter(s => s.status === 'working');
+        
+        if (workingVideasy.length > 0) {
+          console.log(`[EXTRACT] ✓ Videasy succeeded with ${workingVideasy.length} working source(s)`);
+          return { sources: videasyResult.sources, provider: 'videasy' };
+        }
+        console.log(`[EXTRACT] Videasy: ${videasyResult.error || 'No working sources'}`);
+      } catch (videasyError) {
+        console.warn('[EXTRACT] Videasy failed:', videasyError instanceof Error ? videasyError.message : videasyError);
+      }
+      
+      // Try 1movies as second option
       if (ONEMOVIES_ENABLED) {
-        console.log('[EXTRACT] Trying PRIMARY source: 1movies...');
+        console.log('[EXTRACT] Trying fallback source: 1movies...');
         try {
           const onemoviesResult = await extractOneMoviesStreams(tmdbId, type, season, episode);
           const workingOnemovies = onemoviesResult.sources.filter(s => s.status === 'working');
@@ -397,7 +396,7 @@ export async function GET(request: NextRequest) {
         console.log('[EXTRACT] 1movies is DISABLED, skipping...');
       }
       
-      // Try VidSrc as second option
+      // Try VidSrc as last option (if enabled)
       if (VIDSRC_ENABLED) {
         console.log('[EXTRACT] Trying fallback source: VidSrc...');
         try {
@@ -411,21 +410,6 @@ export async function GET(request: NextRequest) {
         } catch (vidsrcError) {
           console.warn('[EXTRACT] VidSrc failed:', vidsrcError instanceof Error ? vidsrcError.message : vidsrcError);
         }
-      }
-      
-      // Fallback to Videasy (multi-language support)
-      console.log('[EXTRACT] Trying fallback source: Videasy (multi-language)...');
-      try {
-        const videasyResult = await extractVideasyStreams(tmdbId, type, season, episode, true);
-        const workingVideasy = videasyResult.sources.filter(s => s.status === 'working');
-        
-        if (workingVideasy.length > 0) {
-          console.log(`[EXTRACT] ✓ Videasy succeeded with ${workingVideasy.length} working source(s)`);
-          return { sources: videasyResult.sources, provider: 'videasy' };
-        }
-        throw new Error(videasyResult.error || 'Videasy returned no working sources');
-      } catch (videasyError) {
-        console.warn('[EXTRACT] Videasy failed:', videasyError instanceof Error ? videasyError.message : videasyError);
       }
       
       // All providers failed
@@ -465,10 +449,11 @@ export async function GET(request: NextRequest) {
 
       // Return proxied URLs with status and language info for multi-language UI
       // Only proxy sources that have valid URLs (skip 'unknown' status sources with empty URLs)
+      // MegaUp CDN sources have requiresSegmentProxy: false and won't be proxied
       const proxiedSources = sources.map((source: any) => ({
         quality: source.quality,
         title: source.title || source.quality,
-        url: source.url ? getStreamProxyUrl(source.url, usedProvider, source.referer) : '',
+        url: maybeProxyUrl(source, usedProvider),
         directUrl: source.url || '',
         referer: source.referer,
         type: source.type,

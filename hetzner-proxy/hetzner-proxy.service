@@ -1,0 +1,17 @@
+[Unit]
+Description=Hetzner VPS Proxy Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/hetzner-proxy
+ExecStart=/usr/bin/node /root/hetzner-proxy/server.js
+Restart=on-failure
+RestartSec=10
+Environment=NODE_ENV=production
+Environment=PORT=3001
+Environment=API_KEY=change-this-secret-key
+
+[Install]
+WantedBy=multi-user.target

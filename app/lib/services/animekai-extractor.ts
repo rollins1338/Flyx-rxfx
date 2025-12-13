@@ -4,14 +4,13 @@
  * 
  * Flow:
  * 1. Convert TMDB ID → MAL/AniList ID using ARM mapping API
- * 2. Search AnimeKai database for the anime
- * 3. Fetch encrypted stream data from AnimeKai
- * 4. Decrypt using enc-dec.app API
- * 
- * Servers available on AnimeKai:
- * - Yuki (primary)
- * - Kuro (backup)
- * - Shiro (backup)
+ * 2. Search AnimeKai database for the anime (get content_id)
+ * 3. Encrypt content_id → fetch episodes list
+ * 4. Parse HTML → get episode token
+ * 5. Encrypt token → fetch servers list
+ * 6. Parse HTML → get server lid
+ * 7. Encrypt lid → fetch embed (encrypted)
+ * 8. Decrypt → get stream URL
  */
 
 interface StreamSource {
@@ -21,6 +20,7 @@ interface StreamSource {
   type: 'hls';
   referer: string;
   requiresSegmentProxy: boolean;
+  skipOrigin?: boolean; // For MegaUp CDN - proxy should NOT send Origin/Referer headers
   status?: 'working' | 'down' | 'unknown';
   language?: string;
 }
@@ -32,37 +32,36 @@ interface ExtractionResult {
   error?: string;
 }
 
-interface AnimeKaiEpisode {
-  id: string;
-  number: number;
-  title?: string;
+interface ParsedEpisodeEntry {
+  token: string;
+  [key: string]: any;
 }
 
-interface AnimeKaiSearchResult {
-  id: string;
-  title: string;
-  mal_id?: number;
-  anilist_id?: number;
-  episodes?: AnimeKaiEpisode[];
+// Episodes structure: { "1": { "1": { token: "..." } }, "2": { "1": { token: "..." } } }
+type ParsedEpisodes = Record<string, Record<string, ParsedEpisodeEntry>>;
+
+interface ParsedServerEntry {
+  lid: string;
+  name?: string;
+  [key: string]: any;
+}
+
+// Servers structure: { sub: { "1": { lid: "...", name: "..." } }, dub: { ... } }
+interface ParsedServers {
+  sub?: Record<string, ParsedServerEntry>;
+  dub?: Record<string, ParsedServerEntry>;
 }
 
 // API Configuration
 const ENC_DEC_API = 'https://enc-dec.app';
+const KAI_AJAX = 'https://animekai.to/ajax';
 const ARM_API = 'https://arm.haglund.dev/api/v2/ids';
-// const ANILIST_API = 'https://graphql.anilist.co'; // Reserved for future use
 
 const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
-  'Accept': 'application/json, text/plain, */*',
   'Connection': 'keep-alive',
 };
 
-// AnimeKai servers
-const SERVERS = [
-  { name: 'Yuki', id: 'yuki', priority: 1 },
-  { name: 'Kuro', id: 'kuro', priority: 2 },
-  { name: 'Shiro', id: 'shiro', priority: 3 },
-];
 
 /**
  * Check if content is anime based on TMDB data
@@ -97,6 +96,128 @@ export async function isAnimeContent(tmdbId: string, type: 'movie' | 'tv'): Prom
     return false;
   }
 }
+
+/**
+ * Encrypt text using AnimeKai encryption via enc-dec.app
+ */
+async function encrypt(text: string): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+    const response = await fetch(`${ENC_DEC_API}/api/enc-kai?text=${encodeURIComponent(text)}`, {
+      headers: HEADERS,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      console.log(`[AnimeKai] Encryption failed: HTTP ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+    return data.result || null;
+  } catch (error) {
+    console.log(`[AnimeKai] Encryption error:`, error);
+    return null;
+  }
+}
+
+/**
+ * Decrypt text using AnimeKai decryption via enc-dec.app
+ */
+async function decrypt(text: string): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    const response = await fetch(`${ENC_DEC_API}/api/dec-kai`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...HEADERS,
+      },
+      body: JSON.stringify({ text }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      console.log(`[AnimeKai] Decryption failed: HTTP ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+    return data.result || null;
+  } catch (error) {
+    console.log(`[AnimeKai] Decryption error:`, error);
+    return null;
+  }
+}
+
+/**
+ * Parse HTML using enc-dec.app parser
+ */
+async function parseHtml(html: string): Promise<any | null> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+    const response = await fetch(`${ENC_DEC_API}/api/parse-html`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...HEADERS,
+      },
+      body: JSON.stringify({ text: html }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      console.log(`[AnimeKai] HTML parse failed: HTTP ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+    return data.result || null;
+  } catch (error) {
+    console.log(`[AnimeKai] HTML parse error:`, error);
+    return null;
+  }
+}
+
+/**
+ * Fetch JSON from AnimeKai AJAX endpoint
+ */
+async function getJson(url: string): Promise<any | null> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    const response = await fetch(url, {
+      headers: HEADERS,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      console.log(`[AnimeKai] Fetch failed: HTTP ${response.status} for ${url}`);
+      return null;
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.log(`[AnimeKai] Fetch error for ${url}:`, error);
+    return null;
+  }
+}
+
 
 /**
  * Get anime IDs from TMDB ID using ARM mapping API
@@ -167,9 +288,10 @@ async function getTmdbAnimeInfo(tmdbId: string, type: 'movie' | 'tv'): Promise<{
 }
 
 /**
- * Search AnimeKai database
+ * Search AnimeKai database via enc-dec.app to get content_id
+ * API returns: [{ info: { kai_id, title_en, ... }, episodes: { ... } }]
  */
-async function searchAnimeKai(query: string, malId?: number | null): Promise<AnimeKaiSearchResult | null> {
+async function searchAnimeKai(query: string, malId?: number | null): Promise<{ content_id: string; title: string; episodes?: ParsedEpisodes } | null> {
   try {
     // First try by MAL ID if available
     if (malId) {
@@ -186,9 +308,20 @@ async function searchAnimeKai(query: string, malId?: number | null): Promise<Ani
 
       if (response.ok) {
         const data = await response.json();
-        if (data && data.id) {
-          console.log(`[AnimeKai] Found by MAL ID: ${data.title}`);
-          return data;
+        // Handle both direct object and array response
+        const result = Array.isArray(data) ? data[0] : data;
+        if (result?.info?.kai_id) {
+          console.log(`[AnimeKai] Found by MAL ID: ${result.info.title_en} (kai_id: ${result.info.kai_id})`);
+          return { 
+            content_id: result.info.kai_id, 
+            title: result.info.title_en || result.info.title_jp,
+            episodes: result.episodes 
+          };
+        }
+        // Also check for flat structure
+        if (result?.kai_id) {
+          console.log(`[AnimeKai] Found by MAL ID: ${result.title_en || result.title} (kai_id: ${result.kai_id})`);
+          return { content_id: result.kai_id, title: result.title_en || result.title };
         }
       }
     }
@@ -212,11 +345,32 @@ async function searchAnimeKai(query: string, malId?: number | null): Promise<Ani
 
     const data = await response.json();
     
+    // API returns array: [{ info: {...}, episodes: {...} }]
+    if (Array.isArray(data) && data.length > 0) {
+      const result = data[0];
+      if (result.info?.kai_id) {
+        console.log(`[AnimeKai] Found ${data.length} results, using first: ${result.info.title_en} (kai_id: ${result.info.kai_id})`);
+        return { 
+          content_id: result.info.kai_id, 
+          title: result.info.title_en || result.info.title_jp,
+          episodes: result.episodes 
+        };
+      }
+    }
+    
+    // Also check for results wrapper
     if (data.results && data.results.length > 0) {
-      console.log(`[AnimeKai] Found ${data.results.length} results, using first: ${data.results[0].title}`);
-      return data.results[0];
+      const result = data.results[0];
+      const info = result.info || result;
+      console.log(`[AnimeKai] Found ${data.results.length} results, using first: ${info.title_en || info.title}`);
+      return { 
+        content_id: info.kai_id, 
+        title: info.title_en || info.title,
+        episodes: result.episodes 
+      };
     }
 
+    console.log(`[AnimeKai] No results found for "${query}"`);
     return null;
   } catch (error) {
     console.log(`[AnimeKai] Search error:`, error);
@@ -224,423 +378,733 @@ async function searchAnimeKai(query: string, malId?: number | null): Promise<Ani
   }
 }
 
+
 /**
- * Get episode ID from AnimeKai
+ * Get episodes list for an anime
  */
-async function getEpisodeId(animeId: string, episodeNumber: number): Promise<string | null> {
+async function getEpisodes(contentId: string): Promise<ParsedEpisodes | null> {
   try {
-    console.log(`[AnimeKai] Getting episode ${episodeNumber} for anime ${animeId}...`);
+    console.log(`[AnimeKai] Getting episodes for content_id: ${contentId}`);
     
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
-
-    // Fetch anime details with episodes
-    const response = await fetch(`${ENC_DEC_API}/db/kai/find?kai_id=${animeId}`, {
-      headers: HEADERS,
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) return null;
-
-    const data = await response.json();
-    
-    if (data.episodes && data.episodes.length > 0) {
-      // Find the episode by number
-      const episode = data.episodes.find((ep: AnimeKaiEpisode) => ep.number === episodeNumber);
-      if (episode) {
-        console.log(`[AnimeKai] Found episode ID: ${episode.id}`);
-        return episode.id;
-      }
-      
-      // If exact match not found, try by index (some anime use 0-indexed)
-      if (data.episodes[episodeNumber - 1]) {
-        console.log(`[AnimeKai] Using episode by index: ${data.episodes[episodeNumber - 1].id}`);
-        return data.episodes[episodeNumber - 1].id;
-      }
+    // Encrypt the content_id
+    const encId = await encrypt(contentId);
+    if (!encId) {
+      console.log(`[AnimeKai] Failed to encrypt content_id`);
+      return null;
     }
 
-    return null;
+    // Fetch episodes list
+    const url = `${KAI_AJAX}/episodes/list?ani_id=${contentId}&_=${encId}`;
+    const response = await getJson(url);
+    
+    if (!response || !response.result) {
+      console.log(`[AnimeKai] No episodes response`);
+      return null;
+    }
+
+    // Parse the HTML response
+    const parsed = await parseHtml(response.result);
+    if (!parsed) {
+      console.log(`[AnimeKai] Failed to parse episodes HTML`);
+      return null;
+    }
+
+    console.log(`[AnimeKai] Got episodes:`, Object.keys(parsed));
+    return parsed;
   } catch (error) {
-    console.log(`[AnimeKai] Get episode error:`, error);
+    console.log(`[AnimeKai] Get episodes error:`, error);
     return null;
   }
 }
 
 /**
- * Encrypt text using AnimeKai encryption
+ * Get servers list for an episode
  */
-async function encryptForAnimeKai(text: string): Promise<string | null> {
+async function getServers(token: string): Promise<ParsedServers | null> {
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    console.log(`[AnimeKai] Getting servers for token: ${token.substring(0, 20)}...`);
+    
+    // Encrypt the token
+    const encToken = await encrypt(token);
+    if (!encToken) {
+      console.log(`[AnimeKai] Failed to encrypt token`);
+      return null;
+    }
 
-    const response = await fetch(`${ENC_DEC_API}/api/enc-kai?text=${encodeURIComponent(text)}`, {
-      headers: HEADERS,
-      signal: controller.signal,
+    // Fetch servers list
+    const url = `${KAI_AJAX}/links/list?token=${token}&_=${encToken}`;
+    const response = await getJson(url);
+    
+    if (!response || !response.result) {
+      console.log(`[AnimeKai] No servers response`);
+      return null;
+    }
+
+    // Parse the HTML response
+    const parsed = await parseHtml(response.result);
+    if (!parsed) {
+      console.log(`[AnimeKai] Failed to parse servers HTML`);
+      return null;
+    }
+
+    console.log(`[AnimeKai] Got servers - sub:`, parsed.sub ? Object.keys(parsed.sub) : 'none', 'dub:', parsed.dub ? Object.keys(parsed.dub) : 'none');
+    return parsed;
+  } catch (error) {
+    console.log(`[AnimeKai] Get servers error:`, error);
+    return null;
+  }
+}
+
+/**
+ * Decrypt MegaUp embed URL to get actual HLS stream
+ * MegaUp embeds (/e/...) need to be decrypted to get the .m3u8 URL
+ * 
+ * Correct flow:
+ * 1. Extract video ID from embed URL
+ * 2. Call /media/{videoId} to get encrypted stream data
+ * 3. Decrypt with enc-dec.app/api/dec-mega
+ */
+async function decryptMegaUpEmbed(embedUrl: string): Promise<string | null> {
+  try {
+    console.log(`[AnimeKai] Decrypting MegaUp embed: ${embedUrl}`);
+    
+    // Extract video ID and base URL from embed URL
+    // Format: https://megaup22.online/e/{videoId}
+    const urlMatch = embedUrl.match(/^(https?:\/\/[^/]+)\/e\/([^/?#]+)/);
+    if (!urlMatch) {
+      console.log(`[AnimeKai] Invalid MegaUp embed URL format`);
+      return null;
+    }
+    
+    const [, baseUrl, videoId] = urlMatch;
+    console.log(`[AnimeKai] MegaUp base: ${baseUrl}, videoId: ${videoId}`);
+    
+    // Step 1: Fetch /media/{videoId} to get encrypted stream data
+    const mediaUrl = `${baseUrl}/media/${videoId}`;
+    console.log(`[AnimeKai] Fetching media endpoint: ${mediaUrl}`);
+    
+    const mediaController = new AbortController();
+    const mediaTimeoutId = setTimeout(() => mediaController.abort(), 10000);
+    
+    const mediaResponse = await fetch(mediaUrl, {
+      headers: {
+        ...HEADERS,
+        'Referer': embedUrl,
+      },
+      signal: mediaController.signal,
     });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) return null;
-
-    const data = await response.json();
-    return data.result || null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Decrypt AnimeKai response
- */
-async function decryptAnimeKaiResponse(encryptedText: string): Promise<any | null> {
-  try {
-    console.log(`[AnimeKai] Decrypting response (${encryptedText.length} chars)...`);
-
+    
+    clearTimeout(mediaTimeoutId);
+    
+    if (!mediaResponse.ok) {
+      console.log(`[AnimeKai] MegaUp media request failed: HTTP ${mediaResponse.status}`);
+      // Fallback to manual extraction
+      return await extractMegaUpSourcesManually(embedUrl);
+    }
+    
+    const mediaData = await mediaResponse.json();
+    
+    if (!mediaData.result) {
+      console.log(`[AnimeKai] No result in MegaUp media response`);
+      return await extractMegaUpSourcesManually(embedUrl);
+    }
+    
+    const encryptedData = mediaData.result;
+    console.log(`[AnimeKai] Got encrypted data (${encryptedData.length} chars)`);
+    
+    // Step 2: Decrypt with enc-dec.app/api/dec-mega
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-    const response = await fetch(`${ENC_DEC_API}/api/dec-kai`, {
+    const response = await fetch(`${ENC_DEC_API}/api/dec-mega`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...HEADERS,
       },
-      body: JSON.stringify({ text: encryptedText }),
+      body: JSON.stringify({ 
+        text: encryptedData,
+        agent: HEADERS['User-Agent']
+      }),
       signal: controller.signal,
     });
 
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      console.log(`[AnimeKai] Decryption failed: HTTP ${response.status}`);
-      return null;
+      console.log(`[AnimeKai] MegaUp decrypt API failed: HTTP ${response.status}`);
+      return await extractMegaUpSourcesManually(embedUrl);
     }
 
     const data = await response.json();
+    console.log(`[AnimeKai] MegaUp decrypt response:`, JSON.stringify(data).substring(0, 300));
     
-    if (!data.result) {
-      console.log('[AnimeKai] Decryption returned no result');
-      return null;
-    }
-
-    // Parse if string
-    if (typeof data.result === 'string') {
-      try {
-        return JSON.parse(data.result);
-      } catch {
+    // The response should contain the actual HLS stream URL
+    if (data.result) {
+      // Result could be a URL string or an object with sources
+      if (typeof data.result === 'string' && (data.result.includes('.m3u8') || data.result.includes('.mp4'))) {
         return data.result;
       }
-    }
-
-    return data.result;
-  } catch (error) {
-    console.log(`[AnimeKai] Decryption error:`, error);
-    return null;
-  }
-}
-
-
-/**
- * Fetch stream from a specific AnimeKai server
- */
-async function fetchFromServer(
-  server: typeof SERVERS[0],
-  animeId: string,
-  episodeId: string
-): Promise<{ source: StreamSource; subtitles?: Array<{ label: string; url: string; language: string }> } | null> {
-  try {
-    console.log(`[AnimeKai] Trying server ${server.name}...`);
-
-    // Build the source URL (this varies by server implementation)
-    // The enc-dec API handles the actual fetching and encryption
-    const sourceUrl = `${animeId}/${episodeId}/${server.id}`;
-    
-    // Encrypt the request
-    const encrypted = await encryptForAnimeKai(sourceUrl);
-    if (!encrypted) {
-      console.log(`[AnimeKai] ${server.name}: Encryption failed`);
-      return null;
-    }
-
-    // Fetch encrypted stream data from AnimeKai
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-    // The actual AnimeKai API endpoint
-    const response = await fetch(`https://animekai.to/ajax/links/${encrypted}`, {
-      headers: {
-        ...HEADERS,
-        'Referer': 'https://animekai.to/',
-        'X-Requested-With': 'XMLHttpRequest',
-      },
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      console.log(`[AnimeKai] ${server.name}: HTTP ${response.status}`);
-      return null;
-    }
-
-    const encryptedData = await response.text();
-    
-    if (!encryptedData || encryptedData.includes('error')) {
-      console.log(`[AnimeKai] ${server.name}: Empty or error response`);
-      return null;
-    }
-
-    // Decrypt the response
-    const decrypted = await decryptAnimeKaiResponse(encryptedData);
-    
-    if (!decrypted) {
-      console.log(`[AnimeKai] ${server.name}: Decryption failed`);
-      return null;
-    }
-
-    // Extract stream URL
-    let streamUrl = '';
-    if (typeof decrypted === 'string') {
-      streamUrl = decrypted;
-    } else if (decrypted.url) {
-      streamUrl = decrypted.url;
-    } else if (decrypted.sources && decrypted.sources[0]) {
-      streamUrl = decrypted.sources[0].url || decrypted.sources[0].file || '';
-    }
-
-    if (!streamUrl) {
-      console.log(`[AnimeKai] ${server.name}: No stream URL in response`);
-      return null;
-    }
-
-    console.log(`[AnimeKai] ${server.name}: ✓ Got stream URL`);
-
-    // Extract subtitles if available
-    const subtitles: Array<{ label: string; url: string; language: string }> = [];
-    if (decrypted.tracks) {
-      for (const track of decrypted.tracks) {
-        if (track.kind === 'captions' || track.kind === 'subtitles') {
-          subtitles.push({
-            label: track.label || 'Unknown',
-            url: track.file || track.url || '',
-            language: track.label?.toLowerCase().includes('english') ? 'en' : 'unknown',
-          });
+      // Try to parse as JSON if it's a string
+      try {
+        const parsed = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
+        if (parsed.sources && parsed.sources[0]) {
+          return parsed.sources[0].file || parsed.sources[0].url || null;
+        }
+        if (parsed.file) return parsed.file;
+        if (parsed.url) return parsed.url;
+      } catch {
+        // Not JSON, check if it's a direct URL
+        if (typeof data.result === 'string' && data.result.startsWith('http')) {
+          return data.result;
         }
       }
     }
-
-    return {
-      source: {
-        quality: 'auto',
-        title: `AnimeKai - ${server.name}`,
-        url: streamUrl,
-        type: 'hls',
-        referer: 'https://animekai.to/',
-        requiresSegmentProxy: true,
-        status: 'working',
-        language: 'ja',
-      },
-      subtitles: subtitles.length > 0 ? subtitles : undefined,
-    };
+    
+    // Also check for direct properties
+    if (data.file) return data.file;
+    if (data.url) return data.url;
+    if (data.sources && data.sources[0]) {
+      return data.sources[0].file || data.sources[0].url || null;
+    }
+    
+    console.log(`[AnimeKai] Could not extract stream URL from MegaUp API response`);
+    return null;
   } catch (error) {
-    console.log(`[AnimeKai] ${server.name}: Error -`, error);
+    console.log(`[AnimeKai] MegaUp decrypt error:`, error);
     return null;
   }
 }
 
 /**
- * Alternative: Direct embed extraction (simpler approach)
- * Uses the embed URL pattern that AnimeKai provides
+ * Unpack p,a,c,k,e,d JavaScript
+ * Many embed pages use this obfuscation
  */
-async function fetchFromEmbed(
-  animeId: string,
-  episodeNumber: number,
-  server: typeof SERVERS[0]
-): Promise<{ source: StreamSource; subtitles?: Array<{ label: string; url: string; language: string }> } | null> {
-  try {
-    console.log(`[AnimeKai] Trying embed method for ${server.name}...`);
+function unpackPACKED(packed: string): string {
+  // Match the packed function pattern - use [\s\S] instead of . with /s flag for compatibility
+  const packedMatch = packed.match(/eval\(function\(p,a,c,k,e,[dr]\)\{[\s\S]*?\}?\('([^']+)',\s*(\d+),\s*(\d+),\s*'([^']+)'\.split\('\|'\)/);
+  
+  if (!packedMatch) {
+    return packed;
+  }
+  
+  const [, p, aStr, cStr, keywords] = packedMatch;
+  const base = parseInt(aStr);
+  const count = parseInt(cStr);
+  const keywordList = keywords.split('|');
+  
+  // Build replacement function
+  const unbaser = (n: number): string => {
+    const chars = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    if (n < base) {
+      return n < 36 ? chars[n] : String.fromCharCode(n + 29);
+    }
+    return unbaser(Math.floor(n / base)) + unbaser(n % base);
+  };
+  
+  // Replace all encoded tokens
+  let result = p;
+  for (let i = count - 1; i >= 0; i--) {
+    if (keywordList[i]) {
+      const token = unbaser(i);
+      result = result.replace(new RegExp(`\\b${token}\\b`, 'g'), keywordList[i]);
+    }
+  }
+  
+  return result;
+}
 
-    // AnimeKai embed URL pattern
-    const embedUrl = `https://animekai.to/embed/${animeId}?ep=${episodeNumber}&server=${server.id}`;
+/**
+ * Manually extract sources from MegaUp embed page
+ * Fallback when dec-mega API fails
+ */
+async function extractMegaUpSourcesManually(embedUrl: string): Promise<string | null> {
+  try {
+    console.log(`[AnimeKai] Trying manual MegaUp extraction...`);
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    
     const response = await fetch(embedUrl, {
       headers: {
         ...HEADERS,
         'Referer': 'https://animekai.to/',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       },
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      console.log(`[AnimeKai] Failed to fetch MegaUp embed: HTTP ${response.status}`);
+      return null;
+    }
+    
+    let html = await response.text();
+    console.log(`[AnimeKai] Got MegaUp page (${html.length} bytes), searching for sources...`);
+    
+    // Check if the page contains packed JavaScript and try to unpack it
+    if (html.includes('eval(function(p,a,c,k,e,')) {
+      console.log(`[AnimeKai] Found packed JavaScript, attempting to unpack...`);
+      try {
+        const unpacked = unpackPACKED(html);
+        if (unpacked !== html) {
+          console.log(`[AnimeKai] Successfully unpacked JavaScript`);
+          html = html + '\n' + unpacked; // Search both original and unpacked
+        }
+      } catch (e) {
+        console.log(`[AnimeKai] Failed to unpack JavaScript:`, e);
+      }
+    }
+    
+    // Try to find sources in the HTML
+    // Look for patterns like: sources: [{file: "..."}] or file: "..."
+    const patterns = [
+      /sources\s*:\s*\[\s*\{\s*file\s*:\s*["']([^"']+\.m3u8[^"']*)["']/i,
+      /file\s*:\s*["']([^"']+\.m3u8[^"']*)["']/i,
+      /source\s*:\s*["']([^"']+\.m3u8[^"']*)["']/i,
+      /src\s*=\s*["']([^"']+\.m3u8[^"']*)["']/i,
+      /"file"\s*:\s*"([^"]+\.m3u8[^"]*)"/i,
+      /"source"\s*:\s*"([^"]+\.m3u8[^"]*)"/i,
+      // Also look for mp4 as fallback
+      /sources\s*:\s*\[\s*\{\s*file\s*:\s*["']([^"']+\.mp4[^"']*)["']/i,
+      /file\s*:\s*["']([^"']+\.mp4[^"']*)["']/i,
+    ];
+    
+    for (const pattern of patterns) {
+      const match = html.match(pattern);
+      if (match && match[1]) {
+        const url = match[1].replace(/\\/g, '');
+        console.log(`[AnimeKai] ✓ Found stream URL in MegaUp page:`, url.substring(0, 80));
+        return url;
+      }
+    }
+    
+    // Also look for any .m3u8 URL
+    const m3u8Match = html.match(/https?:\/\/[^"'\s\\]+\.m3u8[^"'\s\\]*/i);
+    if (m3u8Match) {
+      const url = m3u8Match[0].replace(/\\/g, '');
+      console.log(`[AnimeKai] ✓ Found m3u8 URL in MegaUp page:`, url.substring(0, 80));
+      return url;
+    }
+    
+    // Look for mp4 as fallback
+    const mp4Match = html.match(/https?:\/\/[^"'\s\\]+\.mp4[^"'\s\\]*/i);
+    if (mp4Match) {
+      const url = mp4Match[0].replace(/\\/g, '');
+      console.log(`[AnimeKai] ✓ Found mp4 URL in MegaUp page:`, url.substring(0, 80));
+      return url;
+    }
+    
+    console.log(`[AnimeKai] No stream URL found in MegaUp page`);
+    // Log a snippet of the HTML for debugging
+    console.log(`[AnimeKai] HTML snippet:`, html.substring(0, 800));
+    return null;
+  } catch (error) {
+    console.log(`[AnimeKai] Manual MegaUp extraction error:`, error);
+    return null;
+  }
+}
+
+/**
+ * Decrypt RapidShare embed URL to get actual HLS stream
+ */
+async function decryptRapidShareEmbed(embedUrl: string): Promise<string | null> {
+  try {
+    console.log(`[AnimeKai] Decrypting RapidShare embed: ${embedUrl}`);
+    
+    // First try manual extraction (same approach as MegaUp)
+    const manualResult = await extractMegaUpSourcesManually(embedUrl);
+    if (manualResult) {
+      return manualResult;
+    }
+    
+    // Try the dec-rapid API
+    console.log(`[AnimeKai] Manual extraction failed, trying dec-rapid API...`);
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    const response = await fetch(`${ENC_DEC_API}/api/dec-rapid`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...HEADERS,
+      },
+      body: JSON.stringify({ 
+        text: embedUrl,
+        agent: HEADERS['User-Agent']
+      }),
       signal: controller.signal,
     });
 
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      console.log(`[AnimeKai] Embed ${server.name}: HTTP ${response.status}`);
+      console.log(`[AnimeKai] RapidShare decrypt API failed: HTTP ${response.status}`);
       return null;
     }
 
-    const html = await response.text();
+    const data = await response.json();
+    console.log(`[AnimeKai] RapidShare decrypt response:`, JSON.stringify(data).substring(0, 300));
     
-    // Look for encrypted data in the page
-    const encryptedMatch = html.match(/data-source="([^"]+)"/);
-    if (!encryptedMatch) {
-      console.log(`[AnimeKai] Embed ${server.name}: No encrypted data found`);
-      return null;
+    // Extract stream URL from response
+    if (data.result) {
+      if (typeof data.result === 'string' && (data.result.includes('.m3u8') || data.result.includes('.mp4'))) {
+        return data.result;
+      }
+      try {
+        const parsed = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
+        if (parsed.sources && parsed.sources[0]) {
+          return parsed.sources[0].file || parsed.sources[0].url || null;
+        }
+        if (parsed.file) return parsed.file;
+        if (parsed.url) return parsed.url;
+      } catch {
+        if (typeof data.result === 'string' && data.result.startsWith('http')) {
+          return data.result;
+        }
+      }
     }
-
-    // Decrypt the source
-    const decrypted = await decryptAnimeKaiResponse(encryptedMatch[1]);
     
-    if (!decrypted || !decrypted.url) {
-      console.log(`[AnimeKai] Embed ${server.name}: Decryption failed`);
-      return null;
+    if (data.file) return data.file;
+    if (data.url) return data.url;
+    if (data.sources && data.sources[0]) {
+      return data.sources[0].file || data.sources[0].url || null;
     }
-
-    console.log(`[AnimeKai] Embed ${server.name}: ✓ Got stream URL`);
-
-    return {
-      source: {
-        quality: 'auto',
-        title: `AnimeKai - ${server.name}`,
-        url: decrypted.url,
-        type: 'hls',
-        referer: 'https://animekai.to/',
-        requiresSegmentProxy: true,
-        status: 'working',
-        language: 'ja',
-      },
-    };
+    
+    return null;
   } catch (error) {
-    console.log(`[AnimeKai] Embed ${server.name}: Error -`, error);
+    console.log(`[AnimeKai] RapidShare decrypt error:`, error);
     return null;
   }
 }
 
 /**
+ * Get stream URL from a server
+ */
+async function getStreamFromServer(lid: string, serverName: string): Promise<StreamSource | null> {
+  try {
+    console.log(`[AnimeKai] Getting stream from server ${serverName} (lid: ${lid.substring(0, 20)}...)`);
+    
+    // Encrypt the lid
+    const encLid = await encrypt(lid);
+    if (!encLid) {
+      console.log(`[AnimeKai] Failed to encrypt lid`);
+      return null;
+    }
+
+    // Fetch embed data
+    const url = `${KAI_AJAX}/links/view?id=${lid}&_=${encLid}`;
+    const response = await getJson(url);
+    
+    if (!response || !response.result) {
+      console.log(`[AnimeKai] No embed response`);
+      return null;
+    }
+
+    // Decrypt the response
+    const decrypted = await decrypt(response.result);
+    if (!decrypted) {
+      console.log(`[AnimeKai] Failed to decrypt embed`);
+      return null;
+    }
+
+    // Parse the decrypted data
+    let streamData: any;
+    try {
+      streamData = typeof decrypted === 'string' ? JSON.parse(decrypted) : decrypted;
+    } catch {
+      // If it's not JSON, it might be a direct URL
+      if (typeof decrypted === 'string' && decrypted.startsWith('http')) {
+        streamData = { url: decrypted };
+      } else {
+        console.log(`[AnimeKai] Failed to parse decrypted data`);
+        return null;
+      }
+    }
+
+    // Extract stream URL
+    let streamUrl = '';
+    if (streamData.url) {
+      streamUrl = streamData.url;
+    } else if (streamData.sources && streamData.sources[0]) {
+      streamUrl = streamData.sources[0].url || streamData.sources[0].file || '';
+    } else if (streamData.file) {
+      streamUrl = streamData.file;
+    }
+
+    if (!streamUrl) {
+      console.log(`[AnimeKai] No stream URL in decrypted data:`, streamData);
+      return null;
+    }
+
+    console.log(`[AnimeKai] ✓ Got URL from ${serverName}:`, streamUrl);
+
+    // Check if this is an embed URL that needs further decryption
+    // MegaUp embeds have /e/ in the path and are NOT direct HLS streams
+    if (streamUrl.includes('megaup') && streamUrl.includes('/e/')) {
+      console.log(`[AnimeKai] Detected MegaUp embed URL, decrypting to get HLS stream...`);
+      const hlsUrl = await decryptMegaUpEmbed(streamUrl);
+      if (hlsUrl) {
+        streamUrl = hlsUrl;
+        console.log(`[AnimeKai] ✓ Got HLS stream from MegaUp:`, streamUrl.substring(0, 100));
+      } else {
+        console.log(`[AnimeKai] Failed to decrypt MegaUp embed`);
+        return null;
+      }
+    }
+    // RapidShare embeds also need decryption
+    else if (streamUrl.includes('rapid') && streamUrl.includes('/e/')) {
+      console.log(`[AnimeKai] Detected RapidShare embed URL, decrypting...`);
+      const hlsUrl = await decryptRapidShareEmbed(streamUrl);
+      if (hlsUrl) {
+        streamUrl = hlsUrl;
+        console.log(`[AnimeKai] ✓ Got HLS stream from RapidShare:`, streamUrl.substring(0, 100));
+      } else {
+        console.log(`[AnimeKai] Failed to decrypt RapidShare embed`);
+        return null;
+      }
+    }
+    // Check if URL is already a direct stream (m3u8 or mp4)
+    else if (!streamUrl.includes('.m3u8') && !streamUrl.includes('.mp4') && streamUrl.includes('/e/')) {
+      console.log(`[AnimeKai] Unknown embed type, trying generic extraction...`);
+      const hlsUrl = await extractMegaUpSourcesManually(streamUrl);
+      if (hlsUrl) {
+        streamUrl = hlsUrl;
+        console.log(`[AnimeKai] ✓ Got stream from generic extraction:`, streamUrl.substring(0, 100));
+      } else {
+        console.log(`[AnimeKai] Failed to extract from unknown embed type`);
+        return null;
+      }
+    }
+
+    // Extract the proper referer from the stream URL's origin
+    // MegaUp and similar servers require their own domain as referer, not animekai.to
+    let referer = 'https://animekai.to/';
+    try {
+      const streamOrigin = new URL(streamUrl).origin;
+      // Use the stream's origin as referer - this is what the server expects
+      referer = streamOrigin + '/';
+      console.log(`[AnimeKai] Using referer from stream origin: ${referer}`);
+    } catch {
+      console.log(`[AnimeKai] Could not parse stream URL, using default referer`);
+    }
+
+    // MegaUp CDN URLs (app28base.site, hub26link.site, megaup.cc) MUST be proxied
+    // because browser XHR adds Origin header which MegaUp blocks with 403.
+    // The Cloudflare Worker will fetch WITHOUT Origin header (noreferer mode).
+    const isMegaUpCdn = streamUrl.includes('megaup') || 
+                        streamUrl.includes('hub26link') || 
+                        streamUrl.includes('app28base');
+    
+    if (isMegaUpCdn) {
+      console.log(`[AnimeKai] MegaUp CDN detected - will proxy with noreferer mode`);
+    }
+
+    return {
+      quality: 'auto',
+      title: `AnimeKai - ${serverName}`,
+      url: streamUrl,
+      type: 'hls',
+      referer,
+      // MegaUp CDN MUST be proxied - browser adds Origin header which causes 403
+      // Cloudflare Worker fetches without Origin header
+      requiresSegmentProxy: true,
+      // Flag to tell proxy to skip Origin/Referer headers (MegaUp blocks them)
+      skipOrigin: isMegaUpCdn,
+      status: 'working',
+      language: 'ja',
+    };
+  } catch (error) {
+    console.log(`[AnimeKai] Get stream error:`, error);
+    return null;
+  }
+}
+
+
+/**
  * Main extraction function for AnimeKai
- * Tries servers sequentially until finding a working one
  */
 export async function extractAnimeKaiStreams(
   tmdbId: string,
   type: 'movie' | 'tv',
-  _season?: number, // Season not used for anime (episodes are typically absolute)
+  _season?: number,
   episode?: number
 ): Promise<ExtractionResult> {
-  console.log(`[AnimeKai] Extracting streams for ${type} TMDB ID ${tmdbId}...`);
+  console.log(`[AnimeKai] Extracting streams for ${type} TMDB ID ${tmdbId}, episode ${episode || 1}...`);
 
-  // Step 1: Get anime IDs (MAL/AniList) from TMDB ID
-  const animeIds = await getAnimeIds(tmdbId);
-  
-  // Step 2: Get title from TMDB for fallback search
-  const tmdbInfo = await getTmdbAnimeInfo(tmdbId, type);
-  
-  if (!animeIds.mal_id && !animeIds.anilist_id && !tmdbInfo) {
-    return {
-      success: false,
-      sources: [],
-      error: 'Could not identify anime - no MAL/AniList ID or title found',
-    };
-  }
-
-  // Step 3: Search AnimeKai database
-  const animeResult = await searchAnimeKai(
-    tmdbInfo?.title || '',
-    animeIds.mal_id
-  );
-
-  if (!animeResult) {
-    console.log('[AnimeKai] Anime not found in database');
-    return {
-      success: false,
-      sources: [],
-      error: 'Anime not found in AnimeKai database',
-    };
-  }
-
-  console.log(`[AnimeKai] Found anime: ${animeResult.title} (ID: ${animeResult.id})`);
-
-  // Step 4: Determine episode number
-  // For movies, episode is typically 1 or "full"
-  // For TV, use the provided episode number
-  const episodeNumber = type === 'movie' ? 1 : (episode || 1);
-
-  // Step 5: Get episode ID if needed
-  let episodeId: string | null = null;
-  if (type === 'tv') {
-    episodeId = await getEpisodeId(animeResult.id, episodeNumber);
-    if (!episodeId) {
-      console.log(`[AnimeKai] Episode ${episodeNumber} not found`);
+  try {
+    // Step 1: Get anime IDs (MAL/AniList) from TMDB ID
+    const animeIds = await getAnimeIds(tmdbId);
+    
+    // Step 2: Get title from TMDB for fallback search
+    const tmdbInfo = await getTmdbAnimeInfo(tmdbId, type);
+    
+    if (!animeIds.mal_id && !animeIds.anilist_id && !tmdbInfo) {
+      console.log('[AnimeKai] Could not identify anime');
       return {
         success: false,
         sources: [],
-        error: `Episode ${episodeNumber} not found in AnimeKai`,
+        error: 'Could not identify anime - no MAL/AniList ID or title found',
       };
     }
-  }
 
-  // Step 6: Try each server until one works
-  let workingSource: StreamSource | null = null;
-  let workingSubtitles: Array<{ label: string; url: string; language: string }> = [];
-  let workingServer: typeof SERVERS[0] | null = null;
+    // Step 3: Search AnimeKai database to get content_id (and episodes if available)
+    const animeResult = await searchAnimeKai(
+      tmdbInfo?.title || '',
+      animeIds.mal_id
+    );
 
-  for (const server of SERVERS) {
-    // Try the embed method first (simpler)
-    let result = await fetchFromEmbed(animeResult.id, episodeNumber, server);
+    if (!animeResult) {
+      console.log('[AnimeKai] Anime not found in database');
+      return {
+        success: false,
+        sources: [],
+        error: 'Anime not found in AnimeKai database',
+      };
+    }
+
+    console.log(`[AnimeKai] Found anime: ${animeResult.title} (content_id: ${animeResult.content_id})`);
+
+    // Step 4: Get episodes - use from search result if available, otherwise fetch
+    let episodes: ParsedEpisodes | null = animeResult.episodes || null;
+    if (!episodes) {
+      console.log(`[AnimeKai] Episodes not in search result, fetching separately...`);
+      episodes = await getEpisodes(animeResult.content_id);
+    }
     
-    // If embed fails and we have an episode ID, try the AJAX method
-    if (!result && episodeId) {
-      result = await fetchFromServer(server, animeResult.id, episodeId);
+    if (!episodes) {
+      return {
+        success: false,
+        sources: [],
+        error: 'Failed to get episodes list',
+      };
     }
 
-    if (result) {
-      console.log(`[AnimeKai] ✓ ${server.name} WORKS!`);
-      workingSource = result.source;
-      workingSubtitles = result.subtitles || [];
-      workingServer = server;
-      break;
+    // Step 5: Find the episode token
+    const episodeNumber = type === 'movie' ? 1 : (episode || 1);
+    const episodeKey = String(episodeNumber);
+    
+    // Episodes structure from API: { "1": { "1": { token: "..." }, "2": { token: "..." }, ... } }
+    // The first key "1" is the season, the second key is the episode number
+    let episodeToken: string | null = null;
+    
+    // Try to find the episode - check season "1" first (most anime are single season)
+    const season1 = episodes["1"];
+    if (season1 && season1[episodeKey]) {
+      const epData = season1[episodeKey];
+      if (epData && typeof epData === 'object' && 'token' in epData) {
+        episodeToken = epData.token;
+      }
     }
-  }
+    
+    // If not found in season 1, try direct access (in case structure is different)
+    if (!episodeToken && episodes[episodeKey]) {
+      const episodeData = episodes[episodeKey];
+      if (typeof episodeData === 'object' && 'token' in episodeData) {
+        episodeToken = (episodeData as any).token;
+      } else {
+        // Get the first sub-entry
+        const subKeys = Object.keys(episodeData);
+        if (subKeys.length > 0) {
+          const firstEntry = episodeData[subKeys[0]];
+          if (firstEntry && typeof firstEntry === 'object' && 'token' in firstEntry) {
+            episodeToken = firstEntry.token;
+          }
+        }
+      }
+    }
 
-  if (!workingSource || !workingServer) {
-    console.error('[AnimeKai] All servers failed');
+    if (!episodeToken) {
+      // Log available episodes for debugging
+      const availableEps = season1 ? Object.keys(season1) : Object.keys(episodes);
+      console.log(`[AnimeKai] Episode ${episodeNumber} not found. Available:`, availableEps);
+      return {
+        success: false,
+        sources: [],
+        error: `Episode ${episodeNumber} not found`,
+      };
+    }
+
+    console.log(`[AnimeKai] Found episode ${episodeNumber} token: ${episodeToken.substring(0, 20)}...`);
+
+    // Step 6: Get servers list
+    const servers = await getServers(episodeToken);
+    if (!servers) {
+      return {
+        success: false,
+        sources: [],
+        error: 'Failed to get servers list',
+      };
+    }
+
+    // Step 7: Try servers (prefer sub over dub)
+    const allSources: StreamSource[] = [];
+    const serverTypes: Array<'sub' | 'dub'> = ['sub', 'dub'];
+
+    for (const serverType of serverTypes) {
+      const serverList = servers[serverType];
+      if (!serverList) continue;
+
+      for (const [serverKey, serverData] of Object.entries(serverList)) {
+        const server = serverData as any;
+        if (!server.lid) continue;
+
+        const serverName = server.name || `Server ${serverKey}`;
+        const displayName = `${serverName} (${serverType})`;
+
+        // Try to get stream from this server
+        const source = await getStreamFromServer(server.lid, displayName);
+        
+        if (source) {
+          source.title = displayName;
+          source.language = serverType === 'dub' ? 'en' : 'ja';
+          allSources.push(source);
+          
+          console.log(`[AnimeKai] ✓ Got source from ${displayName}`);
+        }
+
+        // Only try first 3 servers to avoid timeout
+        if (allSources.length >= 3) break;
+      }
+
+      if (allSources.length >= 3) break;
+    }
+
+    if (allSources.length === 0) {
+      console.log('[AnimeKai] All servers failed');
+      return {
+        success: false,
+        sources: [],
+        error: 'All AnimeKai servers failed',
+      };
+    }
+
+    console.log(`[AnimeKai] Returning ${allSources.length} sources`);
+    
+    // Log final source URLs for debugging
+    allSources.forEach((src, i) => {
+      console.log(`[AnimeKai] Source ${i + 1}: ${src.title}`);
+      console.log(`[AnimeKai]   URL: ${src.url}`);
+      console.log(`[AnimeKai]   Referer: ${src.referer}`);
+    });
+
+    return {
+      success: true,
+      sources: allSources,
+    };
+  } catch (error) {
+    console.error('[AnimeKai] Extraction error:', error);
     return {
       success: false,
       sources: [],
-      error: 'All AnimeKai servers unavailable',
+      error: `AnimeKai extraction failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
     };
   }
-
-  // Build sources list: working source first, then others as unknown
-  const allSources: StreamSource[] = [workingSource];
-  
-  for (const server of SERVERS) {
-    if (server.id === workingServer.id) continue;
-    
-    allSources.push({
-      quality: 'auto',
-      title: `AnimeKai - ${server.name}`,
-      url: '', // Will be fetched when user selects
-      type: 'hls',
-      referer: 'https://animekai.to/',
-      requiresSegmentProxy: true,
-      status: 'unknown',
-      language: 'ja',
-    });
-  }
-
-  console.log(`[AnimeKai] Returning 1 working source + ${allSources.length - 1} other servers`);
-
-  return {
-    success: true,
-    sources: allSources,
-    subtitles: workingSubtitles.length > 0 ? workingSubtitles : undefined,
-  };
 }
+
 
 /**
  * Fetch a specific AnimeKai server by name
@@ -649,50 +1113,103 @@ export async function fetchAnimeKaiSourceByName(
   serverName: string,
   tmdbId: string,
   type: 'movie' | 'tv',
-  _season?: number, // Season not used for anime
+  _season?: number,
   episode?: number
 ): Promise<StreamSource | null> {
   console.log(`[AnimeKai] Fetching specific server: ${serverName}`);
 
-  // Find the server config
-  const serverConfig = SERVERS.find(s => 
-    s.name === serverName || 
-    serverName.includes(s.name)
-  );
-  
-  if (!serverConfig) {
-    console.error(`[AnimeKai] Unknown server: ${serverName}`);
+  try {
+    // Get anime info
+    const animeIds = await getAnimeIds(tmdbId);
+    const tmdbInfo = await getTmdbAnimeInfo(tmdbId, type);
+    
+    if (!animeIds.mal_id && !tmdbInfo) {
+      return null;
+    }
+
+    // Search AnimeKai
+    const animeResult = await searchAnimeKai(tmdbInfo?.title || '', animeIds.mal_id);
+    if (!animeResult) {
+      return null;
+    }
+
+    // Get episodes - use from search result if available
+    let episodes: ParsedEpisodes | null = animeResult.episodes || null;
+    if (!episodes) {
+      episodes = await getEpisodes(animeResult.content_id);
+    }
+    if (!episodes) {
+      return null;
+    }
+
+    // Find episode token
+    const episodeNumber = type === 'movie' ? 1 : (episode || 1);
+    const episodeKey = String(episodeNumber);
+    
+    let episodeToken: string | null = null;
+    
+    // Try season "1" first
+    const season1 = episodes["1"];
+    if (season1 && season1[episodeKey]) {
+      const epData = season1[episodeKey];
+      if (epData && typeof epData === 'object' && 'token' in epData) {
+        episodeToken = epData.token;
+      }
+    }
+    
+    // Fallback to direct access
+    if (!episodeToken && episodes[episodeKey]) {
+      const episodeData = episodes[episodeKey];
+      if (typeof episodeData === 'object' && 'token' in episodeData) {
+        episodeToken = (episodeData as any).token;
+      } else {
+        const subKeys = Object.keys(episodeData);
+        if (subKeys.length > 0) {
+          const firstEntry = episodeData[subKeys[0]];
+          if (firstEntry && typeof firstEntry === 'object' && 'token' in firstEntry) {
+            episodeToken = firstEntry.token;
+          }
+        }
+      }
+    }
+
+    if (!episodeToken) {
+      return null;
+    }
+
+    // Get servers
+    const servers = await getServers(episodeToken);
+    if (!servers) {
+      return null;
+    }
+
+    // Find the specific server by name
+    const serverTypes: Array<'sub' | 'dub'> = ['sub', 'dub'];
+    
+    for (const serverType of serverTypes) {
+      const serverList = servers[serverType];
+      if (!serverList) continue;
+
+      for (const [, serverData] of Object.entries(serverList)) {
+        const server = serverData as any;
+        const displayName = `${server.name || 'Server'} (${serverType})`;
+        
+        if (serverName.includes(server.name) || serverName === displayName) {
+          const source = await getStreamFromServer(server.lid, displayName);
+          if (source) {
+            source.language = serverType === 'dub' ? 'en' : 'ja';
+            return source;
+          }
+        }
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error(`[AnimeKai] Fetch source by name error:`, error);
     return null;
   }
-
-  // Get anime info
-  const animeIds = await getAnimeIds(tmdbId);
-  const tmdbInfo = await getTmdbAnimeInfo(tmdbId, type);
-  
-  if (!animeIds.mal_id && !tmdbInfo) {
-    return null;
-  }
-
-  // Search AnimeKai
-  const animeResult = await searchAnimeKai(tmdbInfo?.title || '', animeIds.mal_id);
-  if (!animeResult) {
-    return null;
-  }
-
-  const episodeNumber = type === 'movie' ? 1 : (episode || 1);
-
-  // Try to fetch from the specific server
-  const result = await fetchFromEmbed(animeResult.id, episodeNumber, serverConfig);
-  
-  if (result) {
-    return result.source;
-  }
-
-  return null;
 }
-
-// Export server list for UI
-export const ANIMEKAI_SERVERS = SERVERS;
 
 // Export enabled flag
 export const ANIMEKAI_ENABLED = true;

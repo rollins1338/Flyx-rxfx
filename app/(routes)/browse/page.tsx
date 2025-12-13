@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 export const revalidate = 3600;
 
 interface BrowsePageProps {
-  searchParams: { type?: string; filter?: string; genre?: string; page?: string };
+  searchParams: Promise<{ type?: string; filter?: string; genre?: string; page?: string }>;
 }
 
 async function getBrowseData(type: string, filter: string, genre: string, page: number) {
@@ -148,10 +148,11 @@ function getPageTitle(type: string, filter: string, genre: string): string {
 }
 
 export default async function BrowsePage({ searchParams }: BrowsePageProps) {
-  const type = searchParams.type || 'movie';
-  const filter = searchParams.filter || 'popular';
-  const genre = searchParams.genre || '';
-  const page = parseInt(searchParams.page || '1', 10);
+  const params = await searchParams;
+  const type = params.type || 'movie';
+  const filter = params.filter || 'popular';
+  const genre = params.genre || '';
+  const page = parseInt(params.page || '1', 10);
 
   const data = await getBrowseData(type, filter, genre, page);
   const title = getPageTitle(type, filter, genre);

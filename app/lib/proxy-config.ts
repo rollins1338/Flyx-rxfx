@@ -18,7 +18,8 @@
 export function getStreamProxyUrl(
   url: string,
   source: string = '2embed',
-  referer: string = 'https://www.2embed.cc'
+  referer: string = 'https://www.2embed.cc',
+  skipOrigin: boolean = false
 ): string {
   const cfProxyUrl = process.env.NEXT_PUBLIC_CF_STREAM_PROXY_URL;
   
@@ -27,7 +28,9 @@ export function getStreamProxyUrl(
     throw new Error('Stream proxy not configured. Set NEXT_PUBLIC_CF_STREAM_PROXY_URL environment variable.');
   }
   
-  return `${cfProxyUrl}/?url=${encodeURIComponent(url)}&source=${source}&referer=${encodeURIComponent(referer)}`;
+  // Add noreferer param for sources that block requests with Origin header (like MegaUp CDN)
+  const noRefParam = skipOrigin ? '&noreferer=true' : '';
+  return `${cfProxyUrl}/?url=${encodeURIComponent(url)}&source=${source}&referer=${encodeURIComponent(referer)}${noRefParam}`;
 }
 
 // Check if DLHD proxy (Oxylabs residential) should be used for Live TV

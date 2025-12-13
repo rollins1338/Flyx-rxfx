@@ -62,6 +62,7 @@
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
+    "react-is": "^19.2.3",
     "react-simple-maps": "^3.0.0",
     "react-syntax-highlighter": "^16.1.0",
     "react-world-flags": "^1.6.0",
@@ -90,7 +91,7 @@
     "http-proxy-agent": "^7.0.2",
     "https-proxy-agent": "^7.0.6",
     "postcss": "^8.5.6",
-    "tailwindcss": "^4.1.18",
+    "tailwindcss": "^3.4.17",
     "typescript": "^5.9.3"
   },
   "jest": {

@@ -143,6 +143,143 @@ function proxyIPTVApi(targetUrl, mac, token, res) {
 }
 
 /**
+ * Generic HLS Stream proxy - for MegaUp and similar CDNs
+ * Used when Cloudflare IPs are blocked by the CDN
+ */
+function proxyHLSStream(targetUrl, referer, res, redirectCount = 0) {
+  if (redirectCount > 5) {
+    console.error(`[HLS Stream] Too many redirects`);
+    res.writeHead(502, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Too many redirects' }));
+    return;
+  }
+
+  const url = new URL(targetUrl);
+  const client = url.protocol === 'https:' ? https : http;
+  
+  // Build headers - NO referer for MegaUp (they block requests WITH referer)
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': '*/*',
+    'Accept-Encoding': 'identity', // Don't compress - we're proxying
+    'Connection': 'keep-alive',
+  };
+  
+  // Only add referer if explicitly requested and not same-origin
+  // MegaUp CDN blocks requests that have a Referer header!
+  if (referer && referer !== 'none') {
+    try {
+      const refererOrigin = new URL(referer).origin;
+      const targetOrigin = url.origin;
+      // Only add referer if it's different from target (cross-origin)
+      if (refererOrigin !== targetOrigin) {
+        headers['Referer'] = referer;
+        headers['Origin'] = refererOrigin;
+      }
+    } catch (e) {
+      // Invalid referer URL, skip it
+    }
+  }
+  
+  const options = {
+    hostname: url.hostname,
+    port: url.port || (url.protocol === 'https:' ? 443 : 80),
+    path: url.pathname + url.search,
+    method: 'GET',
+    headers,
+    timeout: 30000,
+    rejectUnauthorized: false,
+  };
+
+  console.log(`[HLS Stream] ${targetUrl.substring(0, 100)}... (referer: ${referer || 'none'})`);
+
+  const proxyReq = client.request(options, (proxyRes) => {
+    const contentType = proxyRes.headers['content-type'] || 'application/octet-stream';
+    
+    console.log(`[HLS Stream] Response: ${proxyRes.statusCode} - ${contentType}`);
+    
+    // Handle redirects
+    if ([301, 302, 303, 307, 308].includes(proxyRes.statusCode) && proxyRes.headers.location) {
+      const redirectUrl = proxyRes.headers.location.startsWith('http') 
+        ? proxyRes.headers.location 
+        : new URL(proxyRes.headers.location, targetUrl).toString();
+      console.log(`[HLS Stream] Redirect to: ${redirectUrl.substring(0, 80)}...`);
+      proxyHLSStream(redirectUrl, referer, res, redirectCount + 1);
+      return;
+    }
+    
+    // For m3u8 playlists, we need to rewrite URLs to go through the proxy
+    const isPlaylist = contentType.includes('mpegurl') || 
+                       targetUrl.includes('.m3u8') || 
+                       contentType.includes('text');
+    
+    if (isPlaylist && proxyRes.statusCode === 200) {
+      const chunks = [];
+      proxyRes.on('data', chunk => chunks.push(chunk));
+      proxyRes.on('end', () => {
+        let playlist = Buffer.concat(chunks).toString('utf8');
+        
+        // Check if it's actually a playlist
+        if (playlist.includes('#EXTM3U') || playlist.includes('#EXT-X-')) {
+          console.log(`[HLS Stream] Rewriting playlist URLs...`);
+          // We'll return the playlist as-is - the Cloudflare proxy will handle URL rewriting
+          // This is just to get past the CDN's IP blocking
+        }
+        
+        res.writeHead(proxyRes.statusCode, {
+          'Content-Type': 'application/vnd.apple.mpegurl',
+          'Content-Length': Buffer.byteLength(playlist),
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Expose-Headers': 'Content-Length, X-Proxy-Source',
+          'Cache-Control': 'public, max-age=5',
+          'X-Proxy-Source': 'hetzner',
+        });
+        res.end(playlist);
+      });
+      return;
+    }
+    
+    // Stream video segments directly
+    res.writeHead(proxyRes.statusCode, {
+      'Content-Type': contentType,
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Expose-Headers': 'Content-Length, Content-Range, X-Proxy-Source',
+      'Cache-Control': 'public, max-age=3600',
+      'X-Proxy-Source': 'hetzner',
+    });
+    
+    proxyRes.pipe(res);
+    
+    proxyRes.on('error', (err) => {
+      console.error(`[HLS Stream Error] ${err.message}`);
+      if (!res.headersSent) res.writeHead(502);
+      res.end();
+    });
+  });
+
+  proxyReq.on('error', (err) => {
+    console.error(`[HLS Stream Error] ${err.message}`);
+    if (!res.headersSent) {
+      res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ error: 'HLS proxy error', details: err.message }));
+    }
+  });
+
+  proxyReq.on('timeout', () => {
+    proxyReq.destroy();
+    if (!res.headersSent) {
+      res.writeHead(504, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ error: 'HLS stream timeout' }));
+    }
+  });
+
+  // Handle client disconnect
+  res.on('close', () => proxyReq.destroy());
+
+  proxyReq.end();
+}
+
+/**
  * IPTV Stream proxy - streams raw MPEG-TS data
  * Follows redirects automatically (IPTV servers often return 302)
  */
@@ -272,6 +409,25 @@ const server = http.createServer((req, res) => {
     return res.end(JSON.stringify({ error: 'Rate limited' }));
   }
 
+  // Generic HLS Stream proxy (for MegaUp, etc.)
+  if (reqUrl.pathname === '/stream') {
+    const targetUrl = reqUrl.searchParams.get('url');
+    const referer = reqUrl.searchParams.get('referer') || 'none';
+    
+    if (!targetUrl) {
+      res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ error: 'Missing url parameter' }));
+    }
+
+    try {
+      proxyHLSStream(decodeURIComponent(targetUrl), referer === 'none' ? null : decodeURIComponent(referer), res);
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ error: 'Invalid URL', details: err.message }));
+    }
+    return;
+  }
+
   // IPTV API proxy
   if (reqUrl.pathname === '/iptv/api') {
     const targetUrl = reqUrl.searchParams.get('url');
@@ -327,7 +483,7 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, BIND_HOST, () => {
   console.log(`
 ╔═══════════════════════════════════════════════════════════╗
-║         Hetzner VPS IPTV Proxy Server                     ║
+║         Hetzner VPS Proxy Server                          ║
 ╠═══════════════════════════════════════════════════════════╣
 ║  Host: ${BIND_HOST.padEnd(49)}║
 ║  Port: ${PORT.toString().padEnd(49)}║
@@ -335,6 +491,7 @@ server.listen(PORT, BIND_HOST, () => {
 ╠═══════════════════════════════════════════════════════════╣
 ║  Endpoints:                                               ║
 ║    GET /health              - Health check                ║
+║    GET /stream?url=&referer=- HLS stream proxy (MegaUp)   ║
 ║    GET /iptv/api?url=&mac=  - Stalker API proxy           ║
 ║    GET /iptv/stream?url=    - IPTV stream proxy           ║
 ╠═══════════════════════════════════════════════════════════╣

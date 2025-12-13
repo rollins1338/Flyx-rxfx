@@ -12,6 +12,9 @@ import { Logger, createLogger, type LogLevel } from './logger';
 export interface Env {
   API_KEY?: string;
   LOG_LEVEL?: string;
+  // Hetzner VPS proxy for MegaUp streams (Cloudflare IPs are blocked)
+  HETZNER_PROXY_URL?: string;
+  HETZNER_PROXY_KEY?: string;
 }
 
 export default {
@@ -73,25 +76,70 @@ export default {
         });
       }
       
+      // Check if we should skip referer (some servers block requests WITH referer)
+      // If referer matches the target URL's origin, or if noreferer param is set, skip it
+      const noRefererParam = url.searchParams.get('noreferer') === 'true' || url.searchParams.get('noref') === '1';
+      
+      // Parse origins for comparison
+      let targetOrigin = '';
+      let refererOrigin = '';
+      try {
+        targetOrigin = new URL(decodedUrl).origin;
+        refererOrigin = upstreamReferer ? new URL(upstreamReferer).origin : '';
+      } catch (e) {
+        logger.warn('Failed to parse URL origins', { error: String(e) });
+      }
+      
+      const sameOriginReferer = !!(targetOrigin && refererOrigin && targetOrigin === refererOrigin);
+      const skipReferer = noRefererParam || sameOriginReferer;
+      
+      // Detect MegaUp/hub26link requests - these CDNs block requests with Origin header
+      // They DON'T block Cloudflare IPs - they block the Origin header specifically
+      const isMegaUp = decodedUrl.includes('megaup') || decodedUrl.includes('hub26link') || decodedUrl.includes('app28base');
+      
+      // For MegaUp, ALWAYS skip Origin/Referer headers (they cause 403)
+      const effectiveSkipReferer = isMegaUp ? true : skipReferer;
+      
+      if (isMegaUp) {
+        logger.info('MegaUp request detected - forcing noreferer mode (Origin header causes 403)', {
+          targetOrigin,
+          originalSkipReferer: skipReferer,
+          effectiveSkipReferer,
+        });
+      }
+      
       logger.info('Proxying request', { 
         targetUrl: decodedUrl.substring(0, 150),
         source,
-        referer: upstreamReferer.substring(0, 100),
+        referer: effectiveSkipReferer ? '(skipped - MegaUp or noreferer)' : upstreamReferer.substring(0, 100),
+        skipReferer: effectiveSkipReferer,
+        routeVia: 'direct',
       });
 
-      // Fetch with proper headers
-      const headers: HeadersInit = {
+      let response: Response;
+      const fetchStart = Date.now();
+
+      // Direct fetch - Cloudflare Worker fetches without Origin header for MegaUp
+      const headers: Record<string, string> = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': '*/*',
         'Accept-Encoding': 'identity',
-        'Referer': upstreamReferer,
-        'Origin': new URL(upstreamReferer).origin,
       };
+      
+      // Only add Referer/Origin if not skipping (MegaUp blocks requests with Origin header)
+      if (!effectiveSkipReferer && upstreamReferer) {
+        headers['Referer'] = upstreamReferer;
+        headers['Origin'] = new URL(upstreamReferer).origin;
+      }
+      
+      logger.debug('Direct fetch headers', {
+        skipReferer: effectiveSkipReferer,
+        headersKeys: Object.keys(headers),
+        isMegaUp,
+      });
 
-      const fetchStart = Date.now();
       logger.fetchStart(decodedUrl, { headers });
 
-      let response: Response;
       try {
         response = await fetch(decodedUrl, {
           headers,
@@ -129,7 +177,7 @@ export default {
             return jsonResponse({ error: `Redirect target error: ${response.status}` }, response.status, logger, requestOrigin);
           }
           
-          return handleStreamResponse(response, decodedUrl, source, upstreamReferer, url.origin, logger, requestOrigin);
+          return handleStreamResponse(response, decodedUrl, source, upstreamReferer, url.origin, logger, requestOrigin, effectiveSkipReferer);
         }
       }
 
@@ -142,7 +190,7 @@ export default {
         return jsonResponse({ error: `Upstream error: ${response.status}` }, response.status, logger, requestOrigin);
       }
 
-      return handleStreamResponse(response, decodedUrl, source, upstreamReferer, url.origin, logger, requestOrigin);
+      return handleStreamResponse(response, decodedUrl, source, upstreamReferer, url.origin, logger, requestOrigin, effectiveSkipReferer);
 
     } catch (error) {
       logger.error('Proxy error', error as Error);
@@ -161,7 +209,8 @@ async function handleStreamResponse(
   referer: string,
   proxyOrigin: string,
   logger: Logger,
-  requestOrigin?: string | null
+  requestOrigin?: string | null,
+  skipReferer: boolean = false
 ): Promise<Response> {
   const contentType = response.headers.get('content-type') || '';
   
@@ -205,7 +254,7 @@ async function handleStreamResponse(
     const lineCount = text.split('\n').length;
     logger.info('Processing playlist', { lineCount, size: arrayBuffer.byteLength });
     
-    const rewrittenPlaylist = rewritePlaylistUrls(text, decodedUrl, source, referer, proxyOrigin, logger);
+    const rewrittenPlaylist = rewritePlaylistUrls(text, decodedUrl, source, referer, proxyOrigin, logger, skipReferer);
     
     const res = new Response(rewrittenPlaylist, {
       status: 200,
@@ -250,7 +299,8 @@ function rewritePlaylistUrls(
   source: string,
   referer: string,
   proxyOrigin: string,
-  logger: Logger
+  logger: Logger,
+  skipReferer: boolean = false
 ): string {
   const lines = playlist.split('\n');
   const rewritten: string[] = [];
@@ -271,7 +321,9 @@ function rewritePlaylistUrls(
     }
     
     urlsRewritten++;
-    return `${proxyOrigin}/stream/?url=${encodeURIComponent(absoluteUrl)}&source=${source}&referer=${encodeURIComponent(referer)}`;
+    // Include noreferer flag if we're skipping referer (for servers that block requests with Referer header)
+    const noRefParam = skipReferer ? '&noreferer=true' : '';
+    return `${proxyOrigin}/stream/?url=${encodeURIComponent(absoluteUrl)}&source=${source}&referer=${encodeURIComponent(referer)}${noRefParam}`;
   };
   
   for (const line of lines) {

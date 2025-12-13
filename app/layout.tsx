@@ -1,8 +1,24 @@
 import './globals.css'
 import { Metadata, Viewport } from 'next'
+import { Inter, JetBrains_Mono } from 'next/font/google'
 import AnalyticsProvider from './components/analytics/AnalyticsProvider'
 import PresenceProvider from './components/analytics/PresenceProvider'
 import { RegionProvider } from './lib/context/RegionContext'
+
+// Optimized font loading with next/font (eliminates render-blocking CSS)
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-inter',
+  preload: true,
+})
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-mono',
+  preload: true,
+})
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -69,12 +85,14 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://image.tmdb.org" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://image.tmdb.org" />
+        <link rel="preconnect" href="https://api.themoviedb.org" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://api.themoviedb.org" />
       </head>
-      <body suppressHydrationWarning>
+      <body className={inter.className} suppressHydrationWarning>
         {/* Screen reader announcements */}
         <div id="sr-announcements" role="status" aria-live="polite" aria-atomic="true" className="sr-only"></div>
         

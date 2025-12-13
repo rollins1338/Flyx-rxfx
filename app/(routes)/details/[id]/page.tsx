@@ -5,12 +5,12 @@ import type { MediaItem } from '@/types/media';
 import DetailsPageClient from './DetailsPageClient';
 
 interface DetailsPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
-  searchParams: {
+  }>;
+  searchParams: Promise<{
     type?: 'movie' | 'tv';
-  };
+  }>;
 }
 
 /**
@@ -18,8 +18,9 @@ interface DetailsPageProps {
  * Fetches content details and related content on the server
  */
 export default async function DetailsPage({ params, searchParams }: DetailsPageProps) {
-  const { id } = params;
-  const mediaType = searchParams.type || 'movie';
+  const { id } = await params;
+  const { type } = await searchParams;
+  const mediaType = type || 'movie';
 
   let content: MediaItem | null = null;
   let relatedContent: MediaItem[] = [];
