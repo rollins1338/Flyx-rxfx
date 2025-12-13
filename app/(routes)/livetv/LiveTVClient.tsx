@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import { useState, useEffect, useCallback, useMemo, memo, useRef, ChangeEvent } from 'react';
 import { Navigation } from '@/components/layout/Navigation';
 import { Footer } from '@/components/layout/Footer';
 import { useAnalytics } from '@/components/analytics/AnalyticsProvider';
@@ -315,11 +315,11 @@ function LiveTVPlayer({
   updateLiveTVQuality: _updateLiveTVQuality,
 }: LiveTVPlayerProps) {
   const presenceContext = usePresenceContext();
-  const videoRef = React.useRef<HTMLVideoElement>(null);
-  const containerRef = React.useRef<HTMLDivElement>(null);
-  const playerRef = React.useRef<any>(null); // mpegts.js player
-  const controlsTimeoutRef = React.useRef<NodeJS.Timeout>();
-  const watchStartTimeRef = React.useRef<number>(0);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<any>(null); // mpegts.js player
+  const controlsTimeoutRef = useRef<NodeJS.Timeout>();
+  const watchStartTimeRef = useRef<number>(0);
   const CONTROLS_HIDE_DELAY = 3000;
   
   const [isLoading, setIsLoading] = useState(true);
@@ -337,7 +337,7 @@ function LiveTVPlayer({
   const [currentAccountId, setCurrentAccountId] = useState<string | null>(null);
   const [failedAccounts, setFailedAccounts] = useState<string[]>([]); // Just IDs
   const [remainingAccounts, setRemainingAccounts] = useState<number>(0);
-  const failedAccountsRef = React.useRef<string[]>([]); // Track failed account IDs for API calls
+  const failedAccountsRef = useRef<string[]>([]); // Track failed account IDs for API calls
 
   const cast = useCast({
     onConnect: () => console.log('[LiveTV] Cast connected'),
@@ -841,7 +841,7 @@ function LiveTVPlayer({
     videoRef.current.muted = !isMuted;
   };
 
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleVolumeChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (!videoRef.current) return;
     const val = parseFloat(e.target.value);
     videoRef.current.volume = val;
