@@ -7,7 +7,7 @@ import { useWatchProgress } from '@/lib/hooks/useWatchProgress';
 import { trackWatchStart, trackWatchProgress, trackWatchPause, trackWatchComplete } from '@/lib/utils/live-activity';
 import { usePresenceContext } from '../analytics/PresenceProvider';
 import { getSubtitlePreferences, setSubtitlesEnabled, setSubtitleLanguage, getSubtitleStyle, setSubtitleStyle, type SubtitleStyle } from '@/lib/utils/subtitle-preferences';
-import { getPlayerPreferences, setAutoPlayNextEpisode, setAutoPlayCountdown, type PlayerPreferences } from '@/lib/utils/player-preferences';
+import { getPlayerPreferences, setAutoPlayNextEpisode, setAutoPlayCountdown, setShowNextEpisodeBeforeEnd, type PlayerPreferences } from '@/lib/utils/player-preferences';
 import { usePinchZoom } from '@/hooks/usePinchZoom';
 import { useCast, CastMedia } from '@/hooks/useCast';
 import { CastOverlay } from './CastButton';
@@ -27,9 +27,15 @@ interface VideoPlayerProps {
     isNextSeason?: boolean;
   } | null;
   onNextEpisode?: () => void;
+  autoplay?: boolean; // Auto-start playback (used when navigating from previous episode)
 }
 
-export default function VideoPlayer({ tmdbId, mediaType, season, episode, title, nextEpisode, onNextEpisode }: VideoPlayerProps) {
+export default function VideoPlayer({ tmdbId, mediaType, season, episode, title, nextEpisode, onNextEpisode, autoplay = false }: VideoPlayerProps) {
+  // Debug: Log nextEpisode prop
+  useEffect(() => {
+    console.log('[VideoPlayer] nextEpisode prop received:', nextEpisode);
+  }, [nextEpisode]);
+  
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -38,6 +44,8 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
   const subtitlesAutoLoadedRef = useRef(false);
   const hasShownResumePromptRef = useRef(false);
   const triedProvidersRef = useRef<Set<string>>(new Set());
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const isAutoplayNavigationRef = useRef(autoplay); // Track if this is an autoplay navigation
 
   // Analytics and progress tracking
   const { trackContentEngagement, trackInteraction, updateWatchTime, recordPause, clearWatchTime } = useAnalytics();
@@ -97,6 +105,27 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
   const [autoPlayCountdown, setAutoPlayCountdownState] = useState<number | null>(null);
   const [playerPrefs, setPlayerPrefs] = useState<PlayerPreferences>(getPlayerPreferences());
   const autoPlayTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Refs to access current values in event handlers (avoid stale closures)
+  const nextEpisodeRef = useRef(nextEpisode);
+  const playerPrefsRef = useRef(playerPrefs);
+  const onNextEpisodeRef = useRef(onNextEpisode);
+  const showNextEpisodeButtonRef = useRef(showNextEpisodeButton);
+  const autoPlayCountdownRef = useRef(autoPlayCountdown);
+  
+  // Keep refs in sync with props/state
+  useEffect(() => { 
+    console.log('[VideoPlayer] Updating nextEpisodeRef:', nextEpisode);
+    nextEpisodeRef.current = nextEpisode; 
+  }, [nextEpisode]);
+  useEffect(() => { playerPrefsRef.current = playerPrefs; }, [playerPrefs]);
+  useEffect(() => { 
+    console.log('[VideoPlayer] Updating onNextEpisodeRef:', !!onNextEpisode);
+    onNextEpisodeRef.current = onNextEpisode; 
+  }, [onNextEpisode]);
+  useEffect(() => { showNextEpisodeButtonRef.current = showNextEpisodeButton; }, [showNextEpisodeButton]);
+  useEffect(() => { autoPlayCountdownRef.current = autoPlayCountdown; }, [autoPlayCountdown]);
+  
   const [provider, setProvider] = useState('vidsrc'); // Default to vidsrc (primary provider)
   const [menuProvider, setMenuProvider] = useState('vidsrc');
   const [showServerMenu, setShowServerMenu] = useState(false);
@@ -379,6 +408,14 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     setError(null);
     setHighlightServerButton(false);
     setStreamUrl(null);
+    
+    // Reset next episode state when content changes (prevents auto-skip bug)
+    setShowNextEpisodeButton(false);
+    setAutoPlayCountdownState(null);
+    if (autoPlayTimerRef.current) {
+      clearTimeout(autoPlayTimerRef.current);
+      autoPlayTimerRef.current = null;
+    }
 
     const initializePlayer = async () => {
       // First fetch provider availability
@@ -861,12 +898,24 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
         setBuffered((video.buffered.end(video.buffered.length - 1) / video.duration) * 100);
       }
 
-      if (nextEpisode && video.duration > 0) {
+      // Show next episode button based on user preference (use refs for current values)
+      const currentNextEpisode = nextEpisodeRef.current;
+      const currentPrefs = playerPrefsRef.current;
+      const isButtonShowing = showNextEpisodeButtonRef.current;
+      if (currentNextEpisode && video.duration > 0) {
         const timeRemaining = video.duration - video.currentTime;
-        if (timeRemaining <= 90) {
+        const showBeforeEnd = currentPrefs.showNextEpisodeBeforeEnd || 90;
+        if (timeRemaining <= showBeforeEnd && !isButtonShowing) {
+          // Show the button and start countdown if auto-play is enabled
           setShowNextEpisodeButton(true);
-        } else {
+          if (currentPrefs.autoPlayNextEpisode) {
+            console.log('[VideoPlayer] Starting countdown - time remaining:', timeRemaining);
+            setAutoPlayCountdownState(currentPrefs.autoPlayCountdown);
+          }
+        } else if (timeRemaining > showBeforeEnd && isButtonShowing) {
+          // Hide button if we're no longer in the "show before end" window (e.g., user seeked back)
           setShowNextEpisodeButton(false);
+          setAutoPlayCountdownState(null);
         }
       }
 
@@ -902,6 +951,14 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
       setDuration(video.duration);
 
       if (hasShownResumePromptRef.current) return;
+      
+      // Skip resume prompt if this is an autoplay navigation (coming from previous episode)
+      if (isAutoplayNavigationRef.current) {
+        console.log('[VideoPlayer] Skipping resume prompt for autoplay navigation');
+        hasShownResumePromptRef.current = true;
+        isAutoplayNavigationRef.current = false; // Reset for future use
+        return;
+      }
 
       const savedTime = loadProgress();
       if (savedTime > 0 && savedTime < video.duration - 30) {
@@ -937,15 +994,27 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     };
 
     const handleEnded = () => {
+      console.log('[VideoPlayer] Video ended event fired');
       setIsPlaying(false);
-      if (nextEpisode && onNextEpisode) {
-        // Check if auto-play is enabled
-        const prefs = getPlayerPreferences();
-        if (prefs.autoPlayNextEpisode) {
-          // Start countdown for auto-play
-          setAutoPlayCountdownState(prefs.autoPlayCountdown);
+      // Use refs for current values (avoid stale closures)
+      const currentNextEpisode = nextEpisodeRef.current;
+      const currentOnNextEpisode = onNextEpisodeRef.current;
+      const currentCountdown = autoPlayCountdownRef.current;
+      console.log('[VideoPlayer] handleEnded - nextEpisode:', currentNextEpisode, 'onNextEpisode:', !!currentOnNextEpisode);
+      if (currentNextEpisode && currentOnNextEpisode) {
+        // Always show the next episode button when video ends
+        setShowNextEpisodeButton(true);
+        // If countdown isn't already running, start it now
+        if (currentCountdown === null) {
+          const prefs = getPlayerPreferences();
+          console.log('[VideoPlayer] Auto-play prefs:', prefs);
+          if (prefs.autoPlayNextEpisode) {
+            console.log('[VideoPlayer] Starting auto-play countdown:', prefs.autoPlayCountdown);
+            setAutoPlayCountdownState(prefs.autoPlayCountdown);
+          }
         }
-        // If auto-play is disabled, just show the next episode button
+      } else {
+        console.log('[VideoPlayer] No next episode or callback available');
       }
     };
 
@@ -1008,18 +1077,47 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
-  // Auto-play countdown timer
+  // Auto-play countdown timer - uses refs to avoid stale closures
   useEffect(() => {
-    if (autoPlayCountdown === null || autoPlayCountdown <= 0) {
-      if (autoPlayCountdown === 0 && nextEpisode && onNextEpisode) {
-        // Countdown finished, play next episode
-        onNextEpisode();
+    // Skip if countdown is null (not started)
+    if (autoPlayCountdown === null) {
+      return;
+    }
+    
+    console.log('[VideoPlayer] Auto-play countdown:', autoPlayCountdown);
+    
+    // When countdown reaches 0, navigate to next episode
+    if (autoPlayCountdown <= 0) {
+      const currentNextEpisode = nextEpisodeRef.current;
+      const currentOnNextEpisode = onNextEpisodeRef.current;
+      console.log('[VideoPlayer] Countdown reached 0!', { 
+        hasNextEpisode: !!currentNextEpisode, 
+        hasCallback: !!currentOnNextEpisode,
+        nextEpisodeData: currentNextEpisode
+      });
+      
+      // Reset countdown state first to prevent re-triggering
+      setAutoPlayCountdownState(null);
+      setShowNextEpisodeButton(false);
+      
+      if (currentNextEpisode && currentOnNextEpisode) {
+        console.log('[VideoPlayer] AUTO-NAVIGATING to next episode NOW!');
+        // Call immediately - no delay needed
+        currentOnNextEpisode();
+      } else {
+        console.error('[VideoPlayer] Cannot navigate - missing nextEpisode or callback!');
       }
       return;
     }
-
+    
+    // Set up the next tick (countdown by 1 second)
     autoPlayTimerRef.current = setTimeout(() => {
-      setAutoPlayCountdownState(prev => prev !== null ? prev - 1 : null);
+      setAutoPlayCountdownState(prev => {
+        if (prev === null || prev <= 0) return null;
+        const newValue = prev - 1;
+        console.log('[VideoPlayer] Countdown tick:', prev, '->', newValue);
+        return newValue;
+      });
     }, 1000);
 
     return () => {
@@ -1027,7 +1125,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
         clearTimeout(autoPlayTimerRef.current);
       }
     };
-  }, [autoPlayCountdown, nextEpisode, onNextEpisode]);
+  }, [autoPlayCountdown]);
 
   // Cancel auto-play countdown when user interacts
   const cancelAutoPlay = useCallback(() => {
@@ -1036,8 +1134,6 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     }
     setAutoPlayCountdownState(null);
   }, []);
-  // Export for use in UI - will be used in auto-play overlay
-  void cancelAutoPlay;
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -1072,6 +1168,22 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
         case 'arrowdown':
           e.preventDefault();
           handleVolumeChange(Math.max(volume * 100 - 10, 0));
+          break;
+        case 'n':
+          // Test: Trigger next episode flow (simulates video ending)
+          e.preventDefault();
+          console.log('[VideoPlayer] TEST: Manually triggering next episode flow');
+          const currentNextEp = nextEpisodeRef.current;
+          const currentCallback = onNextEpisodeRef.current;
+          console.log('[VideoPlayer] TEST: nextEpisode:', currentNextEp, 'callback:', !!currentCallback);
+          if (currentNextEp && currentCallback) {
+            const prefs = getPlayerPreferences();
+            if (prefs.autoPlayNextEpisode) {
+              console.log('[VideoPlayer] TEST: Starting countdown:', prefs.autoPlayCountdown);
+              setAutoPlayCountdownState(prefs.autoPlayCountdown);
+            }
+            setShowNextEpisodeButton(true);
+          }
           break;
       }
     };
@@ -1479,22 +1591,78 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
         </button>
       )}
 
+      {/* Next Episode Button with integrated countdown timer */}
       {showNextEpisodeButton && nextEpisode && (
-        <button
-          className={styles.nextEpisodeButton}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (onNextEpisode) onNextEpisode();
-          }}
-        >
-          <span className={styles.nextEpisodeLabel}>Up Next</span>
-          <span className={styles.nextEpisodeTitle}>
-            {nextEpisode.title || `Episode ${nextEpisode.episode}`}
-          </span>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
-          </svg>
-        </button>
+        <div className={styles.nextEpisodeContainer} onClick={(e) => e.stopPropagation()}>
+          {/* Cancel button (X) */}
+          <button
+            className={styles.nextEpisodeDismiss}
+            onClick={() => {
+              cancelAutoPlay();
+              setShowNextEpisodeButton(false);
+            }}
+            title="Dismiss"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+            </svg>
+          </button>
+          
+          <button
+            className={styles.nextEpisodeButton}
+            onClick={() => {
+              console.log('[VideoPlayer] Next episode button clicked!');
+              cancelAutoPlay();
+              setShowNextEpisodeButton(false);
+              const callback = onNextEpisodeRef.current || onNextEpisode;
+              if (callback) {
+                console.log('[VideoPlayer] Calling next episode callback from button click');
+                callback();
+              } else {
+                console.error('[VideoPlayer] No callback available for next episode!');
+              }
+            }}
+          >
+            {/* Countdown circle */}
+            {autoPlayCountdown !== null && autoPlayCountdown > 0 && (
+              <div className={styles.nextEpisodeCountdown}>
+                <svg viewBox="0 0 36 36" className={styles.countdownCircle}>
+                  <circle
+                    className={styles.countdownCircleBg}
+                    cx="18"
+                    cy="18"
+                    r="16"
+                  />
+                  <circle
+                    className={styles.countdownCircleProgress}
+                    cx="18"
+                    cy="18"
+                    r="16"
+                    style={{
+                      strokeDasharray: `${2 * Math.PI * 16}`,
+                      strokeDashoffset: `${2 * Math.PI * 16 * (1 - autoPlayCountdown / (playerPrefs.autoPlayCountdown || 10))}`,
+                    }}
+                  />
+                </svg>
+                <span className={styles.countdownNumber}>{autoPlayCountdown}</span>
+              </div>
+            )}
+            
+            <div className={styles.nextEpisodeInfo}>
+              <span className={styles.nextEpisodeLabel}>
+                {autoPlayCountdown !== null && autoPlayCountdown > 0 ? 'Playing in...' : 'Up Next'}
+              </span>
+              <span className={styles.nextEpisodeTitle}>
+                {nextEpisode.isNextSeason && `S${nextEpisode.season} • `}
+                {nextEpisode.title || `Episode ${nextEpisode.episode}`}
+              </span>
+            </div>
+            
+            <svg className={styles.nextEpisodeIcon} width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+            </svg>
+          </button>
+        </div>
       )}
 
       <div className={`${styles.controls} ${showControls || !isPlaying ? styles.visible : ''}`}>
@@ -1760,7 +1928,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                   {/* Auto-play settings - only show for TV shows */}
                   {mediaType === 'tv' && (
                     <div className={styles.settingsSection} style={{ borderTop: '1px solid rgba(255, 255, 255, 0.1)', marginTop: '0.5rem', paddingTop: '0.75rem' }}>
-                      <div className={styles.settingsLabel}>Auto-Play</div>
+                      <div className={styles.settingsLabel}>Next Episode</div>
                       <button
                         className={styles.settingsOption}
                         onClick={() => {
@@ -1770,7 +1938,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                         }}
                         style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                       >
-                        <span>Auto-play next episode</span>
+                        <span>Auto-play next</span>
                         <span style={{
                           width: '40px',
                           height: '22px',
@@ -1794,7 +1962,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                       {playerPrefs.autoPlayNextEpisode && (
                         <div style={{ padding: '0.5rem 1rem' }}>
                           <div style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '0.8rem', marginBottom: '0.5rem' }}>
-                            Countdown: {playerPrefs.autoPlayCountdown}s
+                            Countdown timer: {playerPrefs.autoPlayCountdown}s
                           </div>
                           <input
                             type="range"
@@ -1812,6 +1980,25 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                           />
                         </div>
                       )}
+                      <div style={{ padding: '0.5rem 1rem' }}>
+                        <div style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '0.8rem', marginBottom: '0.5rem' }}>
+                          Show &quot;Up Next&quot; before end: {playerPrefs.showNextEpisodeBeforeEnd || 90}s
+                        </div>
+                        <input
+                          type="range"
+                          min="30"
+                          max="180"
+                          step="15"
+                          value={playerPrefs.showNextEpisodeBeforeEnd || 90}
+                          onChange={(e) => {
+                            const newValue = Number(e.target.value);
+                            setShowNextEpisodeBeforeEnd(newValue);
+                            setPlayerPrefs(prev => ({ ...prev, showNextEpisodeBeforeEnd: newValue }));
+                          }}
+                          className={styles.volumeSlider}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
@@ -2096,6 +2283,8 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
           </div>
         </div>
       )}
+
+
 
       {/* Cast Overlay - shown when casting to TV */}
       {isCastOverlayVisible && cast.isCasting && (

@@ -4,13 +4,15 @@
 
 export interface PlayerPreferences {
   autoPlayNextEpisode: boolean;
-  autoPlayCountdown: number; // seconds before auto-playing next episode (5-30)
+  autoPlayCountdown: number; // seconds for countdown timer before auto-playing (5-30)
+  showNextEpisodeBeforeEnd: number; // seconds before video ends to show "Up Next" button (30-180)
 }
 
 const STORAGE_KEY = 'flyx_player_preferences';
 const DEFAULT_PREFERENCES: PlayerPreferences = {
   autoPlayNextEpisode: true,
   autoPlayCountdown: 10,
+  showNextEpisodeBeforeEnd: 90, // Show 90 seconds before end by default
 };
 
 /**
@@ -67,6 +69,16 @@ export function setAutoPlayCountdown(seconds: number): void {
   const preferences = getPlayerPreferences();
   // Clamp between 5 and 30 seconds
   preferences.autoPlayCountdown = Math.max(5, Math.min(30, seconds));
+  savePlayerPreferences(preferences);
+}
+
+/**
+ * Update show next episode before end time
+ */
+export function setShowNextEpisodeBeforeEnd(seconds: number): void {
+  const preferences = getPlayerPreferences();
+  // Clamp between 30 and 180 seconds (30s to 3 minutes)
+  preferences.showNextEpisodeBeforeEnd = Math.max(30, Math.min(180, seconds));
   savePlayerPreferences(preferences);
 }
 

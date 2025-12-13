@@ -53,6 +53,7 @@ function WatchContent() {
   const season = searchParams.get('season');
   const episode = searchParams.get('episode');
   const titleParam = searchParams.get('title') || searchParams.get('name');
+  const shouldAutoplay = searchParams.get('autoplay') === 'true';
 
   // Decode title if it exists
   const title = titleParam ? decodeURIComponent(titleParam) : 'Loading...';
@@ -85,9 +86,22 @@ function WatchContent() {
       }
 
       const seasonData: SeasonInfo = await seasonResponse.json();
+      console.log('[WatchPage] Season data received:', { 
+        seasonNumber: seasonData.seasonNumber, 
+        episodeCount: seasonData.episodeCount,
+        episodes: seasonData.episodes?.map(e => ({ num: e.episodeNumber, title: e.title }))
+      });
+      
       const currentEpisodeIndex = seasonData.episodes.findIndex(
         ep => ep.episodeNumber === episodeId
       );
+      const isLastEpisodeInSeason = currentEpisodeIndex === seasonData.episodes.length - 1;
+      console.log('[WatchPage] Current episode:', { 
+        index: currentEpisodeIndex, 
+        total: seasonData.episodes.length,
+        episodeId,
+        isLastEpisodeInSeason
+      });
 
       // Check if there's a next episode in the current season
       if (currentEpisodeIndex !== -1 && currentEpisodeIndex < seasonData.episodes.length - 1) {
@@ -111,11 +125,14 @@ function WatchContent() {
       }
 
       // Current episode is the last in the season, check for next season
+      console.log('[WatchPage] Checking for next season (current is last in season or next ep not aired)');
+      
       const detailsResponse = await fetch(
-        `/api/content/details?id=${contentId}&type=tv`
+        `/api/content/details?id=${contentId}&mediaType=tv`
       );
 
       if (!detailsResponse.ok) {
+        console.error('[WatchPage] Failed to fetch show details:', detailsResponse.status);
         // No next episode available
         setNextEpisode({
           season: seasonId,
@@ -125,7 +142,13 @@ function WatchContent() {
         return;
       }
 
-      const showDetails: ShowInfo = await detailsResponse.json();
+      const detailsData = await detailsResponse.json();
+      // API returns { success, data: { seasons, ... } }
+      const showDetails: ShowInfo = detailsData.data || detailsData;
+      console.log('[WatchPage] Show details received:', { 
+        totalSeasons: showDetails.seasons?.length,
+        seasons: showDetails.seasons?.map(s => ({ num: s.seasonNumber, eps: s.episodeCount }))
+      });
       
       // Filter out season 0 (specials) and find the next season
       const regularSeasons = showDetails.seasons
@@ -136,8 +159,11 @@ function WatchContent() {
         s => s.seasonNumber === seasonId
       );
 
+      console.log('[WatchPage] Checking for next season. Current season index:', currentSeasonIndex, 'Total seasons:', regularSeasons.length);
+      
       if (currentSeasonIndex !== -1 && currentSeasonIndex < regularSeasons.length - 1) {
         const nextSeasonNum = regularSeasons[currentSeasonIndex + 1].seasonNumber;
+        console.log('[WatchPage] Found next season:', nextSeasonNum);
         
         // Fetch next season data to get first episode info
         const nextSeasonResponse = await fetch(
@@ -146,8 +172,13 @@ function WatchContent() {
 
         if (nextSeasonResponse.ok) {
           const nextSeasonData: SeasonInfo = await nextSeasonResponse.json();
+          console.log('[WatchPage] Next season data:', { 
+            seasonNumber: nextSeasonData.seasonNumber, 
+            episodeCount: nextSeasonData.episodeCount,
+            episodes: nextSeasonData.episodes?.map(e => ({ num: e.episodeNumber, title: e.title, airDate: e.airDate }))
+          });
           
-          if (nextSeasonData.episodes.length > 0) {
+          if (nextSeasonData.episodes && nextSeasonData.episodes.length > 0) {
             const firstEp = nextSeasonData.episodes[0];
             
             // Check if the first episode of next season has aired
@@ -155,6 +186,16 @@ function WatchContent() {
             today.setHours(0, 0, 0, 0);
             const airDate = firstEp.airDate ? new Date(firstEp.airDate) : null;
             
+            console.log('[WatchPage] Next season first episode:', { 
+              episode: firstEp.episodeNumber, 
+              title: firstEp.title, 
+              airDate: firstEp.airDate,
+              parsedAirDate: airDate?.toISOString(),
+              today: today.toISOString(),
+              hasAired: !airDate || airDate <= today
+            });
+            
+            // Show next episode if it has aired OR if no air date is set (assume available)
             if (!airDate || airDate <= today) {
               setNextEpisode({
                 season: nextSeasonNum,
@@ -164,9 +205,17 @@ function WatchContent() {
                 isLastEpisode: false,
               });
               return;
+            } else {
+              console.log('[WatchPage] Next season episode not yet aired - air date:', firstEp.airDate);
             }
+          } else {
+            console.log('[WatchPage] Next season has no episodes data');
           }
+        } else {
+          console.log('[WatchPage] Failed to fetch next season data:', nextSeasonResponse.status);
         }
+      } else {
+        console.log('[WatchPage] No more seasons available');
       }
 
       // No more episodes available
@@ -177,11 +226,11 @@ function WatchContent() {
       });
     } catch (error) {
       console.error('[WatchPage] Error fetching next episode info:', error);
-      // Fallback to simple next episode
+      // On error, mark as last episode to be safe (don't assume next episode exists)
       setNextEpisode({
         season: seasonId,
-        episode: episodeId + 1,
-        title: `Episode ${episodeId + 1}`,
+        episode: episodeId,
+        isLastEpisode: true,
       });
     } finally {
       setIsLoadingNextEpisode(false);
@@ -190,8 +239,16 @@ function WatchContent() {
 
   // Fetch next episode info when component mounts or episode changes
   useEffect(() => {
+    // Reset nextEpisode immediately to prevent stale data from showing
+    setNextEpisode(null);
+    console.log('[WatchPage] Fetching next episode info for:', { contentId, mediaType, seasonId, episodeId });
     fetchNextEpisodeInfo();
   }, [fetchNextEpisodeInfo]);
+
+  // Debug: Log when nextEpisode changes
+  useEffect(() => {
+    console.log('[WatchPage] nextEpisode state updated:', nextEpisode);
+  }, [nextEpisode]);
 
   const handleBack = () => {
     // Navigate back to details page with the current season preserved
@@ -203,26 +260,34 @@ function WatchContent() {
   };
 
   const handleNextEpisode = useCallback(() => {
-    if (!nextEpisode || nextEpisode.isLastEpisode) return;
+    console.log('[WatchPage] handleNextEpisode called!', { nextEpisode, contentId, title });
+    
+    if (!nextEpisode || nextEpisode.isLastEpisode) {
+      console.log('[WatchPage] Cannot navigate - no next episode or is last episode');
+      return;
+    }
 
     const navigateToNextEpisode = () => {
-      const url = `/watch/${contentId}?type=tv&season=${nextEpisode.season}&episode=${nextEpisode.episode}&title=${encodeURIComponent(title)}`;
-      // Use window.location for more reliable navigation
-      window.location.href = url;
+      const url = `/watch/${contentId}?type=tv&season=${nextEpisode.season}&episode=${nextEpisode.episode}&title=${encodeURIComponent(title)}&autoplay=true`;
+      console.log('[WatchPage] NAVIGATING NOW to:', url);
+      // Use Next.js router for client-side navigation (preserves autoplay capability)
+      router.push(url);
     };
 
     // Exit fullscreen first if in fullscreen mode
     if (document.fullscreenElement) {
+      console.log('[WatchPage] Exiting fullscreen before navigation...');
       document.exitFullscreen().then(() => {
         navigateToNextEpisode();
-      }).catch(() => {
+      }).catch((err) => {
+        console.log('[WatchPage] exitFullscreen failed:', err);
         // If exitFullscreen fails, navigate anyway
         navigateToNextEpisode();
       });
     } else {
       navigateToNextEpisode();
     }
-  }, [contentId, nextEpisode, title]);
+  }, [contentId, nextEpisode, title, router]);
 
   if (!contentId || !mediaType) {
     return (
@@ -275,6 +340,7 @@ function WatchContent() {
           title={title}
           nextEpisode={nextEpisodeProp}
           onNextEpisode={handleNextEpisode}
+          autoplay={shouldAutoplay}
         />
       </div>
     </div>

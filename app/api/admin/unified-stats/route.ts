@@ -12,6 +12,8 @@
  * - analytics_events: Page views and events
  * 
  * IMPORTANT: All user counts use COUNT(DISTINCT user_id) to avoid duplicates
+ * 
+ * OPTIMIZATION: Uses in-memory caching to reduce database load
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -22,6 +24,15 @@ import { getCountryName } from '@/app/lib/utils/geolocation';
 // Minimum valid timestamp (Jan 1, 2020)
 const MIN_VALID_TIMESTAMP = 1577836800000;
 
+// In-memory cache for stats
+interface CachedStats {
+  data: any;
+  timestamp: number;
+}
+
+let statsCache: CachedStats | null = null;
+const CACHE_TTL = 10000; // 10 seconds cache TTL - balances freshness with performance
+
 export async function GET(request: NextRequest) {
   try {
     const authResult = await verifyAdminAuth(request);
@@ -29,12 +40,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const now = Date.now();
+    
+    // Check cache first - return cached data if still valid
+    if (statsCache && (now - statsCache.timestamp) < CACHE_TTL) {
+      return NextResponse.json({
+        ...statsCache.data,
+        cached: true,
+        cacheAge: now - statsCache.timestamp,
+      });
+    }
+
     await initializeDB();
     const db = getDB();
     const adapter = db.getAdapter();
     const isNeon = db.isUsingNeon();
 
-    const now = Date.now();
     const oneDayAgo = now - 24 * 60 * 60 * 1000;
     const oneWeekAgo = now - 7 * 24 * 60 * 60 * 1000;
     const oneMonthAgo = now - 30 * 24 * 60 * 60 * 1000;
@@ -289,7 +310,7 @@ export async function GET(request: NextRequest) {
       console.error('Error fetching page view stats:', e);
     }
 
-    return NextResponse.json({
+    const responseData = {
       success: true,
       realtime,
       users,
@@ -310,7 +331,15 @@ export async function GET(request: NextRequest) {
       },
       timestamp: now,
       timestampISO: new Date(now).toISOString(),
-    });
+    };
+    
+    // Cache the results
+    statsCache = {
+      data: responseData,
+      timestamp: now,
+    };
+
+    return NextResponse.json(responseData);
 
   } catch (error) {
     console.error('Unified stats API error:', error);

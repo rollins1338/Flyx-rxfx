@@ -112,10 +112,11 @@ export default function LiveActivityTracker() {
     fetchLiveTVStats();
 
     if (autoRefresh) {
+      // Reduced from 5s to 10s to decrease server load while maintaining responsiveness
       const interval = setInterval(() => {
         fetchLiveActivity();
         fetchLiveTVStats();
-      }, 5000);
+      }, 10000);
       return () => clearInterval(interval);
     }
   }, [autoRefresh]);
