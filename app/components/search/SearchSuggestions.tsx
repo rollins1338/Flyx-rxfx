@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import styles from './SearchSuggestions.module.css';
 
 export interface SearchSuggestionsProps {

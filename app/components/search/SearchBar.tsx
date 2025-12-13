@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { useAnalytics } from '@/components/analytics/AnalyticsProvider';
 import styles from './SearchBar.module.css';

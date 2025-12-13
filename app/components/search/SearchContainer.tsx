@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { SearchResult } from '@/types/media';
 import { tmdbService } from '@/lib/services/tmdb';

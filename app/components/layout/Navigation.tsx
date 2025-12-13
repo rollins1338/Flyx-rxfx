@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useIsScrolled } from '@/app/lib/hooks/useScrollPosition';
 import { useIsMobile } from '@/app/lib/hooks/useMediaQuery';

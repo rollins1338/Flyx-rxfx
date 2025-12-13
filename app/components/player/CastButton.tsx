@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import { useCast, CastMedia } from '@/hooks/useCast';
 import styles from './CastButton.module.css';
 

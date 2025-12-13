@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useRef, useEffect } from 'react';
+import React, { useRef, useEffect } from 'react';
 import type { SearchResult } from '@/types/media';
 import { GlassPanel } from '@/components/ui/GlassPanel';
 import styles from './SearchResults.module.css';
