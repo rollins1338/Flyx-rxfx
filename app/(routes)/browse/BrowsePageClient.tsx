@@ -28,7 +28,7 @@ export default function BrowsePageClient({
   title,
   type,
   filter: _filter,
-  genre,
+  genre: _genre,
 }: BrowsePageClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
