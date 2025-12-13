@@ -52,7 +52,7 @@ class AnalyticsService {
   private eventQueue: AnalyticsEvent[] = [];
   private flushTimeout: NodeJS.Timeout | null = null;
   private isInitialized = false;
-  private liveActivityInterval: NodeJS.Timeout | null = null;
+  // liveActivityInterval removed - PresenceProvider handles live activity now
   private watchTimeSyncInterval: NodeJS.Timeout | null = null;
   private liveTVSessionInterval: NodeJS.Timeout | null = null;
   private pageTrackingInterval: NodeJS.Timeout | null = null;
@@ -179,7 +179,7 @@ class AnalyticsService {
       this.trackSessionEnd();
       this.flushEvents();
       this.syncAllWatchTime();
-      this.stopLiveActivity();
+      // stopLiveActivity removed - PresenceProvider handles this
       this.stopPageTracking();
       this.endLiveTVSession();
       this.syncCurrentPageView(true);
@@ -754,95 +754,7 @@ class AnalyticsService {
     // Don't call sendLiveActivityHeartbeat() - PresenceProvider handles this
   }
 
-  /**
-   * Start live activity heartbeat
-   */
-  private startLiveActivityHeartbeat(): void {
-    if (this.liveActivityInterval) {
-      console.log('[Analytics] Live activity already started');
-      return;
-    }
-
-    console.log('[Analytics] Starting live activity heartbeat');
-
-    // Send initial heartbeat
-    this.currentActivity = { type: 'browsing' };
-    this.sendLiveActivityHeartbeat();
-
-    // Send heartbeat every 30 seconds
-    this.liveActivityInterval = setInterval(() => {
-      this.sendLiveActivityHeartbeat();
-    }, 30000);
-  }
-
-  /**
-   * Stop live activity
-   */
-  private stopLiveActivity(): void {
-    if (this.liveActivityInterval) {
-      clearInterval(this.liveActivityInterval);
-      this.liveActivityInterval = null;
-    }
-
-    // Deactivate current activity
-    if (this.userSession) {
-      const activityId = `live_${this.userSession.userId}_${this.userSession.sessionId}`;
-      fetch(`/api/analytics/live-activity?id=${activityId}`, {
-        method: 'DELETE',
-        keepalive: true,
-      }).catch(() => {
-        // Ignore errors on page unload
-      });
-    }
-  }
-
-  /**
-   * Send live activity heartbeat
-   */
-  private async sendLiveActivityHeartbeat(): Promise<void> {
-    if (!this.userSession || !this.currentActivity) {
-      console.warn('[Analytics] Cannot send heartbeat - missing session or activity');
-      return;
-    }
-
-    console.log('[Analytics] Sending live activity heartbeat:', {
-      userId: this.userSession.userId.substring(0, 8),
-      type: this.currentActivity.type,
-      contentId: this.currentActivity.contentId,
-    });
-
-    try {
-      const response = await fetch('/api/analytics/live-activity', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: this.userSession.userId,
-          sessionId: this.userSession.sessionId,
-          activityType: this.currentActivity.type,
-          contentId: this.currentActivity.contentId,
-          contentTitle: this.currentActivity.contentTitle,
-          contentType: this.currentActivity.contentType,
-          seasonNumber: this.currentActivity.seasonNumber,
-          episodeNumber: this.currentActivity.episodeNumber,
-          currentPosition: this.currentActivity.currentPosition,
-          duration: this.currentActivity.duration,
-          quality: this.currentActivity.quality,
-          // Include Live TV specific data
-          channelId: this.currentActivity.channelId,
-          channelName: this.currentActivity.channelName,
-          category: this.currentActivity.category,
-        }),
-      });
-
-      if (!response.ok) {
-        console.error('[Analytics] Heartbeat failed:', response.status, await response.text());
-      } else {
-        console.log('[Analytics] Heartbeat sent successfully');
-      }
-    } catch (error) {
-      console.error('[Analytics] Failed to send live activity heartbeat:', error);
-    }
-  }
+  // NOTE: Live activity heartbeat functions removed - PresenceProvider handles this now
 
   /**
    * Start watch time sync interval
