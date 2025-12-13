@@ -1485,7 +1485,8 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
 
   // Sync current subtitle to video time
   // This finds the currently displayed subtitle and adjusts timing so it matches the current video position
-  const syncSubtitleToCurrentTime = () => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _syncSubtitleToCurrentTime = () => {
     if (!videoRef.current || !videoRef.current.textTracks || videoRef.current.textTracks.length === 0) {
       console.log('[VideoPlayer] No text tracks to sync');
       return;
