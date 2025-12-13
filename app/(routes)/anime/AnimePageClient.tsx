@@ -32,12 +32,12 @@ export default function AnimePageClient({
   const { trackEvent } = useAnalytics();
   const presenceContext = usePresenceContext();
 
-  // Track browsing activity
+  // Track browsing activity - run once on mount
   useEffect(() => {
     if (presenceContext?.setBrowsingContext) {
       presenceContext.setBrowsingContext('Anime');
     }
-  }, [presenceContext]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleContentClick = useCallback((item: MediaItem, source: string) => {
     trackEvent('content_clicked', { content_id: item.id, source });

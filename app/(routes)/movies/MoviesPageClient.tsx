@@ -51,12 +51,12 @@ export default function MoviesPageClient() {
   const [data, setData] = useState<MoviesData>(initialData);
   const [loading, setLoading] = useState(true);
 
-  // Track browsing activity
+  // Track browsing activity - run once on mount
   useEffect(() => {
     if (presenceContext?.setBrowsingContext) {
       presenceContext.setBrowsingContext('Movies');
     }
-  }, [presenceContext]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     async function fetchData() {

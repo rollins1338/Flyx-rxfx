@@ -82,7 +82,7 @@ export default function HomePageClient({
   // Get presence context for browsing tracking
   const presenceContext = usePresenceContext();
 
-  // Analytics tracking
+  // Analytics tracking - run once on mount
   useEffect(() => {
     trackPageView('/');
     trackEvent('homepage_loaded', {
@@ -91,19 +91,28 @@ export default function HomePageClient({
       popular_movies_count: popularMovies.length,
       popular_tv_count: popularTV.length
     });
-    
-    // Track browsing activity on homepage
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  
+  // Set browsing context once on mount
+  useEffect(() => {
     if (presenceContext?.setBrowsingContext) {
       presenceContext.setBrowsingContext('Home');
     }
-  }, [trackPageView, trackEvent, heroContent, trendingToday.length, popularMovies.length, popularTV.length, presenceContext]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Scroll tracking
+  // Scroll tracking - throttled for performance
   useEffect(() => {
+    let ticking = false;
     const handleScroll = () => {
-      setScrollY(window.scrollY);
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          setScrollY(window.scrollY);
+          ticking = false;
+        });
+        ticking = true;
+      }
     };
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 

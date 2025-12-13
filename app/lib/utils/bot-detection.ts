@@ -310,7 +310,7 @@ function generateFingerprint(): string {
     components.push('canvas-error');
   }
 
-  // WebGL info
+  // WebGL info - with proper cleanup to avoid context leaks
   try {
     const canvas = document.createElement('canvas');
     const gl = canvas.getContext('webgl');
@@ -319,6 +319,11 @@ function generateFingerprint(): string {
       if (debugInfo) {
         components.push(gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) || '');
         components.push(gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || '');
+      }
+      // Cleanup WebGL context to prevent "too many contexts" warning
+      const loseContext = gl.getExtension('WEBGL_lose_context');
+      if (loseContext) {
+        loseContext.loseContext();
       }
     }
   } catch {

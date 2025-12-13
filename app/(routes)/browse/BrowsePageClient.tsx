@@ -36,12 +36,12 @@ export default function BrowsePageClient({
   const { trackEvent } = useAnalytics();
   const presenceContext = usePresenceContext();
   
-  // Track browsing activity with page context
+  // Track browsing activity with page context - only when title changes
   useEffect(() => {
     if (presenceContext?.setBrowsingContext) {
       presenceContext.setBrowsingContext(`Browse: ${title}`);
     }
-  }, [title, presenceContext]);
+  }, [title]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleContentClick = useCallback((item: MediaItem) => {
     trackEvent('content_clicked', { content_id: item.id, source: 'browse' });

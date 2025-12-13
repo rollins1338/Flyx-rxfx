@@ -311,14 +311,22 @@ export function PresenceProvider({ children }: PresenceProviderProps) {
   }, [sendHeartbeat]);
   
   // Set browsing context (called by pages to track what users are browsing)
+  // Only sends heartbeat if context actually changed
   const setBrowsingContext = useCallback((pageName: string, contentTitle?: string, contentId?: string, contentType?: 'movie' | 'tv') => {
-    activityTypeRef.current = 'browsing';
-    contentRef.current = {
-      contentTitle: contentTitle || pageName,
-      contentId: contentId,
-      contentType: contentType,
-    };
-    sendHeartbeat(true);
+    const newTitle = contentTitle || pageName;
+    const currentTitle = contentRef.current.contentTitle;
+    const currentId = contentRef.current.contentId;
+    
+    // Only update and send heartbeat if something changed
+    if (newTitle !== currentTitle || contentId !== currentId) {
+      activityTypeRef.current = 'browsing';
+      contentRef.current = {
+        contentTitle: newTitle,
+        contentId: contentId,
+        contentType: contentType,
+      };
+      sendHeartbeat(true);
+    }
   }, [sendHeartbeat]);
   
   // Initialize with enhanced bot detection

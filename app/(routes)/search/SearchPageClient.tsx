@@ -88,7 +88,7 @@ export default function SearchPageClient({
   // Get presence context for browsing tracking
   const presenceContext = usePresenceContext();
 
-  // Analytics tracking
+  // Analytics tracking - only when query changes
   useEffect(() => {
     if (sessionId) {
       trackPageView('/search');
@@ -99,7 +99,7 @@ export default function SearchPageClient({
         presenceContext.setBrowsingContext(searchContext);
       }
     }
-  }, [trackPageView, sessionId, query, presenceContext]);
+  }, [query]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sort helper
   const sortResults = (items: MediaItem[], sortBy: string): MediaItem[] => {

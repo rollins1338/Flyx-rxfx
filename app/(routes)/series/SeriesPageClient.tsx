@@ -51,12 +51,12 @@ export default function SeriesPageClient() {
   const [data, setData] = useState<SeriesData>(initialData);
   const [loading, setLoading] = useState(true);
 
-  // Track browsing activity
+  // Track browsing activity - run once on mount
   useEffect(() => {
     if (presenceContext?.setBrowsingContext) {
       presenceContext.setBrowsingContext('TV Series');
     }
-  }, [presenceContext]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     async function fetchData() {

@@ -49,7 +49,7 @@ export default function DetailsPageClient({
   const [loadingEpisodes, setLoadingEpisodes] = useState(false);
   const [episodeProgress, setEpisodeProgress] = useState<Record<number, number>>({});
   
-  // Track browsing activity with content title
+  // Track browsing activity with content title - only when content changes
   useEffect(() => {
     if (content && presenceContext?.setBrowsingContext) {
       const title = content.title || content.name || 'Unknown';
@@ -60,7 +60,7 @@ export default function DetailsPageClient({
         content.mediaType as 'movie' | 'tv'
       );
     }
-  }, [content, presenceContext]);
+  }, [content?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load episodes when season changes for TV shows
   useEffect(() => {
