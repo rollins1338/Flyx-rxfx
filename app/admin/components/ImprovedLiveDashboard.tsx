@@ -74,7 +74,8 @@ export default function ImprovedLiveDashboard() {
 
   // Update peak stats if current values are higher
   const updatePeakStats = useCallback(async () => {
-    if (currentActivity.total === 0) return;
+    // Don't update if no users or if stats are still loading
+    if (currentActivity.total === 0 || statsLoading) return;
     
     try {
       const response = await fetch('/api/admin/peak-stats', {
@@ -94,7 +95,7 @@ export default function ImprovedLiveDashboard() {
     } catch (error) {
       console.error('Failed to update peak stats:', error);
     }
-  }, [currentActivity]);
+  }, [currentActivity, statsLoading]);
 
   // Initial fetch
   useEffect(() => {

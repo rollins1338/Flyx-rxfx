@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useStats } from '../context/StatsContext';
 
 // Helper function to get country name from ISO code
@@ -84,6 +84,28 @@ export default function LiveActivityTracker() {
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'watching' | 'livetv' | 'browsing'>('all');
+  
+  // Ref to preserve scroll position during refreshes
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const scrollPositionRef = useRef<number>(0);
+
+  // Save scroll position before state updates
+  const saveScrollPosition = useCallback(() => {
+    if (scrollContainerRef.current) {
+      scrollPositionRef.current = scrollContainerRef.current.scrollTop;
+    }
+  }, []);
+
+  // Restore scroll position after state updates
+  const restoreScrollPosition = useCallback(() => {
+    if (scrollContainerRef.current && scrollPositionRef.current > 0) {
+      requestAnimationFrame(() => {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTop = scrollPositionRef.current;
+        }
+      });
+    }
+  }, []);
 
   useEffect(() => {
     fetchLiveActivity();
@@ -100,6 +122,9 @@ export default function LiveActivityTracker() {
 
   const fetchLiveActivity = async () => {
     try {
+      // Save scroll position before updating
+      saveScrollPosition();
+      
       setRefreshing(true);
       const response = await fetch('/api/analytics/live-activity?maxAge=5');
       const data = await response.json();
@@ -108,6 +133,9 @@ export default function LiveActivityTracker() {
         setActivities(data.activities);
         setStats(data.stats);
         setLastUpdated(new Date());
+        
+        // Restore scroll position after state update
+        setTimeout(restoreScrollPosition, 0);
       }
     } catch (error) {
       console.error('Failed to fetch live activity:', error);
@@ -557,7 +585,7 @@ export default function LiveActivityTracker() {
       )}
 
       {/* Active Sessions List */}
-      <div>
+      <div ref={scrollContainerRef} style={{ maxHeight: '600px', overflowY: 'auto' }}>
         {(() => {
           const filteredActivities = activities.filter(a => {
             if (activeTab === 'all') return true;

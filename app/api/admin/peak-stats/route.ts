@@ -178,7 +178,26 @@ export async function POST(request: NextRequest) {
     const existing = await adapter.query(selectQuery, [today]);
     
     if (existing.length === 0) {
-      // Insert new record for today
+      // Insert new record for today - but only if we have actual data
+      // Don't create a record with all zeros
+      if ((total || 0) === 0 && (watching || 0) === 0 && (livetv || 0) === 0 && (browsing || 0) === 0) {
+        return NextResponse.json({
+          success: true,
+          peaks: {
+            date: today,
+            peakTotal: 0,
+            peakWatching: 0,
+            peakLiveTV: 0,
+            peakBrowsing: 0,
+            peakTotalTime: 0,
+            peakWatchingTime: 0,
+            peakLiveTVTime: 0,
+            peakBrowsingTime: 0,
+          },
+          message: 'No data to record',
+        });
+      }
+      
       const insertQuery = isNeon
         ? `INSERT INTO peak_stats (date, peak_total, peak_watching, peak_livetv, peak_browsing, 
             peak_total_time, peak_watching_time, peak_livetv_time, peak_browsing_time, last_updated, created_at)
@@ -197,23 +216,36 @@ export async function POST(request: NextRequest) {
       const current = existing[0];
       
       // Calculate new peak values (keep existing if current is not higher)
-      const newPeakTotal = (total || 0) > (current.peak_total || 0) ? total : (current.peak_total || 0);
-      const newPeakWatching = (watching || 0) > (current.peak_watching || 0) ? watching : (current.peak_watching || 0);
-      const newPeakLiveTV = (livetv || 0) > (current.peak_livetv || 0) ? livetv : (current.peak_livetv || 0);
-      const newPeakBrowsing = (browsing || 0) > (current.peak_browsing || 0) ? browsing : (current.peak_browsing || 0);
+      // Parse as integers to ensure proper comparison (DB might return strings)
+      const currentPeakTotal = parseInt(current.peak_total) || 0;
+      const currentPeakWatching = parseInt(current.peak_watching) || 0;
+      const currentPeakLiveTV = parseInt(current.peak_livetv) || 0;
+      const currentPeakBrowsing = parseInt(current.peak_browsing) || 0;
+      
+      const newPeakTotal = (total || 0) > currentPeakTotal ? total : currentPeakTotal;
+      const newPeakWatching = (watching || 0) > currentPeakWatching ? watching : currentPeakWatching;
+      const newPeakLiveTV = (livetv || 0) > currentPeakLiveTV ? livetv : currentPeakLiveTV;
+      const newPeakBrowsing = (browsing || 0) > currentPeakBrowsing ? browsing : currentPeakBrowsing;
       
       // Update timestamps only when peak changes
-      const newPeakTotalTime = (total || 0) > (current.peak_total || 0) ? now : (current.peak_total_time || now);
-      const newPeakWatchingTime = (watching || 0) > (current.peak_watching || 0) ? now : (current.peak_watching_time || now);
-      const newPeakLiveTVTime = (livetv || 0) > (current.peak_livetv || 0) ? now : (current.peak_livetv_time || now);
-      const newPeakBrowsingTime = (browsing || 0) > (current.peak_browsing || 0) ? now : (current.peak_browsing_time || now);
+      const newPeakTotalTime = (total || 0) > currentPeakTotal ? now : (parseInt(current.peak_total_time) || now);
+      const newPeakWatchingTime = (watching || 0) > currentPeakWatching ? now : (parseInt(current.peak_watching_time) || now);
+      const newPeakLiveTVTime = (livetv || 0) > currentPeakLiveTV ? now : (parseInt(current.peak_livetv_time) || now);
+      const newPeakBrowsingTime = (browsing || 0) > currentPeakBrowsing ? now : (parseInt(current.peak_browsing_time) || now);
       
       // Check if any peak actually changed
       const hasChanges = 
-        newPeakTotal > (current.peak_total || 0) ||
-        newPeakWatching > (current.peak_watching || 0) ||
-        newPeakLiveTV > (current.peak_livetv || 0) ||
-        newPeakBrowsing > (current.peak_browsing || 0);
+        newPeakTotal > currentPeakTotal ||
+        newPeakWatching > currentPeakWatching ||
+        newPeakLiveTV > currentPeakLiveTV ||
+        newPeakBrowsing > currentPeakBrowsing;
+      
+      console.log('[Peak Stats] Comparison:', {
+        incoming: { total, watching, livetv, browsing },
+        current: { currentPeakTotal, currentPeakWatching, currentPeakLiveTV, currentPeakBrowsing },
+        new: { newPeakTotal, newPeakWatching, newPeakLiveTV, newPeakBrowsing },
+        hasChanges,
+      });
       
       if (hasChanges) {
         const updateQuery = isNeon

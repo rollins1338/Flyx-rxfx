@@ -374,8 +374,9 @@ export function PresenceProvider({ children }: PresenceProviderProps) {
       }
     }, 30000);
     
-    // Initial heartbeat (delayed to allow bot detection to complete)
-    setTimeout(() => sendHeartbeat(true), 500);
+    // Initial heartbeat (delayed to allow bot detection and page components to set their context)
+    // 1 second delay gives pages time to call setBrowsingContext
+    setTimeout(() => sendHeartbeat(true), 1000);
     
     return () => {
       if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
@@ -400,11 +401,17 @@ export function PresenceProvider({ children }: PresenceProviderProps) {
       // Reset to browsing when navigating (unless on watch page)
       if (!pathname?.includes('/watch')) {
         activityTypeRef.current = 'browsing';
-        contentRef.current = {};
+        // Clear content info when navigating away from watch/details pages
+        // Pages will set their own context via setBrowsingContext
+        if (!pathname?.includes('/details')) {
+          contentRef.current = {};
+        }
       }
-      sendHeartbeat(true);
+      // Don't send heartbeat here - let pages call setBrowsingContext which will send the heartbeat
+      // This prevents the race condition where we send a heartbeat with empty content before the page sets it
+      // The regular 30s heartbeat interval will still keep the session alive
     }
-  }, [pathname, userId, sessionId, sendHeartbeat]);
+  }, [pathname, userId, sessionId]);
   
   return (
     <PresenceContext.Provider value={{ userId, sessionId, isActive, setActivityType, setBrowsingContext }}>
