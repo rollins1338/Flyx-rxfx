@@ -97,9 +97,13 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
   const [availableSubtitles, setAvailableSubtitles] = useState<any[]>([]);
   const [subtitlesLoading, setSubtitlesLoading] = useState(false);
   const [subtitleStyle, setSubtitleStyleState] = useState<SubtitleStyle>(getSubtitleStyle());
+  const [subtitleOffset, setSubtitleOffset] = useState<number>(0); // Subtitle sync offset in seconds
   const [showResumePrompt, setShowResumePrompt] = useState(false);
   const [savedProgress, setSavedProgress] = useState<number>(0);
   const [showVolumeIndicator, setShowVolumeIndicator] = useState(false);
+  const [customSubtitles, setCustomSubtitles] = useState<any[]>([]); // User-uploaded VTT files
+  const subtitleFileInputRef = useRef<HTMLInputElement>(null);
+  const currentSubtitleDataRef = useRef<any>(null); // Store current subtitle data for re-syncing
 
   const [showNextEpisodeButton, setShowNextEpisodeButton] = useState(false);
   const [autoPlayCountdown, setAutoPlayCountdownState] = useState<number | null>(null);
@@ -1185,6 +1189,20 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
             setShowNextEpisodeButton(true);
           }
           break;
+        case 'g':
+          // Subtitle sync: delay subtitles (they appear too early)
+          e.preventDefault();
+          if (currentSubtitle) {
+            adjustSubtitleOffset(0.5);
+          }
+          break;
+        case 'h':
+          // Subtitle sync: advance subtitles (they appear too late)
+          e.preventDefault();
+          if (currentSubtitle) {
+            adjustSubtitleOffset(-0.5);
+          }
+          break;
       }
     };
     window.addEventListener('keydown', handleKeyPress);
@@ -1325,41 +1343,170 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     }
   };
 
-  const loadSubtitle = (subtitle: any | null) => {
+  const loadSubtitle = (subtitle: any | null, offset: number = 0) => {
     if (!videoRef.current) return;
     const tracks = videoRef.current.querySelectorAll('track');
     tracks.forEach(track => track.remove());
+    
+    // Store current subtitle data for re-syncing
+    currentSubtitleDataRef.current = subtitle;
+    
     if (subtitle) {
-      const proxiedUrl = `/api/subtitle-proxy?url=${encodeURIComponent(subtitle.url)}`;
+      // For custom uploaded subtitles, use the blob URL directly
+      // For OpenSubtitles, proxy through our API
+      const subtitleUrl = subtitle.isCustom 
+        ? subtitle.url 
+        : `/api/subtitle-proxy?url=${encodeURIComponent(subtitle.url)}`;
+      
+      console.log('[VideoPlayer] Loading subtitle:', { 
+        isCustom: subtitle.isCustom, 
+        url: subtitleUrl.substring(0, 100),
+        language: subtitle.language,
+        offset: offset
+      });
+      
       const track = document.createElement('track');
       track.kind = 'subtitles';
       track.label = subtitle.language || 'Subtitles';
       track.srclang = subtitle.iso639 || 'en';
-      track.src = proxiedUrl;
+      track.src = subtitleUrl;
       track.default = true;
       track.addEventListener('load', () => {
-        if (videoRef.current && videoRef.current.textTracks && videoRef.current.textTracks.length > 0) {
-          const textTrack = videoRef.current.textTracks[0];
-          textTrack.mode = 'showing';
+        console.log('[VideoPlayer] Subtitle track loaded successfully');
+        if (videoRef.current && videoRef.current.textTracks) {
+          // Set all tracks to showing and apply offset
+          for (let i = 0; i < videoRef.current.textTracks.length; i++) {
+            const textTrack = videoRef.current.textTracks[i];
+            console.log('[VideoPlayer] Track', i, ':', textTrack.label, textTrack.mode, 'cues:', textTrack.cues?.length);
+            textTrack.mode = 'showing';
+            
+            // Apply offset to all cues
+            if (offset !== 0 && textTrack.cues) {
+              for (let j = 0; j < textTrack.cues.length; j++) {
+                const cue = textTrack.cues[j] as VTTCue;
+                cue.startTime = Math.max(0, cue.startTime + offset);
+                cue.endTime = Math.max(0, cue.endTime + offset);
+              }
+              console.log('[VideoPlayer] Applied offset of', offset, 'seconds to', textTrack.cues.length, 'cues');
+            }
+          }
         }
       });
+      track.addEventListener('error', (e) => {
+        console.error('[VideoPlayer] Subtitle track failed to load:', e);
+      });
       videoRef.current.appendChild(track);
+      
+      // Force track to show after a delay
       setTimeout(() => {
-        if (videoRef.current && videoRef.current.textTracks && videoRef.current.textTracks.length > 0) {
-          const textTrack = videoRef.current.textTracks[0];
-          if (textTrack.mode !== 'showing') {
+        if (videoRef.current && videoRef.current.textTracks) {
+          for (let i = 0; i < videoRef.current.textTracks.length; i++) {
+            const textTrack = videoRef.current.textTracks[i];
             textTrack.mode = 'showing';
           }
         }
       }, 500);
+      
       setCurrentSubtitle(subtitle.id);
       setSubtitleLanguage(subtitle.langCode, subtitle.language);
       setSubtitlesEnabled(true);
     } else {
+      currentSubtitleDataRef.current = null;
       setCurrentSubtitle(null);
       setSubtitlesEnabled(false);
     }
     setShowSubtitles(false);
+  };
+
+  // Adjust subtitle timing offset
+  const adjustSubtitleOffset = (delta: number) => {
+    const newOffset = subtitleOffset + delta;
+    setSubtitleOffset(newOffset);
+    
+    // Apply offset to current text tracks
+    if (videoRef.current && videoRef.current.textTracks) {
+      for (let i = 0; i < videoRef.current.textTracks.length; i++) {
+        const textTrack = videoRef.current.textTracks[i];
+        if (textTrack.cues) {
+          for (let j = 0; j < textTrack.cues.length; j++) {
+            const cue = textTrack.cues[j] as VTTCue;
+            cue.startTime = Math.max(0, cue.startTime + delta);
+            cue.endTime = Math.max(0, cue.endTime + delta);
+          }
+        }
+      }
+    }
+    console.log('[VideoPlayer] Subtitle offset adjusted to:', newOffset, 'seconds');
+  };
+
+  // Reset subtitle offset
+  const resetSubtitleOffset = () => {
+    if (subtitleOffset !== 0 && currentSubtitleDataRef.current) {
+      // Reload the subtitle to reset timing
+      loadSubtitle(currentSubtitleDataRef.current, 0);
+      setSubtitleOffset(0);
+      console.log('[VideoPlayer] Subtitle offset reset');
+    }
+  };
+
+  // Sync current subtitle to video time
+  // This finds the currently displayed subtitle and adjusts timing so it matches the current video position
+  const syncSubtitleToCurrentTime = () => {
+    if (!videoRef.current || !videoRef.current.textTracks || videoRef.current.textTracks.length === 0) {
+      console.log('[VideoPlayer] No text tracks to sync');
+      return;
+    }
+
+    const textTrack = videoRef.current.textTracks[0];
+    if (!textTrack.cues || textTrack.cues.length === 0) {
+      console.log('[VideoPlayer] No cues to sync');
+      return;
+    }
+
+    const currentVideoTime = videoRef.current.currentTime;
+    
+    // Find the currently active cue (the one being displayed)
+    let activeCue: VTTCue | null = null;
+    for (let i = 0; i < textTrack.cues.length; i++) {
+      const cue = textTrack.cues[i] as VTTCue;
+      if (cue.startTime <= currentVideoTime && cue.endTime >= currentVideoTime) {
+        activeCue = cue;
+        break;
+      }
+    }
+
+    // If no active cue, find the next upcoming cue
+    if (!activeCue) {
+      for (let i = 0; i < textTrack.cues.length; i++) {
+        const cue = textTrack.cues[i] as VTTCue;
+        if (cue.startTime > currentVideoTime) {
+          activeCue = cue;
+          break;
+        }
+      }
+    }
+
+    if (!activeCue) {
+      console.log('[VideoPlayer] No suitable cue found for sync');
+      return;
+    }
+
+    // Calculate the offset needed to make this cue start at the current video time
+    // If the cue starts at 10s but video is at 15s, we need to shift all cues by +5s
+    const neededOffset = currentVideoTime - activeCue.startTime;
+    
+    console.log('[VideoPlayer] Smart sync:', {
+      currentVideoTime,
+      cueStartTime: activeCue.startTime,
+      neededOffset,
+      cueText: activeCue.text.substring(0, 50)
+    });
+
+    // Apply the offset
+    if (Math.abs(neededOffset) > 0.1) { // Only adjust if more than 0.1s difference
+      adjustSubtitleOffset(neededOffset - subtitleOffset); // Adjust relative to current offset
+      setSubtitleOffset(neededOffset);
+    }
   };
 
   const fetchSubtitles = async (imdbId: string) => {
@@ -1382,6 +1529,182 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     } finally {
       setSubtitlesLoading(false);
     }
+  };
+
+  // Handle custom VTT file upload
+  const handleSubtitleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const validTypes = ['.vtt', '.srt'];
+    const fileExtension = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
+    if (!validTypes.includes(fileExtension)) {
+      alert('Please upload a .vtt or .srt subtitle file');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onerror = (error) => {
+      console.error('[VideoPlayer] FileReader error:', error);
+      alert('Failed to read subtitle file');
+    };
+    reader.onload = (e) => {
+      let content = e.target?.result as string;
+      
+      if (!content) {
+        console.error('[VideoPlayer] File content is empty or null');
+        alert('Subtitle file appears to be empty');
+        return;
+      }
+      
+      console.log('[VideoPlayer] === SUBTITLE FILE LOADED ===');
+      console.log('[VideoPlayer] Original file size:', content.length, 'bytes');
+      console.log('[VideoPlayer] File extension:', fileExtension);
+      console.log('[VideoPlayer] First 200 chars raw:', JSON.stringify(content.substring(0, 200)));
+      
+      // Convert SRT to VTT if needed
+      if (fileExtension === '.srt') {
+        console.log('[VideoPlayer] Starting SRT conversion...');
+        content = convertSrtToVtt(content);
+        console.log('[VideoPlayer] After conversion length:', content.length);
+        console.log('[VideoPlayer] Converted preview:', JSON.stringify(content.substring(0, 300)));
+      }
+      
+      // Ensure VTT header exists
+      if (!content.startsWith('WEBVTT')) {
+        console.log('[VideoPlayer] Adding WEBVTT header');
+        content = 'WEBVTT\n\n' + content;
+      }
+
+      // Create a blob URL for the subtitle
+      const blob = new Blob([content], { type: 'text/vtt' });
+      const blobUrl = URL.createObjectURL(blob);
+      console.log('[VideoPlayer] Created blob URL:', blobUrl);
+      console.log('[VideoPlayer] Final content length:', content.length);
+
+      // Extract language from filename if possible (e.g., "movie.en.vtt" or "movie_english.srt")
+      const fileName = file.name.toLowerCase();
+      let language = 'Custom';
+      if (fileName.includes('english') || fileName.includes('.en.') || fileName.includes('_en.')) language = 'English (Custom)';
+      else if (fileName.includes('spanish') || fileName.includes('.es.') || fileName.includes('_es.')) language = 'Spanish (Custom)';
+      else if (fileName.includes('french') || fileName.includes('.fr.') || fileName.includes('_fr.')) language = 'French (Custom)';
+      else if (fileName.includes('german') || fileName.includes('.de.') || fileName.includes('_de.')) language = 'German (Custom)';
+      else if (fileName.includes('danish') || fileName.includes('.da.') || fileName.includes('_da.')) language = 'Danish (Custom)';
+      else if (fileName.includes('dutch') || fileName.includes('.nl.') || fileName.includes('_nl.')) language = 'Dutch (Custom)';
+      else if (fileName.includes('swedish') || fileName.includes('.sv.') || fileName.includes('_sv.')) language = 'Swedish (Custom)';
+      else if (fileName.includes('norwegian') || fileName.includes('.no.') || fileName.includes('_no.')) language = 'Norwegian (Custom)';
+
+      const customSub = {
+        id: `custom-${Date.now()}`,
+        url: blobUrl,
+        language: language,
+        langCode: 'custom',
+        format: 'vtt',
+        fileName: file.name,
+        isCustom: true,
+        qualityScore: 100, // Custom subs get highest priority
+      };
+
+      // Add to custom subtitles list
+      setCustomSubtitles(prev => [...prev, customSub]);
+      
+      // Reset subtitle offset
+      setSubtitleOffset(0);
+      
+      // Load the subtitle
+      loadSubtitle(customSub);
+      
+      console.log('[VideoPlayer] Custom subtitle loaded:', file.name);
+    };
+
+    reader.readAsText(file);
+    
+    // Reset the input so the same file can be uploaded again if needed
+    event.target.value = '';
+  }, []);
+
+  // Convert SRT format to VTT format
+  const convertSrtToVtt = (srtContent: string): string => {
+    console.log('[VideoPlayer] Converting SRT, input length:', srtContent.length);
+    
+    // Normalize line endings
+    let normalized = srtContent
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
+      .trim();
+    
+    // Start with VTT header
+    let vttContent = 'WEBVTT\n\n';
+    
+    // Use regex to match SRT blocks: number, timestamp, text
+    // SRT format: 
+    // 1
+    // 00:00:01,000 --> 00:00:04,000
+    // Subtitle text here
+    // (blank line)
+    
+    const srtBlockRegex = /(\d+)\n(\d{1,2}:\d{2}:\d{2}[,\.]\d{3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[,\.]\d{3})\n([\s\S]*?)(?=\n\n\d+\n|\n*$)/g;
+    
+    let match;
+    let blockCount = 0;
+    
+    while ((match = srtBlockRegex.exec(normalized)) !== null) {
+      blockCount++;
+      const startTime = match[2].replace(',', '.');
+      const endTime = match[3].replace(',', '.');
+      const text = match[4].trim();
+      
+      if (text) {
+        vttContent += `${startTime} --> ${endTime}\n${text}\n\n`;
+      }
+    }
+    
+    console.log('[VideoPlayer] SRT conversion found', blockCount, 'blocks');
+    
+    // If regex didn't find anything, try a simpler line-by-line approach
+    if (blockCount === 0) {
+      console.log('[VideoPlayer] Trying fallback SRT parsing...');
+      const lines = normalized.split('\n');
+      let i = 0;
+      
+      while (i < lines.length) {
+        // Skip empty lines and subtitle numbers
+        while (i < lines.length && (lines[i].trim() === '' || /^\d+$/.test(lines[i].trim()))) {
+          i++;
+        }
+        
+        if (i >= lines.length) break;
+        
+        // Check if this line is a timestamp
+        const timestampMatch = lines[i].match(/(\d{1,2}:\d{2}:\d{2}[,\.]\d{3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[,\.]\d{3})/);
+        
+        if (timestampMatch) {
+          const startTime = timestampMatch[1].replace(',', '.');
+          const endTime = timestampMatch[2].replace(',', '.');
+          i++;
+          
+          // Collect subtitle text until empty line or next number
+          const textLines: string[] = [];
+          while (i < lines.length && lines[i].trim() !== '' && !/^\d+$/.test(lines[i].trim())) {
+            textLines.push(lines[i]);
+            i++;
+          }
+          
+          if (textLines.length > 0) {
+            blockCount++;
+            vttContent += `${startTime} --> ${endTime}\n${textLines.join('\n')}\n\n`;
+          }
+        } else {
+          i++;
+        }
+      }
+      
+      console.log('[VideoPlayer] Fallback parsing found', blockCount, 'blocks');
+    }
+    
+    console.log('[VideoPlayer] Final VTT length:', vttContent.length);
+    return vttContent;
   };
 
   useEffect(() => {
@@ -1760,12 +2083,44 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                     >
                       Off
                     </button>
+                    {/* Custom uploaded subtitles */}
+                    {customSubtitles.length > 0 && (
+                      <div className={styles.sourcesList}>
+                        <div style={{ padding: '0.5rem 1rem', color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          Uploaded
+                        </div>
+                        {customSubtitles.map((subtitle) => (
+                          <button
+                            key={subtitle.id}
+                            className={`${styles.settingsOption} ${currentSubtitle === subtitle.id ? styles.active : ''}`}
+                            onClick={() => loadSubtitle(subtitle)}
+                            title={subtitle.fileName}
+                            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                          >
+                            <span>📁</span>
+                            <span style={{ 
+                              overflow: 'hidden', 
+                              textOverflow: 'ellipsis', 
+                              whiteSpace: 'nowrap',
+                              maxWidth: '180px'
+                            }}>
+                              {subtitle.fileName}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* OpenSubtitles results */}
                     {subtitlesLoading ? (
                       <div style={{ padding: '0.75rem 1rem', color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.875rem', fontStyle: 'italic' }}>
                         Loading subtitles...
                       </div>
                     ) : availableSubtitles.length > 0 ? (
                       <div className={styles.sourcesList}>
+                        <div style={{ padding: '0.5rem 1rem', color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          OpenSubtitles
+                        </div>
                         {availableSubtitles.map((subtitle, index) => (
                           <button
                             key={index}
@@ -1782,6 +2137,22 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                         No subtitles available
                       </div>
                     )}
+                    
+                    {/* Upload custom subtitle button */}
+                    <button
+                      className={styles.settingsOption}
+                      onClick={() => subtitleFileInputRef.current?.click()}
+                      style={{ borderTop: '1px solid rgba(255, 255, 255, 0.1)', marginTop: '0.5rem', paddingTop: '0.75rem' }}
+                    >
+                      📤 Upload VTT/SRT File
+                    </button>
+                    <input
+                      ref={subtitleFileInputRef}
+                      type="file"
+                      accept=".vtt,.srt"
+                      onChange={handleSubtitleFileUpload}
+                      style={{ display: 'none' }}
+                    />
 
                     <button
                       className={styles.settingsOption}
@@ -1800,7 +2171,132 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
               {showSubtitleCustomization && (
                 <div className={styles.settingsMenu} onClick={(e) => e.stopPropagation()}>
                   <div className={styles.settingsSection}>
-                    <div className={styles.settingsLabel}>Subtitle Appearance</div>
+                    {/* Subtitle Sync Controls */}
+                    <div className={styles.settingsLabel}>Subtitle Sync</div>
+                    <div style={{ padding: '0.75rem 1rem' }}>
+                      <div style={{ 
+                        color: 'rgba(255, 255, 255, 0.8)', 
+                        fontSize: '0.875rem', 
+                        marginBottom: '0.75rem',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}>
+                        <span>Offset: {subtitleOffset > 0 ? '+' : ''}{subtitleOffset.toFixed(1)}s</span>
+                        {subtitleOffset !== 0 && (
+                          <button
+                            onClick={resetSubtitleOffset}
+                            style={{
+                              background: 'rgba(229, 9, 20, 0.3)',
+                              border: '1px solid rgba(229, 9, 20, 0.5)',
+                              borderRadius: '4px',
+                              color: '#fff',
+                              padding: '2px 8px',
+                              fontSize: '0.75rem',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Reset
+                          </button>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                        <button
+                          onClick={() => adjustSubtitleOffset(-5)}
+                          style={{
+                            background: 'rgba(255, 255, 255, 0.1)',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            borderRadius: '4px',
+                            color: '#fff',
+                            padding: '6px 10px',
+                            fontSize: '0.8rem',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          -5s
+                        </button>
+                        <button
+                          onClick={() => adjustSubtitleOffset(-1)}
+                          style={{
+                            background: 'rgba(255, 255, 255, 0.1)',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            borderRadius: '4px',
+                            color: '#fff',
+                            padding: '6px 10px',
+                            fontSize: '0.8rem',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          -1s
+                        </button>
+                        <button
+                          onClick={() => adjustSubtitleOffset(-0.5)}
+                          style={{
+                            background: 'rgba(255, 255, 255, 0.1)',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            borderRadius: '4px',
+                            color: '#fff',
+                            padding: '6px 10px',
+                            fontSize: '0.8rem',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          -0.5s
+                        </button>
+                        <button
+                          onClick={() => adjustSubtitleOffset(0.5)}
+                          style={{
+                            background: 'rgba(255, 255, 255, 0.1)',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            borderRadius: '4px',
+                            color: '#fff',
+                            padding: '6px 10px',
+                            fontSize: '0.8rem',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          +0.5s
+                        </button>
+                        <button
+                          onClick={() => adjustSubtitleOffset(1)}
+                          style={{
+                            background: 'rgba(255, 255, 255, 0.1)',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            borderRadius: '4px',
+                            color: '#fff',
+                            padding: '6px 10px',
+                            fontSize: '0.8rem',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          +1s
+                        </button>
+                        <button
+                          onClick={() => adjustSubtitleOffset(5)}
+                          style={{
+                            background: 'rgba(255, 255, 255, 0.1)',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            borderRadius: '4px',
+                            color: '#fff',
+                            padding: '6px 10px',
+                            fontSize: '0.8rem',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          +5s
+                        </button>
+                      </div>
+                      <div style={{ 
+                        color: 'rgba(255, 255, 255, 0.5)', 
+                        fontSize: '0.7rem', 
+                        marginTop: '0.5rem',
+                        textAlign: 'center'
+                      }}>
+                        Use + if subtitles appear too early, - if too late
+                      </div>
+                    </div>
+                    
+                    <div className={styles.settingsLabel} style={{ marginTop: '0.5rem' }}>Subtitle Appearance</div>
                     <div style={{ padding: '0.75rem 1rem' }}>
                       <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '0.875rem', marginBottom: '0.5rem' }}>
                         Font Size: {subtitleStyle.fontSize}%

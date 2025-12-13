@@ -12,10 +12,29 @@ const languageMap = {
   'ger': { name: 'German', iso639: 'de' },
   'ita': { name: 'Italian', iso639: 'it' },
   'por': { name: 'Portuguese', iso639: 'pt' },
+  'pob': { name: 'Portuguese (BR)', iso639: 'pt-BR' },
   'rus': { name: 'Russian', iso639: 'ru' },
   'ara': { name: 'Arabic', iso639: 'ar' },
   'chi': { name: 'Chinese', iso639: 'zh' },
-  'jpn': { name: 'Japanese', iso639: 'ja' }
+  'jpn': { name: 'Japanese', iso639: 'ja' },
+  'kor': { name: 'Korean', iso639: 'ko' },
+  'dan': { name: 'Danish', iso639: 'da' },
+  'dut': { name: 'Dutch', iso639: 'nl' },
+  'fin': { name: 'Finnish', iso639: 'fi' },
+  'nor': { name: 'Norwegian', iso639: 'no' },
+  'swe': { name: 'Swedish', iso639: 'sv' },
+  'pol': { name: 'Polish', iso639: 'pl' },
+  'tur': { name: 'Turkish', iso639: 'tr' },
+  'gre': { name: 'Greek', iso639: 'el' },
+  'heb': { name: 'Hebrew', iso639: 'he' },
+  'hin': { name: 'Hindi', iso639: 'hi' },
+  'tha': { name: 'Thai', iso639: 'th' },
+  'vie': { name: 'Vietnamese', iso639: 'vi' },
+  'ind': { name: 'Indonesian', iso639: 'id' },
+  'cze': { name: 'Czech', iso639: 'cs' },
+  'hun': { name: 'Hungarian', iso639: 'hu' },
+  'rum': { name: 'Romanian', iso639: 'ro' },
+  'ukr': { name: 'Ukrainian', iso639: 'uk' },
 };
 
 async function fetchSubtitlesForLanguage(imdbId, languageId, season, episode) {
@@ -121,7 +140,7 @@ export async function GET(request) {
     console.log('[SUBTITLES] Request:', { imdbId, season, episode });
 
     // Fetch subtitles for all languages in parallel
-    const languageIds = ['eng', 'spa', 'fre', 'ger', 'ita', 'por', 'rus', 'ara', 'chi', 'jpn'];
+    const languageIds = Object.keys(languageMap);
     const results = await Promise.all(
       languageIds.map(langId => fetchSubtitlesForLanguage(imdbId, langId, season, episode))
     );
