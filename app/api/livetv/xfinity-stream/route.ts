@@ -234,7 +234,6 @@ export async function GET(request: NextRequest) {
     // This is critical - without it, the token gets bound to Vercel's IP!
     const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
                      request.headers.get('x-real-ip') ||
-                     request.ip ||
                      'unknown';
     
     if (!channelId) {

@@ -56,7 +56,7 @@ export default function AboutPage() {
         <p className="subtitle">
           A comprehensive analysis of building ethical streaming infrastructure by reverse engineering 
           the security measures of criminals who profit from content they do not own, featuring extensive 
-          documentation of late-night debugging sessions and an alarming amount of coffee consumption.
+          documentation of late-night debugging sessions and an alarming amount of Monster Energy consumption.
         </p>
         <div className="author">
           <span className="avatar">V</span>
@@ -113,8 +113,8 @@ export default function AboutPage() {
                 by building something that works without being terrible.
               </p>
               <p>
-                Through systematic reverse engineering of third-party streaming providers—entities that 
-                themselves profit from content they do not own—we demonstrate that it is entirely possible 
+                Through systematic reverse engineering of third-party streaming providers (entities that 
+                themselves profit from content they do not own) we demonstrate that it is entirely possible 
                 to extract and serve video content without subjecting users to the digital equivalent of 
                 walking through a minefield blindfolded. Our findings suggest that the prevalence of 
                 exploitative practices in pirate streaming reflects a choice to prioritize profit over 
@@ -122,7 +122,7 @@ export default function AboutPage() {
               </p>
               <p>
                 <strong>Keywords:</strong> Streaming Architecture, Reverse Engineering, Ethical Design, 
-                Obfuscation Analysis, JavaScript Archaeology, Sleep Deprivation, Coffee Dependency
+                Obfuscation Analysis, JavaScript Archaeology, Sleep Deprivation, Monster Energy Dependency
               </p>
             </div>
           </section>
@@ -175,8 +175,8 @@ export default function AboutPage() {
               We reject this assumption.
             </p>
             <p>
-              Not because we are naive idealists who believe in the inherent goodness of humanity—we 
-              have spent too much time reading YouTube comments for that—but because we suspected it 
+              Not because we are naive idealists who believe in the inherent goodness of humanity (we 
+              have spent too much time reading YouTube comments for that) but because we suspected it 
               was simply not true. The exploitation is not a necessary evil. It is a choice. A 
               profitable choice, certainly, but a choice nonetheless.
             </p>
@@ -191,7 +191,7 @@ export default function AboutPage() {
             <blockquote>
               &quot;The best way to prove something is possible is to do it. The second best way is to 
               write a really long document about doing it and hope people believe you.&quot;
-              <cite>— Ancient Proverb (Source: We Made It Up)</cite>
+              <cite>- Ancient Proverb (Source: We Made It Up)</cite>
             </blockquote>
             <p>
               We chose the first option, then wrote the document anyway because we are overachievers 
@@ -258,7 +258,7 @@ export default function AboutPage() {
               Gray et al. (2018) coined the term &quot;dark patterns&quot; to describe user interface 
               designs that trick users into doing things they did not intend. Pirate streaming sites 
               have elevated this to an art form. Fake close buttons, hidden redirects, misleading 
-              download links, and countdown timers that reset when you are not looking—these are not 
+              download links, and countdown timers that reset when you are not looking. These are not 
               accidents. They are features.
             </p>
             <p>
@@ -302,7 +302,7 @@ export default function AboutPage() {
             </p>
             <p>
               Yet the streaming space has seen limited progress in this direction. This is partly due 
-              to technical complexity—streaming is harder than search—and partly due to legal ambiguity 
+              to technical complexity (streaming is harder than search) and partly due to legal ambiguity 
               surrounding content aggregation. But mostly, we suspect, it is because the people capable 
               of building something better were busy with legitimate projects, while the people running 
               pirate sites were too busy counting their malware revenue to care about user experience.
@@ -318,7 +318,7 @@ export default function AboutPage() {
             <p>
               This study employs what academics call &quot;constructive research methodology&quot; and 
               what normal people call &quot;building the thing and seeing if it works.&quot; The primary 
-              research artifact—the Flyx streaming platform—serves as both the subject of investigation 
+              research artifact (the Flyx streaming platform) serves as both the subject of investigation 
               and the vehicle for generating insights. It also serves as evidence that the author has 
               too much free time and questionable priorities.
             </p>
@@ -367,8 +367,8 @@ export default function AboutPage() {
 
             <h3>3.2 Development Constraints</h3>
             <p>
-              To ensure the validity of our findings regarding solo development feasibility—and also 
-              because we did not have a choice—the following constraints were observed throughout the 
+              To ensure the validity of our findings regarding solo development feasibility (and also 
+              because we did not have a choice) the following constraints were observed throughout the 
               project:
             </p>
             <div className="constraints">
@@ -498,7 +498,7 @@ export default function AboutPage() {
             <h3>5.1 The Irony</h3>
             <p className="lead">
               Here is the delicious irony at the heart of this project: the streaming providers we 
-              needed to crack are not legitimate businesses. They are pirates themselves—profiting 
+              needed to crack are not legitimate businesses. They are pirates themselves, profiting 
               from content they do not own by wrapping it in malware, pop-ups, and cryptocurrency 
               miners. Our job was to break into their systems and steal what they had already stolen, 
               then serve it without the exploitation.
@@ -509,16 +509,16 @@ export default function AboutPage() {
             <blockquote>
               &quot;These sites make millions from advertisements and malware while hiding behind 
               layers of obfuscation that would make nation-state hackers proud. They are not 
-              protecting intellectual property—they are protecting their revenue stream from people 
+              protecting intellectual property. They are protecting their revenue stream from people 
               like us who want to give users the content without the cancer.&quot;
-              <cite>— Field Notes, 3 AM, Week 7</cite>
+              <cite>- Field Notes, 3 AM, Week 7</cite>
             </blockquote>
 
             <h3>5.2 The Battlefield</h3>
             <p>
               Picture this: you find a pirate streaming site. It works. Videos play. But when you 
-              try to extract the actual stream URL to use in your own player—to strip away the 
-              pop-ups and malware—you hit a wall. Not just one wall. A fortress of walls, each more 
+              try to extract the actual stream URL to use in your own player (to strip away the 
+              pop-ups and malware) you hit a wall. Not just one wall. A fortress of walls, each more 
               devious than the last. These criminals have invested serious engineering talent into 
               making sure nobody can do what we were trying to do.
             </p>
@@ -527,7 +527,7 @@ export default function AboutPage() {
               <h4>🔐 Challenge 1: The Code Spaghetti Monster</h4>
               <p>
                 Open DevTools on any pirate streaming site and look at their JavaScript. It is not 
-                code—it is a war crime against readability. Variable names like <code>_0x4a3f</code> 
+                code. It is a war crime against readability. Variable names like <code>_0x4a3f</code> 
                 and <code>_0xb7c2</code>. Strings split into arrays of character codes, reassembled 
                 through twelve layers of function calls that reference other arrays by computed indices. 
                 Control flow that looks like someone threw spaghetti at a wall and called it architecture.
@@ -577,7 +577,7 @@ export default function AboutPage() {
               </p>
               <p>
                 Fail any check and you get a fake stream that plays for exactly 30 seconds before 
-                cutting to black—or worse, an IP ban that requires you to restart your router and 
+                cutting to black. Or worse, an IP ban that requires you to restart your router and 
                 contemplate your life choices.
               </p>
               <p className="solution">
@@ -614,40 +614,40 @@ export default function AboutPage() {
             <h3>5.3 War Stories</h3>
             <p>
               Every provider was a different puzzle. Different obfuscation, different tricks, different 
-              ways to make our lives difficult. Here are the ones that nearly broke us—and how we broke 
+              ways to make our lives difficult. Here are the ones that nearly broke us, and how we broke 
               them instead.
             </p>
 
             <div className="war-story">
-              <h4>The 2Embed Labyrinth — Three Weeks to Crack</h4>
+              <h4>The Vidsrc Evolution: Learning from the Past</h4>
               <p>
-                2Embed was our white whale. A hydra of domains—streamsrcs, embedsrcs, vidsrc, and 
-                half a dozen others—each redirecting to the next, each generating new tokens, each 
-                running its own obfuscated validation. The final player used a packing algorithm we 
-                had never seen before: strings were not just encoded, they were shattered into 
-                individual characters stored in arrays, then reassembled through a maze of function 
-                calls that referenced other arrays by computed indices.
+                After months of battling 2Embed and MoviesAPI, we made a strategic pivot. Vidsrc 
+                emerged as a more reliable foundation, with cleaner architecture and more predictable 
+                behavior. But do not let that fool you: their obfuscation was still formidable. 
+                Multiple layers of encoding, rotating keys, and timestamp-based token generation 
+                that expired faster than you could say &quot;network request.&quot;
               </p>
               <p>
-                We spent two weeks just understanding how their packer worked. Filled notebooks with 
-                diagrams. Wrote a custom unpacker. Then discovered they had THREE different packing 
-                schemes that rotated based on content ID. Back to the drawing board.
+                The real game-changer was Videasy. Where other providers buried their streams under 
+                mountains of JavaScript spaghetti, Videasy took a different approach. Still protected, 
+                still obfuscated, but with patterns we could recognize and exploit. Their token 
+                system used predictable seeds derived from content metadata.
               </p>
               <p>
-                <strong>The Breakthrough:</strong> 3 AM on a Tuesday, week three. We noticed the 
-                packing seed was derived from the TMDB ID in a predictable way. If we knew the 
-                content, we could predict which unpacker to use. Suddenly, extraction dropped from 
-                5+ seconds with full browser automation to 180 milliseconds with pure HTTP requests. 
-                We may have woken up the neighbors with our celebration.
+                <strong>The Breakthrough:</strong> Instead of fighting each provider&apos;s unique 
+                obfuscation, we built a unified extraction pipeline. Vidsrc for reliability, Videasy 
+                for speed, with automatic fallback between them. Extraction times dropped from 
+                5+ seconds to under 200 milliseconds. The old providers (2Embed, MoviesAPI) became 
+                backup options rather than primary sources.
               </p>
             </div>
 
             <div className="war-story">
-              <h4>SuperEmbed&apos;s Decoy Trap — The One That Fought Back</h4>
+              <h4>SuperEmbed&apos;s Decoy Trap: The One That Fought Back</h4>
               <p>
                 SuperEmbed was paranoid. Canvas fingerprinting. WebGL checks. Timing analysis on 
                 every interaction. But their cruelest trick was the decoy streams. Fail their bot 
-                detection and they do not block you—they give you a stream that works perfectly for 
+                detection and they do not block you. They give you a stream that works perfectly for 
                 exactly 30 seconds, then dies. You think you have won. You deploy your code. Users 
                 start complaining. You realize you have been played.
               </p>
@@ -657,7 +657,7 @@ export default function AboutPage() {
               </p>
               <p>
                 <strong>The Breakthrough:</strong> We stopped trying to fool their JavaScript and 
-                started ignoring it entirely. Their validation happened client-side—in the browser. 
+                started ignoring it entirely. Their validation happened client-side, in the browser. 
                 But the actual stream endpoint? It just needed the right parameters. We traced the 
                 network requests, found the endpoint, figured out what parameters it expected, and 
                 called it directly. No browser. No JavaScript. No bot detection. Just a clean HTTP 
@@ -681,7 +681,7 @@ export default function AboutPage() {
               </div>
               <div className="stat">
                 <span className="stat-value">∞</span>
-                <span className="stat-label">Coffee consumed</span>
+                <span className="stat-label">Monsters consumed</span>
               </div>
             </div>
           </section>
@@ -752,7 +752,7 @@ export default function AboutPage() {
             
             <h3>7.1 Primary Findings</h3>
             <p>
-              After five months of development, countless debugging sessions, and an amount of coffee 
+              After five months of development, countless debugging sessions, and an amount of Monster Energy 
               that probably qualifies as a medical concern, we can report the following findings:
             </p>
 
@@ -810,7 +810,7 @@ export default function AboutPage() {
             <h3>8.1 Implications</h3>
             <p>
               The existence of Flyx has implications that extend beyond the technical. It demonstrates 
-              that the exploitative practices endemic to pirate streaming are not inevitable—they are 
+              that the exploitative practices endemic to pirate streaming are not inevitable. They are 
               choices made by operators who prioritize profit over users.
             </p>
             <p>
@@ -829,7 +829,7 @@ export default function AboutPage() {
               <li>The platform depends on third-party stream providers that may change their 
               obfuscation at any time, requiring ongoing maintenance.</li>
               <li>The legal status of content aggregation remains ambiguous in many jurisdictions.</li>
-              <li>The author&apos;s coffee consumption during development may have reached levels 
+              <li>The author&apos;s Monster Energy consumption during development may have reached levels 
               that are not medically advisable.</li>
               <li>Some features that users expect from commercial platforms (recommendations, 
               multiple profiles, offline viewing) are not yet implemented.</li>
@@ -885,7 +885,7 @@ export default function AboutPage() {
               part-time, with no budget, over five months of evenings and weekends.
             </p>
             <p>
-              That is the point. Not that we are special—we are not. The point is that if one person 
+              That is the point. Not that we are special (we are not). The point is that if one person 
               can do this under these constraints, then every pirate streaming site that serves 
               malware is making a choice. They could treat users like humans instead of revenue 
               sources. They choose not to because exploitation is more profitable than ethics.
@@ -910,7 +910,7 @@ export default function AboutPage() {
             </p>
             <p>
               Flyx exists because we got tired of watching the internet get worse. It is a small 
-              thing—one platform, one developer, one statement. But it is proof that better is 
+              thing: one platform, one developer, one statement. But it is proof that better is 
               possible. And sometimes, proof is enough.
             </p>
           </section>
@@ -963,8 +963,8 @@ export default function AboutPage() {
               and bear no responsibility for availability, accuracy, legality, or quality.
             </p>
             <p>
-              The Platform functions as a technical interface—analogous to a web browser or search 
-              engine—that facilitates access to content hosted elsewhere on the internet. We do not 
+              The Platform functions as a technical interface (analogous to a web browser or search 
+              engine) that facilitates access to content hosted elsewhere on the internet. We do not 
               select, curate, edit, modify, or exercise editorial control over the content accessible 
               through the Platform.
             </p>
