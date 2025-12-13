@@ -106,8 +106,8 @@ export const ParallaxContainer: React.FC<ParallaxContainerProps> = ({
 
   // Clone children and add parallax transforms
   const enhancedChildren = React.Children.map(children, (child) => {
-    if (React.isValidElement(child) && child.type === ParallaxLayer) {
-      const speed = (child.props as ParallaxLayerProps).speed || 1;
+    if (React.isValidElement<ParallaxLayerProps>(child) && child.type === ParallaxLayer) {
+      const speed = child.props.speed || 1;
       
       // Calculate transforms based on speed
       const scrollY = useTransform(
