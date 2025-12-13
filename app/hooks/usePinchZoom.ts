@@ -24,7 +24,7 @@ interface UsePinchZoomReturn {
   isZoomed: boolean;
   resetZoom: () => void;
   containerProps: {
-    ref: React.RefObject<HTMLDivElement>;
+    ref: React.RefObject<HTMLDivElement | null>;
     style: React.CSSProperties;
   };
   contentStyle: React.CSSProperties;
