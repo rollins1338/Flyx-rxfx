@@ -29,18 +29,6 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Check cache first
-  const cacheKey = `${tmdbId}-${type}`;
-  const cached = malCache.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    console.log(`[mal-info] Cache hit for ${cacheKey}, seasons: ${cached.data?.allSeasons?.length || 0}`);
-    return NextResponse.json({
-      success: true,
-      data: cached.data,
-      cached: true,
-    });
-  }
-
   try {
     // If no title provided, fetch from TMDB
     if (!title) {
@@ -60,6 +48,19 @@ export async function GET(request: NextRequest) {
         { error: 'Could not determine title for MAL search' },
         { status: 400 }
       );
+    }
+
+    // Check cache AFTER we have the title - include title in cache key since different seasons have different MAL entries
+    // e.g., "Bleach" vs "Bleach: Thousand-Year Blood War" are different MAL entries
+    const cacheKey = `${tmdbId}-${type}-${title}`;
+    const cached = malCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      console.log(`[mal-info] Cache hit for ${cacheKey}, seasons: ${cached.data?.allSeasons?.length || 0}`);
+      return NextResponse.json({
+        success: true,
+        data: cached.data,
+        cached: true,
+      });
     }
 
     console.log(`[mal-info] Fetching MAL data for: "${title}" (${tmdbId})`);
