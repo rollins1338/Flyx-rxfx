@@ -61,23 +61,44 @@ export async function GET(request: NextRequest) {
     const oneMonthAgo = now - 30 * 24 * 60 * 60 * 1000;
 
     // ============================================
-    // 1. REAL-TIME DATA (SESSION-BASED)
-    // Count UNIQUE users with active watch sessions
+    // 1. REAL-TIME DATA (from session_details - ACTIVE USER SESSIONS)
+    // Count users with active browser sessions (not ended, or recently updated)
     // 
-    // "Active" = session updated in last 5 minutes (player sends updates)
-    // "Watching" = active watch sessions (VOD content)
-    // "LiveTV" = active sessions with content_type = 'livetv'
-    // "Browsing" = users in user_activity but NOT in active watch sessions
+    // "Active" = browser session active in last 5 minutes
+    // "Watching" = users with active watch_sessions (VOD)
+    // "LiveTV" = users with active watch_sessions (content_type = 'livetv')
+    // "Browsing" = active sessions but NOT watching anything
     // ============================================
     const fiveMinutesAgo = now - 5 * 60 * 1000;
     const twoMinutesAgo = now - 2 * 60 * 1000;
     let realtime = { totalActive: 0, trulyActive: 0, watching: 0, browsing: 0, livetv: 0 };
     
     try {
-      // Count users with active watch sessions (updated in last 5 min, not ended)
-      // Sessions are "active" if:
-      // 1. ended_at is NULL (session not ended), OR
-      // 2. updated_at is recent (player still sending updates)
+      // Count ACTIVE USER SESSIONS from session_details
+      // A session is active if: ended_at IS NULL OR updated_at is recent
+      const activeSessionsQuery = isNeon
+        ? `SELECT 
+             COUNT(DISTINCT session_id) as total_sessions,
+             COUNT(DISTINCT user_id) as total_users
+           FROM session_details 
+           WHERE (ended_at IS NULL OR updated_at >= $1)
+             AND started_at >= $2`
+        : `SELECT 
+             COUNT(DISTINCT session_id) as total_sessions,
+             COUNT(DISTINCT user_id) as total_users
+           FROM session_details 
+           WHERE (ended_at IS NULL OR updated_at >= ?)
+             AND started_at >= ?`;
+      
+      const activeResult = await adapter.query(activeSessionsQuery, 
+        isNeon ? [fiveMinutesAgo, oneDayAgo] : [fiveMinutesAgo, oneDayAgo]
+      );
+      
+      // Total active = unique users with active browser sessions
+      realtime.totalActive = parseInt(activeResult[0]?.total_users) || 0;
+      
+      // Now get watching breakdown from watch_sessions
+      // Users currently watching content (VOD or LiveTV)
       const watchingQuery = isNeon
         ? `SELECT 
              COUNT(DISTINCT user_id) as watching_count,
@@ -102,41 +123,18 @@ export async function GET(request: NextRequest) {
       realtime.watching = parseInt(watchResult[0]?.vod_count) || 0;
       realtime.livetv = parseInt(watchResult[0]?.livetv_count) || 0;
       
-      // Get users who are browsing (active in user_activity but NOT watching)
-      // These are users who have been active recently but don't have an active watch session
-      const browsingQuery = isNeon
-        ? `SELECT COUNT(DISTINCT ua.user_id) as browsing_count
-           FROM user_activity ua
-           WHERE ua.last_seen >= $1
-             AND ua.user_id NOT IN (
-               SELECT DISTINCT user_id FROM watch_sessions 
-               WHERE (ended_at IS NULL OR updated_at >= $2)
-                 AND started_at >= $3
-             )`
-        : `SELECT COUNT(DISTINCT ua.user_id) as browsing_count
-           FROM user_activity ua
-           WHERE ua.last_seen >= ?
-             AND ua.user_id NOT IN (
-               SELECT DISTINCT user_id FROM watch_sessions 
-               WHERE (ended_at IS NULL OR updated_at >= ?)
-                 AND started_at >= ?
-             )`;
-      
-      const browsingResult = await adapter.query(browsingQuery,
-        isNeon ? [fiveMinutesAgo, fiveMinutesAgo, oneDayAgo] : [fiveMinutesAgo, fiveMinutesAgo, oneDayAgo]
-      );
-      
-      realtime.browsing = parseInt(browsingResult[0]?.browsing_count) || 0;
-      realtime.totalActive = watchingUsers + realtime.browsing;
+      // Browsing = active sessions minus watching users
+      // (users on site but not watching anything)
+      realtime.browsing = Math.max(0, realtime.totalActive - watchingUsers);
       
       // "Truly active" = sessions updated in last 2 minutes (stricter)
       const strictQuery = isNeon
         ? `SELECT COUNT(DISTINCT user_id) as count
-           FROM watch_sessions 
+           FROM session_details 
            WHERE (ended_at IS NULL OR updated_at >= $1)
              AND started_at >= $2`
         : `SELECT COUNT(DISTINCT user_id) as count
-           FROM watch_sessions 
+           FROM session_details 
            WHERE (ended_at IS NULL OR updated_at >= ?)
              AND started_at >= ?`;
       
@@ -359,7 +357,7 @@ export async function GET(request: NextRequest) {
       pageViews,
       // Include time ranges for transparency
       timeRanges: {
-        realtime: '5 minutes (session-based, 2 min for truly active)',
+        realtime: '5 minutes (from session_details, 2 min for truly active)',
         dau: '24 hours',
         wau: '7 days',
         mau: '30 days',
