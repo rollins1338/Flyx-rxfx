@@ -460,3 +460,80 @@
   font-weight: 500;
   color: rgba(255, 255, 255, 0.8);
 }
+
+
+/* MAL Part Selector for anime with multiple MAL entries per TMDB season */
+.malPartSelector {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: rgba(46, 81, 162, 0.1);
+  border: 1px solid rgba(46, 81, 162, 0.2);
+  border-radius: 12px;
+}
+
+.malPartHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.malPartNote {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.malPartButtons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.malPartButton {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 1rem 1.25rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.malPartButton:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.malPartButtonSelected {
+  background: linear-gradient(135deg, rgba(46, 81, 162, 0.3), rgba(139, 92, 246, 0.2));
+  border-color: rgba(46, 81, 162, 0.5);
+}
+
+.malPartName {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 0.25rem;
+}
+
+.malPartMeta {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+@media (max-width: 768px) {
+  .malPartSelector {
+    padding: 0.875rem;
+  }
+  
+  .malPartButton {
+    padding: 0.875rem 1rem;
+  }
+  
+  .malPartName {
+    font-size: 0.9375rem;
+  }
+}
