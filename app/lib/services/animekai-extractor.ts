@@ -1295,7 +1295,13 @@ export async function extractAnimeKaiStreams(
     // If so, we should use season 1 and the episode number directly
     // because the season-specific anime is a separate entry with its own episode numbering
     let foundSeasonSpecificEntry = false;
-    if (seasonNum > 1 && animeResult.title !== baseTitle) {
+    
+    // If MAL title was provided and we found the anime, ALWAYS treat as season-specific
+    // because the episode number is already relative to that MAL entry
+    if (malTitle && animeResult) {
+      foundSeasonSpecificEntry = true;
+      console.log(`[AnimeKai] MAL title provided - treating as season-specific entry (episode ${episode || 1} is MAL-relative)`);
+    } else if (seasonNum > 1 && animeResult.title !== baseTitle) {
       // Check if the found title contains season indicators
       const seasonIndicators = [
         `season ${seasonNum}`,
@@ -1440,18 +1446,75 @@ export async function extractAnimeKaiStreams(
       // Log available episodes for debugging
       const allSeasons = Object.keys(episodes);
       const episodeInfo: Record<string, string[]> = {};
+      let maxEpisodeInSeason1 = 0;
       for (const s of allSeasons) {
         const seasonData = episodes[s];
         if (seasonData && typeof seasonData === 'object') {
-          episodeInfo[`Season ${s}`] = Object.keys(seasonData);
+          const epKeys = Object.keys(seasonData);
+          episodeInfo[`Season ${s}`] = epKeys;
+          if (s === '1') {
+            maxEpisodeInSeason1 = Math.max(...epKeys.map(k => parseInt(k) || 0));
+          }
         }
       }
       console.log(`[AnimeKai] S${seasonNumber}E${episodeNumber} not found. Available:`, episodeInfo);
-      return {
-        success: false,
-        sources: [],
-        error: `Episode S${seasonNumber}E${episodeNumber} not found`,
-      };
+      
+      // Strategy 5: If episode number exceeds available episodes, this might be a multi-part anime
+      // Try to find the next part and calculate the relative episode number
+      if (episodeNumber > maxEpisodeInSeason1 && maxEpisodeInSeason1 > 0 && !malTitle) {
+        console.log(`[AnimeKai] Episode ${episodeNumber} exceeds max episode ${maxEpisodeInSeason1} - trying to find next part...`);
+        
+        // Calculate which part and episode we need
+        // For now, assume each part has roughly the same number of episodes
+        const partNumber = Math.ceil(episodeNumber / maxEpisodeInSeason1);
+        const relativeEpisode = episodeNumber - (maxEpisodeInSeason1 * (partNumber - 1));
+        
+        console.log(`[AnimeKai] Calculated: Part ${partNumber}, Episode ${relativeEpisode}`);
+        
+        // Try to find the next part by searching with part number
+        const partSearchVariants = [
+          `${baseTitle} Part ${partNumber}`,
+          `${animeResult.title} Part ${partNumber}`,
+          // For specific anime like Bleach TYBW
+          ...(animeResult.title.toLowerCase().includes('thousand-year blood war') ? [
+            partNumber === 2 ? 'Bleach: Thousand-Year Blood War - The Separation' : null,
+            partNumber === 3 ? 'Bleach: Thousand-Year Blood War - The Conflict' : null,
+          ].filter(Boolean) as string[] : []),
+        ];
+        
+        for (const variant of partSearchVariants) {
+          console.log(`[AnimeKai] Trying next part search: "${variant}"`);
+          const nextPartResult = await searchAnimeKai(variant, null);
+          if (nextPartResult && nextPartResult.content_id !== animeResult.content_id) {
+            console.log(`[AnimeKai] ✓ Found next part: "${nextPartResult.title}"`);
+            
+            // Get episodes for the next part
+            const nextPartEpisodes = nextPartResult.episodes || await getEpisodes(nextPartResult.content_id);
+            if (nextPartEpisodes) {
+              const nextPartSeason1 = nextPartEpisodes["1"];
+              if (nextPartSeason1 && nextPartSeason1[String(relativeEpisode)]) {
+                const epData = nextPartSeason1[String(relativeEpisode)];
+                if (epData && typeof epData === 'object' && 'token' in epData) {
+                  episodeToken = epData.token;
+                  console.log(`[AnimeKai] ✓ Found episode ${relativeEpisode} in next part!`);
+                  // Update animeResult for logging
+                  animeResult = nextPartResult;
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      // If still not found, return error
+      if (!episodeToken) {
+        return {
+          success: false,
+          sources: [],
+          error: `Episode S${seasonNumber}E${episodeNumber} not found`,
+        };
+      }
     }
 
     console.log(`[AnimeKai] Found episode token: ${episodeToken.substring(0, 20)}...`);

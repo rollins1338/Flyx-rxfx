@@ -265,7 +265,7 @@ function WatchContent() {
   };
 
   const handleNextEpisode = useCallback(() => {
-    console.log('[WatchPage] handleNextEpisode called!', { nextEpisode, contentId, title });
+    console.log('[WatchPage] handleNextEpisode called!', { nextEpisode, contentId, title, malId, malTitle });
     
     if (!nextEpisode || nextEpisode.isLastEpisode) {
       console.log('[WatchPage] Cannot navigate - no next episode or is last episode');
@@ -273,7 +273,17 @@ function WatchContent() {
     }
 
     const navigateToNextEpisode = () => {
-      const url = `/watch/${contentId}?type=tv&season=${nextEpisode.season}&episode=${nextEpisode.episode}&title=${encodeURIComponent(title)}&autoplay=true`;
+      // Build URL with MAL info preserved for anime
+      let url = `/watch/${contentId}?type=tv&season=${nextEpisode.season}&episode=${nextEpisode.episode}&title=${encodeURIComponent(title)}&autoplay=true`;
+      
+      // Preserve MAL info for anime - this is critical for multi-part anime like Bleach TYBW
+      if (malId) {
+        url += `&malId=${malId}`;
+      }
+      if (malTitle) {
+        url += `&malTitle=${encodeURIComponent(malTitle)}`;
+      }
+      
       console.log('[WatchPage] NAVIGATING NOW to:', url);
       // Use Next.js router for client-side navigation (preserves autoplay capability)
       router.push(url);
@@ -292,7 +302,7 @@ function WatchContent() {
     } else {
       navigateToNextEpisode();
     }
-  }, [contentId, nextEpisode, title, router]);
+  }, [contentId, nextEpisode, title, router, malId, malTitle]);
 
   if (!contentId || !mediaType) {
     return (
