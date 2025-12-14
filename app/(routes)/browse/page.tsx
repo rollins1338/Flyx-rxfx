@@ -10,32 +10,51 @@ export const metadata: Metadata = {
 
 export const revalidate = 3600;
 
+// Fetch multiple pages to get more content (40 items = 2 pages of 20)
+const PAGES_TO_FETCH = 2;
+
 interface BrowsePageProps {
-  searchParams: Promise<{ type?: string; filter?: string; genre?: string; page?: string }>;
+  searchParams: Promise<{ type?: string; filter?: string; genre?: string; page?: string; region?: string }>;
 }
 
-async function getBrowseData(type: string, filter: string, genre: string, page: number) {
+async function getBrowseData(type: string, filter: string, genre: string, page: number, region: string) {
   try {
     let endpoint = '';
-    let params: Record<string, string> = { page: page.toString() };
+    let params: Record<string, string> = {};
 
     // Handle different content types and filters
     if (type === 'movie') {
-      if (filter === 'popular') endpoint = '/movie/popular';
-      else if (filter === 'top_rated') endpoint = '/movie/top_rated';
-      else if (filter === 'now_playing') endpoint = '/movie/now_playing';
-      else if (genre) {
+      // For movies with region, always use discover endpoint
+      if (region || genre) {
         endpoint = '/discover/movie';
-        params.with_genres = genre;
         params.sort_by = 'popularity.desc';
+        if (region) params.with_origin_country = region;
+        if (genre) params.with_genres = genre;
+        if (filter === 'top_rated') {
+          params.sort_by = 'vote_average.desc';
+          params['vote_count.gte'] = '200';
+        } else if (filter === 'now_playing') {
+          const today = new Date().toISOString().split('T')[0];
+          const monthAgo = new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0];
+          params['primary_release_date.gte'] = monthAgo;
+          params['primary_release_date.lte'] = today;
+        }
+      } else if (filter === 'popular') {
+        endpoint = '/movie/popular';
+      } else if (filter === 'top_rated') {
+        endpoint = '/movie/top_rated';
+      } else if (filter === 'now_playing') {
+        endpoint = '/movie/now_playing';
       } else {
         endpoint = '/movie/popular';
       }
     } else if (type === 'tv') {
-      // Always use discover to exclude anime (genre 16)
+      // Always use discover to exclude anime (genre 16) and support region
       endpoint = '/discover/tv';
       params.without_genres = '16';
       params.sort_by = 'popularity.desc';
+      
+      if (region) params.with_origin_country = region;
       
       if (filter === 'top_rated') {
         params.sort_by = 'vote_average.desc';
@@ -80,14 +99,30 @@ async function getBrowseData(type: string, filter: string, genre: string, page: 
       return { items: [], total: 0, page: 1, totalPages: 0 };
     }
 
-    const data = await fetchTMDBData(endpoint, params);
+    // Fetch multiple pages for more content
+    const startPage = (page - 1) * PAGES_TO_FETCH + 1;
+    const pagePromises = [];
+    for (let i = 0; i < PAGES_TO_FETCH; i++) {
+      pagePromises.push(fetchTMDBData(endpoint, { ...params, page: (startPage + i).toString() }));
+    }
+    
+    const results = await Promise.all(pagePromises);
     const mediaType = type === 'movie' || type === 'anime-movies' ? 'movie' : 'tv';
     
+    // Combine results from all pages
+    const allItems = results.flatMap(data => 
+      data?.results?.map((item: any) => ({ ...item, mediaType })) || []
+    );
+    
+    const firstResult = results[0];
+    const totalResults = firstResult?.total_results || 0;
+    const totalPages = Math.min(Math.ceil((firstResult?.total_pages || 0) / PAGES_TO_FETCH), 250);
+    
     return {
-      items: data?.results?.map((item: any) => ({ ...item, mediaType })) || [],
-      total: data?.total_results || 0,
-      page: data?.page || 1,
-      totalPages: Math.min(data?.total_pages || 0, 500), // TMDB limits to 500 pages
+      items: allItems,
+      total: totalResults,
+      page: page,
+      totalPages: totalPages,
     };
   } catch (error) {
     console.error('Error fetching browse data:', error);
@@ -153,8 +188,9 @@ export default async function BrowsePage({ searchParams }: BrowsePageProps) {
   const filter = params.filter || 'popular';
   const genre = params.genre || '';
   const page = parseInt(params.page || '1', 10);
+  const region = params.region || '';
 
-  const data = await getBrowseData(type, filter, genre, page);
+  const data = await getBrowseData(type, filter, genre, page, region);
   const title = getPageTitle(type, filter, genre);
 
   return (

@@ -1171,6 +1171,30 @@ export async function extractAnimeKaiStreams(
     if (tmdbInfo?.title && !animeResult.title.toLowerCase().includes(tmdbInfo.title.toLowerCase().split(' ')[0])) {
       console.warn(`[AnimeKai] ⚠️ WARNING: Found title "${animeResult.title}" doesn't match expected "${tmdbInfo.title}"!`);
     }
+    
+    // IMPORTANT: Check if we found a season-specific entry
+    // If so, we should use season 1 and the episode number directly
+    // because the season-specific anime is a separate entry with its own episode numbering
+    let foundSeasonSpecificEntry = false;
+    if (seasonNum > 1 && animeResult.title !== tmdbInfo?.title) {
+      // Check if the found title contains season indicators
+      const seasonIndicators = [
+        `season ${seasonNum}`,
+        `${seasonNum}nd season`, `${seasonNum}rd season`, `${seasonNum}th season`,
+        `part ${seasonNum}`,
+        toRomanNumeral(seasonNum).toLowerCase(),
+        // Also check for specific sequel titles
+        'thousand-year blood war', 'tybw', // Bleach
+        'shippuden', // Naruto
+        'brotherhood', // FMA
+      ];
+      const lowerTitle = animeResult.title.toLowerCase();
+      foundSeasonSpecificEntry = seasonIndicators.some(indicator => lowerTitle.includes(indicator));
+      
+      if (foundSeasonSpecificEntry) {
+        console.log(`[AnimeKai] ✓ Found season-specific entry "${animeResult.title}" - will use episode ${episode || 1} directly`);
+      }
+    }
 
     // Step 4: Get episodes - use from search result if available, otherwise fetch
     let episodes: ParsedEpisodes | null = animeResult.episodes || null;
@@ -1188,10 +1212,16 @@ export async function extractAnimeKaiStreams(
     }
 
     // Step 5: Find the episode token
-    const seasonNumber = type === 'movie' ? 1 : (season || 1);
+    // IMPORTANT: If we found a season-specific entry, use season 1 with the episode number
+    // because the anime site treats each season as a separate anime with its own episode list
+    const seasonNumber = type === 'movie' ? 1 : (foundSeasonSpecificEntry ? 1 : (season || 1));
     const episodeNumber = type === 'movie' ? 1 : (episode || 1);
     const seasonKey = String(seasonNumber);
     const episodeKey = String(episodeNumber);
+    
+    if (foundSeasonSpecificEntry) {
+      console.log(`[AnimeKai] Using season 1 (season-specific entry) with episode ${episodeNumber}`);
+    }
     
     // Episodes structure from API: { "1": { "1": { token: "..." }, "2": { token: "..." }, ... } }
     // The first key is the season, the second key is the episode number
@@ -1456,6 +1486,25 @@ export async function fetchAnimeKaiSourceByName(
     if (!animeResult) {
       return null;
     }
+    
+    // Check if we found a season-specific entry
+    // If so, we should use season 1 and the episode number directly
+    let foundSeasonSpecificEntry = false;
+    if (seasonNum > 1 && animeResult.title !== tmdbInfo?.title) {
+      const seasonIndicators = [
+        `season ${seasonNum}`,
+        `${seasonNum}nd season`, `${seasonNum}rd season`, `${seasonNum}th season`,
+        `part ${seasonNum}`,
+        toRomanNumeral(seasonNum).toLowerCase(),
+        'thousand-year blood war', 'tybw', 'shippuden', 'brotherhood',
+      ];
+      const lowerTitle = animeResult.title.toLowerCase();
+      foundSeasonSpecificEntry = seasonIndicators.some(indicator => lowerTitle.includes(indicator));
+      
+      if (foundSeasonSpecificEntry) {
+        console.log(`[AnimeKai] ✓ Found season-specific entry "${animeResult.title}" - will use episode ${episode || 1} directly`);
+      }
+    }
 
     // Get episodes - use from search result if available
     let episodes: ParsedEpisodes | null = animeResult.episodes || null;
@@ -1467,10 +1516,15 @@ export async function fetchAnimeKaiSourceByName(
     }
 
     // Find episode token - for season-specific entries, episode is in season "1"
-    const seasonNumber = type === 'movie' ? 1 : (season || 1);
+    // because the anime site treats each season as a separate anime
+    const seasonNumber = type === 'movie' ? 1 : (foundSeasonSpecificEntry ? 1 : (season || 1));
     const episodeNumber = type === 'movie' ? 1 : (episode || 1);
     const seasonKey = String(seasonNumber);
     const episodeKey = String(episodeNumber);
+    
+    if (foundSeasonSpecificEntry) {
+      console.log(`[AnimeKai] Using season 1 (season-specific entry) with episode ${episodeNumber}`);
+    }
     
     let episodeToken: string | null = null;
     
