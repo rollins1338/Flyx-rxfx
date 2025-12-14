@@ -20,7 +20,7 @@ interface ContinueWatchingItem extends WatchProgress {
 
 export default function ContinueWatching() {
   const router = useRouter();
-  const { getAllWatchProgress, trackEvent } = useAnalytics();
+  const { getAllWatchProgress, removeWatchProgress, trackEvent } = useAnalytics();
   const [items, setItems] = useState<ContinueWatchingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [metadataCache, setMetadataCache] = useState<Record<string, ContentMetadata>>({});
@@ -118,6 +118,28 @@ export default function ContinueWatching() {
 
     router.push(url);
   }, [router, trackEvent]);
+
+  const handleRemove = useCallback((e: React.MouseEvent, item: ContinueWatchingItem) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    const success = removeWatchProgress(item.contentId, item.seasonNumber, item.episodeNumber);
+    
+    if (success) {
+      setItems(prev => prev.filter(i => 
+        !(i.contentId === item.contentId && 
+          i.seasonNumber === item.seasonNumber && 
+          i.episodeNumber === item.episodeNumber)
+      ));
+      
+      trackEvent('continue_watching_removed', {
+        content_id: item.contentId,
+        content_type: item.contentType,
+        season: item.seasonNumber,
+        episode: item.episodeNumber,
+      });
+    }
+  }, [removeWatchProgress, trackEvent]);
 
   const formatTimeRemaining = (currentTime: number, duration: number): string => {
     const remaining = Math.max(0, duration - currentTime);
@@ -247,6 +269,20 @@ export default function ContinueWatching() {
                       )}
 
                       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent" />
+
+                      {/* Remove button */}
+                      <button
+                        onClick={(e) => handleRemove(e, item)}
+                        className="absolute top-2 right-2 w-7 h-7 bg-black/60 hover:bg-red-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 z-10 border border-white/20 hover:border-red-500"
+                        aria-label={`Remove ${item.metadata?.title || 'item'} from continue watching`}
+                        data-tv-skip="true"
+                        tabIndex={-1}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                      </button>
 
                       <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                         <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/30">

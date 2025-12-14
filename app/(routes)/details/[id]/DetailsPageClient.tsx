@@ -4,11 +4,14 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import type { MediaItem, Season } from '@/types/media';
+import type { MALAnimeDetails } from '@/lib/services/mal';
 import { ParallaxContainer } from '@/components/ui/ParallaxContainer';
 import { GlassPanel } from '@/components/ui/GlassPanel';
 import { FluidButton } from '@/components/ui/FluidButton';
 import { SeasonSelector } from './SeasonSelector';
 import { EpisodeList } from './EpisodeList';
+import { MALSeasonSelector } from './MALSeasonSelector';
+import { MALEpisodeList } from './MALEpisodeList';
 import { usePresenceContext } from '@/components/analytics/PresenceProvider';
 import styles from './DetailsPage.module.css';
 
@@ -187,6 +190,12 @@ export default function DetailsPageClient({
   const [loadingEpisodes, setLoadingEpisodes] = useState(false);
   const [episodeProgress, setEpisodeProgress] = useState<Record<number, number>>({});
   
+  // MAL-specific state for anime
+  const [isAnime, setIsAnime] = useState<boolean>(false);
+  const [malData, setMalData] = useState<MALAnimeDetails | null>(null);
+  const [selectedMALSeasonIndex, setSelectedMALSeasonIndex] = useState<number>(0);
+  const [loadingMAL, setLoadingMAL] = useState<boolean>(false);
+  
   // Track browsing activity with content title - only when content changes
   useEffect(() => {
     if (content && presenceContext?.setBrowsingContext) {
@@ -200,13 +209,59 @@ export default function DetailsPageClient({
     }
   }, [content?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load episodes when season changes for TV shows
+  // Check if content is anime and fetch MAL data
   useEffect(() => {
-    if (content?.mediaType === 'tv' && content.seasons && content.seasons.length > 0) {
+    if (content?.mediaType === 'tv') {
+      checkAndLoadMALData();
+    }
+  }, [content?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const checkAndLoadMALData = async () => {
+    if (!content) return;
+    
+    setLoadingMAL(true);
+    try {
+      // First check if it's anime
+      const checkResponse = await fetch(
+        `/api/content/check-anime?tmdbId=${content.id}&type=${content.mediaType}`
+      );
+      const checkData = await checkResponse.json();
+      
+      if (checkData.isAnime) {
+        setIsAnime(true);
+        
+        // Fetch MAL data
+        const title = content.title || content.name || '';
+        const malResponse = await fetch(
+          `/api/content/mal-info?tmdbId=${content.id}&type=${content.mediaType}&title=${encodeURIComponent(title)}`
+        );
+        const malResult = await malResponse.json();
+        
+        if (malResult.success && malResult.data) {
+          console.log('[DetailsPage] MAL data loaded:', malResult.data);
+          setMalData(malResult.data);
+        } else {
+          console.log('[DetailsPage] No MAL match found, using TMDB data');
+          setIsAnime(false); // Fall back to TMDB if no MAL match
+        }
+      } else {
+        setIsAnime(false);
+      }
+    } catch (err) {
+      console.error('[DetailsPage] Error checking anime/MAL:', err);
+      setIsAnime(false);
+    } finally {
+      setLoadingMAL(false);
+    }
+  };
+
+  // Load episodes when season changes for TV shows (non-anime or fallback)
+  useEffect(() => {
+    if (content?.mediaType === 'tv' && content.seasons && content.seasons.length > 0 && !isAnime) {
       loadSeasonEpisodes(selectedSeason);
       loadEpisodeProgress(selectedSeason);
     }
-  }, [selectedSeason, content]);
+  }, [selectedSeason, content, isAnime]);
 
   // Load episode watch progress from localStorage and API
   const loadEpisodeProgress = async (seasonNumber: number) => {
@@ -332,6 +387,13 @@ export default function DetailsPageClient({
     
     if (content.mediaType === 'movie') {
       router.push(`/watch/${content.id}?type=movie&title=${title}`);
+    } else if (isAnime && malData && malData.allSeasons.length > 0) {
+      // For anime with MAL data, use MAL season info
+      const malSeason = malData.allSeasons[selectedMALSeasonIndex];
+      const malTitle = encodeURIComponent(malSeason.titleEnglish || malSeason.title);
+      router.push(
+        `/watch/${content.id}?type=tv&season=${selectedMALSeasonIndex + 1}&episode=1&title=${title}&malId=${malSeason.malId}&malTitle=${malTitle}`
+      );
     } else {
       // For TV shows, watch first episode of selected season
       const episode = seasonData?.episodes[0];
@@ -348,6 +410,22 @@ export default function DetailsPageClient({
     const title = encodeURIComponent(content.title || content.name || 'Unknown');
     router.push(
       `/watch/${content.id}?type=tv&season=${selectedSeason}&episode=${episodeNumber}&title=${title}`
+    );
+  };
+
+  // Handler for MAL-based anime episode selection
+  const handleMALEpisodeSelect = (episodeNumber: number, malId: number) => {
+    if (!content || !malData) return;
+    
+    const malSeason = malData.allSeasons.find(s => s.malId === malId);
+    if (!malSeason) return;
+    
+    const title = encodeURIComponent(content.title || content.name || 'Unknown');
+    const malTitle = encodeURIComponent(malSeason.titleEnglish || malSeason.title);
+    
+    // Pass MAL info to watch page for accurate episode mapping
+    router.push(
+      `/watch/${content.id}?type=tv&season=${malSeason.seasonOrder}&episode=${episodeNumber}&title=${title}&malId=${malId}&malTitle=${malTitle}`
     );
   };
 
@@ -492,7 +570,14 @@ export default function DetailsPageClient({
 
               {/* Info Row */}
               <div className={styles.infoRow}>
-                <span className={styles.rating}>⭐ {formattedRating}</span>
+                {/* Show MAL rating for anime, TMDB rating otherwise */}
+                {isAnime && malData?.mainEntry?.score ? (
+                  <span className={styles.rating} title="MyAnimeList Score">
+                    ⭐ {malData.mainEntry.score.toFixed(2)} <span className={styles.malBadgeSmall}>MAL</span>
+                  </span>
+                ) : (
+                  <span className={styles.rating}>⭐ {formattedRating}</span>
+                )}
                 <span className={styles.separator}>•</span>
                 <span className={styles.year}>{releaseYear}</span>
                 {content.runtime && (
@@ -503,8 +588,16 @@ export default function DetailsPageClient({
                 )}
                 <span className={styles.separator}>•</span>
                 <span className={styles.mediaType}>
-                  {content.mediaType === 'movie' ? 'Movie' : 'TV Show'}
+                  {isAnime ? 'Anime' : content.mediaType === 'movie' ? 'Movie' : 'TV Show'}
                 </span>
+                {isAnime && malData && (
+                  <>
+                    <span className={styles.separator}>•</span>
+                    <span className={styles.totalEpisodes}>
+                      {malData.totalEpisodes} total episodes
+                    </span>
+                  </>
+                )}
               </div>
 
               {/* Genres */}
@@ -546,29 +639,58 @@ export default function DetailsPageClient({
       </ParallaxContainer>
 
       {/* TV Show Season/Episode Selection */}
-      {content.mediaType === 'tv' && content.seasons && content.seasons.length > 0 && (
+      {content.mediaType === 'tv' && (
         <section className={styles.seasonsSection}>
           <GlassPanel className={styles.seasonsPanel}>
             <h2 className={styles.sectionTitle}>Episodes</h2>
             
-            <SeasonSelector
-              seasons={content.seasons}
-              selectedSeason={selectedSeason}
-              onSeasonChange={setSelectedSeason}
-            />
-
-            {loadingEpisodes ? (
+            {/* Loading MAL data indicator */}
+            {loadingMAL && (
               <div className={styles.loadingEpisodes}>
                 <div className={styles.spinner} />
-                <p>Loading episodes...</p>
+                <p>Checking anime database...</p>
               </div>
-            ) : seasonData ? (
-              <EpisodeList
-                episodes={seasonData.episodes}
-                onEpisodeSelect={handleEpisodeSelect}
-                episodeProgress={episodeProgress}
-              />
-            ) : null}
+            )}
+            
+            {/* MAL-based display for anime */}
+            {!loadingMAL && isAnime && malData && malData.allSeasons.length > 0 && (
+              <>
+                <MALSeasonSelector
+                  seasons={malData.allSeasons}
+                  selectedSeasonIndex={selectedMALSeasonIndex}
+                  onSeasonChange={setSelectedMALSeasonIndex}
+                />
+                <MALEpisodeList
+                  season={malData.allSeasons[selectedMALSeasonIndex]}
+                  onEpisodeSelect={handleMALEpisodeSelect}
+                  episodeProgress={episodeProgress}
+                />
+              </>
+            )}
+            
+            {/* TMDB-based display for non-anime or fallback */}
+            {!loadingMAL && !isAnime && content.seasons && content.seasons.length > 0 && (
+              <>
+                <SeasonSelector
+                  seasons={content.seasons}
+                  selectedSeason={selectedSeason}
+                  onSeasonChange={setSelectedSeason}
+                />
+
+                {loadingEpisodes ? (
+                  <div className={styles.loadingEpisodes}>
+                    <div className={styles.spinner} />
+                    <p>Loading episodes...</p>
+                  </div>
+                ) : seasonData ? (
+                  <EpisodeList
+                    episodes={seasonData.episodes}
+                    onEpisodeSelect={handleEpisodeSelect}
+                    episodeProgress={episodeProgress}
+                  />
+                ) : null}
+              </>
+            )}
           </GlassPanel>
         </section>
       )}

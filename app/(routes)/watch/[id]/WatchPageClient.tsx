@@ -54,9 +54,14 @@ function WatchContent() {
   const episode = searchParams.get('episode');
   const titleParam = searchParams.get('title') || searchParams.get('name');
   const shouldAutoplay = searchParams.get('autoplay') === 'true';
+  
+  // MAL-specific parameters for anime
+  const malId = searchParams.get('malId');
+  const malTitleParam = searchParams.get('malTitle');
 
   // Decode title if it exists
   const title = titleParam ? decodeURIComponent(titleParam) : 'Loading...';
+  const malTitle = malTitleParam ? decodeURIComponent(malTitleParam) : undefined;
 
   const seasonId = season ? parseInt(season) : undefined;
   const episodeId = episode ? parseInt(episode) : undefined;
@@ -341,6 +346,8 @@ function WatchContent() {
           nextEpisode={nextEpisodeProp}
           onNextEpisode={handleNextEpisode}
           autoplay={shouldAutoplay}
+          malId={malId ? parseInt(malId) : undefined}
+          malTitle={malTitle}
         />
       </div>
     </div>

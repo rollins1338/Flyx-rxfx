@@ -293,6 +293,33 @@ class UserTrackingService {
   }
 
   /**
+   * Remove watch progress for a specific content item
+   */
+  removeWatchProgress(contentId: string, season?: number, episode?: number): boolean {
+    if (!this.preferences?.watchProgress) return false;
+
+    const key = this.getStorageKey(contentId, season, episode);
+    
+    if (!(key in this.preferences.watchProgress)) {
+      return false;
+    }
+
+    delete this.preferences.watchProgress[key];
+
+    try {
+      localStorage.setItem(
+        UserTrackingService.WATCH_PROGRESS_KEY,
+        JSON.stringify(this.preferences.watchProgress)
+      );
+      this.updatePreferences({ watchProgress: this.preferences.watchProgress });
+      return true;
+    } catch (error) {
+      console.error('Failed to remove watch progress:', error);
+      return false;
+    }
+  }
+
+  /**
    * Add to viewing history
    */
   addToViewingHistory(item: ViewingHistory): void {

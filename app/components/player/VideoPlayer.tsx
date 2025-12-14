@@ -40,13 +40,22 @@ interface VideoPlayerProps {
   } | null;
   onNextEpisode?: () => void;
   autoplay?: boolean; // Auto-start playback (used when navigating from previous episode)
+  malId?: number; // MyAnimeList ID for anime (used for accurate episode mapping)
+  malTitle?: string; // MAL title for the specific season/entry
 }
 
-export default function VideoPlayer({ tmdbId, mediaType, season, episode, title, nextEpisode, onNextEpisode, autoplay = false }: VideoPlayerProps) {
+export default function VideoPlayer({ tmdbId, mediaType, season, episode, title, nextEpisode, onNextEpisode, autoplay = false, malId, malTitle }: VideoPlayerProps) {
   // Debug: Log nextEpisode prop
   useEffect(() => {
     console.log('[VideoPlayer] nextEpisode prop received:', nextEpisode);
   }, [nextEpisode]);
+  
+  // Debug: Log MAL info when available (for anime)
+  useEffect(() => {
+    if (malId) {
+      console.log('[VideoPlayer] MAL info available:', { malId, malTitle, season, episode });
+    }
+  }, [malId, malTitle, season, episode]);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);

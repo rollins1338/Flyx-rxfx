@@ -185,3 +185,129 @@
   border-radius: 0 2px 2px 0;
   transition: width 0.3s ease;
 }
+
+
+/* MAL-specific styles */
+.malSeasonHeader {
+  display: flex;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  background: rgba(46, 81, 162, 0.1);
+  border: 1px solid rgba(46, 81, 162, 0.2);
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+}
+
+.malSeasonInfo {
+  flex: 1;
+}
+
+.malSeasonTitle {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 0.75rem 0;
+}
+
+.malSeasonStats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.malStat {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.malSeasonPoster {
+  width: 100px;
+  height: auto;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.malSynopsis {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0 0 1.5rem 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.malNote {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 0.5rem;
+}
+
+/* MAL Episode Card - Compact style */
+.malEpisodeCard {
+  min-height: auto;
+}
+
+.malEpisodeCard .thumbnailContainer {
+  aspect-ratio: auto;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.malEpisodeNumber {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(59, 130, 246, 0.2));
+}
+
+.epNumber {
+  font-size: 2rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.malEpisodeCard .episodeInfo {
+  padding: 0.75rem;
+  text-align: center;
+}
+
+.malEpisodeCard .episodeTitle {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+/* Responsive for MAL */
+@media (max-width: 768px) {
+  .malSeasonHeader {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .malSeasonPoster {
+    width: 80px;
+    align-self: center;
+  }
+  
+  .malSeasonStats {
+    justify-content: center;
+  }
+  
+  .episodeGrid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  }
+  
+  .malEpisodeCard .thumbnailContainer {
+    height: 60px;
+  }
+  
+  .epNumber {
+    font-size: 1.5rem;
+  }
+}
