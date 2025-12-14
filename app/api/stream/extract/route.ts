@@ -111,6 +111,12 @@ export async function GET(request: NextRequest) {
     const episode = searchParams.get('episode') ? parseInt(searchParams.get('episode')!) : undefined;
     const provider = searchParams.get('provider') || '1movies';
     const sourceName = searchParams.get('source'); // Optional: fetch specific source by name
+    
+    // MAL info for anime - used to get correct episode from AnimeKai
+    // When MAL splits a TMDB season into multiple parts, we need to use the MAL ID
+    // and calculate the episode number within that MAL part
+    const malId = searchParams.get('malId') ? parseInt(searchParams.get('malId')!) : undefined;
+    const malTitle = searchParams.get('malTitle') || undefined;
 
     // Validate parameters
     if (!tmdbId) {
@@ -146,7 +152,7 @@ export async function GET(request: NextRequest) {
       
       // Try to fetch from the appropriate provider
       if (sourceName.includes('AnimeKai') || provider === 'animekai') {
-        source = await fetchAnimeKaiSourceByName(sourceName, tmdbId, type, season, episode);
+        source = await fetchAnimeKaiSourceByName(sourceName, tmdbId, type, season, episode, malId, malTitle);
         usedProvider = 'animekai';
       } else if (sourceName.includes('1movies') || provider === '1movies') {
         source = await fetchOneMoviesSourceByName(sourceName, tmdbId, type, season, episode);
@@ -285,11 +291,14 @@ export async function GET(request: NextRequest) {
       // If explicitly requesting animekai, use it directly (no fallback to preserve tab separation)
       if (provider === 'animekai') {
         console.log('[EXTRACT] Using AnimeKai (explicit request)...');
+        if (malId) {
+          console.log(`[EXTRACT] MAL info provided: ID=${malId}, Title="${malTitle}"`);
+        }
         if (!ANIMEKAI_ENABLED) {
           throw new Error('AnimeKai provider is disabled');
         }
         
-        const animekaiResult = await extractAnimeKaiStreams(tmdbId, type, season, episode);
+        const animekaiResult = await extractAnimeKaiStreams(tmdbId, type, season, episode, malId, malTitle);
         
         if (animekaiResult.sources.length > 0) {
           console.log(`[EXTRACT] ✓ AnimeKai: ${animekaiResult.sources.length} sources`);
@@ -302,9 +311,12 @@ export async function GET(request: NextRequest) {
       // If content is anime (auto-detected) and not explicitly requesting a provider, try AnimeKai first
       if (isAnime) {
         console.log('[EXTRACT] Detected ANIME - trying AnimeKai first...');
+        if (malId) {
+          console.log(`[EXTRACT] MAL info provided: ID=${malId}, Title="${malTitle}"`);
+        }
         if (ANIMEKAI_ENABLED) {
           try {
-            const animekaiResult = await extractAnimeKaiStreams(tmdbId, type, season, episode);
+            const animekaiResult = await extractAnimeKaiStreams(tmdbId, type, season, episode, malId, malTitle);
             
             if (animekaiResult.sources.length > 0) {
               const workingSources = animekaiResult.sources.filter(s => s.status === 'working');

@@ -1130,14 +1130,26 @@ async function getStreamFromServer(lid: string, serverName: string): Promise<Str
 
 /**
  * Main extraction function for AnimeKai
+ * 
+ * @param tmdbId - TMDB ID of the content
+ * @param type - 'movie' or 'tv'
+ * @param season - Season number (TMDB)
+ * @param episode - Episode number (TMDB - may need conversion for MAL split seasons)
+ * @param malId - Optional MAL ID for direct lookup (used when TMDB season is split into multiple MAL entries)
+ * @param malTitle - Optional MAL title for the specific entry
  */
 export async function extractAnimeKaiStreams(
   tmdbId: string,
   type: 'movie' | 'tv',
   season?: number,
-  episode?: number
+  episode?: number,
+  malId?: number,
+  malTitle?: string
 ): Promise<ExtractionResult> {
   console.log(`[AnimeKai] Extracting streams for ${type} TMDB ID ${tmdbId}, S${season || 1}E${episode || 1}...`);
+  if (malId) {
+    console.log(`[AnimeKai] MAL override: ID=${malId}, Title="${malTitle}"`);
+  }
 
   try {
     // Step 1: Get anime IDs (MAL/AniList) from TMDB ID
@@ -1197,9 +1209,40 @@ export async function extractAnimeKaiStreams(
     
     let animeResult: { content_id: string; title: string; episodes?: ParsedEpisodes } | null = null;
     
-    // For seasons > 1, ALWAYS try season-specific search FIRST
+    // If we have a specific MAL title (from MAL split), search for it FIRST
+    // This handles cases like Bleach TYBW where TMDB S2 is split into 3 MAL entries
+    if (malTitle) {
+      console.log(`[AnimeKai] MAL title provided - searching for: "${malTitle}"`);
+      
+      // Try the MAL title directly
+      animeResult = await searchAnimeKai(malTitle, malId || null);
+      
+      if (!animeResult) {
+        // Try variations of the MAL title
+        const malTitleVariants = [
+          malTitle.replace(/:/g, ''), // Remove colons
+          malTitle.replace(/-/g, ' '), // Replace hyphens with spaces
+          malTitle.split(':').pop()?.trim() || malTitle, // Just the subtitle
+        ];
+        
+        for (const variant of malTitleVariants) {
+          if (variant !== malTitle) {
+            console.log(`[AnimeKai] Trying MAL title variant: "${variant}"`);
+            animeResult = await searchAnimeKai(variant, null);
+            if (animeResult) {
+              console.log(`[AnimeKai] ✓ Found with MAL title variant: "${animeResult.title}"`);
+              break;
+            }
+          }
+        }
+      } else {
+        console.log(`[AnimeKai] ✓ Found with MAL title: "${animeResult.title}"`);
+      }
+    }
+    
+    // For seasons > 1, ALWAYS try season-specific search FIRST (if MAL title didn't work)
     // This is because anime sites list each season as a separate entry
-    if (seasonNum > 1 && seasonSearchVariants.length > 0) {
+    if (!animeResult && seasonNum > 1 && seasonSearchVariants.length > 0) {
       console.log(`[AnimeKai] Season ${seasonNum} requested - trying season-specific search first...`);
       
       for (const variant of seasonSearchVariants) {
@@ -1523,9 +1566,14 @@ export async function fetchAnimeKaiSourceByName(
   tmdbId: string,
   type: 'movie' | 'tv',
   season?: number,
-  episode?: number
+  episode?: number,
+  malId?: number,
+  malTitle?: string
 ): Promise<StreamSource | null> {
   console.log(`[AnimeKai] Fetching specific server: ${serverName}`);
+  if (malId) {
+    console.log(`[AnimeKai] MAL override: ID=${malId}, Title="${malTitle}"`);
+  }
 
   try {
     // Get anime info
@@ -1565,10 +1613,31 @@ export async function fetchAnimeKaiSourceByName(
     
     let animeResult: { content_id: string; title: string; episodes?: ParsedEpisodes } | null = null;
     
-    // For seasons > 1, ALWAYS try season-specific search FIRST
+    // If we have a specific MAL title (from MAL split), search for it FIRST
+    if (malTitle) {
+      console.log(`[AnimeKai] MAL title provided - searching for: "${malTitle}"`);
+      animeResult = await searchAnimeKai(malTitle, malId || null);
+      
+      if (!animeResult) {
+        // Try variations
+        const malTitleVariants = [
+          malTitle.replace(/:/g, ''),
+          malTitle.replace(/-/g, ' '),
+          malTitle.split(':').pop()?.trim() || malTitle,
+        ];
+        for (const variant of malTitleVariants) {
+          if (variant !== malTitle) {
+            animeResult = await searchAnimeKai(variant, null);
+            if (animeResult) break;
+          }
+        }
+      }
+    }
+    
+    // For seasons > 1, ALWAYS try season-specific search FIRST (if MAL title didn't work)
     // This is critical because anime sites list each season as a separate entry
     // e.g., "Record of Ragnarok III" is a different entry from "Record of Ragnarok"
-    if (seasonNum > 1 && baseTitle && seasonVariants.length > 0) {
+    if (!animeResult && seasonNum > 1 && baseTitle && seasonVariants.length > 0) {
       console.log(`[AnimeKai] Season ${seasonNum} requested - trying season-specific search first...`);
       if (tmdbSeasonName) {
         console.log(`[AnimeKai] TMDB Season name: "${tmdbSeasonName}"`);

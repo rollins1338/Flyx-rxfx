@@ -358,6 +358,14 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
         params.append('season', season.toString());
         params.append('episode', episode.toString());
       }
+      
+      // Pass MAL info for anime - used by AnimeKai to get correct episode
+      if (malId) {
+        params.append('malId', malId.toString());
+      }
+      if (malTitle) {
+        params.append('malTitle', malTitle);
+      }
 
       console.log(`[VideoPlayer] Fetching sources for ${providerName}:`, `/api/stream/extract?${params}`);
 
