@@ -157,6 +157,18 @@ export async function getMALAnimeRelations(malId: number): Promise<MALRelation[]
   }
 }
 
+// Known title mappings from TMDB to MAL search terms
+const TITLE_MAPPINGS: Record<string, string> = {
+  'thousand-year blood war': 'Sennen Kessen',
+  'attack on titan': 'Shingeki no Kyojin',
+  'demon slayer': 'Kimetsu no Yaiba',
+  'my hero academia': 'Boku no Hero Academia',
+  'jujutsu kaisen': 'Jujutsu Kaisen',
+  'spy x family': 'Spy x Family',
+  'chainsaw man': 'Chainsaw Man',
+  'one punch man': 'One Punch Man',
+};
+
 /**
  * Find the best MAL match for a TMDB anime
  */
@@ -165,14 +177,31 @@ export async function findMALMatch(
   _tmdbYear?: number, // Reserved for future year-based filtering
   tmdbType?: 'movie' | 'tv'
 ): Promise<MALAnime | null> {
-  // Clean up title for search
-  const cleanTitle = tmdbTitle
+  console.log(`[MAL] Finding match for: "${tmdbTitle}"`);
+  
+  // Clean up title for search - but keep important keywords like "Thousand-Year Blood War"
+  let cleanTitle = tmdbTitle
     .replace(/\s*\(.*?\)\s*/g, '') // Remove parenthetical info
     .replace(/\s*-\s*Season\s*\d+/gi, '') // Remove "- Season X"
     .replace(/\s*Season\s*\d+/gi, '') // Remove "Season X"
     .trim();
   
-  const results = await searchMALAnime(cleanTitle, 15);
+  // Check for known title mappings
+  const titleLower = cleanTitle.toLowerCase();
+  for (const [englishTerm, japaneseTerm] of Object.entries(TITLE_MAPPINGS)) {
+    if (titleLower.includes(englishTerm)) {
+      // Replace the English term with Japanese term for better MAL search
+      const baseName = cleanTitle.split(':')[0].trim(); // Get "Bleach" from "Bleach: Thousand-Year Blood War"
+      cleanTitle = `${baseName} ${japaneseTerm}`;
+      console.log(`[MAL] Applied title mapping: "${englishTerm}" -> "${japaneseTerm}"`);
+      break;
+    }
+  }
+  
+  console.log(`[MAL] Search query: "${cleanTitle}"`);
+  
+  const results = await searchMALAnime(cleanTitle, 25);
+  console.log(`[MAL] Search returned ${results.length} results`);
   
   if (results.length === 0) {
     // Try with original title
@@ -193,12 +222,28 @@ export async function findMALMatch(
     const resultTitleLower = result.title.toLowerCase();
     const resultEnglishLower = result.title_english?.toLowerCase() || '';
     
+    // Exact match
     if (resultTitleLower === titleLower || resultEnglishLower === titleLower) {
       score += 100;
-    } else if (resultTitleLower.includes(titleLower) || resultEnglishLower.includes(titleLower)) {
+    } 
+    // Check if search title contains result title or vice versa
+    else if (resultTitleLower.includes(titleLower) || resultEnglishLower.includes(titleLower)) {
       score += 50;
-    } else if (titleLower.includes(resultTitleLower) || titleLower.includes(resultEnglishLower)) {
+    } else if (titleLower.includes(resultTitleLower) || (resultEnglishLower && titleLower.includes(resultEnglishLower))) {
       score += 30;
+    }
+    
+    // Special handling for specific keywords that should match
+    // e.g., "Thousand-Year Blood War" should strongly prefer entries with that phrase
+    const keywords = ['thousand-year', 'blood war', 'sennen kessen', 'tybw'];
+    for (const keyword of keywords) {
+      if (titleLower.includes(keyword)) {
+        if (resultTitleLower.includes(keyword) || resultEnglishLower.includes(keyword)) {
+          score += 50; // Strong bonus for matching important keywords
+        } else {
+          score -= 30; // Penalty for NOT having the keyword when we're searching for it
+        }
+      }
     }
     
     // Type match
@@ -217,8 +262,17 @@ export async function findMALMatch(
   // Sort by score and get best match
   scoredResults.sort((a, b) => b.score - a.score);
   
+  // Log top 5 results for debugging
+  console.log('[MAL] Top 5 scored results:', scoredResults.slice(0, 5).map(r => ({
+    title: r.result.title,
+    english: r.result.title_english,
+    score: r.score,
+    malId: r.result.mal_id
+  })));
+  
   if (scoredResults.length > 0 && scoredResults[0].score > 20) {
     const anime = await getMALAnimeById(scoredResults[0].result.mal_id);
+    console.log(`[MAL] Best match: ${anime?.title} (${anime?.mal_id})`);
     return anime;
   }
   
@@ -226,8 +280,41 @@ export async function findMALMatch(
 }
 
 /**
+ * Recursively collect all sequel IDs following the chain
+ * e.g., Part 1 → Part 2 → Part 3
+ */
+async function collectSequelChain(
+  startId: number,
+  collected: Set<number>,
+  maxDepth: number = 10
+): Promise<void> {
+  if (maxDepth <= 0 || collected.has(startId)) return;
+  
+  collected.add(startId);
+  
+  try {
+    const relations = await getMALAnimeRelations(startId);
+    
+    for (const relation of relations) {
+      // Follow sequels and prequels to build the complete chain
+      if (relation.relation === 'Sequel' || relation.relation === 'Prequel') {
+        for (const entry of relation.entry) {
+          if (entry.type === 'anime' && !collected.has(entry.mal_id)) {
+            console.log(`[MAL] Following ${relation.relation}: ${entry.name} (${entry.mal_id})`);
+            await collectSequelChain(entry.mal_id, collected, maxDepth - 1);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error(`[MAL] Error collecting sequel chain for ${startId}:`, error);
+  }
+}
+
+/**
  * Get all seasons/entries for an anime series
  * This handles cases like Bleach TYBW where MAL has multiple entries
+ * Recursively follows sequel/prequel chains to find all parts
  */
 export async function getMALSeriesSeasons(malId: number): Promise<MALAnimeDetails | null> {
   try {
@@ -235,31 +322,22 @@ export async function getMALSeriesSeasons(malId: number): Promise<MALAnimeDetail
     const mainAnime = await getMALAnimeById(malId);
     if (!mainAnime) return null;
     
-    // Get relations to find all related entries
-    const relations = await getMALAnimeRelations(malId);
+    console.log(`[MAL] Getting series seasons for: ${mainAnime.title} (${malId})`);
     
-    // Collect all related anime IDs (sequels, prequels, side stories that are TV)
+    // Recursively collect all related anime IDs following sequel/prequel chains
     const relatedIds = new Set<number>();
-    relatedIds.add(malId);
+    await collectSequelChain(malId, relatedIds);
     
-    const relevantRelations = ['Sequel', 'Prequel', 'Parent story', 'Side story'];
-    
-    for (const relation of relations) {
-      if (relevantRelations.includes(relation.relation)) {
-        for (const entry of relation.entry) {
-          if (entry.type === 'anime') {
-            relatedIds.add(entry.mal_id);
-          }
-        }
-      }
-    }
+    console.log(`[MAL] Found ${relatedIds.size} related entries:`, Array.from(relatedIds));
     
     // Fetch details for all related anime
     const allAnimePromises = Array.from(relatedIds).map(id => getMALAnimeById(id));
     const allAnimeResults = await Promise.all(allAnimePromises);
     const allAnime = allAnimeResults.filter((a): a is MALAnime => a !== null);
     
-    // Filter to only TV series and sort by air date
+    console.log(`[MAL] Fetched ${allAnime.length} anime details`);
+    
+    // Filter to only TV series and ONA, sort by air date
     const tvSeries = allAnime
       .filter(a => a.type === 'TV' || a.type === 'ONA')
       .sort((a, b) => {
@@ -268,8 +346,29 @@ export async function getMALSeriesSeasons(malId: number): Promise<MALAnimeDetail
         return dateA - dateB;
       });
     
+    console.log(`[MAL] Filtered to ${tvSeries.length} TV/ONA series:`, tvSeries.map(a => ({
+      title: a.title,
+      episodes: a.episodes,
+      aired: a.aired.from
+    })));
+    
+    // For Bleach TYBW specifically, we need to filter to only the TYBW entries
+    // Check if the main anime title contains specific keywords
+    const mainTitleLower = mainAnime.title.toLowerCase();
+    const isTYBW = mainTitleLower.includes('sennen kessen') || mainTitleLower.includes('thousand-year');
+    
+    let filteredSeries = tvSeries;
+    if (isTYBW) {
+      // Filter to only TYBW entries (they all have "Sennen Kessen" in the title)
+      filteredSeries = tvSeries.filter(a => 
+        a.title.toLowerCase().includes('sennen kessen') || 
+        a.title.toLowerCase().includes('thousand-year')
+      );
+      console.log(`[MAL] Filtered to TYBW entries only: ${filteredSeries.length}`);
+    }
+    
     // Convert to MALSeason format
-    const seasons: MALSeason[] = tvSeries.map((anime, index) => ({
+    const seasons: MALSeason[] = filteredSeries.map((anime, index) => ({
       malId: anime.mal_id,
       title: anime.title,
       titleEnglish: anime.title_english,
@@ -286,6 +385,8 @@ export async function getMALSeriesSeasons(malId: number): Promise<MALAnimeDetail
     
     // Calculate total episodes
     const totalEpisodes = seasons.reduce((sum, s) => sum + (s.episodes || 0), 0);
+    
+    console.log(`[MAL] Final result: ${seasons.length} seasons, ${totalEpisodes} total episodes`);
     
     return {
       mainEntry: mainAnime,

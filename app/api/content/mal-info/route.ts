@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
   const cacheKey = `${tmdbId}-${type}`;
   const cached = malCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    console.log(`[mal-info] Cache hit for ${cacheKey}, seasons: ${cached.data?.allSeasons?.length || 0}`);
     return NextResponse.json({
       success: true,
       data: cached.data,
@@ -61,8 +62,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    console.log(`[mal-info] Fetching MAL data for: "${title}" (${tmdbId})`);
+    
     // Get MAL data
     const malData = await malService.getDataForTMDB(title, undefined, type);
+
+    console.log(`[mal-info] MAL result:`, {
+      found: !!malData,
+      mainEntry: malData?.mainEntry?.title,
+      seasonsCount: malData?.allSeasons?.length || 0,
+      seasons: malData?.allSeasons?.map(s => ({ title: s.title, eps: s.episodes }))
+    });
 
     // Cache the result
     malCache.set(cacheKey, { data: malData, timestamp: Date.now() });
@@ -79,6 +89,12 @@ export async function GET(request: NextRequest) {
       success: true,
       data: malData,
       cached: false,
+      debug: {
+        searchedTitle: title,
+        mainEntry: malData.mainEntry?.title,
+        seasonsCount: malData.allSeasons?.length,
+        totalEpisodes: malData.totalEpisodes
+      }
     });
   } catch (error) {
     console.error('[mal-info] Error:', error);
