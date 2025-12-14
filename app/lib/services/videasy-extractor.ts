@@ -65,6 +65,39 @@ const HEADERS = {
   'Connection': 'keep-alive',
 };
 
+// Rate limiting configuration
+const MIN_DELAY_MS = 800;  // Minimum delay between requests
+const MAX_DELAY_MS = 2000; // Maximum delay for backoff
+const BACKOFF_MULTIPLIER = 1.5; // Exponential backoff multiplier
+
+// Track rate limit state
+let lastRequestTime = 0;
+let consecutiveFailures = 0;
+
+/**
+ * Delay with exponential backoff based on consecutive failures
+ */
+async function rateLimitDelay(): Promise<void> {
+  const now = Date.now();
+  const timeSinceLastRequest = now - lastRequestTime;
+  
+  // Calculate delay with exponential backoff
+  const backoffDelay = Math.min(
+    MIN_DELAY_MS * Math.pow(BACKOFF_MULTIPLIER, consecutiveFailures),
+    MAX_DELAY_MS
+  );
+  
+  // Ensure minimum time between requests
+  const requiredDelay = Math.max(0, backoffDelay - timeSinceLastRequest);
+  
+  if (requiredDelay > 0) {
+    console.log(`[Videasy] Rate limit delay: ${Math.round(requiredDelay)}ms (failures: ${consecutiveFailures})`);
+    await new Promise(resolve => setTimeout(resolve, requiredDelay));
+  }
+  
+  lastRequestTime = Date.now();
+}
+
 // Language display names for UI (exported for use in other components)
 export const LANGUAGE_NAMES: Record<string, string> = {
   'en': 'English',
@@ -104,7 +137,7 @@ const SOURCES = [
 ];
 
 /**
- * Fetch encrypted data from Videasy API
+ * Fetch encrypted data from Videasy API with rate limiting
  */
 async function fetchFromVideasy(
   endpoint: string,
@@ -115,9 +148,15 @@ async function fetchFromVideasy(
   season?: number,
   episode?: number,
   queryParams?: string,
-  useAltApi: boolean = false
+  useAltApi: boolean = false,
+  retryCount: number = 0
 ): Promise<string | null> {
+  const MAX_RETRIES = 2;
+  
   try {
+    // Apply rate limiting delay before each request
+    await rateLimitDelay();
+    
     const baseUrl = useAltApi ? VIDEASY_API_BASE_ALT : VIDEASY_API_BASE;
     
     // Build URL
@@ -143,7 +182,32 @@ async function fetchFromVideasy(
 
     clearTimeout(timeoutId);
 
+    // Handle rate limiting (429)
+    if (response.status === 429) {
+      consecutiveFailures++;
+      console.log(`[Videasy] ${endpoint}: HTTP 429 (rate limited), failures: ${consecutiveFailures}`);
+      
+      // Check for Retry-After header
+      const retryAfter = response.headers.get('Retry-After');
+      if (retryAfter) {
+        const waitTime = parseInt(retryAfter) * 1000 || 5000;
+        console.log(`[Videasy] Retry-After header: waiting ${waitTime}ms`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+      
+      // Retry with exponential backoff
+      if (retryCount < MAX_RETRIES) {
+        const backoffWait = MIN_DELAY_MS * Math.pow(2, retryCount + 1);
+        console.log(`[Videasy] Retrying ${endpoint} after ${backoffWait}ms (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+        await new Promise(resolve => setTimeout(resolve, backoffWait));
+        return fetchFromVideasy(endpoint, tmdbId, title, year, type, season, episode, queryParams, useAltApi, retryCount + 1);
+      }
+      
+      return null;
+    }
+
     if (!response.ok) {
+      consecutiveFailures++;
       console.log(`[Videasy] ${endpoint}: HTTP ${response.status}`);
       return null;
     }
@@ -151,12 +215,16 @@ async function fetchFromVideasy(
     const text = await response.text();
     
     if (!text || text.trim() === '' || text.includes('error') || text.includes('Error')) {
+      consecutiveFailures++;
       console.log(`[Videasy] ${endpoint}: Empty or error response`);
       return null;
     }
 
+    // Success - reset failure counter
+    consecutiveFailures = Math.max(0, consecutiveFailures - 1);
     return text;
   } catch (error) {
+    consecutiveFailures++;
     if (error instanceof Error && error.name === 'AbortError') {
       console.log(`[Videasy] ${endpoint}: Timeout`);
     } else {

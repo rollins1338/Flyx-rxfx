@@ -59,8 +59,41 @@ const HEADERS = {
   'Connection': 'keep-alive',
 };
 
+// Rate limiting configuration
+const MIN_DELAY_MS = 800;  // Minimum delay between requests
+const MAX_DELAY_MS = 2000; // Maximum delay for backoff
+const BACKOFF_MULTIPLIER = 1.5;
+
+// Track rate limit state
+let lastRequestTime = 0;
+let consecutiveFailures = 0;
+
 /**
- * Fetch encrypted data from Videasy API (1movies endpoint)
+ * Delay with exponential backoff based on consecutive failures
+ */
+async function rateLimitDelay(): Promise<void> {
+  const now = Date.now();
+  const timeSinceLastRequest = now - lastRequestTime;
+  
+  // Calculate delay with exponential backoff
+  const backoffDelay = Math.min(
+    MIN_DELAY_MS * Math.pow(BACKOFF_MULTIPLIER, consecutiveFailures),
+    MAX_DELAY_MS
+  );
+  
+  // Ensure minimum time between requests
+  const requiredDelay = Math.max(0, backoffDelay - timeSinceLastRequest);
+  
+  if (requiredDelay > 0) {
+    console.log(`[1movies] Rate limit delay: ${Math.round(requiredDelay)}ms (failures: ${consecutiveFailures})`);
+    await new Promise(resolve => setTimeout(resolve, requiredDelay));
+  }
+  
+  lastRequestTime = Date.now();
+}
+
+/**
+ * Fetch encrypted data from Videasy API (1movies endpoint) with rate limiting
  */
 async function fetchFrom1Movies(
   tmdbId: string,
@@ -68,9 +101,15 @@ async function fetchFrom1Movies(
   year: string,
   type: 'movie' | 'tv',
   season?: number,
-  episode?: number
+  episode?: number,
+  retryCount: number = 0
 ): Promise<string | null> {
+  const MAX_RETRIES = 2;
+  
   try {
+    // Apply rate limiting delay before each request
+    await rateLimitDelay();
+    
     // Build URL for 1movies endpoint
     let url = `${VIDEASY_API_BASE}/1movies/sources-with-title?title=${encodeURIComponent(title)}&mediaType=${type}&year=${year}&tmdbId=${tmdbId}`;
     
@@ -90,7 +129,32 @@ async function fetchFrom1Movies(
 
     clearTimeout(timeoutId);
 
+    // Handle rate limiting (429)
+    if (response.status === 429) {
+      consecutiveFailures++;
+      console.log(`[1movies] HTTP 429 (rate limited), failures: ${consecutiveFailures}`);
+      
+      // Check for Retry-After header
+      const retryAfter = response.headers.get('Retry-After');
+      if (retryAfter) {
+        const waitTime = parseInt(retryAfter) * 1000 || 5000;
+        console.log(`[1movies] Retry-After header: waiting ${waitTime}ms`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+      
+      // Retry with exponential backoff
+      if (retryCount < MAX_RETRIES) {
+        const backoffWait = MIN_DELAY_MS * Math.pow(2, retryCount + 1);
+        console.log(`[1movies] Retrying after ${backoffWait}ms (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+        await new Promise(resolve => setTimeout(resolve, backoffWait));
+        return fetchFrom1Movies(tmdbId, title, year, type, season, episode, retryCount + 1);
+      }
+      
+      return null;
+    }
+
     if (!response.ok) {
+      consecutiveFailures++;
       console.log(`[1movies] HTTP ${response.status}`);
       return null;
     }
@@ -98,13 +162,17 @@ async function fetchFrom1Movies(
     const text = await response.text();
     
     if (!text || text.trim() === '' || text.includes('error') || text.includes('Error')) {
+      consecutiveFailures++;
       console.log(`[1movies] Empty or error response`);
       return null;
     }
 
+    // Success - reset failure counter
+    consecutiveFailures = Math.max(0, consecutiveFailures - 1);
     console.log(`[1movies] Got encrypted response (${text.length} chars)`);
     return text;
   } catch (error) {
+    consecutiveFailures++;
     if (error instanceof Error && error.name === 'AbortError') {
       console.log(`[1movies] Timeout`);
     } else {

@@ -41,11 +41,49 @@ const CAPSOLVER_API_KEY = process.env.CAPSOLVER_API_KEY;
 // Domain for stream URLs
 const STREAM_DOMAIN = 'shadowlandschronicles.com';
 
+// Rate limiting configuration
+const VIDSRC_MIN_DELAY_MS = 500;  // Minimum delay between requests
+const VIDSRC_MAX_DELAY_MS = 3000; // Maximum delay for backoff
+const VIDSRC_BACKOFF_MULTIPLIER = 1.5;
+
+// Track rate limit state
+let vidsrcLastRequestTime = 0;
+let vidsrcConsecutiveFailures = 0;
+
 /**
- * Fetch with proper headers and timeout
+ * Delay with exponential backoff based on consecutive failures
+ */
+async function vidsrcRateLimitDelay(): Promise<void> {
+  const now = Date.now();
+  const timeSinceLastRequest = now - vidsrcLastRequestTime;
+  
+  // Calculate delay with exponential backoff
+  const backoffDelay = Math.min(
+    VIDSRC_MIN_DELAY_MS * Math.pow(VIDSRC_BACKOFF_MULTIPLIER, vidsrcConsecutiveFailures),
+    VIDSRC_MAX_DELAY_MS
+  );
+  
+  // Ensure minimum time between requests
+  const requiredDelay = Math.max(0, backoffDelay - timeSinceLastRequest);
+  
+  if (requiredDelay > 0) {
+    console.log(`[VidSrc] Rate limit delay: ${Math.round(requiredDelay)}ms (failures: ${vidsrcConsecutiveFailures})`);
+    await new Promise(resolve => setTimeout(resolve, requiredDelay));
+  }
+  
+  vidsrcLastRequestTime = Date.now();
+}
+
+/**
+ * Fetch with proper headers, timeout, and rate limiting
  * Uses browser-like headers to avoid Cloudflare detection
  */
-async function fetchWithHeaders(url: string, referer?: string, timeoutMs: number = 15000): Promise<Response> {
+async function fetchWithHeaders(url: string, referer?: string, timeoutMs: number = 15000, retryCount: number = 0): Promise<Response> {
+  const MAX_RETRIES = 2;
+  
+  // Apply rate limiting delay before each request
+  await vidsrcRateLimitDelay();
+  
   const headers: HeadersInit = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
@@ -82,9 +120,40 @@ async function fetchWithHeaders(url: string, referer?: string, timeoutMs: number
       redirect: 'follow',
     });
     clearTimeout(timeoutId);
+    
+    // Handle rate limiting (429)
+    if (response.status === 429) {
+      vidsrcConsecutiveFailures++;
+      console.log(`[VidSrc] HTTP 429 (rate limited), failures: ${vidsrcConsecutiveFailures}`);
+      
+      // Check for Retry-After header
+      const retryAfter = response.headers.get('Retry-After');
+      if (retryAfter) {
+        const waitTime = parseInt(retryAfter) * 1000 || 5000;
+        console.log(`[VidSrc] Retry-After header: waiting ${waitTime}ms`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+      
+      // Retry with exponential backoff
+      if (retryCount < MAX_RETRIES) {
+        const backoffWait = VIDSRC_MIN_DELAY_MS * Math.pow(2, retryCount + 1);
+        console.log(`[VidSrc] Retrying after ${backoffWait}ms (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+        await new Promise(resolve => setTimeout(resolve, backoffWait));
+        return fetchWithHeaders(url, referer, timeoutMs, retryCount + 1);
+      }
+    }
+    
+    // Success - reduce failure counter
+    if (response.ok) {
+      vidsrcConsecutiveFailures = Math.max(0, vidsrcConsecutiveFailures - 1);
+    } else {
+      vidsrcConsecutiveFailures++;
+    }
+    
     return response;
   } catch (error) {
     clearTimeout(timeoutId);
+    vidsrcConsecutiveFailures++;
     if (error instanceof Error && error.name === 'AbortError') {
       throw new Error(`Request timeout after ${timeoutMs}ms`);
     }
@@ -577,11 +646,10 @@ async function executeDecoder(
 }
 
 /**
- * Small delay to avoid rate limiting (100-300ms random)
+ * Small delay to avoid rate limiting - now uses the rate limit system
  */
-function randomDelay(): Promise<void> {
-  const delay = 100 + Math.random() * 200;
-  return new Promise(resolve => setTimeout(resolve, delay));
+async function randomDelay(): Promise<void> {
+  await vidsrcRateLimitDelay();
 }
 
 /**
