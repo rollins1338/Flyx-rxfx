@@ -61,88 +61,54 @@ export async function GET(request: NextRequest) {
     const oneMonthAgo = now - 30 * 24 * 60 * 60 * 1000;
 
     // ============================================
-    // 1. REAL-TIME DATA (from session_details - ACTIVE USER SESSIONS)
-    // Count users with active browser sessions (not ended, or recently updated)
+    // 1. REAL-TIME DATA (from live_activity table - HEARTBEAT BASED)
+    // This is the SAME source as /api/analytics/live-activity
+    // Uses heartbeat to track active users in real-time
     // 
-    // "Active" = browser session active in last 5 minutes
-    // "Watching" = users with active watch_sessions (VOD)
-    // "LiveTV" = users with active watch_sessions (content_type = 'livetv')
-    // "Browsing" = active sessions but NOT watching anything
+    // Time windows:
+    // - "totalActive": Users with heartbeat in last 2 minutes
+    // - "trulyActive": Users with heartbeat in last 60 seconds (stricter)
     // ============================================
-    const fiveMinutesAgo = now - 5 * 60 * 1000;
     const twoMinutesAgo = now - 2 * 60 * 1000;
+    const oneMinuteAgo = now - 60 * 1000;
     let realtime = { totalActive: 0, trulyActive: 0, watching: 0, browsing: 0, livetv: 0 };
     
     try {
-      // Count ACTIVE USER SESSIONS from session_details
-      // A session is active if: ended_at IS NULL OR updated_at is recent
-      const activeSessionsQuery = isNeon
+      // Count unique users per activity type from live_activity table
+      // This matches what /api/analytics/live-activity returns
+      const liveQuery = isNeon
         ? `SELECT 
-             COUNT(DISTINCT session_id) as total_sessions,
-             COUNT(DISTINCT user_id) as total_users
-           FROM session_details 
-           WHERE (ended_at IS NULL OR updated_at >= $1)
-             AND started_at >= $2`
+             activity_type, 
+             COUNT(DISTINCT user_id) as count,
+             COUNT(DISTINCT CASE WHEN last_heartbeat >= $2 THEN user_id END) as strict_count
+           FROM live_activity 
+           WHERE is_active = TRUE AND last_heartbeat >= $1 
+           GROUP BY activity_type`
         : `SELECT 
-             COUNT(DISTINCT session_id) as total_sessions,
-             COUNT(DISTINCT user_id) as total_users
-           FROM session_details 
-           WHERE (ended_at IS NULL OR updated_at >= ?)
-             AND started_at >= ?`;
+             activity_type, 
+             COUNT(DISTINCT user_id) as count,
+             COUNT(DISTINCT CASE WHEN last_heartbeat >= ? THEN user_id END) as strict_count
+           FROM live_activity 
+           WHERE is_active = 1 AND last_heartbeat >= ? 
+           GROUP BY activity_type`;
       
-      const activeResult = await adapter.query(activeSessionsQuery, 
-        isNeon ? [fiveMinutesAgo, oneDayAgo] : [fiveMinutesAgo, oneDayAgo]
+      const liveResult = await adapter.query(liveQuery, 
+        isNeon ? [twoMinutesAgo, oneMinuteAgo] : [oneMinuteAgo, twoMinutesAgo]
       );
       
-      // Total active = unique users with active browser sessions
-      realtime.totalActive = parseInt(activeResult[0]?.total_users) || 0;
-      
-      // Now get watching breakdown from watch_sessions
-      // Users currently watching content (VOD or LiveTV)
-      const watchingQuery = isNeon
-        ? `SELECT 
-             COUNT(DISTINCT user_id) as watching_count,
-             COUNT(DISTINCT CASE WHEN content_type = 'livetv' THEN user_id END) as livetv_count,
-             COUNT(DISTINCT CASE WHEN content_type != 'livetv' THEN user_id END) as vod_count
-           FROM watch_sessions 
-           WHERE (ended_at IS NULL OR updated_at >= $1)
-             AND started_at >= $2`
-        : `SELECT 
-             COUNT(DISTINCT user_id) as watching_count,
-             COUNT(DISTINCT CASE WHEN content_type = 'livetv' THEN user_id END) as livetv_count,
-             COUNT(DISTINCT CASE WHEN content_type != 'livetv' THEN user_id END) as vod_count
-           FROM watch_sessions 
-           WHERE (ended_at IS NULL OR updated_at >= ?)
-             AND started_at >= ?`;
-      
-      const watchResult = await adapter.query(watchingQuery, 
-        isNeon ? [fiveMinutesAgo, oneDayAgo] : [fiveMinutesAgo, oneDayAgo]
-      );
-      
-      const watchingUsers = parseInt(watchResult[0]?.watching_count) || 0;
-      realtime.watching = parseInt(watchResult[0]?.vod_count) || 0;
-      realtime.livetv = parseInt(watchResult[0]?.livetv_count) || 0;
-      
-      // Browsing = active sessions minus watching users
-      // (users on site but not watching anything)
-      realtime.browsing = Math.max(0, realtime.totalActive - watchingUsers);
-      
-      // "Truly active" = sessions updated in last 2 minutes (stricter)
-      const strictQuery = isNeon
-        ? `SELECT COUNT(DISTINCT user_id) as count
-           FROM session_details 
-           WHERE (ended_at IS NULL OR updated_at >= $1)
-             AND started_at >= $2`
-        : `SELECT COUNT(DISTINCT user_id) as count
-           FROM session_details 
-           WHERE (ended_at IS NULL OR updated_at >= ?)
-             AND started_at >= ?`;
-      
-      const strictResult = await adapter.query(strictQuery,
-        isNeon ? [twoMinutesAgo, oneDayAgo] : [twoMinutesAgo, oneDayAgo]
-      );
-      
-      realtime.trulyActive = parseInt(strictResult[0]?.count) || 0;
+      let total = 0;
+      let strictTotal = 0;
+      for (const row of liveResult) {
+        const count = parseInt(row.count) || 0;
+        const strictCount = parseInt(row.strict_count) || 0;
+        total += count;
+        strictTotal += strictCount;
+        if (row.activity_type === 'watching') realtime.watching = count;
+        else if (row.activity_type === 'browsing') realtime.browsing = count;
+        else if (row.activity_type === 'livetv') realtime.livetv = count;
+      }
+      realtime.totalActive = total;
+      realtime.trulyActive = strictTotal;
       
     } catch (e) {
       console.error('Error fetching realtime stats:', e);
@@ -357,7 +323,7 @@ export async function GET(request: NextRequest) {
       pageViews,
       // Include time ranges for transparency
       timeRanges: {
-        realtime: '5 minutes (from session_details, 2 min for truly active)',
+        realtime: '2 minutes (from live_activity heartbeat, 1 min for truly active)',
         dau: '24 hours',
         wau: '7 days',
         mau: '30 days',

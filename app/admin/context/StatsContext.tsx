@@ -11,11 +11,12 @@ import { createContext, useContext, useState, useEffect, useCallback, ReactNode 
 // Unified stats interface - SINGLE SOURCE OF TRUTH
 // All counts use DISTINCT user_id to avoid duplicates
 interface UnifiedStats {
-  // Real-time (from session_details - ACTIVE USER SESSIONS)
-  liveUsers: number;          // Users with active browser sessions (last 5 min)
-  trulyActiveUsers: number;   // Users with sessions updated in last 2 min (stricter)
+  // Real-time (from live_activity table - HEARTBEAT BASED)
+  // Same source as /api/analytics/live-activity for consistency
+  liveUsers: number;          // Users with heartbeat in last 2 min
+  trulyActiveUsers: number;   // Users with heartbeat in last 1 min (stricter)
   liveWatching: number;       // Users watching VOD content
-  liveBrowsing: number;       // Users on site but not watching
+  liveBrowsing: number;       // Users browsing (not watching)
   liveTVViewers: number;      // Users watching Live TV
   
   // User metrics (user_activity table) - all counts are UNIQUE users
@@ -140,9 +141,8 @@ export function StatsProvider({ children }: { children: ReactNode }) {
       
       if (data.success) {
         setStats({
-          // Real-time (from session_details - ACTIVE USER SESSIONS)
-          // Uses active browser sessions (updated in last 5 min) for accurate counts
-          // trulyActive uses stricter 2-min window
+          // Real-time (from live_activity table - HEARTBEAT BASED)
+          // Same source as /api/analytics/live-activity for consistency
           liveUsers: data.realtime?.totalActive || 0,
           trulyActiveUsers: data.realtime?.trulyActive || 0,
           liveWatching: data.realtime?.watching || 0,
