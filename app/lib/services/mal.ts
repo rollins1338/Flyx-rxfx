@@ -282,6 +282,10 @@ export async function findMALMatch(
 /**
  * Recursively collect all sequel IDs following the chain
  * e.g., Part 1 → Part 2 → Part 3
+ * 
+ * IMPORTANT: Only follow SEQUEL relations, not PREQUEL
+ * This prevents including the original series when searching for a specific season
+ * e.g., Bleach TYBW should not include original Bleach (366 eps)
  */
 async function collectSequelChain(
   startId: number,
@@ -296,8 +300,9 @@ async function collectSequelChain(
     const relations = await getMALAnimeRelations(startId);
     
     for (const relation of relations) {
-      // Follow sequels and prequels to build the complete chain
-      if (relation.relation === 'Sequel' || relation.relation === 'Prequel') {
+      // ONLY follow SEQUEL relations to get subsequent parts
+      // Do NOT follow PREQUEL to avoid including the original series
+      if (relation.relation === 'Sequel') {
         for (const entry of relation.entry) {
           if (entry.type === 'anime' && !collected.has(entry.mal_id)) {
             console.log(`[MAL] Following ${relation.relation}: ${entry.name} (${entry.mal_id})`);
@@ -360,11 +365,16 @@ export async function getMALSeriesSeasons(malId: number): Promise<MALAnimeDetail
     let filteredSeries = tvSeries;
     if (isTYBW) {
       // Filter to only TYBW entries (they all have "Sennen Kessen" in the title)
+      // Also filter out entries with null episodes (not yet aired)
       filteredSeries = tvSeries.filter(a => 
-        a.title.toLowerCase().includes('sennen kessen') || 
-        a.title.toLowerCase().includes('thousand-year')
+        (a.title.toLowerCase().includes('sennen kessen') || 
+         a.title.toLowerCase().includes('thousand-year')) &&
+        a.episodes !== null && a.episodes > 0
       );
       console.log(`[MAL] Filtered to TYBW entries only: ${filteredSeries.length}`);
+    } else {
+      // For non-TYBW anime, still filter out entries with null episodes
+      filteredSeries = tvSeries.filter(a => a.episodes !== null && a.episodes > 0);
     }
     
     // Convert to MALSeason format
