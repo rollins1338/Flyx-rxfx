@@ -307,12 +307,32 @@ export default function DetailsPageClient({
         );
         const malResult = await malResponse.json();
         
+        // Debug: Log the full MAL result
+        console.log('[DetailsPage] MAL API response:', {
+          success: malResult.success,
+          hasData: !!malResult.data,
+          seasonsCount: malResult.data?.allSeasons?.length || 0,
+          seasons: malResult.data?.allSeasons?.map((s: any) => ({ 
+            title: s.title, 
+            titleEnglish: s.titleEnglish,
+            malId: s.malId,
+            episodes: s.episodes 
+          })),
+          searchedTitle: searchTitle,
+          debug: malResult.debug
+        });
+        
         if (malResult.success && malResult.data && malResult.data.allSeasons.length > 1) {
           // Only use MAL splitting if there are multiple MAL entries for this anime
-          console.log('[DetailsPage] MAL data loaded with multiple parts:', malResult.data);
+          console.log('[DetailsPage] MAL data loaded with multiple parts:', malResult.data.allSeasons.length);
           setMalData(malResult.data);
         } else {
           console.log('[DetailsPage] Single MAL entry or no match, using standard TMDB display');
+          console.log('[DetailsPage] Reason:', {
+            success: malResult.success,
+            hasData: !!malResult.data,
+            seasonsCount: malResult.data?.allSeasons?.length || 0
+          });
           // Still mark as anime for UI purposes, but don't use MAL splitting
           setMalData(null);
         }

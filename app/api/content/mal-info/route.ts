@@ -71,8 +71,15 @@ export async function GET(request: NextRequest) {
     console.log(`[mal-info] MAL result:`, {
       found: !!malData,
       mainEntry: malData?.mainEntry?.title,
+      mainEntryMalId: malData?.mainEntry?.mal_id,
       seasonsCount: malData?.allSeasons?.length || 0,
-      seasons: malData?.allSeasons?.map(s => ({ title: s.title, eps: s.episodes }))
+      seasons: malData?.allSeasons?.map(s => ({ 
+        title: s.title, 
+        titleEnglish: s.titleEnglish,
+        malId: s.malId,
+        eps: s.episodes 
+      })),
+      totalEpisodes: malData?.totalEpisodes
     });
 
     // Cache the result
