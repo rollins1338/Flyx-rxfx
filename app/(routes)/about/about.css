@@ -547,6 +547,43 @@ blockquote cite {
   font-size: 0.95rem;
 }
 
+/* DMCA Notice Box */
+.dmca-notice {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.1), rgba(99, 102, 241, 0.08));
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  border-radius: 12px;
+  padding: 28px;
+  margin: 28px 0;
+  font-family: -apple-system, sans-serif;
+}
+
+.dmca-notice h4 {
+  font-size: 1.15rem;
+  color: #c4b5fd;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dmca-notice p {
+  font-size: 0.95rem;
+  margin-bottom: 14px;
+  color: #cbd5e1;
+}
+
+.dmca-notice p:last-child {
+  margin-bottom: 0;
+}
+
+.dmca-notice em {
+  color: #a5b4fc;
+}
+
+.dmca-notice strong {
+  color: #e2e8f0;
+}
+
 .legal-footer {
   margin-top: 32px;
   padding-top: 20px;

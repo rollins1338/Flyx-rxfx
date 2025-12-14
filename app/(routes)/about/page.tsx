@@ -1367,11 +1367,49 @@ export default function AboutPage() {
               to do the same. We comply with the provisions of the Digital Millennium Copyright Act 
               (DMCA), 17 U.S.C. § 512, and similar international copyright frameworks.
             </p>
+            
+            <div className="dmca-notice">
+              <h4>🏴‍☠️ A Note to Rights Holders Considering a DMCA Notice</h4>
+              <p>
+                Before you send that takedown request, let us be crystal clear about what Flyx actually is:
+              </p>
+              <p>
+                <strong>We do not host any content. Not a single frame. Not one byte of video data.</strong>
+              </p>
+              <p>
+                What we do is reverse engineer the obfuscation and security measures of <em>pirate streaming 
+                sites</em>—the same sites that are actually profiting from your content through malware, 
+                cryptocurrency mining, and aggressive advertising. We extract streams from <em>their</em> 
+                infrastructure and present them without the exploitation.
+              </p>
+              <p>
+                In other words: we are stealing from the people who are stealing from you.
+              </p>
+              <p>
+                <strong>Here&apos;s the thing:</strong> We have spent hundreds of hours reverse engineering 
+                these pirate operations. We know how they work. We know where they host. We know their 
+                infrastructure, their CDN providers, their obfuscation techniques, and their operational 
+                patterns. We have documentation on their systems that would make your legal team very happy.
+              </p>
+              <p>
+                <strong>We would be more than happy to share our findings.</strong>
+              </p>
+              <p>
+                If you want to actually stop the infringement at its source, we can point you to the 
+                real hosts—the ones making money off your content. We can provide technical details about 
+                their infrastructure, help identify their hosting providers, and share intelligence that 
+                would be far more useful than sending a takedown notice to a site that literally does not 
+                have your content on its servers.
+              </p>
+              <p>
+                Your fight is with them, not us. But we are happy to help you fight them.
+              </p>
+            </div>
+
             <p>
-              If you believe that content accessible through the Platform infringes your copyright, 
-              please note that we do not host such content directly. However, we will promptly 
-              investigate and, where appropriate, remove or disable access to any links, references, 
-              or technical integrations that facilitate access to allegedly infringing material.
+              That said, if you still wish to submit a DMCA notice, we will promptly investigate and, 
+              where appropriate, remove or disable access to any links, references, or technical 
+              integrations that facilitate access to allegedly infringing material.
             </p>
             <p>
               To submit a valid DMCA takedown notice, please provide:
@@ -1388,6 +1426,10 @@ export default function AboutPage() {
               right that is allegedly infringed</li>
               <li>Your physical or electronic signature</li>
             </ul>
+            <p>
+              <strong>But seriously:</strong> Reach out first. We would rather help you take down the 
+              actual pirates than play legal whack-a-mole with a site that is, ironically, on your side.
+            </p>
 
             <h3>11.4 Disclaimer of Warranties</h3>
             <p>
