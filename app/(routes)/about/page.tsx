@@ -140,9 +140,15 @@ export default function AboutPage() {
                 filtering. The platform that was &quot;good enough&quot; is now genuinely good.
               </p>
               <p>
+                <strong>Latest Crack (December 2025):</strong> 111movies has been fully reverse engineered. 
+                AES-256-CBC encryption with custom alphabet substitution—cracked without Puppeteer. 
+                See our <Link href="/reverse-engineering">technical documentation</Link> for the complete 
+                breakdown including extracted keys and working code.
+              </p>
+              <p>
                 <strong>Keywords:</strong> Streaming Architecture, Reverse Engineering, Ethical Design, 
                 Obfuscation Analysis, JavaScript Archaeology, Sleep Deprivation, Monster Energy Dependency,
-                Vidsrc, Videasy, AnimeKai, Chromecast, AirPlay, TV Navigation, OpenSubtitles, Provider Migration
+                Vidsrc, Videasy, AnimeKai, 111movies, AES-256-CBC, Chromecast, AirPlay, TV Navigation, OpenSubtitles
               </p>
             </div>
           </section>
@@ -232,7 +238,8 @@ export default function AboutPage() {
                 <strong>Reverse Engineering Documentation:</strong> Comprehensive analysis of the 
                 obfuscation and security measures employed by pirate streaming providers, including 
                 detailed accounts of the author&apos;s descent into madness while debugging minified 
-                JavaScript at 3 AM.
+                JavaScript at 3 AM. <Link href="/reverse-engineering" className="inline-link">
+                Read the full technical breakdown →</Link>
               </li>
               <li>
                 <strong>Architectural Reference:</strong> A blueprint for building privacy-respecting 
@@ -819,6 +826,39 @@ export default function AboutPage() {
                 for speed, with automatic fallback between them. Extraction times dropped from 
                 5+ seconds to under 200 milliseconds. The old providers (2Embed, MoviesAPI) became 
                 backup options rather than primary sources.
+              </p>
+            </div>
+
+            <div className="war-story">
+              <h4>111movies: The AES-256 Fortress (December 2025)</h4>
+              <p>
+                111movies looked impenetrable at first. A Next.js frontend with heavily obfuscated 
+                JavaScript, API calls that returned 403 unless you knew the secret handshake, and 
+                an encoding scheme that made our heads spin. The encoded strings were 783 characters 
+                of apparent gibberish. No obvious patterns. No clear entry point.
+              </p>
+              <p>
+                We spent days deobfuscating their webpack bundles. String arrays with Base64-encoded 
+                values. Decoder functions that rotated indices. Control flow flattening that turned 
+                simple logic into spaghetti. But buried in the chaos, we found it: <code>createCipheriv</code>. 
+                They were using AES-256-CBC encryption.
+              </p>
+              <p>
+                The keys were hidden in plain sight—byte arrays passed to the cipher function. A 32-byte 
+                AES key, a 16-byte IV, and a 9-byte XOR key for post-processing. The encoding flow: 
+                encrypt → hex → XOR → UTF-8 → Base64 → alphabet substitution. Five layers of obfuscation, 
+                all cracked without touching a browser.
+              </p>
+              <p>
+                <strong>The Breakthrough:</strong> The API was returning 403 even with correct encoding. 
+                Hours of comparing our requests to browser requests revealed the culprit: a missing 
+                <code>X-Requested-With: XMLHttpRequest</code> header. One header. That was it. Add 
+                the header, get the streams. 10 sources per movie, 1080p quality, zero ads.
+              </p>
+              <p>
+                <Link href="/reverse-engineering#111movies" className="war-story-link">
+                  → Full technical breakdown with extracted keys
+                </Link>
               </p>
             </div>
 

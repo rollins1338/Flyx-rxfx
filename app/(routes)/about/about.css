@@ -462,6 +462,28 @@ blockquote cite {
   margin-bottom: 0;
 }
 
+.war-story-link {
+  display: inline-block;
+  margin-top: 8px;
+  color: #10b981;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.war-story-link:hover {
+  text-decoration: underline;
+}
+
+.inline-link {
+  color: #10b981;
+  text-decoration: none;
+}
+
+.inline-link:hover {
+  text-decoration: underline;
+}
+
 /* Stats Grid */
 .stats-grid {
   display: grid;

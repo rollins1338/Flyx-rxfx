@@ -206,6 +206,32 @@ export function isMegaUpCdnUrl(url: string): boolean {
 }
 
 /**
+ * Check if a URL is from 1movies CDN (requires RPI residential proxy)
+ * 
+ * 1movies uses Cloudflare Workers CDN domains that block:
+ *   1. Datacenter IPs (Cloudflare, AWS, Vercel, etc.)
+ *   2. Requests from other Cloudflare Workers
+ * 
+ * These domains need to go through the /animekai route -> RPI proxy
+ */
+export function is1moviesCdnUrl(url: string): boolean {
+  // 1movies CDN domains - Cloudflare Workers that block datacenter IPs
+  // Pattern: p.XXXXX.workers.dev (e.g., p.10014.workers.dev)
+  if (url.includes('.workers.dev')) {
+    // Check for 1movies-specific patterns
+    if (url.includes('p.') && url.match(/p\.\d+\.workers\.dev/)) {
+      return true;
+    }
+    // Also check for other 1movies CDN patterns
+    if (url.includes('dewshine') || url.includes('afc7d47f')) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+/**
  * Check if a source is from AnimeKai provider (all AnimeKai sources need RPI proxy)
  */
 export function isAnimeKaiSource(source: { title?: string; referer?: string }): boolean {

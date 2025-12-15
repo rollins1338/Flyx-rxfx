@@ -1,0 +1,5 @@
+Playerjs.com 19.10.30
+//	17.09.2024 12:00:39
+//	API - https://playerjs.com/docs/q=api
+
+eval(function(i,o,A,r,B,e){if(B=function(i){return(i<62?"":B(parseInt(i/62)))+((i%=62)>35?String.fromCharCode(i+29):i.toString(36))
