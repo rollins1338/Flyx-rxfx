@@ -1,11 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback, memo } from 'react';
 import Image from 'next/image';
-import { motion } from 'framer-motion';
-import { Card3D } from '@/components/ui/Card3D';
 import type { MediaItem } from '@/types/media';
-import { useIntersection } from '@/lib/hooks/useIntersection';
 
 export interface ContentCardProps {
   item: MediaItem;
@@ -15,15 +12,14 @@ export interface ContentCardProps {
 }
 
 /**
- * ContentCard - Display component for movies and TV shows
- * Features:
- * - 3D tilt effects on hover
- * - Lazy-loaded images with blur-up
- * - Rating display with visual indicator
- * - Smooth animations
- * - Intersection Observer for analytics
+ * ContentCard - Optimized display component for movies and TV shows
+ * Performance optimizations:
+ * - Uses CSS transforms instead of Framer Motion
+ * - Memoized to prevent unnecessary re-renders
+ * - Simplified hover effects
+ * - Native lazy loading
  */
-export const ContentCard: React.FC<ContentCardProps> = ({
+export const ContentCard: React.FC<ContentCardProps> = memo(({
   item,
   onSelect,
   priority = false,
@@ -32,194 +28,126 @@ export const ContentCard: React.FC<ContentCardProps> = ({
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
 
-  // Intersection observer for lazy loading and analytics
-  const { ref, isIntersecting } = useIntersection<HTMLDivElement>({
-    threshold: 0.1,
-    freezeOnceVisible: true,
-  });
-
-  const handleClick = () => {
+  const handleClick = useCallback(() => {
     onSelect?.(String(item.id));
-  };
+  }, [onSelect, item.id]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      handleClick();
+      onSelect?.(String(item.id));
     }
-  };
+  }, [onSelect, item.id]);
 
-  const handleFocus = () => {
-    // TV navigation handles scrolling, so we don't need to do it here
-    // This prevents double-scrolling issues
-  };
-
-  // Format rating to 1 decimal place
+  // Format rating
   const rating = item.rating || item.vote_average || 0;
   const formattedRating = rating.toFixed(1);
-  const ratingPercentage = (rating / 10) * 100;
 
-  // Get rating color based on score
-  const getRatingColor = (rating: number) => {
-    if (rating >= 7) return 'text-green-400';
-    if (rating >= 5) return 'text-yellow-400';
-    return 'text-red-400';
-  };
+  // Get rating color
+  const ratingColor = rating >= 7 ? 'text-green-400' : rating >= 5 ? 'text-yellow-400' : 'text-red-400';
+
+  // Get poster URL - use smaller size for better performance
+  const posterUrl = item.posterPath || item.poster_path || '';
 
   return (
     <div 
-      ref={ref} 
-      className={`content-card-wrapper ${className}`}
+      className={`content-card group cursor-pointer ${className}`}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
       data-tv-focusable="true"
       tabIndex={0}
-      onFocus={handleFocus}
+      role="button"
+      aria-label={`${item.title || item.name} - ${item.mediaType === 'movie' ? 'Movie' : 'TV Show'}`}
     >
-      <Card3D
-        onClick={handleClick}
-        onKeyDown={handleKeyDown}
-        className="h-full"
-        intensity={12}
-        glowColor="rgba(139, 92, 246, 0.4)"
-        ariaLabel={`${item.title} - ${item.mediaType === 'movie' ? 'Movie' : 'TV Show'}`}
-      >
-        <div className="relative h-full overflow-hidden">
-          {/* Poster Image */}
-          <div className="relative aspect-[2/3] w-full bg-gray-900">
-            {(isIntersecting || priority) && item.posterPath && !imageError ? (
-              <>
-                {/* Blur placeholder */}
-                {!imageLoaded && (
-                  <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 to-blue-900/20 animate-pulse" />
-                )}
-                
-                <Image
-                  src={item.posterPath || item.poster_path || ''}
-                  alt={item.title || item.name || 'Content'}
-                  fill
-                  sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                  className={`object-cover transition-opacity duration-500 ${
-                    imageLoaded ? 'opacity-100' : 'opacity-0'
-                  }`}
-                  onLoad={() => setImageLoaded(true)}
-                  onError={() => setImageError(true)}
-                  priority={priority}
-                />
-              </>
-            ) : (
-              /* Fallback for missing/error images */
-              <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-purple-900/30 to-blue-900/30">
-                <div className="text-center p-4">
-                  <div className="text-4xl mb-2">
-                    {item.mediaType === 'movie' ? '🎬' : '📺'}
-                  </div>
-                  <p className="text-sm text-gray-400 font-medium line-clamp-2">
-                    {item.title || item.name || 'Untitled'}
-                  </p>
+      <div className="relative overflow-hidden rounded-xl bg-gray-800/50 transform transition-all duration-200 ease-out group-hover:scale-[1.02] group-hover:-translate-y-1 group-focus-within:scale-[1.02] group-focus-within:-translate-y-1 group-focus-within:ring-2 group-focus-within:ring-purple-500">
+        {/* Poster Image */}
+        <div className="relative aspect-[2/3] w-full bg-gray-900">
+          {posterUrl && !imageError ? (
+            <>
+              {/* Loading placeholder */}
+              {!imageLoaded && (
+                <div className="absolute inset-0 bg-gray-800 animate-pulse" />
+              )}
+              
+              <Image
+                src={posterUrl}
+                alt={item.title || item.name || 'Content'}
+                fill
+                sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 20vw"
+                className={`object-cover transition-opacity duration-300 ${
+                  imageLoaded ? 'opacity-100' : 'opacity-0'
+                }`}
+                onLoad={() => setImageLoaded(true)}
+                onError={() => setImageError(true)}
+                priority={priority}
+                loading={priority ? 'eager' : 'lazy'}
+              />
+            </>
+          ) : (
+            /* Fallback for missing/error images */
+            <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
+              <div className="text-center p-2">
+                <div className="text-3xl mb-1">
+                  {item.mediaType === 'movie' ? '🎬' : '📺'}
                 </div>
+                <p className="text-xs text-gray-400 font-medium line-clamp-2">
+                  {item.title || item.name || 'Untitled'}
+                </p>
               </div>
-            )}
-
-            {/* Gradient overlay for text readability */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-
-            {/* Rating badge */}
-            <div className="absolute top-2 right-2 z-10">
-              <motion.div
-                className="relative"
-                initial={{ scale: 0, rotate: -180 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
-              >
-                {/* Circular progress background */}
-                <svg className="w-12 h-12 transform -rotate-90" viewBox="0 0 36 36">
-                  <circle
-                    cx="18"
-                    cy="18"
-                    r="16"
-                    fill="none"
-                    stroke="rgba(255, 255, 255, 0.1)"
-                    strokeWidth="2"
-                  />
-                  <circle
-                    cx="18"
-                    cy="18"
-                    r="16"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeDasharray={`${ratingPercentage} 100`}
-                    className={getRatingColor(rating)}
-                  />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className={`text-xs font-bold ${getRatingColor(rating)}`}>
-                    {formattedRating}
-                  </span>
-                </div>
-              </motion.div>
             </div>
+          )}
 
-            {/* Media type badge */}
-            <div className="absolute top-2 left-2 z-10">
-              <div className="px-2 py-1 rounded-md bg-black/60 backdrop-blur-sm border border-white/10">
-                <span className="text-xs font-semibold text-white uppercase">
-                  {item.mediaType === 'movie' ? 'Movie' : 'TV'}
-                </span>
-              </div>
+          {/* Gradient overlay */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none" />
+
+          {/* Rating badge - simplified */}
+          <div className="absolute top-2 right-2 z-10">
+            <div className="px-2 py-1 bg-black/70 backdrop-blur-sm rounded-md flex items-center gap-1">
+              <svg className={`w-3 h-3 ${ratingColor}`} viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+              </svg>
+              <span className={`text-xs font-bold ${ratingColor}`}>
+                {formattedRating}
+              </span>
             </div>
           </div>
 
-          {/* Content info */}
-          <div className="p-4 space-y-2">
-            <h3 className="text-base font-bold text-white line-clamp-2 leading-tight">
-              {item.title || item.name || 'Untitled'}
-            </h3>
-
-            <div className="flex items-center gap-2 text-xs text-gray-400">
-              {(item.releaseDate || item.release_date || item.first_air_date) && (
-                <span>{new Date(item.releaseDate || item.release_date || item.first_air_date || '').getFullYear()}</span>
-              )}
-              {item.genres && item.genres.length > 0 && (
-                <>
-                  <span>•</span>
-                  <span className="line-clamp-1">
-                    {item.genres.slice(0, 2).map(g => g.name).join(', ')}
-                  </span>
-                </>
-              )}
+          {/* Media type badge */}
+          <div className="absolute top-2 left-2 z-10">
+            <div className="px-2 py-1 rounded-md bg-black/60 backdrop-blur-sm">
+              <span className="text-xs font-semibold text-white uppercase">
+                {item.mediaType === 'movie' ? 'Movie' : 'TV'}
+              </span>
             </div>
-
-            {/* Overview preview */}
-            {item.overview && (
-              <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">
-                {item.overview}
-              </p>
-            )}
           </div>
 
-          {/* Hover overlay with play button */}
-          <motion.div
-            className="absolute inset-0 bg-gradient-to-t from-purple-900/90 via-purple-900/50 to-transparent flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-300"
-            initial={false}
-          >
-            <motion.div
-              className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md border-2 border-white/40 flex items-center justify-center"
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <svg
-                className="w-8 h-8 text-white ml-1"
-                fill="currentColor"
-                viewBox="0 0 24 24"
-              >
+          {/* Play button overlay - CSS only */}
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-200 pointer-events-none">
+            <div className="w-12 h-12 rounded-full bg-purple-600/90 flex items-center justify-center shadow-lg">
+              <svg className="w-6 h-6 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M8 5v14l11-7z" />
               </svg>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         </div>
-      </Card3D>
+
+        {/* Content info - simplified */}
+        <div className="p-3 space-y-1">
+          <h3 className="text-sm font-semibold text-white line-clamp-2 leading-tight">
+            {item.title || item.name || 'Untitled'}
+          </h3>
+
+          <div className="flex items-center gap-2 text-xs text-gray-400">
+            {(item.releaseDate || item.release_date || item.first_air_date) && (
+              <span>{new Date(item.releaseDate || item.release_date || item.first_air_date || '').getFullYear()}</span>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
-};
+});
+
+ContentCard.displayName = 'ContentCard';
 
 export default ContentCard;

@@ -1,8 +1,7 @@
 'use client';
 
-import { useCallback, useRef, useEffect, useState } from 'react';
+import { useCallback, useRef, useEffect, useState, memo } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
 import type { MediaItem } from '@/types/media';
 import { Navigation } from '@/components/layout/Navigation';
 import { Footer } from '@/components/layout/Footer';
@@ -113,12 +112,12 @@ export default function SeriesPageClient() {
                 <p className="text-gray-400">Loading series...</p>
               </div>
             ) : (
-              <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }} className="text-center max-w-4xl mx-auto">
-                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.2, type: 'spring', stiffness: 200 }} className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-600 mb-6 shadow-lg shadow-cyan-500/25">
+              <div className="text-center max-w-4xl mx-auto series-hero">
+                <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-600 mb-6 shadow-lg shadow-cyan-500/25 series-icon">
                   <svg width="40" height="40" viewBox="0 0 24 24" fill="white">
                     <path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12zM9 10l5 3-5 3v-6z"/>
                   </svg>
-                </motion.div>
+                </div>
 
                 <h1 className="text-5xl md:text-7xl lg:text-8xl font-black mb-4">
                   <span className="bg-gradient-to-r from-cyan-300 via-blue-400 to-teal-400 bg-clip-text text-transparent">TV Series</span>
@@ -127,7 +126,7 @@ export default function SeriesPageClient() {
                   Binge-worthy dramas, thrilling mysteries, and epic sagas await
                 </p>
 
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="flex items-center justify-center gap-8 mt-8">
+                <div className="flex items-center justify-center gap-8 mt-8 series-stats">
                   <div className="flex items-center gap-2 px-4 py-2 bg-cyan-500/10 border border-cyan-500/20 rounded-full">
                     <span className="relative flex h-2 w-2">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
@@ -143,13 +142,13 @@ export default function SeriesPageClient() {
                     <div className="text-2xl font-bold text-cyan-400">15</div>
                     <div className="text-xs text-gray-500 uppercase tracking-wider">Categories</div>
                   </div>
-                </motion.div>
+                </div>
 
                 {/* Region Selector */}
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="flex justify-center mt-8">
+                <div className="flex justify-center mt-8">
                   <RegionSelector />
-                </motion.div>
-              </motion.div>
+                </div>
+              </div>
             )}
           </div>
         </section>
@@ -179,6 +178,31 @@ export default function SeriesPageClient() {
         )}
 
         <Footer />
+
+        {/* CSS Animations for hero */}
+        <style jsx>{`
+          .series-hero {
+            animation: heroFadeIn 0.6s ease-out;
+          }
+          .series-icon {
+            animation: iconPop 0.5s ease-out 0.2s both;
+          }
+          .series-stats {
+            animation: statsFadeIn 0.4s ease-out 0.4s both;
+          }
+          @keyframes heroFadeIn {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          @keyframes iconPop {
+            from { opacity: 0; transform: scale(0); }
+            to { opacity: 1; transform: scale(1); }
+          }
+          @keyframes statsFadeIn {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+        `}</style>
       </div>
     </PageTransition>
   );
@@ -202,12 +226,13 @@ const accentColors: Record<string, { bg: string; text: string; border: string }>
   rose: { bg: 'bg-rose-500', text: 'text-rose-400', border: 'border-rose-500/30' },
 };
 
-function ContentRow({ title, data, onItemClick, onSeeAll, accentColor = 'cyan', isLive = false }: { 
+// Memoized ContentRow for better performance
+const ContentRow = memo(function ContentRow({ title, data, onItemClick, onSeeAll, accentColor = 'cyan', isLive = false }: { 
   title: string; data: CategoryData; onItemClick: (item: MediaItem, source: string) => void; onSeeAll: () => void; accentColor?: string; isLive?: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const colors = accentColors[accentColor] || accentColors.cyan;
-  const scroll = (dir: 'left' | 'right') => scrollRef.current?.scrollBy({ left: dir === 'left' ? -600 : 600, behavior: 'smooth' });
+  const scroll = useCallback((dir: 'left' | 'right') => scrollRef.current?.scrollBy({ left: dir === 'left' ? -600 : 600, behavior: 'smooth' }), []);
 
   if (!data?.items?.length) return null;
 
@@ -236,30 +261,59 @@ function ContentRow({ title, data, onItemClick, onSeeAll, accentColor = 'cyan', 
         </div>
         <div ref={scrollRef} className="flex gap-4 overflow-x-auto scrollbar-hide pb-4 -mx-2 px-2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }} data-tv-scroll-container="true" data-tv-group={`series-${title.toLowerCase().replace(/[^a-z]/g, '')}`}>
           {data.items.map((item, index) => (
-            <motion.div key={item.id} initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true, margin: '-50px' }} transition={{ delay: Math.min(index * 0.03, 0.3) }} onClick={() => onItemClick(item, title)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onItemClick(item, title); } }} className="flex-shrink-0 w-36 md:w-44 cursor-pointer group" data-tv-focusable="true" tabIndex={0} role="button" aria-label={item.title || item.name || ''}>
-              <motion.div whileHover={{ scale: 1.05, y: -8 }} transition={{ type: 'spring', stiffness: 300, damping: 20 }} className={`relative rounded-xl overflow-hidden bg-gray-900 shadow-lg group-hover:shadow-xl transition-shadow ${isLive ? `border ${colors.border}` : ''}`}>
-                <img src={item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : '/placeholder-poster.jpg'} alt={item.title || item.name || ''} className="w-full aspect-[2/3] object-cover" loading="lazy" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
-                  <motion.div whileHover={{ scale: 1.1 }} className={`w-12 h-12 ${colors.bg} rounded-full flex items-center justify-center shadow-lg`}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z" /></svg>
-                  </motion.div>
-                </div>
-                {(item.vote_average ?? 0) > 0 && (
-                  <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-black/70 backdrop-blur-sm rounded text-xs font-semibold text-cyan-400 flex items-center gap-1">
-                    ★ {(item.vote_average ?? 0).toFixed(1)}
-                  </div>
-                )}
-                {isLive && <div className="absolute top-2 left-2 px-1.5 py-0.5 bg-cyan-500/90 rounded text-[10px] font-bold text-white uppercase">New EP</div>}
-              </motion.div>
-              <div className="mt-2.5 px-1">
-                <h3 className="text-white font-medium text-sm line-clamp-1 group-hover:text-cyan-300 transition-colors">{item.title || item.name}</h3>
-                <p className="text-gray-500 text-xs mt-0.5">{item.first_air_date ? new Date(item.first_air_date).getFullYear() : ''}</p>
-              </div>
-            </motion.div>
+            <SeriesCard key={item.id} item={item} index={index} title={title} colors={colors} isLive={isLive} onItemClick={onItemClick} />
           ))}
         </div>
       </div>
     </section>
   );
-}
+});
+
+// Memoized SeriesCard for better performance
+const SeriesCard = memo(function SeriesCard({ item, index, title, colors, isLive, onItemClick }: {
+  item: MediaItem; index: number; title: string; colors: { bg: string; text: string; border: string }; isLive: boolean; onItemClick: (item: MediaItem, source: string) => void;
+}) {
+  const handleClick = useCallback(() => onItemClick(item, title), [item, title, onItemClick]);
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onItemClick(item, title); }
+  }, [item, title, onItemClick]);
+
+  return (
+    <div
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      className="flex-shrink-0 w-36 md:w-44 cursor-pointer group"
+      style={{ animation: index < 12 ? `cardFadeIn 0.3s ease-out ${Math.min(index * 0.03, 0.3)}s both` : 'none' }}
+      data-tv-focusable="true"
+      tabIndex={0}
+      role="button"
+      aria-label={item.title || item.name || ''}
+    >
+      <div className={`relative rounded-xl overflow-hidden bg-gray-900 shadow-lg group-hover:shadow-xl transition-all duration-200 transform group-hover:scale-105 group-hover:-translate-y-2 group-focus-within:scale-105 group-focus-within:-translate-y-2 ${isLive ? `border ${colors.border}` : ''}`}>
+        <img src={item.poster_path ? `https://image.tmdb.org/t/p/w342${item.poster_path}` : '/placeholder-poster.jpg'} alt={item.title || item.name || ''} className="w-full aspect-[2/3] object-cover" loading="lazy" decoding="async" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-200 pointer-events-none">
+          <div className={`w-12 h-12 ${colors.bg} rounded-full flex items-center justify-center shadow-lg`}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z" /></svg>
+          </div>
+        </div>
+        {(item.vote_average ?? 0) > 0 && (
+          <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-black/70 backdrop-blur-sm rounded text-xs font-semibold text-cyan-400 flex items-center gap-1">
+            ★ {(item.vote_average ?? 0).toFixed(1)}
+          </div>
+        )}
+        {isLive && <div className="absolute top-2 left-2 px-1.5 py-0.5 bg-cyan-500/90 rounded text-[10px] font-bold text-white uppercase">New EP</div>}
+      </div>
+      <div className="mt-2.5 px-1">
+        <h3 className="text-white font-medium text-sm line-clamp-1 group-hover:text-cyan-300 transition-colors">{item.title || item.name}</h3>
+        <p className="text-gray-500 text-xs mt-0.5">{item.first_air_date ? new Date(item.first_air_date).getFullYear() : ''}</p>
+      </div>
+      <style jsx>{`
+        @keyframes cardFadeIn {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+      `}</style>
+    </div>
+  );
+});

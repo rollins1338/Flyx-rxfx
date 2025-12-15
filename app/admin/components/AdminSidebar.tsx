@@ -16,7 +16,8 @@ import {
     TrendingUp,
     MessageSquare,
     Tv,
-    Database
+    Database,
+    Megaphone
 } from 'lucide-react';
 
 export default function AdminSidebar() {
@@ -35,6 +36,7 @@ export default function AdminSidebar() {
         { icon: MessageSquare, label: 'Feedback', href: '/admin/feedback' },
         { icon: Tv, label: 'IPTV Debug', href: '/admin/iptv-debug' },
         { icon: Database, label: 'IPTV Manager', href: '/admin/iptv-manager' },
+        { icon: Megaphone, label: 'Site Banner', href: '/admin/banner' },
         { icon: Settings, label: 'Settings', href: '/admin/settings' },
     ];
 

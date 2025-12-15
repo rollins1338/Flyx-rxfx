@@ -1,8 +1,7 @@
 'use client';
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, memo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { motion } from 'framer-motion';
 import type { MediaItem } from '@/types/media';
 import { Navigation } from '@/components/layout/Navigation';
 import { Footer } from '@/components/layout/Footer';
@@ -75,11 +74,7 @@ export default function BrowsePageClient({
         {/* Header */}
         <section className={`relative pt-24 pb-8 bg-gradient-to-b ${themeColors.bg} via-transparent to-transparent`}>
           <div className="container mx-auto px-6">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex items-center justify-between flex-wrap gap-4"
-            >
+            <div className="flex items-center justify-between flex-wrap gap-4 browse-header">
               <div>
                 <button
                   onClick={() => router.back()}
@@ -95,7 +90,7 @@ export default function BrowsePageClient({
                   {total.toLocaleString()} titles available
                 </p>
               </div>
-            </motion.div>
+            </div>
           </div>
         </section>
 
@@ -109,62 +104,13 @@ export default function BrowsePageClient({
             <>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
                 {items.map((item, index) => (
-                  <motion.div
+                  <BrowseCard
                     key={item.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: Math.min(index * 0.02, 0.4) }}
-                    onClick={() => handleContentClick(item)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        handleContentClick(item);
-                      }
-                    }}
-                    className="cursor-pointer group"
-                    data-tv-focusable="true"
-                    data-tv-group="browse-grid"
-                    tabIndex={0}
-                    role="button"
-                    aria-label={`${item.title || item.name}`}
-                  >
-                    <motion.div
-                      whileHover={{ scale: 1.03, y: -4 }}
-                      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                      className="relative rounded-xl overflow-hidden bg-gray-900 shadow-lg"
-                    >
-                      <img
-                        src={item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : '/placeholder-poster.jpg'}
-                        alt={item.title || item.name || ''}
-                        className="w-full aspect-[2/3] object-cover"
-                        loading="lazy"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
-                        <div className={`w-12 h-12 ${themeColors.btn} rounded-full flex items-center justify-center shadow-lg`}>
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
-                            <path d="M8 5v14l11-7z" />
-                          </svg>
-                        </div>
-                      </div>
-                      {(item.vote_average ?? 0) > 0 && (
-                        <div className={`absolute top-2 right-2 px-1.5 py-0.5 bg-black/70 backdrop-blur-sm rounded text-xs font-semibold ${themeColors.text} flex items-center gap-1`}>
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
-                          </svg>
-                          {(item.vote_average ?? 0).toFixed(1)}
-                        </div>
-                      )}
-                    </motion.div>
-                    <div className="mt-2.5 px-1">
-                      <h3 className="text-white font-medium text-sm line-clamp-2 group-hover:text-white/80 transition-colors">
-                        {item.title || item.name}
-                      </h3>
-                      <p className="text-gray-500 text-xs mt-0.5">
-                        {(item.release_date || item.first_air_date) ? new Date(item.release_date || item.first_air_date || '').getFullYear() : ''}
-                      </p>
-                    </div>
-                  </motion.div>
+                    item={item}
+                    index={index}
+                    themeColors={themeColors}
+                    onContentClick={handleContentClick}
+                  />
                 ))}
               </div>
 
@@ -229,7 +175,108 @@ export default function BrowsePageClient({
         </main>
 
         <Footer />
+
+        {/* CSS Animations */}
+        <style jsx>{`
+          .browse-header {
+            animation: fadeInUp 0.4s ease-out;
+          }
+          @keyframes fadeInUp {
+            from {
+              opacity: 0;
+              transform: translateY(20px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+        `}</style>
       </div>
     </PageTransition>
   );
 }
+
+// Memoized browse card for better performance
+const BrowseCard = memo(function BrowseCard({
+  item,
+  index,
+  themeColors,
+  onContentClick,
+}: {
+  item: MediaItem;
+  index: number;
+  themeColors: { accent: string; bg: string; text: string; btn: string };
+  onContentClick: (item: MediaItem) => void;
+}) {
+  const handleClick = useCallback(() => onContentClick(item), [item, onContentClick]);
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onContentClick(item);
+    }
+  }, [item, onContentClick]);
+
+  return (
+    <div
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      className="cursor-pointer group"
+      style={{
+        animation: index < 24 ? `cardFadeIn 0.3s ease-out ${Math.min(index * 0.02, 0.3)}s both` : 'none',
+      }}
+      data-tv-focusable="true"
+      data-tv-group="browse-grid"
+      tabIndex={0}
+      role="button"
+      aria-label={`${item.title || item.name}`}
+    >
+      <div className="relative rounded-xl overflow-hidden bg-gray-900 shadow-lg transform transition-transform duration-200 ease-out group-hover:scale-[1.03] group-hover:-translate-y-1 group-focus-within:scale-[1.03] group-focus-within:-translate-y-1">
+        <img
+          src={item.poster_path ? `https://image.tmdb.org/t/p/w342${item.poster_path}` : '/placeholder-poster.jpg'}
+          alt={item.title || item.name || ''}
+          className="w-full aspect-[2/3] object-cover"
+          loading="lazy"
+          decoding="async"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-200 pointer-events-none">
+          <div className={`w-12 h-12 ${themeColors.btn} rounded-full flex items-center justify-center shadow-lg`}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </div>
+        </div>
+        {(item.vote_average ?? 0) > 0 && (
+          <div className={`absolute top-2 right-2 px-1.5 py-0.5 bg-black/70 backdrop-blur-sm rounded text-xs font-semibold ${themeColors.text} flex items-center gap-1`}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+            </svg>
+            {(item.vote_average ?? 0).toFixed(1)}
+          </div>
+        )}
+      </div>
+      <div className="mt-2.5 px-1">
+        <h3 className="text-white font-medium text-sm line-clamp-2 group-hover:text-white/80 transition-colors">
+          {item.title || item.name}
+        </h3>
+        <p className="text-gray-500 text-xs mt-0.5">
+          {(item.release_date || item.first_air_date) ? new Date(item.release_date || item.first_air_date || '').getFullYear() : ''}
+        </p>
+      </div>
+
+      <style jsx>{`
+        @keyframes cardFadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(15px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
+    </div>
+  );
+});

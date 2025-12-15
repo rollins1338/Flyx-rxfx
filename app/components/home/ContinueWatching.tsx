@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useAnalytics } from '@/components/analytics/AnalyticsProvider';
 import type { WatchProgress } from '@/lib/services/user-tracking';
 
@@ -174,12 +173,7 @@ export default function ContinueWatching() {
   return (
     <section className="py-12 px-6">
       <div className="container mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-        >
+        <div className="continue-watching-section">
           {/* Header with scroll buttons */}
           <div className="flex items-center justify-between mb-8">
             <h2 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3">
@@ -189,28 +183,24 @@ export default function ContinueWatching() {
               <span>Continue Watching</span>
             </h2>
 
-            {/* Scroll Buttons - matching ContentSection style */}
+            {/* Scroll Buttons - CSS only */}
             <div className="flex gap-4">
-              <motion.button
-                whileHover={{ scale: 1.1, boxShadow: "0 8px 25px rgba(120, 119, 198, 0.4)" }}
-                whileTap={{ scale: 0.9 }}
+              <button
                 onClick={scrollLeft}
-                className="w-12 h-12 bg-gradient-to-r from-purple-600/20 to-pink-600/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:from-purple-600/30 hover:to-pink-600/30 transition-all duration-300 border border-white/20 shadow-xl text-2xl font-bold"
+                className="w-12 h-12 bg-gradient-to-r from-purple-600/20 to-pink-600/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:from-purple-600/30 hover:to-pink-600/30 hover:scale-110 active:scale-95 transition-all duration-200 border border-white/20 shadow-xl text-2xl font-bold"
                 data-tv-skip="true"
                 tabIndex={-1}
               >
                 ‹
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.1, boxShadow: "0 8px 25px rgba(120, 119, 198, 0.4)" }}
-                whileTap={{ scale: 0.9 }}
+              </button>
+              <button
                 onClick={scrollRight}
-                className="w-12 h-12 bg-gradient-to-r from-purple-600/20 to-pink-600/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:from-purple-600/30 hover:to-pink-600/30 transition-all duration-300 border border-white/20 shadow-xl text-2xl font-bold"
+                className="w-12 h-12 bg-gradient-to-r from-purple-600/20 to-pink-600/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:from-purple-600/30 hover:to-pink-600/30 hover:scale-110 active:scale-95 transition-all duration-200 border border-white/20 shadow-xl text-2xl font-bold"
                 data-tv-skip="true"
                 tabIndex={-1}
               >
                 ›
-              </motion.button>
+              </button>
             </div>
           </div>
 
@@ -221,107 +211,167 @@ export default function ContinueWatching() {
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             data-tv-scroll-container="true"
           >
-            <AnimatePresence>
-              {items.map((item, index) => (
-                <motion.div
-                  key={`${item.contentId}-${item.seasonNumber}-${item.episodeNumber}`}
-                  initial={{ opacity: 0, x: 50 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: index * 0.05 }}
-                  onClick={() => handleItemClick(item)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      handleItemClick(item);
-                    }
-                  }}
-                  className="flex-shrink-0 w-72 cursor-pointer group p-2"
-                  data-tv-focusable="true"
-                  data-tv-group="continue-watching"
-                  tabIndex={0}
-                  role="button"
-                  aria-label={`Continue watching ${item.metadata?.title || 'content'}`}
-                >
-                  <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-gray-800 to-gray-900 shadow-lg hover:shadow-2xl hover:shadow-purple-500/20 transition-all duration-300 transform hover:scale-[1.02]">
-                    <div className="relative h-40">
-                      {item.metadata?.backdropPath ? (
-                        <img
-                          src={`https://image.tmdb.org/t/p/w500${item.metadata.backdropPath}`}
-                          alt={item.metadata?.title || 'Content'}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : item.metadata?.posterPath ? (
-                        <img
-                          src={`https://image.tmdb.org/t/p/w500${item.metadata.posterPath}`}
-                          alt={item.metadata?.title || 'Content'}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-purple-900/50 to-pink-900/50 flex items-center justify-center">
-                          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="text-white/30">
-                            <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
-                            <line x1="7" y1="2" x2="7" y2="22" />
-                            <line x1="17" y1="2" x2="17" y2="22" />
-                            <line x1="2" y1="12" x2="22" y2="12" />
-                          </svg>
-                        </div>
-                      )}
-
-                      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent" />
-
-                      {/* Remove button */}
-                      <button
-                        onClick={(e) => handleRemove(e, item)}
-                        className="absolute top-2 right-2 w-7 h-7 bg-black/60 hover:bg-red-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 z-10 border border-white/20 hover:border-red-500"
-                        aria-label={`Remove ${item.metadata?.title || 'item'} from continue watching`}
-                        data-tv-skip="true"
-                        tabIndex={-1}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-white">
-                          <line x1="18" y1="6" x2="6" y2="18" />
-                          <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                      </button>
-
-                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                        <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/30">
-                          <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
-                            <path d="M8 5v14l11-7z" />
-                          </svg>
-                        </div>
-                      </div>
-
-                      <div className="absolute bottom-0 left-0 right-0 p-4">
-                        <h3 className="text-white font-semibold text-sm line-clamp-1 mb-1">
-                          {item.metadata?.title || `Content ${item.contentId}`}
-                        </h3>
-                        
-                        {item.contentType === 'tv' && item.seasonNumber && item.episodeNumber && (
-                          <p className="text-gray-400 text-xs mb-2">
-                            S{item.seasonNumber} E{item.episodeNumber}
-                          </p>
-                        )}
-
-                        <p className="text-gray-400 text-xs">
-                          {formatTimeRemaining(item.currentTime, item.duration)}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="h-1 bg-gray-700">
-                      <div
-                        className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-300"
-                        style={{ width: `${item.completionPercentage}%` }}
-                      />
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </AnimatePresence>
+            {items.map((item, index) => (
+              <ContinueWatchingCard
+                key={`${item.contentId}-${item.seasonNumber}-${item.episodeNumber}`}
+                item={item}
+                index={index}
+                onItemClick={handleItemClick}
+                onRemove={handleRemove}
+                formatTimeRemaining={formatTimeRemaining}
+              />
+            ))}
           </div>
-        </motion.div>
+        </div>
       </div>
+
+      {/* CSS Animation keyframes */}
+      <style jsx>{`
+        .continue-watching-section {
+          animation: fadeInUp 0.4s ease-out;
+        }
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </section>
   );
 }
+
+// Memoized card component for better performance
+const ContinueWatchingCard = memo(function ContinueWatchingCard({
+  item,
+  index,
+  onItemClick,
+  onRemove,
+  formatTimeRemaining,
+}: {
+  item: ContinueWatchingItem;
+  index: number;
+  onItemClick: (item: ContinueWatchingItem) => void;
+  onRemove: (e: React.MouseEvent, item: ContinueWatchingItem) => void;
+  formatTimeRemaining: (currentTime: number, duration: number) => string;
+}) {
+  const handleClick = useCallback(() => onItemClick(item), [item, onItemClick]);
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onItemClick(item);
+    }
+  }, [item, onItemClick]);
+  const handleRemoveClick = useCallback((e: React.MouseEvent) => onRemove(e, item), [item, onRemove]);
+
+  return (
+    <div
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      className="flex-shrink-0 w-72 cursor-pointer group p-2"
+      style={{
+        animation: index < 10 ? `slideIn 0.3s ease-out ${Math.min(index * 0.05, 0.3)}s both` : 'none',
+      }}
+      data-tv-focusable="true"
+      data-tv-group="continue-watching"
+      tabIndex={0}
+      role="button"
+      aria-label={`Continue watching ${item.metadata?.title || 'content'}`}
+    >
+      <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-gray-800 to-gray-900 shadow-lg hover:shadow-2xl hover:shadow-purple-500/20 transition-all duration-200 transform hover:scale-[1.02]">
+        <div className="relative h-40">
+          {item.metadata?.backdropPath ? (
+            <img
+              src={`https://image.tmdb.org/t/p/w500${item.metadata.backdropPath}`}
+              alt={item.metadata?.title || 'Content'}
+              className="w-full h-full object-cover"
+              loading="lazy"
+              decoding="async"
+            />
+          ) : item.metadata?.posterPath ? (
+            <img
+              src={`https://image.tmdb.org/t/p/w500${item.metadata.posterPath}`}
+              alt={item.metadata?.title || 'Content'}
+              className="w-full h-full object-cover"
+              loading="lazy"
+              decoding="async"
+            />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-purple-900/50 to-pink-900/50 flex items-center justify-center">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="text-white/30">
+                <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
+                <line x1="7" y1="2" x2="7" y2="22" />
+                <line x1="17" y1="2" x2="17" y2="22" />
+                <line x1="2" y1="12" x2="22" y2="12" />
+              </svg>
+            </div>
+          )}
+
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent" />
+
+          {/* Remove button */}
+          <button
+            onClick={handleRemoveClick}
+            className="absolute top-2 right-2 w-7 h-7 bg-black/60 hover:bg-red-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 z-10 border border-white/20 hover:border-red-500"
+            aria-label={`Remove ${item.metadata?.title || 'item'} from continue watching`}
+            data-tv-skip="true"
+            tabIndex={-1}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+            <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/30">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </div>
+          </div>
+
+          <div className="absolute bottom-0 left-0 right-0 p-4">
+            <h3 className="text-white font-semibold text-sm line-clamp-1 mb-1">
+              {item.metadata?.title || `Content ${item.contentId}`}
+            </h3>
+            
+            {item.contentType === 'tv' && item.seasonNumber && item.episodeNumber && (
+              <p className="text-gray-400 text-xs mb-2">
+                S{item.seasonNumber} E{item.episodeNumber}
+              </p>
+            )}
+
+            <p className="text-gray-400 text-xs">
+              {formatTimeRemaining(item.currentTime, item.duration)}
+            </p>
+          </div>
+        </div>
+
+        <div className="h-1 bg-gray-700">
+          <div
+            className="h-full bg-gradient-to-r from-purple-500 to-pink-500"
+            style={{ width: `${item.completionPercentage}%` }}
+          />
+        </div>
+      </div>
+
+      <style jsx>{`
+        @keyframes slideIn {
+          from {
+            opacity: 0;
+            transform: translateX(30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+      `}</style>
+    </div>
+  );
+});

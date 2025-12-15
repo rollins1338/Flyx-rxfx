@@ -1300,10 +1300,13 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     };
   }, [tmdbId, season, episode, clearWatchTime]);
 
-  // Fullscreen handler
+  // Fullscreen handler - supports iOS Safari webkitfullscreenchange
   useEffect(() => {
     const handleFullscreenChange = () => {
-      const isNowFullscreen = !!document.fullscreenElement;
+      const isNowFullscreen = !!(
+        document.fullscreenElement || 
+        (document as any).webkitFullscreenElement
+      );
       setIsFullscreen(isNowFullscreen);
       
       // Unlock orientation when exiting fullscreen (e.g., via Escape key)
@@ -1315,8 +1318,34 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
         }
       }
     };
+    
+    // iOS Safari video fullscreen events
+    const handleiOSFullscreenChange = () => {
+      const video = videoRef.current;
+      if (video) {
+        const isNowFullscreen = !!(video as any).webkitDisplayingFullscreen;
+        setIsFullscreen(isNowFullscreen);
+      }
+    };
+    
     document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    
+    // iOS Safari specific events on video element
+    const video = videoRef.current;
+    if (video) {
+      video.addEventListener('webkitbeginfullscreen', handleiOSFullscreenChange);
+      video.addEventListener('webkitendfullscreen', handleiOSFullscreenChange);
+    }
+    
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      if (video) {
+        video.removeEventListener('webkitbeginfullscreen', handleiOSFullscreenChange);
+        video.removeEventListener('webkitendfullscreen', handleiOSFullscreenChange);
+      }
+    };
   }, []);
 
   // Auto-play countdown timer - uses refs to avoid stale closures
@@ -1878,13 +1907,37 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
   };
 
   const toggleFullscreen = async () => {
-    if (!containerRef.current) return;
+    const video = videoRef.current;
+    const container = containerRef.current;
+    if (!container || !video) return;
     
-    if (!document.fullscreenElement) {
+    // Check if we're currently in fullscreen (including webkit prefix)
+    const isCurrentlyFullscreen = !!(
+      document.fullscreenElement || 
+      (document as any).webkitFullscreenElement ||
+      (video as any).webkitDisplayingFullscreen
+    );
+    
+    if (!isCurrentlyFullscreen) {
       try {
-        await containerRef.current.requestFullscreen();
+        // iOS Safari: Use webkitEnterFullscreen on video element
+        // This is the ONLY way to get fullscreen on iOS Safari
+        if ((video as any).webkitEnterFullscreen) {
+          console.log('[VideoPlayer] Using iOS webkitEnterFullscreen');
+          (video as any).webkitEnterFullscreen();
+        }
+        // Safari desktop: Use webkitRequestFullscreen on container
+        else if ((container as any).webkitRequestFullscreen) {
+          console.log('[VideoPlayer] Using Safari webkitRequestFullscreen');
+          await (container as any).webkitRequestFullscreen();
+        }
+        // Standard fullscreen API
+        else if (container.requestFullscreen) {
+          console.log('[VideoPlayer] Using standard requestFullscreen');
+          await container.requestFullscreen();
+        }
         
-        // Force landscape orientation on mobile devices
+        // Force landscape orientation on mobile devices (Android)
         if (screen.orientation && 'lock' in screen.orientation) {
           try {
             await (screen.orientation as any).lock('landscape');
@@ -1905,7 +1958,15 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
           // Ignore unlock errors
         }
       }
-      document.exitFullscreen();
+      
+      // Exit fullscreen using appropriate method
+      if ((video as any).webkitExitFullscreen) {
+        (video as any).webkitExitFullscreen();
+      } else if ((document as any).webkitExitFullscreen) {
+        (document as any).webkitExitFullscreen();
+      } else if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
     }
   };
 
@@ -2593,10 +2654,17 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
           className={styles.video}
           style={zoomContentStyle}
           playsInline
-          // @ts-ignore - AirPlay attributes
+          autoPlay={false}
+          controls={false}
+          preload="metadata"
+          // @ts-ignore - iOS/Safari specific attributes
           x-webkit-airplay="allow"
           // @ts-ignore
           webkit-playsinline="true"
+          // @ts-ignore - Allow AirPlay
+          airplay="allow"
+          // @ts-ignore - Disable picture-in-picture on iOS if needed
+          disablePictureInPicture={false}
         />
       </div>
 

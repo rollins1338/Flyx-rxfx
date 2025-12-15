@@ -1753,3 +1753,222 @@ button[data-server-source]:focus-visible {
   outline-offset: 2px;
   background: rgba(168, 85, 247, 0.3);
 }
+
+
+/* ============================================
+   iOS/Safari Specific Styles
+   ============================================ */
+
+/* iOS Safari video element fixes */
+.video {
+  /* Prevent iOS from showing native controls */
+  -webkit-appearance: none;
+  appearance: none;
+  /* Ensure video fills container properly on iOS */
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  /* Prevent iOS from auto-playing in fullscreen */
+  -webkit-media-playback-requires-user-action: true;
+}
+
+/* iOS Safari fullscreen video styling */
+.video::-webkit-media-controls {
+  display: none !important;
+}
+
+.video::-webkit-media-controls-enclosure {
+  display: none !important;
+}
+
+.video::-webkit-media-controls-panel {
+  display: none !important;
+}
+
+/* iOS Safari touch handling */
+@supports (-webkit-touch-callout: none) {
+  .playerContainer {
+    /* Prevent iOS rubber-banding/bounce effect */
+    overscroll-behavior: contain;
+    /* Improve touch responsiveness */
+    -webkit-tap-highlight-color: transparent;
+    /* Prevent text selection on long press */
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .videoWrapper {
+    /* Ensure proper touch handling for pinch-zoom */
+    touch-action: manipulation;
+  }
+
+  /* Larger touch targets for iOS */
+  .btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Ensure controls are visible and tappable on iOS */
+  .controls {
+    /* Prevent iOS from hiding controls */
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+
+  /* Fix for iOS Safari progress bar touch */
+  .progressContainer {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    padding: 10px 0;
+    margin: -10px 0;
+  }
+
+  /* iOS Safari volume slider fix */
+  .volumeSlider {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .volumeSlider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+}
+
+/* iOS Safari specific media queries */
+@media screen and (-webkit-min-device-pixel-ratio: 2) and (max-device-width: 1024px) {
+  /* iPad and iPhone specific styles */
+  .centerPlayButton {
+    /* Ensure play button is easily tappable */
+    min-width: 80px;
+    min-height: 80px;
+  }
+
+  .nextEpisodeButton {
+    /* Ensure next episode button is easily tappable */
+    min-height: 48px;
+  }
+
+  /* Larger settings menu for touch */
+  .settingsMenu {
+    min-width: 250px;
+  }
+
+  .settingsOption {
+    min-height: 44px;
+    padding: 12px 16px;
+  }
+}
+
+/* Safari desktop specific fixes */
+@supports (background: -webkit-named-image(i)) {
+  .video {
+    /* Fix for Safari video rendering */
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+  }
+}
+
+/* iOS notch/safe area handling */
+@supports (padding: max(0px)) {
+  .controls {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .titleOverlay {
+    padding-left: max(2rem, env(safe-area-inset-left));
+    padding-right: max(2rem, env(safe-area-inset-right));
+    padding-top: max(2rem, env(safe-area-inset-top));
+  }
+
+  /* Fullscreen safe area handling */
+  .playerContainer:fullscreen .controls,
+  .playerContainer:-webkit-full-screen .controls {
+    padding-left: max(2rem, env(safe-area-inset-left));
+    padding-right: max(2rem, env(safe-area-inset-right));
+    padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+  }
+}
+
+/* iOS landscape mode fixes */
+@media screen and (orientation: landscape) and (max-height: 500px) {
+  .controls {
+    padding-top: 2rem;
+    padding-bottom: 0.75rem;
+  }
+
+  .titleOverlay {
+    padding: 1rem;
+    padding-left: max(1rem, env(safe-area-inset-left));
+  }
+
+  .titleOverlay h2 {
+    font-size: 1.25rem;
+  }
+
+  .centerPlayButton {
+    width: 60px;
+    height: 60px;
+  }
+
+  .centerPlayButton svg {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+/* Fix for iOS Safari fullscreen video controls */
+.playerContainer:-webkit-full-screen {
+  width: 100%;
+  height: 100%;
+}
+
+.playerContainer:-webkit-full-screen .video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Ensure webkit fullscreen works properly */
+.playerContainer:-webkit-full-screen .controls {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+}
+
+.playerContainer:-webkit-full-screen .titleOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+
+/* iOS Safari subtitle styling */
+@supports (-webkit-touch-callout: none) {
+  .video::cue {
+    /* Ensure subtitles are readable on iOS */
+    font-size: 1.1em;
+    line-height: 1.5;
+    background: rgba(0, 0, 0, 0.85);
+    padding: 4px 8px;
+  }
+}
+
+/* Fix for iOS Safari button active states */
+@supports (-webkit-touch-callout: none) {
+  .btn:active {
+    transform: scale(0.9);
+    opacity: 0.8;
+  }
+
+  .nextEpisodeButton:active {
+    transform: scale(0.98);
+  }
+
+  .retryButton:active {
+    transform: scale(0.95);
+  }
+}

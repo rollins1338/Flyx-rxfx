@@ -12,11 +12,13 @@ const nextConfig = {
     ],
     // Use modern formats
     formats: ['image/avif', 'image/webp'],
-    // Optimize image sizes
-    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048],
-    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    // Optimize image sizes - reduced for faster loading
+    deviceSizes: [640, 750, 1080, 1920],
+    imageSizes: [16, 32, 64, 128, 256],
     // Minimize layout shift
     minimumCacheTTL: 60 * 60 * 24 * 30, // 30 days
+    // Unoptimized for external images (TMDB handles optimization)
+    unoptimized: false,
   },
 
   // Enable compression
@@ -24,6 +26,9 @@ const nextConfig = {
 
   // Optimize production builds
   productionBrowserSourceMaps: false,
+
+  // Reduce bundle size
+  swcMinify: true,
 
   // Experimental optimizations
   experimental: {
@@ -35,7 +40,16 @@ const nextConfig = {
       '@babel/parser',
       '@babel/traverse',
       '@babel/generator',
+      'date-fns',
     ],
+  },
+
+  // Compiler optimizations
+  compiler: {
+    // Remove console.log in production
+    removeConsole: process.env.NODE_ENV === 'production' ? {
+      exclude: ['error', 'warn'],
+    } : false,
   },
 
   // Headers for caching and security
@@ -48,11 +62,25 @@ const nextConfig = {
             key: 'X-DNS-Prefetch-Control',
             value: 'on',
           },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
         ],
       },
       {
         // Cache static assets aggressively
         source: '/(.*)\\.(ico|png|jpg|jpeg|gif|webp|avif|svg|woff|woff2)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+      {
+        // Cache JS/CSS chunks
+        source: '/_next/static/:path*',
         headers: [
           {
             key: 'Cache-Control',
@@ -70,7 +98,22 @@ const nextConfig = {
           },
         ],
       },
+      {
+        // Cache TMDB proxy responses
+        source: '/api/tmdb/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, s-maxage=300, stale-while-revalidate=600',
+          },
+        ],
+      },
     ];
+  },
+
+  // Rewrites for external resources
+  async rewrites() {
+    return [];
   },
 };
 

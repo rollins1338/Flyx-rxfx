@@ -1,8 +1,7 @@
 'use client';
 
-import { useCallback, useRef, useEffect, useState } from 'react';
+import { useCallback, useRef, useEffect, useState, memo } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
 import type { MediaItem } from '@/types/media';
 import { Navigation } from '@/components/layout/Navigation';
 import { Footer } from '@/components/layout/Footer';
@@ -112,12 +111,12 @@ export default function MoviesPageClient() {
                 <p className="text-gray-400">Loading movies...</p>
               </div>
             ) : (
-              <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }} className="text-center max-w-4xl mx-auto">
-                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.2, type: 'spring', stiffness: 200 }} className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 mb-6 shadow-lg shadow-amber-500/25">
+              <div className="text-center max-w-4xl mx-auto movies-hero">
+                <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 mb-6 shadow-lg shadow-amber-500/25 movies-icon">
                   <svg width="40" height="40" viewBox="0 0 24 24" fill="white">
                     <path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/>
                   </svg>
-                </motion.div>
+                </div>
 
                 <h1 className="text-5xl md:text-7xl lg:text-8xl font-black mb-4">
                   <span className="bg-gradient-to-r from-amber-200 via-yellow-400 to-orange-500 bg-clip-text text-transparent">Movies</span>
@@ -126,7 +125,7 @@ export default function MoviesPageClient() {
                   Blockbusters, indie gems, and timeless classics
                 </p>
 
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="flex items-center justify-center gap-8 mt-8">
+                <div className="flex items-center justify-center gap-8 mt-8 movies-stats">
                   <div className="text-center">
                     <div className="text-2xl font-bold text-amber-400">{(data.nowPlaying?.total ?? 0).toLocaleString()}</div>
                     <div className="text-xs text-gray-500 uppercase tracking-wider">Now Playing</div>
@@ -141,13 +140,13 @@ export default function MoviesPageClient() {
                     <div className="text-2xl font-bold text-amber-400">15</div>
                     <div className="text-xs text-gray-500 uppercase tracking-wider">Categories</div>
                   </div>
-                </motion.div>
+                </div>
 
                 {/* Region Selector */}
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="flex justify-center mt-8">
+                <div className="flex justify-center mt-8">
                   <RegionSelector />
-                </motion.div>
-              </motion.div>
+                </div>
+              </div>
             )}
           </div>
         </section>
@@ -177,6 +176,31 @@ export default function MoviesPageClient() {
         )}
 
         <Footer />
+
+        {/* CSS Animations for hero */}
+        <style jsx>{`
+          .movies-hero {
+            animation: heroFadeIn 0.6s ease-out;
+          }
+          .movies-icon {
+            animation: iconPop 0.5s ease-out 0.2s both;
+          }
+          .movies-stats {
+            animation: statsFadeIn 0.4s ease-out 0.4s both;
+          }
+          @keyframes heroFadeIn {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          @keyframes iconPop {
+            from { opacity: 0; transform: scale(0); }
+            to { opacity: 1; transform: scale(1); }
+          }
+          @keyframes statsFadeIn {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+        `}</style>
       </div>
     </PageTransition>
   );
@@ -199,12 +223,13 @@ const accentColors: Record<string, { bg: string; text: string }> = {
   gray: { bg: 'bg-gray-500', text: 'text-gray-400' },
 };
 
-function ContentRow({ title, data, onItemClick, onSeeAll, accentColor = 'amber' }: { 
+// Memoized ContentRow for better performance
+const ContentRow = memo(function ContentRow({ title, data, onItemClick, onSeeAll, accentColor = 'amber' }: { 
   title: string; data: CategoryData; onItemClick: (item: MediaItem, source: string) => void; onSeeAll: () => void; accentColor?: string;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const colors = accentColors[accentColor] || accentColors.amber;
-  const scroll = (dir: 'left' | 'right') => scrollRef.current?.scrollBy({ left: dir === 'left' ? -600 : 600, behavior: 'smooth' });
+  const scroll = useCallback((dir: 'left' | 'right') => scrollRef.current?.scrollBy({ left: dir === 'left' ? -600 : 600, behavior: 'smooth' }), []);
 
   if (!data?.items?.length) return null;
 
@@ -224,29 +249,58 @@ function ContentRow({ title, data, onItemClick, onSeeAll, accentColor = 'amber' 
         </div>
         <div ref={scrollRef} className="flex gap-4 overflow-x-auto scrollbar-hide pb-4 -mx-2 px-2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }} data-tv-scroll-container="true" data-tv-group={`movies-${title.toLowerCase().replace(/[^a-z]/g, '')}`}>
           {data.items.map((item, index) => (
-            <motion.div key={item.id} initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true, margin: '-50px' }} transition={{ delay: Math.min(index * 0.03, 0.3) }} onClick={() => onItemClick(item, title)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onItemClick(item, title); } }} className="flex-shrink-0 w-36 md:w-44 cursor-pointer group" data-tv-focusable="true" tabIndex={0} role="button" aria-label={item.title || item.name || ''}>
-              <motion.div whileHover={{ scale: 1.05, y: -8 }} transition={{ type: 'spring', stiffness: 300, damping: 20 }} className="relative rounded-xl overflow-hidden bg-gray-900 shadow-lg group-hover:shadow-xl transition-shadow">
-                <img src={item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : '/placeholder-poster.jpg'} alt={item.title || item.name || ''} className="w-full aspect-[2/3] object-cover" loading="lazy" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
-                  <motion.div whileHover={{ scale: 1.1 }} className={`w-12 h-12 ${colors.bg} rounded-full flex items-center justify-center shadow-lg`}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z" /></svg>
-                  </motion.div>
-                </div>
-                {(item.vote_average ?? 0) > 0 && (
-                  <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-black/70 backdrop-blur-sm rounded text-xs font-semibold text-amber-400 flex items-center gap-1">
-                    ★ {(item.vote_average ?? 0).toFixed(1)}
-                  </div>
-                )}
-              </motion.div>
-              <div className="mt-2.5 px-1">
-                <h3 className="text-white font-medium text-sm line-clamp-1 group-hover:text-amber-300 transition-colors">{item.title || item.name}</h3>
-                <p className="text-gray-500 text-xs mt-0.5">{item.release_date ? new Date(item.release_date).getFullYear() : ''}</p>
-              </div>
-            </motion.div>
+            <MovieCard key={item.id} item={item} index={index} title={title} colors={colors} onItemClick={onItemClick} />
           ))}
         </div>
       </div>
     </section>
   );
-}
+});
+
+// Memoized MovieCard for better performance
+const MovieCard = memo(function MovieCard({ item, index, title, colors, onItemClick }: {
+  item: MediaItem; index: number; title: string; colors: { bg: string; text: string }; onItemClick: (item: MediaItem, source: string) => void;
+}) {
+  const handleClick = useCallback(() => onItemClick(item, title), [item, title, onItemClick]);
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onItemClick(item, title); }
+  }, [item, title, onItemClick]);
+
+  return (
+    <div
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      className="flex-shrink-0 w-36 md:w-44 cursor-pointer group"
+      style={{ animation: index < 12 ? `cardFadeIn 0.3s ease-out ${Math.min(index * 0.03, 0.3)}s both` : 'none' }}
+      data-tv-focusable="true"
+      tabIndex={0}
+      role="button"
+      aria-label={item.title || item.name || ''}
+    >
+      <div className="relative rounded-xl overflow-hidden bg-gray-900 shadow-lg group-hover:shadow-xl transition-all duration-200 transform group-hover:scale-105 group-hover:-translate-y-2 group-focus-within:scale-105 group-focus-within:-translate-y-2">
+        <img src={item.poster_path ? `https://image.tmdb.org/t/p/w342${item.poster_path}` : '/placeholder-poster.jpg'} alt={item.title || item.name || ''} className="w-full aspect-[2/3] object-cover" loading="lazy" decoding="async" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-200 pointer-events-none">
+          <div className={`w-12 h-12 ${colors.bg} rounded-full flex items-center justify-center shadow-lg`}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z" /></svg>
+          </div>
+        </div>
+        {(item.vote_average ?? 0) > 0 && (
+          <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-black/70 backdrop-blur-sm rounded text-xs font-semibold text-amber-400 flex items-center gap-1">
+            ★ {(item.vote_average ?? 0).toFixed(1)}
+          </div>
+        )}
+      </div>
+      <div className="mt-2.5 px-1">
+        <h3 className="text-white font-medium text-sm line-clamp-1 group-hover:text-amber-300 transition-colors">{item.title || item.name}</h3>
+        <p className="text-gray-500 text-xs mt-0.5">{item.release_date ? new Date(item.release_date).getFullYear() : ''}</p>
+      </div>
+      <style jsx>{`
+        @keyframes cardFadeIn {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+      `}</style>
+    </div>
+  );
+});

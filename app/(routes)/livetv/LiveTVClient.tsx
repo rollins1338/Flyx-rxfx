@@ -707,6 +707,7 @@ function LiveTVPlayer({
   const currentAccountIdRef = useRef<string | null>(null);
 
   const cast = useCast({
+    videoRef: videoRef, // Pass video ref for AirPlay support
     onConnect: () => console.log('[LiveTV] Cast connected'),
     onDisconnect: () => {
       console.log('[LiveTV] Cast disconnected');

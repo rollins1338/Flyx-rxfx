@@ -1,7 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useCallback, useRef, useState, useEffect, memo } from 'react';
 import { ContentCard } from './ContentCard';
 import type { MediaItem } from '@/types/media';
 
@@ -15,19 +14,18 @@ export interface ContentGridProps {
   layout?: 'grid' | 'masonry';
   className?: string;
   emptyMessage?: string;
-  tvGroup?: string; // Custom TV navigation group name
+  tvGroup?: string;
 }
 
 /**
- * ContentGrid - Responsive grid layout for content cards
- * Features:
- * - Responsive grid with auto-fit columns
- * - Infinite scroll support
- * - Smooth animations
- * - Loading states
- * - Empty state handling
+ * ContentGrid - Optimized responsive grid layout for content cards
+ * Performance optimizations:
+ * - Uses CSS animations instead of Framer Motion
+ * - Progressive loading with intersection observer
+ * - Memoized components to prevent unnecessary re-renders
+ * - Reduced animation complexity
  */
-export const ContentGrid: React.FC<ContentGridProps> = ({
+export const ContentGrid: React.FC<ContentGridProps> = memo(({
   items,
   onItemSelect,
   onItemClick,
@@ -40,44 +38,44 @@ export const ContentGrid: React.FC<ContentGridProps> = ({
   tvGroup = 'content-grid',
 }) => {
   const observerTarget = useRef<HTMLDivElement>(null);
-  const [visibleItems, setVisibleItems] = useState<MediaItem[]>([]);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [visibleCount, setVisibleCount] = useState(24); // Start with 24 items
 
-  // Load items progressively for better performance
+  // Progressive loading - show more items as user scrolls
   useEffect(() => {
-    if (items.length <= 20) {
-      setVisibleItems(items);
-    } else {
-      // Load in batches
-      const batchSize = 20;
-      let currentBatch = 0;
-      
-      const loadBatch = () => {
-        const start = currentBatch * batchSize;
-        const end = start + batchSize;
-        const batch = items.slice(start, end);
-        
-        if (batch.length > 0) {
-          setVisibleItems(prev => [...prev, ...batch]);
-          currentBatch++;
-          
-          if (end < items.length) {
-            requestAnimationFrame(loadBatch);
-          }
+    if (items.length <= visibleCount) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleCount(prev => Math.min(prev + 12, items.length));
         }
-      };
-      
-      setVisibleItems([]);
-      loadBatch();
+      },
+      { threshold: 0.1, rootMargin: '400px' }
+    );
+
+    const target = observerTarget.current;
+    if (target) {
+      observer.observe(target);
     }
+
+    return () => {
+      if (target) observer.unobserve(target);
+    };
+  }, [items.length, visibleCount]);
+
+  // Reset visible count when items change
+  useEffect(() => {
+    setVisibleCount(24);
   }, [items]);
 
-  // Intersection observer for infinite scroll
+  // Infinite scroll for loading more from API
   useEffect(() => {
     if (!onLoadMore || !hasMore || loading) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting) {
+        if (entries[0].isIntersecting && visibleCount >= items.length) {
           onLoadMore();
         }
       },
@@ -90,19 +88,15 @@ export const ContentGrid: React.FC<ContentGridProps> = ({
     }
 
     return () => {
-      if (target) {
-        observer.unobserve(target);
-      }
+      if (target) observer.unobserve(target);
     };
-  }, [onLoadMore, hasMore, loading]);
+  }, [onLoadMore, hasMore, loading, visibleCount, items.length]);
 
   const handleItemSelect = useCallback(
     (id: string) => {
       if (onItemClick) {
         const item = items.find(i => i.id === id);
-        if (item) {
-          onItemClick(item);
-        }
+        if (item) onItemClick(item);
       } else {
         onItemSelect?.(id);
       }
@@ -112,11 +106,11 @@ export const ContentGrid: React.FC<ContentGridProps> = ({
 
   // Grid layout classes
   const gridClasses = layout === 'grid'
-    ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6'
-    : 'columns-2 sm:columns-3 md:columns-4 lg:columns-5 xl:columns-6 gap-4 md:gap-6';
+    ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4'
+    : 'columns-2 sm:columns-3 md:columns-4 lg:columns-5 xl:columns-6 gap-3 md:gap-4';
 
   // Empty state
-  if (!loading && visibleItems.length === 0) {
+  if (!loading && items.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
         <div className="text-6xl mb-4 opacity-50">🎬</div>
@@ -125,77 +119,80 @@ export const ContentGrid: React.FC<ContentGridProps> = ({
     );
   }
 
+  const visibleItems = items.slice(0, visibleCount);
+
   return (
-    <div className={`content-grid ${className}`}>
+    <div ref={containerRef} className={`content-grid ${className}`}>
       <div className={gridClasses} data-tv-group={tvGroup}>
-        <AnimatePresence mode="popLayout">
-          {visibleItems.map((item, index) => (
-            <motion.div
-              key={item.id}
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{
-                duration: 0.3,
-                delay: Math.min(index * 0.03, 0.5),
-                ease: [0.34, 1.56, 0.64, 1],
-              }}
-              layout
-            >
-              <ContentCard
-                item={item}
-                onSelect={handleItemSelect}
-                priority={index < 6}
-              />
-            </motion.div>
-          ))}
-        </AnimatePresence>
+        {visibleItems.map((item, index) => (
+          <div
+            key={item.id}
+            className="content-grid-item"
+            style={{
+              animation: index < 24 ? `fadeInUp 0.3s ease-out ${Math.min(index * 0.02, 0.3)}s both` : 'none',
+            }}
+          >
+            <ContentCard
+              item={item}
+              onSelect={handleItemSelect}
+              priority={index < 6}
+            />
+          </div>
+        ))}
       </div>
 
       {/* Loading skeleton */}
       {loading && (
-        <div className={`${gridClasses} mt-6`}>
+        <div className={`${gridClasses} mt-4`}>
           {Array.from({ length: 12 }).map((_, i) => (
             <ContentCardSkeleton key={`skeleton-${i}`} />
           ))}
         </div>
       )}
 
-      {/* Infinite scroll trigger */}
-      {hasMore && !loading && (
-        <div ref={observerTarget} className="h-20 flex items-center justify-center">
-          <div className="text-gray-500 text-sm">Loading more...</div>
+      {/* Progressive/Infinite scroll trigger */}
+      {(visibleCount < items.length || hasMore) && !loading && (
+        <div ref={observerTarget} className="h-16 flex items-center justify-center">
+          <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
         </div>
       )}
+
+      {/* CSS Animation keyframes */}
+      <style jsx>{`
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </div>
   );
-};
+});
+
+ContentGrid.displayName = 'ContentGrid';
 
 /**
- * ContentCardSkeleton - Loading placeholder matching ContentCard layout
+ * ContentCardSkeleton - Optimized loading placeholder
  */
-const ContentCardSkeleton: React.FC = () => {
+const ContentCardSkeleton: React.FC = memo(() => {
   return (
-    <div className="content-card-skeleton animate-pulse">
-      <div className="bg-gray-800/50 rounded-2xl overflow-hidden border border-gray-700/50">
-        {/* Image skeleton */}
-        <div className="aspect-[2/3] bg-gradient-to-br from-gray-800 to-gray-900 relative">
-          <div className="absolute top-2 right-2 w-12 h-12 rounded-full bg-gray-700/50" />
-          <div className="absolute top-2 left-2 w-16 h-6 rounded-md bg-gray-700/50" />
-        </div>
-        
-        {/* Content skeleton */}
-        <div className="p-4 space-y-2">
-          <div className="h-4 bg-gray-700/50 rounded w-3/4" />
-          <div className="h-3 bg-gray-700/30 rounded w-1/2" />
-          <div className="space-y-1">
-            <div className="h-2 bg-gray-700/20 rounded w-full" />
-            <div className="h-2 bg-gray-700/20 rounded w-5/6" />
-          </div>
+    <div className="content-card-skeleton">
+      <div className="bg-gray-800/50 rounded-xl overflow-hidden">
+        <div className="aspect-[2/3] bg-gradient-to-br from-gray-800 to-gray-900 animate-pulse" />
+        <div className="p-3 space-y-2">
+          <div className="h-4 bg-gray-700/50 rounded w-3/4 animate-pulse" />
+          <div className="h-3 bg-gray-700/30 rounded w-1/2 animate-pulse" />
         </div>
       </div>
     </div>
   );
-};
+});
+
+ContentCardSkeleton.displayName = 'ContentCardSkeleton';
 
 export default ContentGrid;

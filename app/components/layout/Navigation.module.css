@@ -20,13 +20,13 @@
 }
 
 .navContainer {
-  max-width: 1400px;
+  max-width: 1600px;
   margin: 0 auto;
-  padding: 0 2rem;
+  padding: 0 1.5rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 2rem;
+  gap: 1rem;
 }
 
 /* Logo */
@@ -87,24 +87,27 @@
 .navLinks {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.25rem;
   flex: 1;
   justify-content: center;
+  flex-wrap: nowrap;
 }
 
 .navLink {
   position: relative;
-  padding: 0.75rem 1.5rem;
+  padding: 0.625rem 1rem;
   background: transparent;
   border: none;
   color: var(--text-secondary);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   border-radius: 12px;
   overflow: hidden;
   isolation: isolate;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .navLink:hover {

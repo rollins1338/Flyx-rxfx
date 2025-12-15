@@ -1,7 +1,6 @@
 'use client';
 
-import { useRef, useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useRef, useState, useEffect, memo, useCallback } from 'react';
 import { ContentCard } from './ContentCard';
 import type { MediaItem } from '@/types/media';
 
@@ -23,7 +22,7 @@ export interface CategoryRowProps {
  * - Touch/swipe support
  * - Keyboard navigation
  */
-export const CategoryRow: React.FC<CategoryRowProps> = ({
+export const CategoryRow: React.FC<CategoryRowProps> = memo(({
   title,
   items,
   onItemSelect,
@@ -120,43 +119,33 @@ export const CategoryRow: React.FC<CategoryRowProps> = ({
 
       {/* Scrollable container */}
       <div className="relative group">
-        {/* Left arrow */}
-        <AnimatePresence>
-          {canScrollLeft && (
-            <motion.button
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              onClick={() => scroll('left')}
-              className="absolute left-0 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full bg-black/80 backdrop-blur-sm border border-white/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/90 hover:scale-110 transform"
-              aria-label="Scroll left"
-              disabled={isScrolling}
-            >
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </motion.button>
-          )}
-        </AnimatePresence>
+        {/* Left arrow - CSS only */}
+        {canScrollLeft && (
+          <button
+            onClick={() => scroll('left')}
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full bg-black/80 backdrop-blur-sm border border-white/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-black/90 hover:scale-110"
+            aria-label="Scroll left"
+            disabled={isScrolling}
+          >
+            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+        )}
 
-        {/* Right arrow */}
-        <AnimatePresence>
-          {canScrollRight && (
-            <motion.button
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              onClick={() => scroll('right')}
-              className="absolute right-0 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full bg-black/80 backdrop-blur-sm border border-white/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/90 hover:scale-110 transform"
-              aria-label="Scroll right"
-              disabled={isScrolling}
-            >
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </motion.button>
-          )}
-        </AnimatePresence>
+        {/* Right arrow - CSS only */}
+        {canScrollRight && (
+          <button
+            onClick={() => scroll('right')}
+            className="absolute right-0 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full bg-black/80 backdrop-blur-sm border border-white/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-black/90 hover:scale-110"
+            aria-label="Scroll right"
+            disabled={isScrolling}
+          >
+            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        )}
 
         {/* Cards container */}
         <div
@@ -168,28 +157,13 @@ export const CategoryRow: React.FC<CategoryRowProps> = ({
           }}
         >
           {items.map((item, index) => (
-            <motion.div
+            <CategoryRowCard
               key={item.id}
-              className="flex-shrink-0 w-[160px] sm:w-[200px] md:w-[220px] snap-start"
-              initial={{ opacity: 0, x: 50 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{
-                delay: Math.min(index * 0.05, 0.5),
-                duration: 0.4,
-              }}
-            >
-              <ContentCard
-                item={item}
-                onSelect={(id) => {
-                  if (onItemClick) {
-                    onItemClick(item);
-                  } else {
-                    onItemSelect?.(id);
-                  }
-                }}
-                priority={index < 6}
-              />
-            </motion.div>
+              item={item}
+              index={index}
+              onItemClick={onItemClick}
+              onItemSelect={onItemSelect}
+            />
           ))}
         </div>
 
@@ -199,6 +173,56 @@ export const CategoryRow: React.FC<CategoryRowProps> = ({
       </div>
     </div>
   );
-};
+});
+
+CategoryRow.displayName = 'CategoryRow';
+
+// Memoized card wrapper for better performance
+const CategoryRowCard = memo(function CategoryRowCard({
+  item,
+  index,
+  onItemClick,
+  onItemSelect,
+}: {
+  item: MediaItem;
+  index: number;
+  onItemClick?: (item: MediaItem) => void;
+  onItemSelect?: (id: string) => void;
+}) {
+  const handleSelect = useCallback((id: string) => {
+    if (onItemClick) {
+      onItemClick(item);
+    } else {
+      onItemSelect?.(id);
+    }
+  }, [item, onItemClick, onItemSelect]);
+
+  return (
+    <div
+      className="flex-shrink-0 w-[160px] sm:w-[200px] md:w-[220px] snap-start"
+      style={{
+        animation: index < 12 ? `fadeSlideIn 0.3s ease-out ${Math.min(index * 0.03, 0.3)}s both` : 'none',
+      }}
+    >
+      <ContentCard
+        item={item}
+        onSelect={handleSelect}
+        priority={index < 6}
+      />
+      <style jsx>{`
+        @keyframes fadeSlideIn {
+          from {
+            opacity: 0;
+            transform: translateX(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+      `}</style>
+    </div>
+  );
+});
 
 export default CategoryRow;

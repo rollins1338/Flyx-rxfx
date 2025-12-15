@@ -6,6 +6,7 @@ import PresenceProvider from './components/analytics/PresenceProvider'
 import { RegionProvider } from './lib/context/RegionContext'
 import { TVNavigationProvider } from './components/tv/TVNavigationProvider'
 import { TVNavigationHint } from './components/tv/TVNavigationHint'
+import AdminBanner from './components/ui/AdminBanner'
 
 // Optimized font loading with next/font (eliminates render-blocking CSS)
 const inter = Inter({
@@ -102,6 +103,7 @@ export default function RootLayout({
           <AnalyticsProvider>
             <PresenceProvider>
               <TVNavigationProvider>
+                <AdminBanner />
                 {children}
                 <TVNavigationHint />
               </TVNavigationProvider>

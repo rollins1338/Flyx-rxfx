@@ -772,8 +772,8 @@ export default function HomePageClient({
   );
 }
 
-// Content Section Component
-function ContentSection({
+// Optimized Content Section Component - uses CSS transforms instead of Framer Motion for better performance
+const ContentSection = React.memo(function ContentSection({
   title,
   items,
   onItemClick
@@ -784,7 +784,7 @@ function ContentSection({
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const scroll = (direction: 'left' | 'right') => {
+  const scroll = useCallback((direction: 'left' | 'right') => {
     if (scrollRef.current) {
       const scrollAmount = 600;
       scrollRef.current.scrollBy({
@@ -792,161 +792,145 @@ function ContentSection({
         behavior: 'smooth'
       });
     }
+  }, []);
+
+  // Get icon for section title
+  const getIcon = () => {
+    if (title.includes('Trending')) return <span className="text-orange-500">⚡</span>;
+    if (title.includes('Blockbuster')) return <span className="text-purple-500">🎬</span>;
+    if (title.includes('TV')) return <span className="text-blue-500">📺</span>;
+    if (title.includes('Acclaimed')) return <span className="text-yellow-500">⭐</span>;
+    if (title.includes('Action')) return <span>⚡</span>;
+    if (title.includes('Laugh')) return <span>😂</span>;
+    if (title.includes('Sci-Fi')) return <span>🚀</span>;
+    if (title.includes('Chills')) return <span>👻</span>;
+    if (title.includes('Anime')) return <span>🎌</span>;
+    if (title.includes('Real')) return <span>🌍</span>;
+    return null;
   };
 
   return (
-    <section className="py-12 px-6">
+    <section className="py-8 px-6">
       <div className="container mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3">
+            <span className="text-3xl">{getIcon()}</span>
+            <span>{title}</span>
+          </h2>
+          <div className="flex gap-3">
+            <button
+              onClick={() => scroll('left')}
+              className="w-12 h-12 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white transition-colors duration-200 border border-white/20"
+              data-tv-skip="true"
+              tabIndex={-1}
+              aria-label="Scroll left"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+              </svg>
+            </button>
+            <button
+              onClick={() => scroll('right')}
+              className="w-12 h-12 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white transition-colors duration-200 border border-white/20"
+              data-tv-skip="true"
+              tabIndex={-1}
+              aria-label="Scroll right"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div
+          ref={scrollRef}
+          className="flex gap-4 overflow-x-auto scrollbar-hide pb-4 -mx-2 px-2"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          data-tv-scroll-container="true"
+          data-tv-group={`content-${title.toLowerCase().replace(/\s+/g, '-')}`}
         >
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3">
-              {title.includes('Trending') && (
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-orange-500">
-                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-                </svg>
-              )}
-              {title.includes('Blockbuster') && (
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-purple-500">
-                  <path d="M19.82 2H4.18C2.97 2 2 2.97 2 4.18v15.64C2 21.03 2.97 22 4.18 22h15.64c1.21 0 2.18-.97 2.18-2.18V4.18C22 2.97 21.03 2 19.82 2zM7 16l5-5 5 5H7z" />
-                </svg>
-              )}
-              {title.includes('TV') && (
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-blue-500">
-                  <rect x="2" y="7" width="20" height="15" rx="2" ry="2" />
-                  <polyline points="17 2 12 7 7 2" />
-                </svg>
-              )}
-              {title.includes('Acclaimed') && (
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-yellow-500">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                </svg>
-              )}
-              {title.includes('Action') && (
-                <span className="text-3xl">⚡</span>
-              )}
-              {title.includes('Laugh') && (
-                <span className="text-3xl">😂</span>
-              )}
-              {title.includes('Sci-Fi') && (
-                <span className="text-3xl">🚀</span>
-              )}
-              {title.includes('Chills') && (
-                <span className="text-3xl">👻</span>
-              )}
-              {title.includes('Anime') && (
-                <span className="text-3xl">🎌</span>
-              )}
-              {title.includes('Real') && (
-                <span className="text-3xl">🌍</span>
-              )}
-              <span>{title}</span>
-            </h2>
-            <div className="flex gap-4">
-              <motion.button
-                whileHover={{ scale: 1.1, boxShadow: "0 8px 25px rgba(120, 119, 198, 0.4)" }}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => scroll('left')}
-                className="w-20 h-20 bg-gradient-to-r from-purple-600/20 to-pink-600/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:from-purple-600/30 hover:to-pink-600/30 transition-all duration-300 border border-white/20 shadow-xl"
-                data-tv-skip="true"
-                tabIndex={-1}
-              >
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
-                </svg>
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.1, boxShadow: "0 8px 25px rgba(120, 119, 198, 0.4)" }}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => scroll('right')}
-                className="w-20 h-20 bg-gradient-to-r from-purple-600/20 to-pink-600/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:from-purple-600/30 hover:to-pink-600/30 transition-all duration-300 border border-white/20 shadow-xl"
-                data-tv-skip="true"
-                tabIndex={-1}
-              >
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
-                </svg>
-              </motion.button>
-            </div>
-          </div>
-
-          <div
-            ref={scrollRef}
-            className="flex gap-6 overflow-x-auto scrollbar-hide pb-8 pt-4 px-2"
-            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-            data-tv-scroll-container="true"
-            data-tv-group={`content-${title.toLowerCase().replace(/\s+/g, '-')}`}
-          >
-            {items.map((item, index) => (
-              <motion.div
-                key={item.id}
-                initial={{ opacity: 0, x: 50 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: index * 0.05 }}
-                onClick={() => onItemClick(item)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    onItemClick(item);
-                  }
-                }}
-                className="flex-shrink-0 w-56 md:w-64 cursor-pointer group p-2"
-                data-tv-focusable="true"
-                tabIndex={0}
-                role="button"
-                aria-label={`${item.title || item.name}`}
-              >
-                <motion.div
-                  whileHover={{ scale: 1.05, y: -8 }}
-                  transition={{ duration: 0.3, ease: "easeOut" }}
-                  className="relative rounded-xl bg-gray-800 shadow-2xl overflow-hidden"
-                >
-                  <div className="overflow-hidden rounded-xl">
-                    <img
-                      src={`https://image.tmdb.org/t/p/w500${item.poster_path || item.posterPath || ''}`}
-                      alt={item.title || item.name || 'Content'}
-                      className="w-full h-80 md:h-96 object-cover group-hover:scale-110 transition-transform duration-500"
-                      loading="lazy"
-                    />
-                  </div>
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-
-                  {/* Play Button Overlay */}
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none">
-                    <div className="w-20 h-20 bg-gradient-to-r from-purple-600/80 to-pink-600/80 backdrop-blur-md rounded-full flex items-center justify-center shadow-2xl border border-white/20">
-                      <svg width="28" height="28" viewBox="0 0 24 24" fill="white" strokeWidth="0">
-                        <path d="M8 5v14l11-7z" />
-                      </svg>
-                    </div>
-                  </div>
-
-                  {/* Rating Badge */}
-                  <div className="absolute top-4 right-4 px-3 py-2 bg-gradient-to-r from-yellow-500/90 to-orange-500/90 backdrop-blur-md rounded-full text-white text-sm font-bold flex items-center gap-2 shadow-lg border border-white/20">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                    </svg>
-                    {(item.vote_average || item.rating || 0).toFixed(1)}
-                  </div>
-                </motion.div>
-
-                <div className="p-4">
-                  <h3 className="text-white font-semibold text-lg mb-2 line-clamp-2">
-                    {item.title || item.name || 'Untitled'}
-                  </h3>
-                  <p className="text-gray-400 text-sm">
-                    {new Date(item.release_date || item.first_air_date || item.releaseDate || '').getFullYear()}
-                  </p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
+          {items.slice(0, 20).map((item) => (
+            <ContentCard
+              key={item.id}
+              item={item}
+              onClick={onItemClick}
+            />
+          ))}
+        </div>
       </div>
     </section>
   );
-}
+});
+
+// Optimized Content Card - uses CSS transforms instead of Framer Motion
+const ContentCard = React.memo(function ContentCard({
+  item,
+  onClick
+}: {
+  item: MediaItem;
+  onClick: (item: MediaItem) => void;
+}) {
+  const handleClick = useCallback(() => onClick(item), [item, onClick]);
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onClick(item);
+    }
+  }, [item, onClick]);
+
+  const rating = (item.vote_average || item.rating || 0).toFixed(1);
+  const year = new Date(item.release_date || item.first_air_date || item.releaseDate || '').getFullYear();
+  const posterUrl = `https://image.tmdb.org/t/p/w342${item.poster_path || item.posterPath || ''}`;
+
+  return (
+    <div
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      className="flex-shrink-0 w-44 md:w-52 cursor-pointer group"
+      data-tv-focusable="true"
+      tabIndex={0}
+      role="button"
+      aria-label={item.title || item.name || 'Content'}
+    >
+      <div className="relative rounded-xl bg-gray-800/50 shadow-lg overflow-hidden transform transition-transform duration-200 ease-out group-hover:scale-105 group-hover:-translate-y-2 group-focus-within:scale-105 group-focus-within:-translate-y-2">
+        <div className="overflow-hidden rounded-t-xl">
+          <img
+            src={posterUrl}
+            alt={item.title || item.name || 'Content'}
+            className="w-full aspect-[2/3] object-cover transition-transform duration-300 group-hover:scale-105"
+            loading="lazy"
+            decoding="async"
+          />
+        </div>
+        
+        {/* Gradient overlay - always visible for text readability */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none" />
+
+        {/* Play Button Overlay - CSS only */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-200 pointer-events-none">
+          <div className="w-14 h-14 bg-purple-600/90 rounded-full flex items-center justify-center shadow-xl">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </div>
+        </div>
+
+        {/* Rating Badge */}
+        <div className="absolute top-2 right-2 px-2 py-1 bg-black/70 backdrop-blur-sm rounded-md text-white text-xs font-bold flex items-center gap-1">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="text-yellow-400">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+          </svg>
+          {rating}
+        </div>
+      </div>
+
+      <div className="pt-3 px-1">
+        <h3 className="text-white font-medium text-sm line-clamp-2 leading-tight">
+          {item.title || item.name || 'Untitled'}
+        </h3>
+        <p className="text-gray-500 text-xs mt-1">{year || 'N/A'}</p>
+      </div>
+    </div>
+  );
+});
