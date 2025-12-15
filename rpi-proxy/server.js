@@ -3,14 +3,18 @@
  * Raspberry Pi Simple Proxy Server
  * 
  * A minimal residential IP proxy for DLHD keys and m3u8 playlists.
- * No special headers needed - residential IP is all that matters!
+ * Now uses Authorization header for key requests (discovered via reverse engineering).
+ * 
+ * Key Discovery:
+ *   - DLHD key server requires: Authorization: Bearer <token>
+ *   - Token is generated server-side and embedded in player page
+ *   - Token is fetched from: https://epicplayplay.cfd/premiumtv/daddyhd.php?id=<channel>
  * 
  * Setup:
  *   1. Copy this folder to your Raspberry Pi
- *   2. npm install
- *   3. Set API_KEY environment variable
- *   4. Run: node server.js
- *   5. Use Cloudflare Tunnel or ngrok to expose it
+ *   2. Set API_KEY environment variable
+ *   3. Run: node server.js
+ *   4. Use Cloudflare Tunnel or ngrok to expose it
  * 
  * Usage:
  *   GET /proxy?url=<encoded_url>
@@ -20,6 +24,74 @@
 const http = require('http');
 const https = require('https');
 const { URL } = require('url');
+
+// ============================================================================
+// DLHD Auth Token Management
+// The key server requires Authorization: Bearer <token>
+// Token is fetched from the player page and cached per channel
+// ============================================================================
+const authTokenCache = new Map(); // channel -> { token, fetchedAt }
+const AUTH_TOKEN_TTL = 30 * 60 * 1000; // 30 minutes (tokens expire after ~5 hours)
+
+/**
+ * Fetch auth token from the player page for a given channel
+ */
+async function fetchAuthToken(channel) {
+  const cached = authTokenCache.get(channel);
+  if (cached && (Date.now() - cached.fetchedAt) < AUTH_TOKEN_TTL) {
+    console.log(`[Auth] Using cached token for channel ${channel}`);
+    return cached.token;
+  }
+  
+  console.log(`[Auth] Fetching fresh token for channel ${channel}...`);
+  
+  return new Promise((resolve) => {
+    const url = `https://epicplayplay.cfd/premiumtv/daddyhd.php?id=${channel}`;
+    https.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://daddyhd.com/',
+      }
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        // Extract AUTH_TOKEN from the page
+        const match = data.match(/AUTH_TOKEN\s*=\s*["']([^"']+)["']/);
+        if (match) {
+          const token = match[1];
+          authTokenCache.set(channel, { token, fetchedAt: Date.now() });
+          console.log(`[Auth] Got token for channel ${channel}: ${token.substring(0, 20)}...`);
+          resolve(token);
+        } else {
+          console.log(`[Auth] No token found in page for channel ${channel}`);
+          resolve(null);
+        }
+      });
+    }).on('error', (e) => {
+      console.error(`[Auth] Error fetching token: ${e.message}`);
+      resolve(null);
+    });
+  });
+}
+
+/**
+ * Extract channel number from key URL
+ * e.g., https://chevy.kiko2.ru/key/premium51/5886102 -> 51
+ */
+function extractChannelFromKeyUrl(url) {
+  const match = url.match(/premium(\d+)/);
+  return match ? match[1] : null;
+}
+
+// Browser-based key fetcher (bypasses TLS fingerprint detection)
+let keyFetcher = null;
+try {
+  keyFetcher = require('./key-fetcher');
+  console.log('[Init] Browser key fetcher loaded');
+} catch (e) {
+  console.log('[Init] Browser key fetcher not available:', e.message);
+}
 
 const PORT = process.env.PORT || 3001;
 const API_KEY = process.env.API_KEY || 'change-this-secret-key';
@@ -57,7 +129,8 @@ const KEY_CACHE_TTL = 3600000; // 1 hour for keys
 const M3U8_CACHE_TTL = 5000;   // 5 seconds for m3u8 (they update frequently)
 
 function getCacheTTL(url) {
-  if (url.includes('.key') || url.includes('key.php') || url.includes('wmsxx.php')) return KEY_CACHE_TTL;
+  // Key URLs: wmsxx.php, .key, or new format like /key/premium39/5885913
+  if (url.includes('.key') || url.includes('key.php') || url.includes('wmsxx.php') || url.includes('/key/premium')) return KEY_CACHE_TTL;
   if (url.includes('.m3u8') || url.includes('mono.css')) return M3U8_CACHE_TTL;
   return 30000; // 30 seconds default
 }
@@ -111,26 +184,104 @@ function getAwsHeaders() {
 const { spawn } = require('child_process');
 
 /**
- * Proxy using curl (bypasses Node TLS fingerprinting issues)
+ * Fetch DLHD key with Authorization header
+ * This is the correct method - the key server requires Bearer token auth
  */
-function proxyWithCurl(targetUrl, res) {
-  const isKeyRequest = targetUrl.includes('wmsxx.php') || targetUrl.includes('.key');
-  
-  // Force HTTP/2, disable cert verification (like Insomnia)
-  // Note: removed -L (follow redirects) as it may cause issues
-  const args = ['-s', '--max-time', '30', '--http2', '-k'];
-  
-  // Match Insomnia's exact header order and format
-  args.push('-H', 'user-agent: insomnia/2022.4.2');
-  
-  // Add AWS headers for key requests
-  if (isKeyRequest) {
-    const { amzDate, authorization } = getAwsHeaders();
-    args.push('-H', `x-amz-date: ${amzDate}`);
-    args.push('-H', `authorization: ${authorization}`);
-    console.log(`[Key Request] Using curl with AWS headers (HTTP/2)`);
+async function fetchKeyWithAuth(keyUrl, res) {
+  // Extract channel from URL
+  const channel = extractChannelFromKeyUrl(keyUrl);
+  if (!channel) {
+    console.log(`[Key] Could not extract channel from URL: ${keyUrl}`);
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Invalid key URL format' }));
+    return;
   }
   
+  // Get auth token for this channel
+  const authToken = await fetchAuthToken(channel);
+  if (!authToken) {
+    console.log(`[Key] Could not get auth token for channel ${channel}`);
+    res.writeHead(502, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Failed to get auth token' }));
+    return;
+  }
+  
+  // Fetch key with Authorization header
+  const url = new URL(keyUrl);
+  const req = https.request({
+    hostname: url.hostname,
+    path: url.pathname,
+    method: 'GET',
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': '*/*',
+      'Origin': 'https://epicplayplay.cfd',
+      'Referer': 'https://epicplayplay.cfd/',
+      'Authorization': `Bearer ${authToken}`,
+      'X-Channel-Key': `premium${channel}`,
+    },
+  }, (proxyRes) => {
+    const chunks = [];
+    proxyRes.on('data', chunk => chunks.push(chunk));
+    proxyRes.on('end', () => {
+      const data = Buffer.concat(chunks);
+      
+      console.log(`[Key] Response: ${proxyRes.statusCode}, ${data.length} bytes`);
+      
+      // Check if we got a valid key
+      if (data.length === 16) {
+        const text = data.toString('utf8');
+        if (text.includes('error')) {
+          console.log(`[Key] Error response: ${text}`);
+          // Token might be expired, clear cache and return error
+          authTokenCache.delete(channel);
+          res.writeHead(401, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+          res.end(JSON.stringify({ error: 'Key server returned error', response: text }));
+        } else {
+          console.log(`[Key] Valid key: ${data.toString('hex')}`);
+          setCache(keyUrl, data, 'application/octet-stream');
+          res.writeHead(200, {
+            'Content-Type': 'application/octet-stream',
+            'Content-Length': data.length,
+            'Access-Control-Allow-Origin': '*',
+            'X-Cache': 'MISS',
+            'X-Fetched-By': 'auth-header',
+          });
+          res.end(data);
+        }
+      } else {
+        console.log(`[Key] Unexpected response size: ${data.length}`);
+        res.writeHead(proxyRes.statusCode, {
+          'Content-Type': 'application/octet-stream',
+          'Content-Length': data.length,
+          'Access-Control-Allow-Origin': '*',
+        });
+        res.end(data);
+      }
+    });
+  });
+  
+  req.on('error', (e) => {
+    console.error(`[Key] Request error: ${e.message}`);
+    res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+    res.end(JSON.stringify({ error: 'Key fetch failed', details: e.message }));
+  });
+  
+  req.end();
+}
+
+/**
+ * Proxy using curl for non-key requests
+ */
+function proxyWithCurl(targetUrl, res) {
+  // Build args
+  const args = ['-s', '--max-time', '30'];
+  
+  // Add HTTP/2 and ignore cert errors
+  args.push('--http2', '-k');
+  
+  // Add browser headers
+  args.push('-H', 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
   args.push('-H', 'accept: */*');
   args.push('-i'); // Include response headers
   args.push(targetUrl);
@@ -179,17 +330,40 @@ function proxyWithCurl(targetUrl, res) {
     
     console.log(`[Curl Parsed] Status: ${statusCode}, Body: ${data.length} bytes`);
     
-    console.log(`[Response] ${statusCode} - ${data.length} bytes`);
+    // CRITICAL: For key requests, if we get 401 but body is exactly 16 bytes,
+    // the server might be returning the key data with an error status.
+    // AES-128 keys are always exactly 16 bytes.
+    // The {"error":"E3"} JSON response is also 16 bytes, so check if it's JSON
+    const isKeyRequest = targetUrl.includes('/key/premium') || targetUrl.includes('wmsxx.php') || targetUrl.includes('.key');
+    let finalStatus = statusCode;
     
-    if (statusCode === 200) {
+    if (isKeyRequest && statusCode === 401 && data.length === 16) {
+      // Check if it's JSON error or actual binary key data
+      const dataStr = data.toString('utf8');
+      const looksLikeJson = dataStr.startsWith('{') || dataStr.startsWith('[');
+      
+      if (looksLikeJson) {
+        console.log(`[Key 401] Got JSON error response: ${dataStr}`);
+        // It's a JSON error, keep 401 status
+      } else {
+        // It's likely binary key data! Return as 200
+        console.log(`[Key 401] Got 16-byte binary data, treating as valid key!`);
+        console.log(`[Key Data] Hex: ${data.toString('hex')}`);
+        finalStatus = 200;
+        setCache(targetUrl, data, 'application/octet-stream');
+      }
+    } else if (statusCode === 200) {
       setCache(targetUrl, data, 'application/octet-stream');
     }
     
-    res.writeHead(statusCode, {
+    console.log(`[Response] ${finalStatus} - ${data.length} bytes`);
+    
+    res.writeHead(finalStatus, {
       'Content-Type': 'application/octet-stream',
       'Content-Length': data.length,
       'Access-Control-Allow-Origin': '*',
       'X-Cache': 'MISS',
+      'X-Original-Status': statusCode.toString(),
     });
     res.end(data);
   });
@@ -526,10 +700,14 @@ function proxyRequest(targetUrl, res) {
     return;
   }
 
-  // Use curl for key requests (TLS fingerprint matters)
-  const isKeyRequest = targetUrl.includes('wmsxx.php') || targetUrl.includes('.key');
+  // Key URLs: wmsxx.php, .key, or new format like /key/premium39/5885913
+  const isKeyRequest = targetUrl.includes('wmsxx.php') || targetUrl.includes('.key') || targetUrl.includes('/key/premium');
+  
+  // For key requests, use Authorization header method (discovered via reverse engineering)
+  // The key server requires: Authorization: Bearer <token>
   if (isKeyRequest) {
-    return proxyWithCurl(targetUrl, res);
+    console.log(`[Key Request] Using Authorization header method`);
+    return fetchKeyWithAuth(targetUrl, res);
   }
 
   // Use Node https for everything else
@@ -728,13 +906,16 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
   console.log(`
 ╔═══════════════════════════════════════════════════════════╗
-║       Raspberry Pi Simple Proxy (Residential IP)          ║
+║       Raspberry Pi Proxy (DLHD Auth Token Method)         ║
 ╠═══════════════════════════════════════════════════════════╣
 ║  Port: ${PORT.toString().padEnd(49)}║
 ║  API Key: ${API_KEY.substring(0, 8)}${'*'.repeat(Math.max(0, API_KEY.length - 8)).padEnd(41)}║
+║  Key Fetch: Authorization Bearer Token (auto-fetched)     ║
 ╠═══════════════════════════════════════════════════════════╣
-║  No Puppeteer, no special headers - just simple fetches!  ║
-║  Residential IP is all that's needed.                     ║
+║  DLHD Key Method:                                         ║
+║    1. Fetch auth token from epicplayplay.cfd player page  ║
+║    2. Use Authorization: Bearer <token> header            ║
+║    3. Token cached for 30 minutes per channel             ║
 ╠═══════════════════════════════════════════════════════════╣
 ║  Endpoints:                                               ║
 ║    GET /proxy?url=<encoded_url>  - Proxy a request        ║

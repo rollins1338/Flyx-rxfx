@@ -1,0 +1,1 @@
+{"@context":"https://schema.org","@type":"WebSite","name":"DaddyLiveHD - Live Sports Streaming Free - DaddyLiveHD.sx - DLHD","url":"http://daddyhd.com","potentialAction":{"@type":"SearchAction","target":"http://daddyhd.com/?search={search_term_string}","query-input":"required name=search_term_string"}}

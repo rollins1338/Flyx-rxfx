@@ -7,6 +7,7 @@ import './reverse-engineering.css';
 const sections = [
   { id: 'overview', title: 'Overview' },
   { id: 'philosophy', title: 'Philosophy' },
+  { id: 'dlhd', title: 'DLHD Live TV' },
   { id: '111movies', title: '111movies (1movies)' },
   { id: 'vidsrc', title: 'VidSrc' },
   { id: 'videasy', title: 'Videasy' },
@@ -119,6 +120,11 @@ export default function ReverseEngineeringPage() {
             <div className="provider-grid">
               <div className="provider-card">
                 <div className="provider-status working">✓ Working</div>
+                <h3>DLHD Live TV</h3>
+                <p>AES-128 HLS encryption with Bearer token auth. Reverse engineered the obfuscated player to extract auth tokens. December 2025.</p>
+              </div>
+              <div className="provider-card">
+                <div className="provider-status working">✓ Working</div>
                 <h3>111movies</h3>
                 <p>AES-256-CBC encryption with XOR obfuscation and alphabet substitution. Fully cracked December 2025.</p>
               </div>
@@ -162,6 +168,203 @@ export default function ReverseEngineeringPage() {
               <li><strong>Document Everything</strong> - Knowledge should be shared so others can build on it.</li>
               <li><strong>Keep It Updated</strong> - Providers change their obfuscation. We adapt.</li>
             </ul>
+          </section>
+
+          {/* DLHD Live TV */}
+          <section id="dlhd">
+            <h2>DLHD Live TV - Auth Token Discovery</h2>
+            <div className="status-badge success">Fully Reverse Engineered - December 2025</div>
+            
+            <h3>Overview</h3>
+            <p>
+              DLHD (daddyhd.com) provides live TV streams using HLS with AES-128 encryption. The key 
+              server initially appeared to block datacenter IPs, but reverse engineering their 
+              obfuscated JavaScript player revealed the real protection: Bearer token authentication.
+            </p>
+            <p>
+              The breakthrough came from analyzing the player iframe at <code>epicplayplay.cfd</code>, 
+              where we discovered that auth tokens are generated server-side and embedded in the page. 
+              With the correct token, key requests work from ANY IP—no residential proxy needed.
+            </p>
+
+            <h3>The Problem</h3>
+            <p>
+              Initial attempts to fetch encryption keys returned errors. The key server at 
+              <code>chevy.kiko2.ru</code> seemed to reject requests from datacenter IPs. We tried:
+            </p>
+            <ul>
+              <li>Different User-Agent strings</li>
+              <li>Various Referer headers</li>
+              <li>Cookie forwarding</li>
+              <li>TLS fingerprint spoofing</li>
+            </ul>
+            <p>
+              None worked. But the browser worked fine from the same IP. This meant it wasn&apos;t 
+              IP-based blocking—something else was happening.
+            </p>
+
+            <h3>The Discovery</h3>
+            <p>
+              By fetching and analyzing the player page at <code>epicplayplay.cfd/premiumtv/daddyhd.php</code>, 
+              we found the key: an <code>AUTH_TOKEN</code> variable embedded in the JavaScript.
+            </p>
+            <div className="code-block">
+              <div className="code-header">
+                <span>Token Extraction</span>
+                <button 
+                  onClick={() => copyCode('AUTH_TOKEN\\\\s*=\\\\s*["\']([^"\']+)["\']', 'dlhd-regex')}
+                  className={copiedCode === 'dlhd-regex' ? 'copied' : ''}
+                >
+                  {copiedCode === 'dlhd-regex' ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+              <pre><code>{`// Fetch the player page
+const playerUrl = \`https://epicplayplay.cfd/premiumtv/daddyhd.php?id=\${channel}\`;
+const html = await fetch(playerUrl, {
+  headers: {
+    'User-Agent': 'Mozilla/5.0 ...',
+    'Referer': 'https://daddyhd.com/',
+  }
+}).then(r => r.text());
+
+// Extract the auth token
+const match = html.match(/AUTH_TOKEN\\s*=\\s*["']([^"']+)["']/);
+const authToken = match[1];
+// Token looks like: "713384aaecd20309fbc8..."`}</code></pre>
+            </div>
+
+            <h3>The Algorithm</h3>
+            <div className="algorithm-flow">
+              <div className="flow-step">
+                <span className="step-num">1</span>
+                <div>
+                  <h4>Get Server Key</h4>
+                  <p>Call <code>server_lookup?channel_id=premium{'{channel}'}</code> to get CDN server (zeko, chevy, nfs, etc.)</p>
+                </div>
+              </div>
+              <div className="flow-step">
+                <span className="step-num">2</span>
+                <div>
+                  <h4>Fetch M3U8 Playlist</h4>
+                  <p>Build URL: <code>https://{'{server}'}new.kiko2.ru/{'{server}'}/premium{'{channel}'}/mono.css</code></p>
+                </div>
+              </div>
+              <div className="flow-step">
+                <span className="step-num">3</span>
+                <div>
+                  <h4>Extract Key URL</h4>
+                  <p>Parse M3U8 for <code>#EXT-X-KEY</code> tag with URI and IV</p>
+                </div>
+              </div>
+              <div className="flow-step">
+                <span className="step-num">4</span>
+                <div>
+                  <h4>Fetch Auth Token</h4>
+                  <p>Get token from player page (cached for 30 minutes)</p>
+                </div>
+              </div>
+              <div className="flow-step">
+                <span className="step-num">5</span>
+                <div>
+                  <h4>Fetch Key with Auth</h4>
+                  <p>Request key with <code>Authorization: Bearer {'{token}'}</code> header</p>
+                </div>
+              </div>
+            </div>
+
+            <h3>Key Request Headers</h3>
+            <p>The key server requires specific headers. The critical one is <code>Authorization</code>:</p>
+            <div className="code-block">
+              <div className="code-header"><span>Required Headers for Key Fetch</span></div>
+              <pre><code>{`{
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+  'Accept': '*/*',
+  'Origin': 'https://epicplayplay.cfd',
+  'Referer': 'https://epicplayplay.cfd/',
+  'Authorization': 'Bearer \${authToken}',  // THE KEY!
+  'X-Channel-Key': 'premium\${channel}',
+}`}</code></pre>
+            </div>
+
+            <h3>URL Patterns</h3>
+            <div className="endpoint-list">
+              <div className="endpoint">
+                <span className="method get">GET</span>
+                <code>https://chevy.giokko.ru/server_lookup?channel_id=premium{'{channel}'}</code>
+                <p>Returns JSON: <code>{`{"server_key": "zeko"}`}</code></p>
+              </div>
+              <div className="endpoint">
+                <span className="method get">GET</span>
+                <code>https://{'{server}'}new.kiko2.ru/{'{server}'}/premium{'{channel}'}/mono.css</code>
+                <p>Returns HLS M3U8 playlist with AES-128 encryption</p>
+              </div>
+              <div className="endpoint">
+                <span className="method get">GET</span>
+                <code>https://chevy.kiko2.ru/key/premium{'{channel}'}/{'{keyId}'}</code>
+                <p>Returns 16-byte AES key (requires Bearer token)</p>
+              </div>
+              <div className="endpoint">
+                <span className="method get">GET</span>
+                <code>https://epicplayplay.cfd/premiumtv/daddyhd.php?id={'{channel}'}</code>
+                <p>Player page containing AUTH_TOKEN</p>
+              </div>
+            </div>
+
+            <h3>Implementation</h3>
+            <div className="code-block">
+              <div className="code-header"><span>Complete Key Fetch Function</span></div>
+              <pre><code>{`async function fetchDLHDKey(keyUrl, channel) {
+  // Step 1: Get auth token (cached)
+  const authToken = await fetchAuthToken(channel);
+  if (!authToken) throw new Error('Failed to get auth token');
+  
+  // Step 2: Fetch key with Authorization header
+  const response = await fetch(keyUrl, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)...',
+      'Accept': '*/*',
+      'Origin': 'https://epicplayplay.cfd',
+      'Referer': 'https://epicplayplay.cfd/',
+      'Authorization': \`Bearer \${authToken}\`,
+      'X-Channel-Key': \`premium\${channel}\`,
+    },
+  });
+  
+  const keyData = await response.arrayBuffer();
+  
+  // Valid key is exactly 16 bytes
+  if (keyData.byteLength !== 16) {
+    throw new Error(\`Invalid key size: \${keyData.byteLength}\`);
+  }
+  
+  return keyData;
+}`}</code></pre>
+            </div>
+
+            <h3>Why This Works</h3>
+            <p>
+              The auth token is generated server-side when the player page loads. It&apos;s tied to 
+              the channel, not the IP address. This means:
+            </p>
+            <ul>
+              <li><strong>No residential proxy needed</strong> - Works from Cloudflare Workers</li>
+              <li><strong>Token validity ~5 hours</strong> - We cache for 30 minutes to be safe</li>
+              <li><strong>Per-channel tokens</strong> - Each channel needs its own token</li>
+              <li><strong>No IP blocking</strong> - The &quot;blocking&quot; was just missing auth</li>
+            </ul>
+
+            <h3>Lessons Learned</h3>
+            <blockquote>
+              &quot;When requests fail from code but work in browser, don&apos;t assume IP blocking. 
+              Check what headers the browser is actually sending. The answer is usually in the 
+              JavaScript.&quot;
+              <cite>- Field Notes, December 2025</cite>
+            </blockquote>
+            <p>
+              This crack took several days of investigation. We went down rabbit holes of TLS 
+              fingerprinting and residential proxies before realizing the protection was much 
+              simpler: just a Bearer token hidden in obfuscated JavaScript.
+            </p>
           </section>
 
           {/* 111movies */}

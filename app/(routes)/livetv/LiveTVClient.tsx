@@ -19,36 +19,82 @@ interface Channel {
   isHD?: boolean;
   categoryInfo: { name: string; icon: string };
   countryInfo: { name: string; flag: string };
+  source?: 'xfinity' | 'dlhd';
 }
 
-interface XfinityChannel {
+interface DLHDChannel {
   id: string;
   name: string;
   category: string;
+  country: string;
+  firstLetter: string;
   categoryInfo: { name: string; icon: string };
-  hasEast: boolean;
-  hasWest: boolean;
-  eastName?: string;
-  westName?: string;
-  isHD: boolean;
+  countryInfo: { name: string; flag: string };
 }
 
-interface XfinityCategory {
+interface DLHDCategory {
   id: string;
   name: string;
   icon: string;
   count: number;
 }
 
-// Memoized channel card to prevent re-renders
-const ChannelCard = memo(function ChannelCard({ 
+interface DLHDCountry {
+  id: string;
+  name: string;
+  flag: string;
+  count: number;
+}
+
+// DLHD Live Events Types
+interface SportEvent {
+  id: string;
+  time: string;
+  isoTime?: string; // ISO timestamp for local timezone conversion
+  dataTime: string;
+  title: string;
+  sport?: string;
+  league?: string;
+  teams?: { home: string; away: string };
+  isLive: boolean;
+  channels: { name: string; channelId: string; href: string }[];
+}
+
+/**
+ * Format event time in user's local timezone (12-hour format)
+ */
+function formatLocalTime(isoTime?: string, fallbackTime?: string): string {
+  if (isoTime) {
+    try {
+      const date = new Date(isoTime);
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        });
+      }
+    } catch {
+      // Fall through to fallback
+    }
+  }
+  // Fallback to original time if ISO parsing fails
+  return fallbackTime || '';
+}
+
+interface ScheduleCategory {
+  name: string;
+  icon: string;
+  events: SportEvent[];
+}
+
+// Memoized DLHD channel card
+const DLHDChannelCard = memo(function DLHDChannelCard({ 
   channel, 
-  preferWestCoast, 
   onSelect 
 }: { 
-  channel: XfinityChannel; 
-  preferWestCoast: boolean; 
-  onSelect: (channel: XfinityChannel) => void;
+  channel: DLHDChannel; 
+  onSelect: (channel: DLHDChannel) => void;
 }) {
   return (
     <button
@@ -56,24 +102,94 @@ const ChannelCard = memo(function ChannelCard({
       onClick={() => onSelect(channel)}
     >
       <div className={styles.channelLogo}>
-        <span>{channel.name.charAt(0)}</span>
-        {channel.isHD && <span className={styles.hdBadge}>HD</span>}
+        <span>{channel.firstLetter}</span>
       </div>
       <div className={styles.channelInfo}>
         <span className={styles.channelName}>{channel.name}</span>
         <span className={styles.channelMeta}>
           {channel.categoryInfo.icon} {channel.categoryInfo.name}
         </span>
-        {channel.hasEast && channel.hasWest && channel.eastName !== channel.westName && (
-          <span className={styles.coastIndicator}>
-            {preferWestCoast ? '🌄 West' : '🌅 East'}
-          </span>
-        )}
+        <span className={styles.coastIndicator}>
+          {channel.countryInfo.flag} {channel.countryInfo.name}
+        </span>
       </div>
       <span className={styles.playIcon}>▶</span>
     </button>
   );
 });
+
+// Memoized event card for Live Events
+const EventCard = memo(function EventCard({
+  event,
+  onChannelSelect,
+}: {
+  event: SportEvent;
+  onChannelSelect: (channelId: string, channelName: string, eventTitle: string) => void;
+}) {
+  const displayedChannels = event.channels.slice(0, 4);
+  const moreCount = event.channels.length - 4;
+  
+  // Format time in user's local timezone
+  const localTime = formatLocalTime(event.isoTime, event.time);
+
+  return (
+    <div className={`${styles.eventCard} ${event.isLive ? styles.live : ''}`}>
+      <div className={styles.eventHeader}>
+        <span className={styles.eventTime}>{localTime}</span>
+        <span className={styles.eventSport}>{event.sport ? getIcon(event.sport) : '📺'}</span>
+        {event.isLive && (
+          <span className={styles.liveTag}>
+            <span className={styles.liveDot} /> LIVE
+          </span>
+        )}
+      </div>
+      <div className={styles.eventBody}>
+        {event.teams ? (
+          <div className={styles.matchup}>
+            <span className={styles.team}>{event.teams.home}</span>
+            <span className={styles.vs}>vs</span>
+            <span className={styles.team}>{event.teams.away}</span>
+          </div>
+        ) : (
+          <span className={styles.eventTitle}>{event.title}</span>
+        )}
+        {event.league && <span className={styles.league}>{event.league}</span>}
+      </div>
+      <div className={styles.eventChannels}>
+        {displayedChannels.map((ch, idx) => (
+          <button
+            key={idx}
+            className={styles.channelBtn}
+            onClick={() => onChannelSelect(ch.channelId, ch.name, event.title)}
+            disabled={!ch.channelId}
+          >
+            {ch.name}
+          </button>
+        ))}
+        {moreCount > 0 && (
+          <span className={styles.moreChannels}>+{moreCount} more</span>
+        )}
+      </div>
+    </div>
+  );
+});
+
+function getIcon(sport: string): string {
+  const icons: Record<string, string> = {
+    'soccer': '⚽', 'football': '⚽', 'basketball': '🏀', 'tennis': '🎾',
+    'cricket': '🏏', 'hockey': '🏒', 'baseball': '⚾', 'golf': '⛳',
+    'rugby': '🏉', 'motorsport': '🏎️', 'f1': '🏎️', 'boxing': '🥊',
+    'mma': '🥊', 'ufc': '🥊', 'wwe': '🤼', 'volleyball': '🏐',
+    'am. football': '🏈', 'nfl': '🏈', 'tv shows': '📺',
+  };
+  const lower = sport.toLowerCase();
+  for (const [key, icon] of Object.entries(icons)) {
+    if (lower.includes(key)) return icon;
+  }
+  return '📺';
+}
+
+type ViewMode = 'events' | 'channels';
 
 export default function LiveTVClient() {
   const { 
@@ -87,20 +203,124 @@ export default function LiveTVClient() {
     updateLiveTVQuality,
   } = useAnalytics();
   
+  const [viewMode, setViewMode] = useState<ViewMode>('events');
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
-  const [xfinityChannels, setXfinityChannels] = useState<XfinityChannel[]>([]);
-  const [xfinityCategories, setXfinityCategories] = useState<XfinityCategory[]>([]);
+  
+  // DLHD Channels state
+  const [dlhdChannels, setDlhdChannels] = useState<DLHDChannel[]>([]);
+  const [dlhdCategories, setDlhdCategories] = useState<DLHDCategory[]>([]);
+  const [dlhdCountries, setDlhdCountries] = useState<DLHDCountry[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [preferWestCoast, setPreferWestCoast] = useState(false);
+  const [selectedCountry, setSelectedCountry] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [totalChannels, setTotalChannels] = useState(0);
+
+  // DLHD Live Events state
+  const [allScheduleCategories, setAllScheduleCategories] = useState<ScheduleCategory[]>([]); // All categories for sidebar
+  const [scheduleCategories, setScheduleCategories] = useState<ScheduleCategory[]>([]); // Filtered for display
+  const [selectedSport, setSelectedSport] = useState('all');
+  const [liveOnly, setLiveOnly] = useState(false);
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [eventsError, setEventsError] = useState<string | null>(null);
+  const [liveEventsCount, setLiveEventsCount] = useState(0);
+  const [totalEventsCount, setTotalEventsCount] = useState(0); // Total unfiltered events
 
   useEffect(() => { trackPageView('/livetv'); }, [trackPageView]);
 
+  // Fetch Live Events (DLHD schedule) - only on initial load or view mode change
   useEffect(() => {
-    fetchChannels();
-  }, [selectedCategory, searchQuery]);
+    if (viewMode === 'events') {
+      fetchSchedule();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode]);
+  
+  // Apply filters client-side when sport or liveOnly changes
+  useEffect(() => {
+    if (allScheduleCategories.length === 0) return;
+    
+    let filteredCategories = [...allScheduleCategories];
+    
+    // Filter by sport
+    if (selectedSport !== 'all') {
+      filteredCategories = filteredCategories.filter(
+        cat => cat.name.toLowerCase() === selectedSport.toLowerCase()
+      );
+    }
+    
+    // Filter by live only
+    if (liveOnly) {
+      filteredCategories = filteredCategories
+        .map(cat => ({
+          ...cat,
+          events: cat.events.filter(e => e.isLive)
+        }))
+        .filter(cat => cat.events.length > 0);
+    }
+    
+    setScheduleCategories(filteredCategories);
+  }, [selectedSport, liveOnly, allScheduleCategories]);
+
+  // Fetch DLHD channels
+  useEffect(() => {
+    if (viewMode === 'channels') {
+      fetchChannels();
+    }
+  }, [viewMode, selectedCategory, selectedCountry, searchQuery]);
+
+  const fetchSchedule = async () => {
+    try {
+      setEventsLoading(true);
+      setEventsError(null);
+      
+      // Always fetch ALL events first (no sport filter) for sidebar counts
+      const allResponse = await fetch('/api/livetv/schedule');
+      const allData = await allResponse.json();
+      
+      if (allData.success) {
+        // Store all categories for sidebar display
+        setAllScheduleCategories(allData.schedule.categories);
+        setTotalEventsCount(allData.stats.totalEvents);
+        
+        // Calculate total live events from all categories
+        const totalLive = allData.schedule.categories.reduce(
+          (sum: number, cat: ScheduleCategory) => sum + cat.events.filter((e: SportEvent) => e.isLive).length, 
+          0
+        );
+        setLiveEventsCount(totalLive);
+        
+        // Now apply client-side filtering for display
+        let filteredCategories = allData.schedule.categories as ScheduleCategory[];
+        
+        // Filter by sport
+        if (selectedSport !== 'all') {
+          filteredCategories = filteredCategories.filter(
+            cat => cat.name.toLowerCase() === selectedSport.toLowerCase()
+          );
+        }
+        
+        // Filter by live only
+        if (liveOnly) {
+          filteredCategories = filteredCategories
+            .map(cat => ({
+              ...cat,
+              events: cat.events.filter((e: SportEvent) => e.isLive)
+            }))
+            .filter(cat => cat.events.length > 0);
+        }
+        
+        setScheduleCategories(filteredCategories);
+      } else {
+        setEventsError('Failed to load live events');
+      }
+    } catch {
+      setEventsError('Failed to load live events');
+    } finally {
+      setEventsLoading(false);
+    }
+  };
 
   const fetchChannels = async () => {
     try {
@@ -108,14 +328,17 @@ export default function LiveTVClient() {
       setError(null);
       const params = new URLSearchParams();
       if (selectedCategory !== 'all') params.set('category', selectedCategory);
+      if (selectedCountry !== 'all') params.set('country', selectedCountry);
       if (searchQuery) params.set('search', searchQuery);
       
-      const response = await fetch(`/api/livetv/xfinity-channels?${params}`);
+      const response = await fetch(`/api/livetv/dlhd-channels?${params}`);
       const data = await response.json();
       
       if (data.success) {
-        setXfinityChannels(data.channels);
-        setXfinityCategories(data.categories);
+        setDlhdChannels(data.channels);
+        setDlhdCategories(data.categories);
+        setDlhdCountries(data.countries);
+        setTotalChannels(data.totalChannels);
       } else {
         setError('Failed to load channels');
       }
@@ -126,133 +349,276 @@ export default function LiveTVClient() {
     }
   };
 
-  const handleChannelSelect = useCallback((xfinityChannel: XfinityChannel) => {
-    const coastParam = preferWestCoast ? ':west' : ':east';
+  // Handle DLHD event channel selection - routes through RPI proxy
+  const handleEventChannelSelect = useCallback((channelId: string, channelName: string, eventTitle: string) => {
+    if (!channelId) return;
+    
     const channel: Channel = {
-      id: `xfinity-${xfinityChannel.id}`,
-      name: xfinityChannel.name,
-      category: xfinityChannel.category,
-      country: 'us',
-      streamId: xfinityChannel.id + coastParam,
-      firstLetter: xfinityChannel.name.charAt(0),
-      isHD: xfinityChannel.isHD,
-      categoryInfo: xfinityChannel.categoryInfo,
-      countryInfo: { name: 'United States', flag: '🇺🇸' },
+      id: `dlhd-${channelId}`,
+      name: channelName,
+      category: 'Sports',
+      country: 'uk',
+      streamId: channelId, // This is the DLHD channel ID (e.g., "325")
+      firstLetter: channelName.charAt(0),
+      isHD: true,
+      categoryInfo: { name: eventTitle, icon: '⚽' },
+      countryInfo: { name: 'United Kingdom', flag: '🇬🇧' },
+      source: 'dlhd',
+    };
+    
+    setSelectedChannel(channel);
+    trackLiveTVEvent({
+      action: 'channel_select',
+      channelId: channelId,
+      channelName: channelName,
+      category: 'Sports',
+    });
+    trackEvent('livetv_event_channel_selected', { 
+      channelId, 
+      channelName,
+      eventTitle,
+      source: 'dlhd',
+    });
+  }, [trackLiveTVEvent, trackEvent]);
+
+  const handleDLHDChannelSelect = useCallback((dlhdChannel: DLHDChannel) => {
+    const channel: Channel = {
+      id: `dlhd-${dlhdChannel.id}`,
+      name: dlhdChannel.name,
+      category: dlhdChannel.category,
+      country: dlhdChannel.country,
+      streamId: dlhdChannel.id, // DLHD channel ID
+      firstLetter: dlhdChannel.firstLetter,
+      isHD: true,
+      categoryInfo: dlhdChannel.categoryInfo,
+      countryInfo: dlhdChannel.countryInfo,
+      source: 'dlhd',
     };
     setSelectedChannel(channel);
     trackLiveTVEvent({
       action: 'channel_select',
-      channelId: xfinityChannel.id,
-      channelName: xfinityChannel.name,
-      category: xfinityChannel.categoryInfo.name,
+      channelId: dlhdChannel.id,
+      channelName: dlhdChannel.name,
+      category: dlhdChannel.categoryInfo.name,
     });
     trackEvent('livetv_channel_selected', { 
-      channelId: xfinityChannel.id, 
-      channelName: xfinityChannel.name,
-      preferWest: preferWestCoast,
+      channelId: dlhdChannel.id, 
+      channelName: dlhdChannel.name,
+      country: dlhdChannel.country,
+      source: 'dlhd',
     });
-  }, [trackLiveTVEvent, trackEvent, preferWestCoast]);
+  }, [trackLiveTVEvent, trackEvent]);
 
-  const totalChannels = xfinityCategories.reduce((sum, cat) => sum + cat.count, 0);
 
-  // Memoize the channel list to prevent re-renders when player state changes
-  const channelList = useMemo(() => (
-    xfinityChannels.map((channel) => (
-      <ChannelCard
+
+  // Memoize the DLHD channel list - deduplicate by ID to avoid React key warnings
+  const channelList = useMemo(() => {
+    // Deduplicate channels by ID (keep first occurrence)
+    const seen = new Set<string>();
+    const uniqueChannels = dlhdChannels.filter((channel) => {
+      const key = String(channel.id);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    
+    return uniqueChannels.map((channel) => (
+      <DLHDChannelCard
         key={channel.id}
         channel={channel}
-        preferWestCoast={preferWestCoast}
-        onSelect={handleChannelSelect}
+        onSelect={handleDLHDChannelSelect}
       />
-    ))
-  ), [xfinityChannels, preferWestCoast, handleChannelSelect]);
+    ));
+  }, [dlhdChannels, handleDLHDChannelSelect]);
+
+  // Memoize the events list
+  const eventsList = useMemo(() => (
+    scheduleCategories.flatMap((cat) =>
+      cat.events.map((event) => (
+        <EventCard
+          key={event.id}
+          event={{ ...event, sport: cat.name }}
+          onChannelSelect={handleEventChannelSelect}
+        />
+      ))
+    )
+  ), [scheduleCategories, handleEventChannelSelect]);
 
   return (
     <div className={styles.container}>
       <Navigation />
 
-      {/* Hide layout when player is open to save resources */}
+      {/* Hide layout when player is open */}
       <div className={styles.layout} style={{ display: selectedChannel ? 'none' : undefined }}>
         {/* Sidebar */}
         <aside className={styles.sidebar}>
           <div className={styles.sidebarHeader}>
             <h2>Live TV</h2>
-            <span className={styles.channelCount}>{totalChannels} Channels</span>
+            {viewMode === 'events' ? (
+              <span className={styles.liveCount}>
+                <span className={styles.liveDot} /> {liveEventsCount} Live
+              </span>
+            ) : (
+              <span className={styles.channelCount}>{totalChannels} Channels</span>
+            )}
           </div>
 
-          {/* Search */}
-          <div className={styles.sidebarSearch}>
-            <input
-              type="text"
-              placeholder="Search channels..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className={styles.searchInput}
-            />
+          {/* Mode Switch */}
+          <div className={styles.modeSwitch}>
+            <button
+              className={`${styles.modeBtn} ${viewMode === 'events' ? styles.active : ''}`}
+              onClick={() => setViewMode('events')}
+            >
+              🔴 Live Events
+            </button>
+            <button
+              className={`${styles.modeBtn} ${viewMode === 'channels' ? styles.active : ''}`}
+              onClick={() => setViewMode('channels')}
+            >
+              📺 Channels
+            </button>
           </div>
 
-          {/* Category Filters */}
-          <div className={styles.filterList}>
-            <div className={styles.filterSection}>
-              <h3>Categories</h3>
-              <button
-                className={`${styles.filterItem} ${selectedCategory === 'all' ? styles.active : ''}`}
-                onClick={() => setSelectedCategory('all')}
-              >
-                <span>📺 All Channels</span>
-                <span className={styles.filterCount}>{totalChannels}</span>
-              </button>
-              {xfinityCategories.map((cat) => (
+          {viewMode === 'events' ? (
+            /* Live Events Filters */
+            <div className={styles.filterList}>
+              <div className={styles.filterSection}>
+                <h3>Filter</h3>
                 <button
-                  key={cat.id}
-                  className={`${styles.filterItem} ${selectedCategory === cat.id ? styles.active : ''}`}
-                  onClick={() => setSelectedCategory(cat.id)}
+                  className={`${styles.filterItem} ${styles.liveFilter} ${liveOnly ? styles.active : ''}`}
+                  onClick={() => setLiveOnly(!liveOnly)}
                 >
-                  <span>{cat.icon} {cat.name}</span>
-                  <span className={styles.filterCount}>{cat.count}</span>
+                  <span>🔴 Live Now Only</span>
+                  <span className={styles.filterCount}>{liveEventsCount}</span>
                 </button>
-              ))}
+              </div>
+              <div className={styles.filterSection}>
+                <h3>Sports</h3>
+                <button
+                  className={`${styles.filterItem} ${selectedSport === 'all' ? styles.active : ''}`}
+                  onClick={() => setSelectedSport('all')}
+                >
+                  <span>📺 All Sports</span>
+                  <span className={styles.filterCount}>{totalEventsCount}</span>
+                </button>
+                {allScheduleCategories.map((cat) => (
+                  <button
+                    key={cat.name}
+                    className={`${styles.filterItem} ${selectedSport === cat.name.toLowerCase() ? styles.active : ''}`}
+                    onClick={() => setSelectedSport(cat.name.toLowerCase())}
+                  >
+                    <span>{cat.icon} {cat.name}</span>
+                    <span className={styles.filterCount}>{cat.events.length}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className={styles.filterSection}>
-              <h3>Time Zone</h3>
-              <button
-                className={`${styles.filterItem} ${!preferWestCoast ? styles.active : ''}`}
-                onClick={() => setPreferWestCoast(false)}
-              >
-                <span>🌅 East Coast</span>
-              </button>
-              <button
-                className={`${styles.filterItem} ${preferWestCoast ? styles.active : ''}`}
-                onClick={() => setPreferWestCoast(true)}
-              >
-                <span>🌄 West Coast</span>
-              </button>
-            </div>
-          </div>
+          ) : (
+            /* Channels Filters */
+            <>
+              <div className={styles.sidebarSearch}>
+                <input
+                  type="text"
+                  placeholder="Search channels..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className={styles.searchInput}
+                />
+              </div>
+              <div className={styles.filterList}>
+                <div className={styles.filterSection}>
+                  <h3>Categories</h3>
+                  <button
+                    className={`${styles.filterItem} ${selectedCategory === 'all' ? styles.active : ''}`}
+                    onClick={() => setSelectedCategory('all')}
+                  >
+                    <span>📺 All Channels</span>
+                    <span className={styles.filterCount}>{totalChannels}</span>
+                  </button>
+                  {dlhdCategories.map((cat) => (
+                    <button
+                      key={cat.id}
+                      className={`${styles.filterItem} ${selectedCategory === cat.id ? styles.active : ''}`}
+                      onClick={() => setSelectedCategory(cat.id)}
+                    >
+                      <span>{cat.icon} {cat.name}</span>
+                      <span className={styles.filterCount}>{cat.count}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className={styles.filterSection}>
+                  <h3>Countries</h3>
+                  <button
+                    className={`${styles.filterItem} ${selectedCountry === 'all' ? styles.active : ''}`}
+                    onClick={() => setSelectedCountry('all')}
+                  >
+                    <span>🌐 All Countries</span>
+                    <span className={styles.filterCount}>{totalChannels}</span>
+                  </button>
+                  {dlhdCountries.slice(0, 10).map((country) => (
+                    <button
+                      key={country.id}
+                      className={`${styles.filterItem} ${selectedCountry === country.id ? styles.active : ''}`}
+                      onClick={() => setSelectedCountry(country.id)}
+                    >
+                      <span>{country.flag} {country.name}</span>
+                      <span className={styles.filterCount}>{country.count}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
         </aside>
 
         {/* Main Content */}
         <main className={styles.main}>
-          {isLoading ? (
-            <div className={styles.loading}>
-              <div className={styles.spinner} />
-              <p>Loading channels...</p>
-            </div>
-          ) : error ? (
-            <div className={styles.error}>
-              <p>{error}</p>
-              <button onClick={fetchChannels} className={styles.retryBtn}>
-                Retry
-              </button>
-            </div>
+          {viewMode === 'events' ? (
+            /* Live Events Grid */
+            eventsLoading ? (
+              <div className={styles.loading}>
+                <div className={styles.spinner} />
+                <p>Loading live events...</p>
+              </div>
+            ) : eventsError ? (
+              <div className={styles.error}>
+                <p>{eventsError}</p>
+                <button onClick={fetchSchedule} className={styles.retryBtn}>
+                  Retry
+                </button>
+              </div>
+            ) : (
+              <div className={styles.eventsGrid}>
+                {eventsList.length === 0 ? (
+                  <div className={styles.noResults}>
+                    <p>No live events found</p>
+                  </div>
+                ) : eventsList}
+              </div>
+            )
           ) : (
-            <div className={styles.channelsGrid}>
-              {xfinityChannels.length === 0 ? (
-                <div className={styles.noResults}>
-                  <p>No channels found</p>
-                </div>
-              ) : channelList}
-            </div>
+            /* Channels Grid */
+            isLoading ? (
+              <div className={styles.loading}>
+                <div className={styles.spinner} />
+                <p>Loading channels...</p>
+              </div>
+            ) : error ? (
+              <div className={styles.error}>
+                <p>{error}</p>
+                <button onClick={fetchChannels} className={styles.retryBtn}>
+                  Retry
+                </button>
+              </div>
+            ) : (
+              <div className={styles.channelsGrid}>
+                {dlhdChannels.length === 0 ? (
+                  <div className={styles.noResults}>
+                    <p>No channels found</p>
+                  </div>
+                ) : channelList}
+              </div>
+            )
           )}
         </main>
       </div>
@@ -317,7 +683,8 @@ function LiveTVPlayer({
   const presenceContext = usePresenceContext();
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const playerRef = useRef<any>(null); // mpegts.js player
+  const playerRef = useRef<any>(null);
+  const hlsRef = useRef<any>(null);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const watchStartTimeRef = useRef<number>(0);
   const CONTROLS_HIDE_DELAY = 3000;
@@ -331,13 +698,13 @@ function LiveTVPlayer({
   const [showControls, setShowControls] = useState(true);
   const [bufferingStatus, setBufferingStatus] = useState<string | null>(null);
   const [isCastOverlayVisible, setIsCastOverlayVisible] = useState(false);
-  
-  // Account cycling state (internal - not displayed to user)
+
+  // Account cycling state for Xfinity (internal - not displayed to user)
   const [isCycling, setIsCycling] = useState(false);
-  const [currentAccountId, setCurrentAccountId] = useState<string | null>(null);
-  const [failedAccounts, setFailedAccounts] = useState<string[]>([]); // Just IDs
+  const [failedAccounts, setFailedAccounts] = useState<string[]>([]);
   const [remainingAccounts, setRemainingAccounts] = useState<number>(0);
-  const failedAccountsRef = useRef<string[]>([]); // Track failed account IDs for API calls
+  const failedAccountsRef = useRef<string[]>([]);
+  const currentAccountIdRef = useRef<string | null>(null);
 
   const cast = useCast({
     onConnect: () => console.log('[LiveTV] Cast connected'),
@@ -349,8 +716,24 @@ function LiveTVPlayer({
   });
 
   const getCastMedia = useCallback((): CastMedia => {
+    // Different stream URL based on source
+    let streamUrl: string;
+    
+    if (channel.source === 'dlhd') {
+      // Use CF Worker directly for DLHD streams
+      const cfProxyUrl = process.env.NEXT_PUBLIC_CF_TV_PROXY_URL;
+      if (cfProxyUrl) {
+        const baseUrl = cfProxyUrl.replace(/\/(tv|dlhd)\/?$/, '');
+        streamUrl = `${baseUrl}/dlhd?channel=${channel.streamId}`;
+      } else {
+        streamUrl = `${window.location.origin}/api/dlhd-proxy?channel=${channel.streamId}`;
+      }
+    } else {
+      streamUrl = `${window.location.origin}/api/livetv/xfinity-stream?channelId=${channel.streamId}`;
+    }
+    
     return {
-      url: `${window.location.origin}/api/livetv/xfinity-stream?channelId=${channel.streamId}`,
+      url: streamUrl,
       title: channel.name,
       subtitle: `${channel.categoryInfo.icon} ${channel.categoryInfo.name}`,
       contentType: 'application/x-mpegURL',
@@ -393,15 +776,21 @@ function LiveTVPlayer({
         });
       }
       endLiveTVSession();
+      // Cleanup HLS.js player
+      if (hlsRef.current) {
+        try {
+          hlsRef.current.destroy();
+        } catch (e) { /* ignore */ }
+        hlsRef.current = null;
+      }
+      // Cleanup mpegts.js player
       if (playerRef.current) {
         try {
           playerRef.current.pause();
           playerRef.current.unload();
           playerRef.current.detachMediaElement();
           playerRef.current.destroy();
-        } catch (e) {
-          // Ignore cleanup errors
-        }
+        } catch (e) { /* ignore */ }
         playerRef.current = null;
       }
       if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
@@ -409,7 +798,6 @@ function LiveTVPlayer({
     };
   }, [channel.streamId]);
 
-  // Delete an invalid account from the database
   const deleteInvalidAccount = async (accountId: string) => {
     try {
       await fetch('/api/livetv/xfinity-stream', {
@@ -430,7 +818,7 @@ function LiveTVPlayer({
     if (!isRetry) {
       setFailedAccounts([]);
       failedAccountsRef.current = [];
-      setCurrentAccountId(null);
+      currentAccountIdRef.current = null;
       setRemainingAccounts(0);
       setIsCycling(false);
     }
@@ -438,246 +826,357 @@ function LiveTVPlayer({
     setIsLoading(true);
     setError(null);
 
-    // Cleanup previous player safely
+    // Cleanup previous players
+    if (hlsRef.current) {
+      try { hlsRef.current.destroy(); } catch (e) { /* ignore */ }
+      hlsRef.current = null;
+    }
     if (playerRef.current) {
       try {
         playerRef.current.pause();
         playerRef.current.unload();
         playerRef.current.detachMediaElement();
         playerRef.current.destroy();
-      } catch (e) {
-        // Ignore cleanup errors
-      }
+      } catch (e) { /* ignore */ }
       playerRef.current = null;
     }
     
-    // Reset video element
     if (videoRef.current) {
       videoRef.current.removeAttribute('src');
       videoRef.current.load();
     }
 
     try {
-      // Parse channel ID and coast preference
-      const [channelId, coastPart] = channel.streamId.split(':');
-      const coastParam = coastPart === 'west' ? '&coast=west' : '';
-      
-      // Build exclude parameter from failed accounts
-      const excludeParam = failedAccountsRef.current.length > 0 
-        ? `&excludeAccounts=${failedAccountsRef.current.join(',')}` 
-        : '';
-      
-      // Get stream URL from our Xfinity/Stalker API
-      const response = await fetch(`/api/livetv/xfinity-stream?channelId=${channelId}${coastParam}${excludeParam}`);
-      const data = await response.json();
-      
-      // No accounts left
-      if (data.noAccountsLeft) {
-        setIsCycling(false);
-        setIsLoading(false);
-        setError('No available sources for this channel');
-        return;
+      // Route based on source type
+      if (channel.source === 'dlhd') {
+        await loadDLHDStream();
+      } else {
+        await loadXfinityStream(isRetry);
       }
-      
-      if (!data.success || !data.streamUrl) {
-        throw new Error(data.error || 'Failed to get stream');
-      }
-
-      const streamUrl = data.streamUrl;
-      
-      // Track account internally (not displayed)
-      if (data.account) {
-        setCurrentAccountId(data.account.id);
-        setRemainingAccounts(data.account.remainingAccounts || 0);
-        if (isRetry) {
-          setIsCycling(true);
-        }
-      }
-      
-      console.log('[LiveTV] Loading stream:', channel.name, 
-        isRetry ? `(attempt ${failedAccountsRef.current.length + 1})` : '');
-
-      // Use mpegts.js for MPEG-TS streams
-      const mpegtsModule = await import('mpegts.js');
-      const mpegts = mpegtsModule.default;
-
-      if (!mpegts.isSupported()) {
-        setError('Your browser does not support MPEG-TS playback');
-        setIsLoading(false);
-        return;
-      }
-
-      const player = mpegts.createPlayer({
-        type: 'mpegts',
-        isLive: true,
-        url: streamUrl,
-      }, {
-        // Worker for better performance (offloads demuxing to separate thread)
-        enableWorker: true,
-        
-        // Stash buffer - larger buffer for smoother playback
-        enableStashBuffer: true,
-        stashInitialSize: 1024 * 1024, // 1MB initial buffer (was 384KB)
-        
-        // Live stream latency settings - prioritize smoothness over low latency
-        liveBufferLatencyChasing: true, // Enable latency chasing to prevent drift
-        liveBufferLatencyMaxLatency: 8.0, // Allow up to 8 seconds behind live (was 5)
-        liveBufferLatencyMinRemain: 3.0, // Keep at least 3 seconds buffered (was 1)
-        liveSync: true, // Sync to live edge
-        liveSyncMaxLatency: 10.0, // Max latency before seeking to live
-        
-        // Lazy loading disabled for live streams
-        lazyLoad: false,
-        lazyLoadMaxDuration: 3 * 60,
-        lazyLoadRecoverDuration: 30,
-        
-        // Source buffer management
-        autoCleanupSourceBuffer: true,
-        autoCleanupMaxBackwardDuration: 60, // Keep 1 min of backward buffer (was 3 min)
-        autoCleanupMinBackwardDuration: 30, // Start cleanup after 30 sec (was 2 min)
-        
-        // Fix audio/video sync issues
-        fixAudioTimestampGap: true,
-        
-        // Accurate seek for better playback
-        accurateSeek: true,
-        
-        // Seek type for live streams
-        seekType: 'range',
-        
-        // Range load - fetch more data at once
-        rangeLoadZeroStart: false,
-      });
-
-      // Optimize video element for live streaming
-      videoRef.current.preload = 'auto';
-      
-      player.attachMediaElement(videoRef.current);
-      player.load();
-      
-      // Listen for statistics to monitor buffer health
-      player.on(mpegts.Events.STATISTICS_INFO, (stats: any) => {
-        // If buffer is getting low, show buffering indicator
-        if (stats.decodedFrames > 0 && stats.droppedFrames / stats.decodedFrames > 0.1) {
-          console.log('[LiveTV] High frame drop rate:', (stats.droppedFrames / stats.decodedFrames * 100).toFixed(1) + '%');
-        }
-      });
-
-      // Track current account for error handler closure
-      const accountAtLoad = data.account ? { id: data.account.id, mac: data.account.mac } : null;
-      
-      // Flag to prevent handling errors after cleanup
-      let isDestroyed = false;
-
-      player.on(mpegts.Events.ERROR, async (errorType: string, errorDetail: string) => {
-        // Ignore errors after player has been destroyed (SourceBuffer cleanup errors)
-        if (isDestroyed) return;
-        
-        // Ignore SourceBuffer removal errors - these happen during normal cleanup
-        if (errorDetail.includes('SourceBuffer') || errorDetail.includes('removed from the parent')) {
-          console.log('[LiveTV] Ignoring SourceBuffer cleanup error');
-          return;
-        }
-        
-        console.error('[LiveTV] mpegts error:', errorType, errorDetail);
-        
-        const isAccountError = errorDetail.includes('403') || 
-                               errorDetail.includes('HttpStatusCodeInvalid') ||
-                               errorDetail.includes('458') ||
-                               errorDetail.includes('456');
-        
-        if (isAccountError && accountAtLoad) {
-          isDestroyed = true; // Mark as destroyed before cleanup
-          // Add to failed accounts list
-          setFailedAccounts(prev => [...prev, accountAtLoad.id]);
-          
-          // Add to ref (for API calls)
-          if (!failedAccountsRef.current.includes(accountAtLoad.id)) {
-            failedAccountsRef.current.push(accountAtLoad.id);
-          }
-          
-          // Delete the invalid account from database
-          deleteInvalidAccount(accountAtLoad.id);
-          
-          // Cleanup current player before retry (safely)
-          if (playerRef.current) {
-            try {
-              playerRef.current.pause();
-              playerRef.current.unload();
-              playerRef.current.detachMediaElement();
-              playerRef.current.destroy();
-            } catch (e) {
-              // Ignore cleanup errors
-            }
-            playerRef.current = null;
-          }
-          
-          // Try next account after a brief delay
-          setTimeout(() => {
-            loadStream(true);
-          }, 800);
-          return;
-        }
-        
-        // Non-account error
-        setIsCycling(false);
-        setIsLoading(false);
-        
-        if (errorDetail.includes('Network') || errorDetail.includes('fetch')) {
-          setBufferingStatus('Reconnecting...');
-        } else {
-          setError(`Stream error: ${errorDetail}`);
-        }
-        
-        trackLiveTVEvent({
-          action: 'error',
-          channelId: channel.streamId,
-          channelName: channel.name,
-          errorMessage: `${errorType}: ${errorDetail}`,
-        });
-      });
-
-      player.on(mpegts.Events.LOADING_COMPLETE, () => {
-        // This fires when stream data stops - only log it, don't auto-reconnect
-        // The video 'ended' event will handle actual stream end
-        console.log('[LiveTV] Loading complete');
-      });
-
-      player.on(mpegts.Events.MEDIA_INFO, () => {
-        console.log('[LiveTV] Media info received - stream playing!');
-        setIsCycling(false);
-        setIsLoading(false);
-        setBufferingStatus(null);
-        videoRef.current?.play().catch(() => {});
-      });
-
-      playerRef.current = player;
-
     } catch (err: any) {
       console.error('[LiveTV] Stream load error:', err);
-      
-      // If we have a current account, mark it as failed and try next
-      if (currentAccountId && currentAccountId !== 'fallback') {
-        setFailedAccounts(prev => [...prev, currentAccountId]);
-        
-        if (!failedAccountsRef.current.includes(currentAccountId)) {
-          failedAccountsRef.current.push(currentAccountId);
-        }
-        
-        await deleteInvalidAccount(currentAccountId);
-        
-        setTimeout(() => {
-          loadStream(true);
-        }, 800);
-        return;
-      }
-      
-      setIsCycling(false);
       setError(err.message || 'Failed to load stream');
       setIsLoading(false);
     }
   };
 
+  // Load DLHD stream using HLS.js - routes through CF Worker → RPI proxy
+  const loadDLHDStream = async () => {
+    if (!videoRef.current) return;
+    
+    console.log('[LiveTV] Loading DLHD stream for channel:', channel.streamId);
+    
+    // Use Cloudflare Worker directly if available, otherwise fall back to Vercel API
+    const cfProxyUrl = process.env.NEXT_PUBLIC_CF_TV_PROXY_URL;
+    let m3u8Url: string;
+    
+    if (cfProxyUrl) {
+      // Direct to CF Worker (faster, bypasses Vercel)
+      const baseUrl = cfProxyUrl.replace(/\/(tv|dlhd)\/?$/, '');
+      m3u8Url = `${baseUrl}/dlhd?channel=${channel.streamId}`;
+      console.log('[LiveTV] Using CF Worker directly:', m3u8Url);
+    } else {
+      // Fallback to Vercel API (which forwards to CF Worker)
+      m3u8Url = `/api/dlhd-proxy?channel=${channel.streamId}`;
+      console.log('[LiveTV] Using Vercel API proxy');
+    }
+    
+    const Hls = (await import('hls.js')).default;
+    
+    if (!Hls.isSupported()) {
+      // Fallback for Safari
+      if (videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
+        videoRef.current.src = m3u8Url;
+        videoRef.current.addEventListener('loadedmetadata', () => {
+          setIsLoading(false);
+          videoRef.current?.play().catch(() => {});
+        });
+        return;
+      }
+      setError('HLS playback not supported in this browser');
+      setIsLoading(false);
+      return;
+    }
+
+    const hls = new Hls({
+      enableWorker: true,
+      lowLatencyMode: false,
+      backBufferLength: 30,
+      maxBufferLength: 30, // Reduced for live - don't buffer too far ahead
+      maxMaxBufferLength: 60,
+      liveSyncDurationCount: 3,
+      liveMaxLatencyDurationCount: 10,
+      liveDurationInfinity: true,
+      // Aggressive playlist refresh for live streams
+      levelLoadingTimeOut: 10000,
+      levelLoadingMaxRetry: 6, // More retries for level/playlist loading
+      levelLoadingRetryDelay: 500, // Start with 500ms delay
+      levelLoadingMaxRetryTimeout: 30000, // Max 30s between retries
+      // Fragment loading
+      fragLoadingTimeOut: 20000,
+      fragLoadingMaxRetry: 6,
+      fragLoadingRetryDelay: 500,
+      // Manifest loading
+      manifestLoadingTimeOut: 15000,
+      manifestLoadingMaxRetry: 4,
+      manifestLoadingRetryDelay: 500,
+      // Custom XHR setup for debugging and CORS handling
+      xhrSetup: (xhr: XMLHttpRequest, url: string) => {
+        xhr.withCredentials = false;
+        // Log key loading attempts for debugging
+        if (url.includes('/key') || url.includes('wmsxx')) {
+          console.log('[LiveTV] Loading key from:', url);
+        }
+      },
+    });
+
+    hls.loadSource(m3u8Url);
+    hls.attachMedia(videoRef.current);
+    
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      console.log('[LiveTV] DLHD manifest parsed');
+      setIsLoading(false);
+      setError(null); // Clear any previous errors
+      videoRef.current?.play().catch(() => {});
+    });
+    
+    // Log key loading events for debugging
+    hls.on(Hls.Events.KEY_LOADING, (_event: any, data: any) => {
+      console.log('[LiveTV] Loading key:', data.frag?.decryptdata?.uri);
+    });
+    
+    hls.on(Hls.Events.KEY_LOADED, () => {
+      console.log('[LiveTV] Key loaded successfully');
+      setError(null); // Clear error when key loads successfully
+    });
+    
+    // Retry counters for error recovery
+    let keyRetryCount = 0;
+    const MAX_KEY_RETRIES = 5;
+    let networkRetryCount = 0;
+    const MAX_NETWORK_RETRIES = 5;
+    
+    // Clear error and buffering status when fragments load successfully (stream recovered)
+    hls.on(Hls.Events.FRAG_LOADED, () => {
+      // Reset retry counts on successful fragment load
+      keyRetryCount = 0;
+      networkRetryCount = 0;
+      // Clear any error/buffering states
+      setError(null);
+      setBufferingStatus(null);
+    });
+    
+    hls.on(Hls.Events.ERROR, (_event: any, data: any) => {
+      // Log all errors with details for debugging
+      console.error('[LiveTV] HLS error:', {
+        type: data.type,
+        details: data.details,
+        fatal: data.fatal,
+        url: data.url || data.frag?.url || data.context?.url,
+        response: data.response ? {
+          code: data.response.code,
+          text: data.response.text?.substring(0, 100)
+        } : undefined
+      });
+      
+      // Handle key load errors specifically - these are common with encrypted streams
+      if (data.details === 'keyLoadError') {
+        console.error('[LiveTV] Key load error details:', {
+          keyUrl: data.frag?.decryptdata?.uri,
+          networkDetails: data.networkDetails,
+          response: data.response
+        });
+        
+        keyRetryCount++;
+        if (keyRetryCount <= MAX_KEY_RETRIES) {
+          console.log(`[LiveTV] Key load error, retry ${keyRetryCount}/${MAX_KEY_RETRIES}...`);
+          // Show buffering status instead of error during retries
+          setBufferingStatus(`Reconnecting... (${keyRetryCount}/${MAX_KEY_RETRIES})`);
+          setTimeout(() => hls.startLoad(), 1000 * keyRetryCount);
+          return;
+        }
+        console.error('[LiveTV] Key load failed after retries, reloading stream...');
+        // Instead of showing error, try reloading the entire stream
+        keyRetryCount = 0;
+        setBufferingStatus('Refreshing stream...');
+        setTimeout(() => {
+          hls.destroy();
+          loadDLHDStream();
+        }, 2000);
+        return;
+      }
+      
+      // Handle level/playlist load errors (common with live streams)
+      if (data.details === 'levelLoadError' || data.details === 'levelLoadTimeOut') {
+        console.log('[LiveTV] Level load error, HLS.js will auto-retry');
+        setBufferingStatus('Refreshing playlist...');
+        // HLS.js handles retries automatically with our config, just show status
+        return;
+      }
+      
+      if (data.fatal) {
+        switch (data.type) {
+          case Hls.ErrorTypes.NETWORK_ERROR:
+            networkRetryCount++;
+            if (networkRetryCount <= MAX_NETWORK_RETRIES) {
+              console.log(`[LiveTV] Network error, retry ${networkRetryCount}/${MAX_NETWORK_RETRIES}...`);
+              setBufferingStatus(`Reconnecting... (${networkRetryCount}/${MAX_NETWORK_RETRIES})`);
+              setTimeout(() => hls.startLoad(), 1000 * networkRetryCount);
+            } else {
+              console.log('[LiveTV] Network error, reloading stream...');
+              networkRetryCount = 0;
+              setBufferingStatus('Refreshing stream...');
+              setTimeout(() => {
+                hls.destroy();
+                loadDLHDStream();
+              }, 2000);
+            }
+            break;
+          case Hls.ErrorTypes.MEDIA_ERROR:
+            console.log('[LiveTV] Media error, attempting recovery...');
+            setBufferingStatus('Recovering...');
+            hls.recoverMediaError();
+            break;
+          default:
+            // Only show error for truly unrecoverable issues
+            setError(`Stream error: ${data.details}`);
+            setIsLoading(false);
+            break;
+        }
+      } else {
+        // Non-fatal errors - just log and let HLS.js handle recovery
+        console.log('[LiveTV] Non-fatal error, HLS.js will handle recovery');
+      }
+    });
+
+    hlsRef.current = hls;
+  };
+
+  // Load Xfinity/IPTV stream using mpegts.js
+  const loadXfinityStream = async (isRetry: boolean) => {
+    if (!videoRef.current) return;
+    
+    const [channelId, coastPart] = channel.streamId.split(':');
+    const coastParam = coastPart === 'west' ? '&coast=west' : '';
+    const excludeParam = failedAccountsRef.current.length > 0 
+      ? `&excludeAccounts=${failedAccountsRef.current.join(',')}` 
+      : '';
+    
+    const response = await fetch(`/api/livetv/xfinity-stream?channelId=${channelId}${coastParam}${excludeParam}`);
+    const data = await response.json();
+    
+    if (data.noAccountsLeft) {
+      setIsCycling(false);
+      setIsLoading(false);
+      setError('No available sources for this channel');
+      return;
+    }
+    
+    if (!data.success || !data.streamUrl) {
+      throw new Error(data.error || 'Failed to get stream');
+    }
+
+    const streamUrl = data.streamUrl;
+    
+    if (data.account) {
+      currentAccountIdRef.current = data.account.id;
+      setRemainingAccounts(data.account.remainingAccounts || 0);
+      if (isRetry) setIsCycling(true);
+    }
+    
+    console.log('[LiveTV] Loading Xfinity stream:', channel.name);
+
+    const mpegtsModule = await import('mpegts.js');
+    const mpegts = mpegtsModule.default;
+
+    if (!mpegts.isSupported()) {
+      setError('Your browser does not support MPEG-TS playback');
+      setIsLoading(false);
+      return;
+    }
+
+    const player = mpegts.createPlayer({
+      type: 'mpegts',
+      isLive: true,
+      url: streamUrl,
+    }, {
+      enableWorker: true,
+      enableStashBuffer: true,
+      stashInitialSize: 1024 * 1024,
+      liveBufferLatencyChasing: true,
+      liveBufferLatencyMaxLatency: 8.0,
+      liveBufferLatencyMinRemain: 3.0,
+      liveSync: true,
+      liveSyncMaxLatency: 10.0,
+      lazyLoad: false,
+      autoCleanupSourceBuffer: true,
+      autoCleanupMaxBackwardDuration: 60,
+      autoCleanupMinBackwardDuration: 30,
+      fixAudioTimestampGap: true,
+      accurateSeek: true,
+      seekType: 'range',
+    });
+
+    videoRef.current.preload = 'auto';
+    player.attachMediaElement(videoRef.current);
+    player.load();
+    
+    const accountAtLoad = data.account ? { id: data.account.id } : null;
+    let isDestroyed = false;
+
+    player.on(mpegts.Events.ERROR, async (errorType: string, errorDetail: string) => {
+      if (isDestroyed) return;
+      if (errorDetail.includes('SourceBuffer') || errorDetail.includes('removed from the parent')) return;
+      
+      console.error('[LiveTV] mpegts error:', errorType, errorDetail);
+      
+      const isAccountError = errorDetail.includes('403') || 
+                             errorDetail.includes('HttpStatusCodeInvalid') ||
+                             errorDetail.includes('458') ||
+                             errorDetail.includes('456');
+      
+      if (isAccountError && accountAtLoad) {
+        isDestroyed = true;
+        setFailedAccounts(prev => [...prev, accountAtLoad.id]);
+        if (!failedAccountsRef.current.includes(accountAtLoad.id)) {
+          failedAccountsRef.current.push(accountAtLoad.id);
+        }
+        deleteInvalidAccount(accountAtLoad.id);
+        
+        if (playerRef.current) {
+          try {
+            playerRef.current.pause();
+            playerRef.current.unload();
+            playerRef.current.detachMediaElement();
+            playerRef.current.destroy();
+          } catch (e) { /* ignore */ }
+          playerRef.current = null;
+        }
+        
+        setTimeout(() => loadStream(true), 800);
+        return;
+      }
+      
+      setIsCycling(false);
+      setIsLoading(false);
+      
+      if (errorDetail.includes('Network') || errorDetail.includes('fetch')) {
+        setBufferingStatus('Reconnecting...');
+      } else {
+        setError(`Stream error: ${errorDetail}`);
+      }
+    });
+
+    player.on(mpegts.Events.MEDIA_INFO, () => {
+      console.log('[LiveTV] Media info received');
+      setIsCycling(false);
+      setIsLoading(false);
+      setBufferingStatus(null);
+      videoRef.current?.play().catch(() => {});
+    });
+
+    playerRef.current = player;
+  };
 
   // Video event handlers
   useEffect(() => {
@@ -736,12 +1235,10 @@ function LiveTVPlayer({
       setVolume(video.volume);
       setIsMuted(video.muted);
     };
-    
-    // Debounce buffering status to avoid flickering
+
     let bufferingTimeout: NodeJS.Timeout | null = null;
     
     const onWaiting = () => {
-      // Only show buffering after 500ms to avoid flicker on brief pauses
       if (bufferingTimeout) clearTimeout(bufferingTimeout);
       bufferingTimeout = setTimeout(() => {
         setBufferingStatus('Buffering...');
@@ -755,53 +1252,28 @@ function LiveTVPlayer({
     };
     
     const onPlaying = () => {
-      if (bufferingTimeout) {
-        clearTimeout(bufferingTimeout);
-        bufferingTimeout = null;
-      }
+      if (bufferingTimeout) { clearTimeout(bufferingTimeout); bufferingTimeout = null; }
       setBufferingStatus(null);
     };
     
     const onCanPlay = () => {
-      if (bufferingTimeout) {
-        clearTimeout(bufferingTimeout);
-        bufferingTimeout = null;
-      }
+      if (bufferingTimeout) { clearTimeout(bufferingTimeout); bufferingTimeout = null; }
       setBufferingStatus(null);
     };
     
-    // Handle stalled streams - just show status, don't auto-reconnect
-    const onStalled = () => {
-      console.log('[LiveTV] Stream stalled');
-      // Don't auto-reconnect on stall - it's often temporary
-    };
-    
-    // Handle stream ended - auto reconnect for live streams
-    // This only fires when the MediaSource actually ends
     const onEnded = () => {
       console.log('[LiveTV] Video ended - reconnecting...');
       setBufferingStatus('Reconnecting...');
-      setTimeout(() => {
-        loadStream(false);
-      }, 2000);
+      setTimeout(() => loadStream(false), 2000);
     };
     
-    // Handle errors at video element level
     const onError = (e: Event) => {
       const videoEl = e.target as HTMLVideoElement;
-      // Only reconnect on actual media errors, not on cleanup
       if (videoEl.error && videoEl.error.code !== MediaError.MEDIA_ERR_ABORTED) {
         console.log('[LiveTV] Video element error:', videoEl.error?.message);
         setBufferingStatus('Reconnecting...');
-        setTimeout(() => {
-          loadStream(false);
-        }, 2000);
+        setTimeout(() => loadStream(false), 2000);
       }
-    };
-    
-    // Track playback time - for future monitoring if needed
-    const onTimeUpdate = () => {
-      // Currently just a placeholder - can add monitoring later
     };
     
     video.addEventListener('play', onPlay);
@@ -810,10 +1282,8 @@ function LiveTVPlayer({
     video.addEventListener('waiting', onWaiting);
     video.addEventListener('playing', onPlaying);
     video.addEventListener('canplay', onCanPlay);
-    video.addEventListener('stalled', onStalled);
     video.addEventListener('ended', onEnded);
     video.addEventListener('error', onError);
-    video.addEventListener('timeupdate', onTimeUpdate);
     
     return () => {
       if (bufferingTimeout) clearTimeout(bufferingTimeout);
@@ -823,10 +1293,8 @@ function LiveTVPlayer({
       video.removeEventListener('waiting', onWaiting);
       video.removeEventListener('playing', onPlaying);
       video.removeEventListener('canplay', onCanPlay);
-      video.removeEventListener('stalled', onStalled);
       video.removeEventListener('ended', onEnded);
       video.removeEventListener('error', onError);
-      video.removeEventListener('timeupdate', onTimeUpdate);
     };
   }, []);
 
@@ -863,36 +1331,21 @@ function LiveTVPlayer({
   const resetControlsTimeout = useCallback(() => {
     setShowControls(true);
     if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-    // Always set timeout to hide, regardless of play state
-    controlsTimeoutRef.current = setTimeout(() => {
-      setShowControls(false);
-    }, CONTROLS_HIDE_DELAY);
+    controlsTimeoutRef.current = setTimeout(() => setShowControls(false), CONTROLS_HIDE_DELAY);
   }, []);
 
-  const handleMouseMove = useCallback(() => {
-    resetControlsTimeout();
-  }, [resetControlsTimeout]);
-  
+  const handleMouseMove = useCallback(() => resetControlsTimeout(), [resetControlsTimeout]);
   const handleMouseLeave = useCallback(() => {
-    // Hide faster when mouse leaves
     if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
     controlsTimeoutRef.current = setTimeout(() => setShowControls(false), 800);
   }, []);
-  
-  const handleMouseEnter = useCallback(() => {
-    resetControlsTimeout();
-  }, [resetControlsTimeout]);
+  const handleMouseEnter = useCallback(() => resetControlsTimeout(), [resetControlsTimeout]);
 
-  // Auto-hide controls when playing starts or after inactivity
   useEffect(() => {
     if (isPlaying) {
-      // Start hide timer when playback begins
       if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-      controlsTimeoutRef.current = setTimeout(() => {
-        setShowControls(false);
-      }, CONTROLS_HIDE_DELAY);
+      controlsTimeoutRef.current = setTimeout(() => setShowControls(false), CONTROLS_HIDE_DELAY);
     } else {
-      // Show controls when paused
       setShowControls(true);
       if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
     }
@@ -908,6 +1361,8 @@ function LiveTVPlayer({
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, [onClose, isPlaying]);
+
+  const sourceLabel = channel.source === 'dlhd' ? '🌐 DLHD' : '📡 IPTV';
 
   return (
     <div className={styles.playerModal} onClick={onClose}>
@@ -925,7 +1380,9 @@ function LiveTVPlayer({
           <span className={styles.liveTag}><span className={styles.liveDot} /> LIVE</span>
           <span className={styles.channelTitle}>{channel.name}</span>
           <span className={styles.channelFlag}>{channel.countryInfo.flag}</span>
-          <span className={styles.sourceTag} title="IPTV Source">📡 IPTV</span>
+          <span className={styles.sourceTag} title={channel.source === 'dlhd' ? 'DLHD Source' : 'IPTV Source'}>
+            {sourceLabel}
+          </span>
         </div>
 
         <video 
@@ -978,16 +1435,11 @@ function LiveTVPlayer({
           </button>
         </div>
 
-        {/* Loading/Cycling UI - Simple progress bar */}
+        {/* Loading/Cycling UI */}
         {(isLoading || isCycling) && (
           <div className={styles.cyclingOverlay}>
             <div className={styles.cyclingSpinner} />
-            
-            <h3 className={styles.cyclingTitle}>
-              Loading {channel.name}...
-            </h3>
-            
-            {/* Progress bar - shows checked/total ratio */}
+            <h3 className={styles.cyclingTitle}>Loading {channel.name}...</h3>
             <div className={styles.cyclingProgress}>
               <div className={styles.cyclingProgressBar}>
                 <div 
@@ -1000,7 +1452,6 @@ function LiveTVPlayer({
                 />
               </div>
             </div>
-            
             <p className={styles.cyclingHint}>
               {failedAccounts.length === 0 
                 ? 'Connecting to stream...'
@@ -1029,7 +1480,6 @@ function LiveTVPlayer({
                 : error
               }
             </p>
-            
             <div className={styles.errorActions}>
               <button onClick={() => {
                 setFailedAccounts([]);
@@ -1037,12 +1487,6 @@ function LiveTVPlayer({
                 loadStream();
               }} className={styles.retryBtn}>
                 Try Again
-              </button>
-              <button 
-                onClick={() => window.open(`mailto:support@flyx.tv?subject=Channel Issue: ${channel.name}&body=The channel "${channel.name}" had issues on ${new Date().toLocaleString()}.`, '_blank')}
-                className={styles.feedbackBtn}
-              >
-                Report Issue
               </button>
               <button onClick={onClose} className={styles.closeErrorBtn}>Close</button>
             </div>

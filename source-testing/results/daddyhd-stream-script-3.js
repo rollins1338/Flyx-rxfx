@@ -1,0 +1,1 @@
+window.u_cfg={fdl:0,lst:"clear",ltp:"perSite",ltm:300000, pp:4,dl:10000,ak:"EDS11MB3i7ACM7",si:"84a37fa591c1c90114f7ef09a", pType:"tabup", kw:"sport+stream"}

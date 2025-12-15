@@ -1,294 +1,77 @@
 /**
  * DLHD Key Proxy API
  * 
- * Fetches decryption keys for DLHD streams with proper headers.
- * Keys are cached per-hour (keys typically rotate every 3-4 hours).
- * Cache refreshes automatically when the hour changes.
- * 
- * GET /api/dlhd-proxy/key?url=<encoded_key_url>
- * GET /api/dlhd-proxy/key?channel=<id>
- * GET /api/dlhd-proxy/key?channel=<id>&invalidate=true - Force refresh
+ * Routes key requests through Cloudflare Worker → RPI Proxy
+ * Keys MUST come from residential IP - datacenter IPs are blocked.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
-// Known player domains that host server_lookup.js
-const PLAYER_DOMAINS = [
-  'epicplayplay.cfd',
-  'daddyhd.com',
-];
-
-interface CachedKey {
-  keyBuffer: ArrayBuffer;
-  keyHex: string;
-  keyUrl: string;
-  fetchedAt: number;
-  fetchedHour: number; // Hour when key was fetched (0-23)
-  playerDomain: string;
-}
-
-// In-memory key cache (per channel)
-const keyCache = new Map<string, CachedKey>();
-
-/**
- * Get current hour (0-23) - keys typically rotate every 3-4 hours
- * We refresh when the hour changes to catch any key rotations
- */
-function getCurrentHour(): number {
-  return new Date().getUTCHours();
-}
-
-/**
- * Check if a cached key is still valid
- * Keys are valid as long as we're in the same hour they were fetched
- */
-function isKeyCacheValid(cached: CachedKey | undefined): cached is CachedKey {
-  if (!cached) return false;
-  const currentHour = getCurrentHour();
-  return cached.fetchedHour === currentHour;
-}
-
-/**
- * Get cached key for a channel
- * NOTE: For live streams, keys rotate frequently (the 'number' parameter in the key URL changes).
- * We should NOT cache keys aggressively - only use cache if the key URL matches.
- */
-function getCachedKey(channelId: string): CachedKey | null {
-  const cached = keyCache.get(channelId);
-  if (isKeyCacheValid(cached)) {
-    console.log(`[DLHD Key] Using cached key for channel ${channelId} (age: ${Math.round((Date.now() - cached.fetchedAt) / 1000)}s)`);
-    return cached;
-  }
-  return null;
-}
-
-/**
- * Invalidate cached key for a channel
- */
-function invalidateKeyCache(channelId: string): void {
-  if (keyCache.has(channelId)) {
-    console.log(`[DLHD Key] Invalidating key cache for channel ${channelId}`);
-    keyCache.delete(channelId);
-  }
-}
-
-/**
- * Store key in cache
- */
-function cacheKey(channelId: string, keyBuffer: ArrayBuffer, keyUrl: string, playerDomain: string): CachedKey {
-  const currentHour = getCurrentHour();
-  const cached: CachedKey = {
-    keyBuffer,
-    keyHex: Buffer.from(keyBuffer).toString('hex'),
-    keyUrl,
-    fetchedAt: Date.now(),
-    fetchedHour: currentHour,
-    playerDomain,
-  };
-  keyCache.set(channelId, cached);
-  console.log(`[DLHD Key] Cached key for channel ${channelId} (hour: ${currentHour})`);
-  return cached;
-}
-
-// Raspberry Pi proxy - fallback if direct fetch fails
-const RPI_PROXY_URL = process.env.RPI_PROXY_URL;
-const RPI_PROXY_KEY = process.env.RPI_PROXY_KEY;
-
-async function fetchViaProxy(url: string): Promise<Response> {
-  // Try direct fetch first - giokko.ru doesn't block based on IP, only headers!
-  console.log(`[DLHD Key] Trying direct fetch: ${url}`);
-  
-  try {
-    const directResponse = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-        'Accept': '*/*',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Referer': 'https://epicplayplay.cfd/',
-        'Origin': 'https://epicplayplay.cfd',
-      },
-      cache: 'no-store',
-    });
-    
-    if (directResponse.ok) {
-      console.log(`[DLHD Key] Direct fetch succeeded`);
-      return directResponse;
-    }
-    
-    console.log(`[DLHD Key] Direct fetch failed with status: ${directResponse.status}`);
-  } catch (err) {
-    console.log(`[DLHD Key] Direct fetch error:`, (err as Error).message);
-  }
-
-  // Fallback to RPI proxy if direct fetch fails
-  if (!RPI_PROXY_URL || !RPI_PROXY_KEY) {
-    throw new Error('Direct fetch failed and RPI_PROXY_URL/RPI_PROXY_KEY not configured');
-  }
-
-  console.log(`[DLHD Key] Falling back to RPI proxy`);
-  const proxyUrl = `${RPI_PROXY_URL}/proxy?url=${encodeURIComponent(url)}`;
-  
-  try {
-    const response = await fetch(proxyUrl, {
-      headers: { 'X-API-Key': RPI_PROXY_KEY },
-      cache: 'no-store',
-    });
-    
-    if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      throw new Error(`RPI proxy failed: ${response.status} - ${text}`);
-    }
-    
-    console.log(`[DLHD Key] RPI proxy success`);
-    return response;
-  } catch (err) {
-    console.error(`[DLHD Key] RPI proxy fetch error:`, err);
-    throw err;
-  }
-}
-
-async function fetchWithHeaders(url: string, headers: Record<string, string> = {}): Promise<Response> {
-  return fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      'Accept': '*/*',
-      ...headers,
-    },
-    cache: 'no-store',
-  });
-}
-
-async function getServerKey(channelKey: string): Promise<{ serverKey: string; playerDomain: string }> {
-  let lastError: Error | null = null;
-  
-  for (const domain of PLAYER_DOMAINS) {
-    const lookupUrl = `https://${domain}/server_lookup.js?channel_id=${channelKey}`;
-    const referer = `https://${domain}/`;
-    
-    try {
-      const response = await fetchWithHeaders(lookupUrl, {
-        'Referer': referer,
-        'Origin': `https://${domain}`,
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.server_key) {
-          return { serverKey: data.server_key, playerDomain: domain };
-        }
-      }
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-    }
-  }
-  
-  throw lastError || new Error('All server lookups failed');
-}
-
-function constructM3U8Url(serverKey: string, channelKey: string): string {
-  if (serverKey === 'top1/cdn') {
-    return `https://top1.giokko.ru/top1/cdn/${channelKey}/mono.css`;
-  }
-  return `https://${serverKey}new.giokko.ru/${serverKey}/${channelKey}/mono.css`;
-}
-
-async function fetchM3U8ViaProxy(url: string): Promise<string> {
-  const response = await fetchViaProxy(url);
-  return response.text();
-}
-
-async function getKeyUrlFromChannel(channelId: string): Promise<{ keyUrl: string; playerDomain: string }> {
-  const channelKey = `premium${channelId}`;
-  const { serverKey, playerDomain } = await getServerKey(channelKey);
-  const m3u8Url = constructM3U8Url(serverKey, channelKey);
-  
-  const content = await fetchM3U8ViaProxy(m3u8Url);
-  const keyMatch = content.match(/URI="([^"]+)"/);
-
-  if (!keyMatch) {
-    throw new Error('No key URL found in M3U8');
-  }
-
-  return { keyUrl: keyMatch[1], playerDomain };
-}
-
-async function fetchKeyViaProxy(keyUrl: string): Promise<ArrayBuffer> {
-  const response = await fetchViaProxy(keyUrl);
-  const buffer = await response.arrayBuffer();
-  if (buffer.byteLength !== 16) throw new Error(`Invalid key length: ${buffer.byteLength}`);
-  return buffer;
-}
-
 export async function GET(request: NextRequest) {
+  const cfProxyUrl = process.env.NEXT_PUBLIC_CF_TV_PROXY_URL;
+  
+  if (!cfProxyUrl) {
+    return NextResponse.json({
+      error: 'DLHD proxy not configured',
+      hint: 'Set NEXT_PUBLIC_CF_TV_PROXY_URL environment variable',
+    }, { status: 503 });
+  }
+  
+  // Strip trailing path if present
+  const baseUrl = cfProxyUrl.replace(/\/(tv|dlhd)\/?$/, '');
+  
+  const searchParams = request.nextUrl.searchParams;
+  const url = searchParams.get('url');
+  const channel = searchParams.get('channel');
+
+  if (!url && !channel) {
+    return NextResponse.json({
+      error: 'Missing parameters',
+      usage: {
+        url: 'GET /api/dlhd-proxy/key?url=<encoded_key_url>',
+        channel: 'GET /api/dlhd-proxy/key?channel=325',
+      },
+    }, { status: 400 });
+  }
+
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const url = searchParams.get('url');
-    const channel = searchParams.get('channel');
-    const invalidate = searchParams.get('invalidate') === 'true';
-
-    let keyUrl: string;
-    let playerDomain = PLAYER_DOMAINS[0];
-    let keyBuffer: ArrayBuffer;
-    let keyFromCache = false;
-
-    if (channel) {
-      // Check if we should invalidate the cache
-      if (invalidate) {
-        invalidateKeyCache(channel);
-      }
-      
-      // Try to use cached key first
-      const cachedKey = getCachedKey(channel);
-      
-      if (cachedKey) {
-        keyBuffer = cachedKey.keyBuffer;
-        keyFromCache = true;
-      } else {
-        // Fetch fresh key
-        const result = await getKeyUrlFromChannel(channel);
-        keyUrl = result.keyUrl;
-        playerDomain = result.playerDomain;
-        keyBuffer = await fetchKeyViaProxy(keyUrl);
-        
-        // Cache the key
-        cacheKey(channel, keyBuffer, keyUrl, playerDomain);
-      }
-    } else if (url) {
-      keyUrl = decodeURIComponent(url);
-      keyBuffer = await fetchKeyViaProxy(keyUrl);
+    // Forward to Cloudflare Worker DLHD key endpoint
+    let cfUrl: string;
+    if (url) {
+      cfUrl = `${baseUrl}/dlhd/key?url=${encodeURIComponent(url)}`;
     } else {
-      return NextResponse.json(
-        {
-          error: 'Missing parameters',
-          usage: {
-            url: 'GET /api/dlhd-proxy/key?url=<encoded_key_url>',
-            channel: 'GET /api/dlhd-proxy/key?channel=325',
-            invalidate: 'GET /api/dlhd-proxy/key?channel=325&invalidate=true - Force refresh',
-          },
-          caching: {
-            strategy: 'hour-based',
-            note: 'Keys are cached until the hour changes (keys rotate every 3-4 hours). Use invalidate=true if decryption fails.',
-          },
-        },
-        { status: 400 }
-      );
+      cfUrl = `${baseUrl}/dlhd/key?channel=${channel}`;
+    }
+    
+    const response = await fetch(cfUrl, {
+      headers: {
+        'Accept': 'application/octet-stream',
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[DLHD Key] CF Worker error:', response.status, errorText);
+      return NextResponse.json({
+        error: 'Key fetch failed',
+        details: errorText,
+      }, { status: response.status });
     }
 
+    const keyBuffer = await response.arrayBuffer();
+    
+    // Validate key size (AES-128 keys should be 16 bytes)
     if (keyBuffer.byteLength !== 16) {
-      return NextResponse.json(
-        { error: `Invalid key length: ${keyBuffer.byteLength} (expected 16)` },
-        { status: 500 }
-      );
+      console.error('[DLHD Key] Invalid key size:', keyBuffer.byteLength);
+      return NextResponse.json({
+        error: 'Invalid key data',
+        size: keyBuffer.byteLength,
+        expected: 16,
+      }, { status: 502 });
     }
-
-    // Calculate cache info for response headers
-    const cachedKey = channel ? keyCache.get(channel) : null;
-    const cacheAge = cachedKey ? Math.round((Date.now() - cachedKey.fetchedAt) / 1000) : 0;
-    const minutesUntilNextHour = 60 - new Date().getUTCMinutes();
-    const cacheTTL = cachedKey ? minutesUntilNextHour * 60 : 0; // Seconds until next hour
 
     return new NextResponse(keyBuffer, {
       status: 200,
@@ -299,21 +82,16 @@ export async function GET(request: NextRequest) {
         'Access-Control-Allow-Methods': 'GET, OPTIONS',
         'Access-Control-Allow-Headers': 'Range, Content-Type',
         'Cache-Control': 'no-cache',
-        'X-DLHD-Key-Hex': Buffer.from(keyBuffer).toString('hex'),
-        'X-DLHD-Key-Cached': keyFromCache ? 'true' : 'false',
-        'X-DLHD-Key-Cache-Age': cacheAge.toString(),
-        'X-DLHD-Key-Cache-TTL': cacheTTL.toString(),
+        'X-Proxied-Via': 'cloudflare-worker',
       },
     });
 
   } catch (error) {
-    return NextResponse.json(
-      {
-        error: 'Key fetch error',
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 }
-    );
+    console.error('[DLHD Key] Proxy error:', error);
+    return NextResponse.json({
+      error: 'Key proxy error',
+      details: error instanceof Error ? error.message : String(error),
+    }, { status: 500 });
   }
 }
 

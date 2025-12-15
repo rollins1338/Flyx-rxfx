@@ -225,6 +225,12 @@ export const Navigation: React.FC<NavigationProps> = ({
               >
                 About
               </NavLink>
+              <NavLink
+                isActive={pathname === '/reverse-engineering'}
+                onClick={() => handleNavigation('/reverse-engineering')}
+              >
+                How It Works
+              </NavLink>
             </div>
           )}
 

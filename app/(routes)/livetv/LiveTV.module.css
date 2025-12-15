@@ -224,22 +224,27 @@
 .retryBtn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 24px;
-  background: #e50914;
+  gap: 10px;
+  padding: 14px 28px;
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   color: white;
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
+  box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
 }
 
 .retryBtn:hover {
-  background: #f40612;
+  background: linear-gradient(135deg, #9f7aea 0%, #8b5cf6 100%);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(229, 9, 20, 0.4);
+  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.5);
+}
+
+.retryBtn:active {
+  transform: translateY(0);
 }
 
 
@@ -289,20 +294,23 @@
 .liveTag {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  background: #ef4444;
-  border-radius: 4px;
-  font-size: 0.7rem;
+  gap: 8px;
+  padding: 6px 14px;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  border-radius: 20px;
+  font-size: 0.75rem;
   font-weight: 700;
   color: white;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  box-shadow: 0 2px 12px rgba(239, 68, 68, 0.4);
 }
 
 .liveTag .liveDot {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   background: white;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
 }
 
 .eventBody {
@@ -488,17 +496,15 @@
 
 
 
-/* ========== PLAYER MODAL - Premium Design ========== */
+/* ========== PLAYER MODAL - Premium Fullscreen Design ========== */
 .playerModal {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.95);
-  backdrop-filter: blur(8px);
+  background: #000;
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  padding: 24px;
   animation: fadeIn 0.2s ease;
 }
 
@@ -510,17 +516,9 @@
 .playerContainer {
   position: relative;
   width: 100%;
-  max-width: 1400px;
+  height: 100%;
   background: #000;
-  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.8);
-  animation: scaleIn 0.3s ease;
-}
-
-@keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
 }
 
 .closeBtn {
@@ -529,25 +527,30 @@
   right: 20px;
   width: 48px;
   height: 48px;
-  background: rgba(0, 0, 0, 0.8);
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(12px);
+  border: 2px solid rgba(255, 255, 255, 0.15);
   border-radius: 50%;
   color: white;
-  font-size: 1.5rem;
+  font-size: 1.3rem;
   font-weight: bold;
   cursor: pointer;
   z-index: 100;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.3s ease, opacity 0.3s ease;
-  opacity: 1;
+  transition: all 0.2s ease;
 }
 
 .closeBtn:hover {
-  background: #e50914;
+  background: rgba(229, 9, 20, 0.9);
   border-color: #e50914;
-  transform: scale(1.1);
+  transform: scale(1.08);
+  box-shadow: 0 0 20px rgba(229, 9, 20, 0.5);
+}
+
+.closeBtn:active {
+  transform: scale(0.95);
 }
 
 .playerHeader {
@@ -558,23 +561,23 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 24px;
-  padding-right: 80px;
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.7) 50%, transparent 100%);
+  padding: 24px 80px 40px 28px;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.7) 50%, rgba(0, 0, 0, 0.3) 80%, transparent 100%);
   z-index: 50;
   transition: opacity 0.3s ease, transform 0.3s ease;
-  opacity: 1;
 }
 
 .channelTitle {
-  font-size: 1.25rem;
+  font-size: 1.3rem;
   font-weight: 700;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+  color: white;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
+  letter-spacing: 0.02em;
 }
 
 .video {
   width: 100%;
-  aspect-ratio: 16/9;
+  height: 100%;
   background: #000;
   object-fit: contain;
 }
@@ -595,19 +598,20 @@
 .channelFlag {
   font-size: 1.5rem;
   margin-left: auto;
-  margin-right: 60px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
 }
 
 .sourceTag {
-  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
   color: white;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 0.75rem;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+  letter-spacing: 0.8px;
+  box-shadow: 0 2px 12px rgba(139, 92, 246, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* Custom Video Controls */
@@ -618,9 +622,9 @@
   right: 0;
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 20px 24px;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.7) 50%, transparent 100%);
+  gap: 20px;
+  padding: 30px 32px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.98) 0%, rgba(0, 0, 0, 0.8) 40%, rgba(0, 0, 0, 0.4) 70%, transparent 100%);
   z-index: 50;
   transition: opacity 0.3s ease, transform 0.3s ease;
   opacity: 1;
@@ -661,10 +665,11 @@
 }
 
 .controlBtn {
-  width: 50px;
-  height: 50px;
-  background: rgba(255, 255, 255, 0.2);
-  border: 2px solid rgba(255, 255, 255, 0.4);
+  width: 56px;
+  height: 56px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(255, 255, 255, 0.25);
   border-radius: 50%;
   color: white;
   cursor: pointer;
@@ -672,42 +677,64 @@
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
-  font-size: 1.5rem;
+  font-size: 1.4rem;
 }
 
 .controlBtn:hover {
-  background: rgba(255, 255, 255, 0.3);
-  border-color: rgba(255, 255, 255, 0.6);
-  transform: scale(1.1);
+  background: rgba(139, 92, 246, 0.5);
+  border-color: rgba(139, 92, 246, 0.8);
+  transform: scale(1.08);
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+}
+
+.controlBtn:active {
+  transform: scale(0.95);
 }
 
 .volumeSlider {
-  width: 100px;
-  height: 4px;
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 2px;
+  width: 120px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
   outline: none;
   cursor: pointer;
   -webkit-appearance: none;
   appearance: none;
+  transition: all 0.2s ease;
+}
+
+.volumeSlider:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .volumeSlider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 14px;
-  height: 14px;
-  background: white;
+  width: 18px;
+  height: 18px;
+  background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
   border-radius: 50%;
   cursor: pointer;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.5);
+  transition: all 0.2s ease;
+}
+
+.volumeSlider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 2px 12px rgba(139, 92, 246, 0.7);
 }
 
 .volumeSlider::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  background: white;
+  width: 18px;
+  height: 18px;
+  background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
   border-radius: 50%;
   border: none;
   cursor: pointer;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.5);
+}
+
+.volumeSlider::-moz-range-track {
+  background: transparent;
 }
 
 .spacer {
@@ -717,55 +744,41 @@
 .controlsLive {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: rgba(239, 68, 68, 0.2);
+  gap: 10px;
+  padding: 10px 20px;
+  background: rgba(239, 68, 68, 0.15);
+  backdrop-filter: blur(10px);
   border: 1px solid rgba(239, 68, 68, 0.4);
-  border-radius: 6px;
-  font-size: 0.8rem;
+  border-radius: 24px;
+  font-size: 0.85rem;
   font-weight: 700;
   color: #ef4444;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.2);
 }
 
+/* Fullscreen button is now part of customControls, keeping this for backwards compat */
 .fullscreenBtn {
-  position: absolute;
-  bottom: 70px;
-  right: 20px;
-  width: 44px;
-  height: 44px;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  color: white;
-  cursor: pointer;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-}
-
-.fullscreenBtn:hover {
-  background: rgba(255, 255, 255, 0.15);
-  transform: scale(1.05);
+  display: none;
 }
 
 .loadingSpinner {
-  width: 56px;
-  height: 56px;
-  border: 4px solid rgba(255, 255, 255, 0.1);
-  border-top-color: #e50914;
+  width: 64px;
+  height: 64px;
+  border: 4px solid rgba(139, 92, 246, 0.15);
+  border-top-color: #8b5cf6;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
+  box-shadow: 0 0 30px rgba(139, 92, 246, 0.3);
 }
 
 .loadingText {
-  font-size: 1.1rem;
-  font-weight: 600;
+  font-size: 1.2rem;
+  font-weight: 700;
   color: white;
   margin: 0;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
 .retrySubtext {
@@ -808,8 +821,8 @@
 
 .errorActions {
   display: flex;
-  gap: 12px;
-  margin-top: 16px;
+  gap: 16px;
+  margin-top: 20px;
   flex-wrap: wrap;
   justify-content: center;
 }
@@ -831,12 +844,13 @@
 }
 
 .closeErrorBtn {
-  padding: 12px 24px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
+  padding: 14px 28px;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
   color: white;
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
@@ -844,41 +858,49 @@
 
 .closeErrorBtn:hover {
   background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+.closeErrorBtn:active {
+  transform: translateY(0);
 }
 
 /* Buffering Overlay - semi-transparent, doesn't block video */
 .bufferingOverlay {
   position: absolute;
-  bottom: 80px;
+  bottom: 100px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 20px;
-  background: rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(8px);
-  border-radius: 30px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  gap: 14px;
+  padding: 14px 24px;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(12px);
+  border-radius: 40px;
+  border: 1px solid rgba(139, 92, 246, 0.3);
   z-index: 20;
   animation: fadeIn 0.2s ease;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
 .bufferingSpinner {
-  width: 20px;
-  height: 20px;
-  border: 2px solid rgba(255, 255, 255, 0.2);
+  width: 22px;
+  height: 22px;
+  border: 2px solid rgba(139, 92, 246, 0.2);
   border-top-color: #8b5cf6;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
 
 .bufferingText {
-  font-size: 0.9rem;
-  font-weight: 500;
+  font-size: 0.95rem;
+  font-weight: 600;
   color: white;
   margin: 0;
   white-space: nowrap;
+  letter-spacing: 0.02em;
 }
 
 /* ========== RESPONSIVE ========== */
@@ -1105,9 +1127,9 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.95);
+  background: linear-gradient(135deg, rgba(10, 10, 15, 0.98) 0%, rgba(20, 15, 30, 0.98) 100%);
   color: white;
-  gap: 1.5rem;
+  gap: 2rem;
   z-index: 15;
   padding: 2rem;
 }
@@ -1124,35 +1146,38 @@
 }
 
 .cyclingTitle {
-  font-size: 1.3rem;
+  font-size: 1.5rem;
   font-weight: 700;
   color: white;
   margin: 0;
   text-align: center;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
 }
 
 .cyclingProgress {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   width: 100%;
-  max-width: 400px;
+  max-width: 350px;
 }
 
 .cyclingProgressBar {
   width: 100%;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
   overflow: hidden;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .cyclingProgressFill {
   height: 100%;
-  background: linear-gradient(90deg, #8b5cf6, #ec4899);
-  border-radius: 3px;
-  transition: width 0.3s ease;
+  background: linear-gradient(90deg, #8b5cf6 0%, #a78bfa 50%, #ec4899 100%);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.5);
 }
 
 .cyclingStats {
@@ -1228,20 +1253,22 @@
 }
 
 .cyclingHint {
-  font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.5);
   text-align: center;
   max-width: 350px;
-  line-height: 1.5;
+  line-height: 1.6;
+  animation: pulse 2s ease-in-out infinite;
 }
 
 .cyclingSpinner {
-  width: 48px;
-  height: 48px;
-  border: 3px solid rgba(139, 92, 246, 0.2);
+  width: 60px;
+  height: 60px;
+  border: 4px solid rgba(139, 92, 246, 0.15);
   border-top-color: #8b5cf6;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
+  box-shadow: 0 0 40px rgba(139, 92, 246, 0.3);
 }
 
 .cyclingDot {
@@ -1279,7 +1306,7 @@
   font-size: 0.6rem;
 }
 
-/* No accounts left state */
+/* No accounts left state / Error state */
 .noAccountsOverlay {
   position: absolute;
   inset: 0;
@@ -1287,7 +1314,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.95);
+  background: linear-gradient(135deg, rgba(10, 10, 15, 0.98) 0%, rgba(25, 15, 20, 0.98) 100%);
   color: white;
   gap: 1.5rem;
   z-index: 15;
@@ -1295,23 +1322,25 @@
 }
 
 .noAccountsIcon {
-  font-size: 3rem;
-  opacity: 0.5;
+  font-size: 4rem;
+  opacity: 0.7;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.5));
 }
 
 .noAccountsTitle {
-  font-size: 1.3rem;
+  font-size: 1.5rem;
   font-weight: 700;
   color: white;
   margin: 0;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
 .noAccountsText {
-  font-size: 0.95rem;
+  font-size: 1rem;
   color: rgba(255, 255, 255, 0.6);
   text-align: center;
-  max-width: 400px;
-  line-height: 1.6;
+  max-width: 420px;
+  line-height: 1.7;
   margin: 0;
 }
 

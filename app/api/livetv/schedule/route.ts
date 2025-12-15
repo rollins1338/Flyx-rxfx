@@ -13,6 +13,7 @@ export const dynamic = 'force-dynamic';
 interface SportEvent {
   id: string;
   time: string;
+  isoTime: string; // ISO timestamp for client-side timezone conversion
   dataTime: string;
   title: string;
   sport?: string;
@@ -45,34 +46,76 @@ function getIcon(name: string): string {
 }
 
 /**
- * Check if an event is currently live based on its start time.
- * Events are considered live if they started within the last 3 hours.
- * (Most sports events last 1.5-3 hours)
+ * Convert UK GMT time (HH:MM) to ISO timestamp for today
+ * This allows the client to convert to local timezone
  */
-function isEventLive(dataTime: string, htmlIndicatesLive: boolean): boolean {
+function toISOTimestamp(time24: string): string {
+  if (!time24) return '';
+  
+  const match = time24.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return '';
+  
+  const hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  
+  // Create a date for today with the given time in UTC (UK GMT = UTC)
+  const now = new Date();
+  const eventDate = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+    hours,
+    minutes,
+    0,
+    0
+  ));
+  
+  return eventDate.toISOString();
+}
+
+/**
+ * Check if an event is currently live based on its start time.
+ * Events are considered live if they started within the last hour
+ * (for "Live Now Only" filter to show currently airing events)
+ */
+function isEventLive(dataTime: string, time24: string, htmlIndicatesLive: boolean): boolean {
   // If HTML already says it's live, trust that
   if (htmlIndicatesLive) return true;
   
-  if (!dataTime) return false;
-  
+  // Try to parse the time and check if it's within the last hour
   try {
-    // dataTime format is typically "YYYY-MM-DD HH:MM" or unix timestamp
-    let eventTime: Date;
+    const now = new Date();
+    let eventTime: Date | null = null;
     
-    if (/^\d+$/.test(dataTime)) {
+    // First try dataTime if it looks like a full date/timestamp
+    if (dataTime && /^\d+$/.test(dataTime)) {
       // Unix timestamp (seconds)
       eventTime = new Date(parseInt(dataTime) * 1000);
-    } else {
-      // Parse as date string - assume UK timezone
+    } else if (dataTime && dataTime.includes('-')) {
+      // Full date string like "2025-12-14 13:00"
       eventTime = new Date(dataTime + ' GMT');
+    } else if (time24) {
+      // Just time like "13:00" - assume today in UK timezone
+      const match = time24.match(/^(\d{1,2}):(\d{2})$/);
+      if (match) {
+        const hours = parseInt(match[1], 10);
+        const minutes = parseInt(match[2], 10);
+        
+        // Create a date for today with the given time (UK timezone = GMT)
+        eventTime = new Date();
+        // Adjust for UK timezone (GMT/UTC)
+        const ukOffset = 0; // GMT is UTC+0
+        eventTime.setUTCHours(hours - ukOffset, minutes, 0, 0);
+      }
     }
     
-    const now = new Date();
-    const diffMs = now.getTime() - eventTime.getTime();
-    const diffHours = diffMs / (1000 * 60 * 60);
+    if (!eventTime) return false;
     
-    // Event is live if it started between 0 and 3 hours ago
-    return diffHours >= 0 && diffHours <= 3;
+    const diffMs = now.getTime() - eventTime.getTime();
+    const diffMinutes = diffMs / (1000 * 60);
+    
+    // Event is live if it started between 0 and 60 minutes ago (1 hour)
+    return diffMinutes >= 0 && diffMinutes <= 60;
   } catch {
     return false;
   }
@@ -80,54 +123,94 @@ function isEventLive(dataTime: string, htmlIndicatesLive: boolean): boolean {
 
 function parseEvents(html: string): SportEvent[] {
   const events: SportEvent[] = [];
-  const eventRegex = /<div[^>]*class="[^"]*schedule__event[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/gi;
+  
+  // Match schedule__event blocks - each event contains eventHeader and channels
+  // The structure is: <div class="schedule__event">...<div class="schedule__channels">...</div></div>
+  const eventRegex = /<div[^>]*class="[^"]*schedule__event(?:\s[^"]*)?[^"]*"[^>]*>([\s\S]*?)(?=<div[^>]*class="[^"]*schedule__event(?:\s|")[^"]*"|<\/div>\s*<\/div>\s*<div[^>]*class="[^"]*schedule__category|$)/gi;
   let match;
   let index = 0;
 
   while ((match = eventRegex.exec(html)) !== null) {
     const eventHtml = match[0];
     
-    // Extract time
-    const timeMatch = eventHtml.match(/class="[^"]*schedule__time[^"]*"[^>]*data-time="([^"]*)"[^>]*>([^<]*)</i);
-    const time = timeMatch ? timeMatch[2].trim() : '';
-    const dataTime = timeMatch ? timeMatch[1] : '';
+    // Extract time - format: <span class="schedule__time" data-time="13:00">13:00</span>
+    let time = '';
+    let dataTime = '';
     
-    // Extract title
+    // Try data-time attribute first
+    const dataTimeMatch = eventHtml.match(/data-time="([^"]*)"/i);
+    if (dataTimeMatch) {
+      dataTime = dataTimeMatch[1];
+    }
+    
+    // Get display time from schedule__time span
+    const timeMatch = eventHtml.match(/class="[^"]*schedule__time[^"]*"[^>]*>([^<]*)</i);
+    if (timeMatch) {
+      time = timeMatch[1].trim();
+    }
+    
+    // Extract title from schedule__eventTitle span
     const titleMatch = eventHtml.match(/class="[^"]*schedule__eventTitle[^"]*"[^>]*>([^<]*)</i);
     const title = titleMatch ? titleMatch[1].trim() : '';
     
-    // Check if live from HTML
-    const htmlIndicatesLive = /is-live|>live</i.test(eventHtml);
+    // Check if live from HTML - look for is-live class or LIVE text
+    const htmlIndicatesLive = /is-live|class="[^"]*live[^"]*"|>LIVE</i.test(eventHtml);
     
     // Determine if event is live based on time or HTML indicator
-    const isLive = isEventLive(dataTime, htmlIndicatesLive);
+    const isLive = isEventLive(dataTime, time, htmlIndicatesLive);
     
-    // Extract channels
+    // Get ISO timestamp for client-side timezone conversion
+    const isoTime = toISOTimestamp(time);
+    
+    // Extract channels from schedule__channels section
     const channels: { name: string; channelId: string; href: string }[] = [];
-    const channelRegex = /<a[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>/gi;
-    let chMatch;
-    while ((chMatch = channelRegex.exec(eventHtml)) !== null) {
-      const href = chMatch[1];
-      const name = chMatch[2].trim();
-      const idMatch = href.match(/id=([^&|]+)/);
-      if (name) {
-        channels.push({ name, channelId: idMatch ? idMatch[1] : '', href });
+    const channelsSection = eventHtml.match(/class="[^"]*schedule__channels[^"]*"[^>]*>([\s\S]*?)(?:<\/div>|$)/i);
+    if (channelsSection) {
+      const channelRegex = /<a[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>/gi;
+      let chMatch;
+      while ((chMatch = channelRegex.exec(channelsSection[1])) !== null) {
+        const href = chMatch[1];
+        const name = chMatch[2].trim();
+        // Extract channel ID from href like "/watch.php?id=313"
+        const idMatch = href.match(/id=(\d+)/);
+        if (name && name.length > 0) {
+          channels.push({ 
+            name, 
+            channelId: idMatch ? idMatch[1] : '', 
+            href 
+          });
+        }
       }
     }
     
-    // Parse teams from title
+    // Parse teams from title (e.g., "Team A vs Team B - League Name")
     let teams: { home: string; away: string } | undefined;
     let league: string | undefined;
-    const vsMatch = title.match(/(.+?)\s+vs\.?\s+(.+?)(?:\s*-\s*(.+))?$/i);
+    const vsMatch = title.match(/(.+?)\s+vs\.?\s+(.+?)(?:\s*[-–]\s*(.+))?$/i);
     if (vsMatch) {
       teams = { home: vsMatch[1].trim(), away: vsMatch[2].trim() };
       if (vsMatch[3]) league = vsMatch[3].trim();
     }
     
-    if (title || time) {
+    // Only add if we have meaningful content
+    if (title && title.length > 0) {
+      // Create a unique ID based on content hash to avoid duplicates
+      const contentHash = `${time}-${title}-${channels.map(c => c.channelId).join(',')}`;
+      const hashCode = contentHash.split('').reduce((a, b) => {
+        a = ((a << 5) - a) + b.charCodeAt(0);
+        return a & a;
+      }, 0);
+      
       events.push({
-        id: `event-${Date.now()}-${index++}`,
-        time, dataTime, title, isLive, channels, teams, league
+        id: `event-${Math.abs(hashCode)}-${index++}`,
+        time: time, // Keep original 24h UK time
+        isoTime, // ISO timestamp for client-side conversion
+        dataTime, 
+        title, 
+        isLive, 
+        channels, 
+        teams, 
+        league
       });
     }
   }
@@ -137,31 +220,107 @@ function parseEvents(html: string): SportEvent[] {
 
 
 function parseCategories(html: string): ScheduleCategory[] {
-  const categories: ScheduleCategory[] = [];
-  const catRegex = /<div[^>]*class="[^"]*schedule__category[^"]*"[^>]*>([\s\S]*?)(?=<div[^>]*class="[^"]*schedule__category|$)/gi;
-  let match;
-
-  while ((match = catRegex.exec(html)) !== null) {
-    const catHtml = match[0];
-    
-    // Extract category name
-    const headerMatch = catHtml.match(/class="[^"]*schedule__catHeader[^"]*"[^>]*>([^<]*)</i);
-    const name = headerMatch ? headerMatch[1].trim() : '';
-    
-    if (!name) continue;
-    
-    const events = parseEvents(catHtml);
-    events.forEach(e => { e.sport = name; });
-    
-    if (events.length > 0) {
-      categories.push({ name, icon: getIcon(name), events });
+  // Find all category names and their positions using card__meta divs
+  const categoryPositions: { name: string; index: number }[] = [];
+  const cardMetaRegex = /<div[^>]*class="card__meta"[^>]*>([^<]+)<\/div>/gi;
+  let cardMetaMatch;
+  
+  while ((cardMetaMatch = cardMetaRegex.exec(html)) !== null) {
+    const name = cardMetaMatch[1].trim();
+    if (name) {
+      categoryPositions.push({
+        name,
+        index: cardMetaMatch.index
+      });
     }
   }
+  
+  if (categoryPositions.length === 0) {
+    return [];
+  }
+  
+  // Parse events for each category section (from one card__meta to the next)
+  const categoryMap = new Map<string, SportEvent[]>();
+  let globalEventIndex = 0; // Global counter to ensure unique IDs across all categories
+  
+  for (let i = 0; i < categoryPositions.length; i++) {
+    const start = categoryPositions[i].index;
+    const end = i < categoryPositions.length - 1 ? categoryPositions[i + 1].index : html.length;
+    const catHtml = html.substring(start, end);
+    const catName = categoryPositions[i].name;
+    
+    const events = parseEvents(catHtml);
+    // Assign globally unique IDs and set sport name
+    events.forEach(e => { 
+      e.sport = catName;
+      // Override the ID with a globally unique one
+      e.id = `evt-${i}-${globalEventIndex++}`;
+    });
+    
+    if (events.length > 0) {
+      // Merge with existing category if name already exists
+      const existing = categoryMap.get(catName);
+      if (existing) {
+        existing.push(...events);
+      } else {
+        categoryMap.set(catName, events);
+      }
+    }
+  }
+  
+  // Convert map to array
+  const categories: ScheduleCategory[] = [];
+  for (const [name, events] of categoryMap) {
+    categories.push({ name, icon: getIcon(name), events });
+  }
+  
+  // Sort by event count (most events first)
+  categories.sort((a, b) => b.events.length - a.events.length);
   
   return categories;
 }
 
+/**
+ * Fetch schedule HTML via Cloudflare Worker → RPI Proxy → DLHD
+ * This ensures requests come from residential IP, not Vercel datacenter
+ */
 async function fetchScheduleHTML(source?: string): Promise<string> {
+  const cfProxyUrl = process.env.NEXT_PUBLIC_CF_TV_PROXY_URL;
+  
+  if (!cfProxyUrl) {
+    console.error('[Schedule] CF_TV_PROXY_URL not configured, falling back to direct fetch');
+    // Fallback to direct fetch (may be blocked)
+    return fetchScheduleHTMLDirect(source);
+  }
+  
+  // Strip trailing path if present
+  const baseUrl = cfProxyUrl.replace(/\/(tv|dlhd)\/?$/, '');
+  
+  try {
+    const params = source ? `?source=${source}` : '';
+    const response = await fetch(`${baseUrl}/dlhd/schedule${params}`, {
+      headers: {
+        'Accept': 'text/html',
+      },
+      next: { revalidate: 60 }
+    });
+    
+    if (!response.ok) {
+      console.error('[Schedule] CF proxy failed:', response.status);
+      return fetchScheduleHTMLDirect(source);
+    }
+    
+    return await response.text();
+  } catch (err) {
+    console.error('[Schedule] CF proxy error:', err);
+    return fetchScheduleHTMLDirect(source);
+  }
+}
+
+/**
+ * Direct fetch fallback (may be blocked by DLHD)
+ */
+async function fetchScheduleHTMLDirect(source?: string): Promise<string> {
   const headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
     'Accept': 'application/json, text/html',

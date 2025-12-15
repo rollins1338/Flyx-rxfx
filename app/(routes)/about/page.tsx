@@ -146,9 +146,18 @@ export default function AboutPage() {
                 breakdown including extracted keys and working code.
               </p>
               <p>
+                <strong>Live TV Breakthrough (December 2025):</strong> DLHD live TV streams now work 
+                through our Cloudflare proxy. The key server appeared to block datacenter IPs, but 
+                reverse engineering their obfuscated JavaScript player revealed the real protection: 
+                Bearer token authentication. With the correct auth token extracted from the player page, 
+                key requests work from ANY IP. No residential proxy needed. 
+                See the <Link href="/reverse-engineering#dlhd">full technical breakdown</Link>.
+              </p>
+              <p>
                 <strong>Keywords:</strong> Streaming Architecture, Reverse Engineering, Ethical Design, 
                 Obfuscation Analysis, JavaScript Archaeology, Sleep Deprivation, Monster Energy Dependency,
-                Vidsrc, Videasy, AnimeKai, 111movies, AES-256-CBC, Chromecast, AirPlay, TV Navigation, OpenSubtitles
+                Vidsrc, Videasy, AnimeKai, 111movies, DLHD, Live TV, AES-256-CBC, AES-128, Bearer Token,
+                Chromecast, AirPlay, TV Navigation, OpenSubtitles
               </p>
             </div>
           </section>
