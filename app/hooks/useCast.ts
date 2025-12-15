@@ -428,6 +428,25 @@ export function useCast(options: UseCastOptions = {}) {
       }
     }
 
+    // Try Remote Playback API FIRST (works with more devices including some smart TVs)
+    // @ts-ignore
+    const remote = video.remote;
+    if (remote && !isIOSRef.current) {
+      try {
+        console.log('[useCast] Trying Remote Playback API first...');
+        await remote.prompt();
+        return true;
+      } catch (error: any) {
+        if (error.name === 'NotAllowedError') {
+          // User cancelled - not an error
+          console.log('[useCast] User cancelled cast prompt');
+          return false;
+        }
+        // Continue to try Google Cast SDK
+        console.log('[useCast] Remote Playback failed, trying Cast SDK...', error.name);
+      }
+    }
+
     // Try Google Cast SDK (Chrome desktop and Android)
     if (hasCastSDKRef.current && window.chrome?.cast?.requestSession) {
       console.log('[useCast] Requesting Google Cast session...');
@@ -474,9 +493,9 @@ export function useCast(options: UseCastOptions = {}) {
               resolve(false);
               return;
             } else if (error.code === 'receiver_unavailable') {
-              errorMessage = 'No Chromecast devices found. Make sure your device is on the same network.';
+              errorMessage = 'No Chromecast devices found. For LG/Samsung TVs, try "Cast tab" from Chrome menu instead.';
             } else if (error.code === 'session_error') {
-              errorMessage = 'Failed to connect to Chromecast. Please try again.';
+              errorMessage = 'Failed to connect. For smart TVs (LG/Samsung), use "Cast tab" from Chrome menu (⋮ → Cast).';
             } else if (error.code === 'timeout') {
               errorMessage = 'Connection timed out. Please try again.';
             } else {
@@ -491,37 +510,6 @@ export function useCast(options: UseCastOptions = {}) {
       });
     }
 
-    // Try Remote Playback API (Chrome/Edge fallback - not iOS)
-    // @ts-ignore
-    const remote = video.remote;
-    if (remote && !isIOSRef.current) {
-      try {
-        console.log('[useCast] Showing Remote Playback prompt...');
-        await remote.prompt();
-        return true;
-      } catch (error: any) {
-        let errorMessage: string;
-        if (error.name === 'NotFoundError') {
-          errorMessage = 'No cast devices found. Make sure your Chromecast/TV is on the same network.';
-        } else if (error.name === 'NotAllowedError') {
-          // User cancelled - not an error
-          console.log('[useCast] User cancelled cast prompt');
-          return false;
-        } else if (error.name === 'InvalidStateError') {
-          errorMessage = 'Already connecting to a device';
-        } else if (error.name === 'NotSupportedError') {
-          errorMessage = 'Casting requires HTTPS. Try deploying to Vercel or using a secure connection.';
-        } else {
-          errorMessage = error.message || 'Failed to connect to cast device';
-        }
-        
-        console.error('[useCast] Remote Playback error:', errorMessage);
-        setState(prev => ({ ...prev, lastError: errorMessage }));
-        options.onError?.(errorMessage);
-        return false;
-      }
-    }
-
     // No casting method available
     let error: string;
     if (isIOSRef.current) {
@@ -529,7 +517,7 @@ export function useCast(options: UseCastOptions = {}) {
     } else if (isAndroidRef.current) {
       error = 'Casting requires the Google Home app. Make sure your Chromecast is set up.';
     } else {
-      error = 'Casting is not supported in this browser. Try Chrome or Safari.';
+      error = 'For LG/Samsung smart TVs, use Chrome menu (⋮) → Cast → Sources → Cast tab. For Chromecast, make sure it\'s on the same network.';
     }
     setState(prev => ({ ...prev, lastError: error }));
     options.onError?.(error);

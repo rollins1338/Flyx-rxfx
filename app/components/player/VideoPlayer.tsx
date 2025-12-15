@@ -2598,7 +2598,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
         </div>
       )}
 
-      {/* Cast error toast notification */}
+      {/* Cast error/help notification */}
       {castError && (
         <div 
           style={{
@@ -2606,41 +2606,64 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
             bottom: '100px',
             left: '50%',
             transform: 'translateX(-50%)',
-            backgroundColor: 'rgba(220, 38, 38, 0.95)',
+            backgroundColor: castError.includes('LG') || castError.includes('Samsung') || castError.includes('Cast tab') 
+              ? 'rgba(59, 130, 246, 0.95)' // Blue for help/info
+              : 'rgba(220, 38, 38, 0.95)', // Red for errors
             color: 'white',
-            padding: '12px 20px',
-            borderRadius: '8px',
+            padding: '16px 20px',
+            borderRadius: '12px',
             display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
+            flexDirection: 'column',
+            gap: '8px',
             zIndex: 100,
-            maxWidth: '90%',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+            maxWidth: '400px',
+            width: '90%',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
             animation: 'fadeIn 0.2s ease-out',
           }}
-          onClick={() => setCastError(null)}
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M1 18v3h3c0-1.66-1.34-3-3-3z" />
-            <path d="M1 14v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7z" />
-            <path d="M1 10v2c4.97 0 9 4.03 9 9h2c0-6.08-4.93-11-11-11z" />
-            <path d="M21 3H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z" />
-          </svg>
-          <span style={{ fontSize: '14px' }}>{castError}</span>
-          <button 
-            onClick={(e) => { e.stopPropagation(); setCastError(null); }}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'white',
-              cursor: 'pointer',
-              padding: '4px',
-              marginLeft: '8px',
-              opacity: 0.8,
-            }}
-          >
-            ✕
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M1 18v3h3c0-1.66-1.34-3-3-3z" />
+              <path d="M1 14v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7z" />
+              <path d="M1 10v2c4.97 0 9 4.03 9 9h2c0-6.08-4.93-11-11-11z" />
+              <path d="M21 3H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z" />
+            </svg>
+            <span style={{ fontSize: '14px', fontWeight: 500, flex: 1 }}>
+              {castError.includes('LG') || castError.includes('Samsung') || castError.includes('Cast tab') 
+                ? 'How to Cast to Smart TV' 
+                : 'Cast Error'}
+            </span>
+            <button 
+              onClick={(e) => { e.stopPropagation(); setCastError(null); }}
+              style={{
+                background: 'rgba(255,255,255,0.2)',
+                border: 'none',
+                color: 'white',
+                cursor: 'pointer',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                fontSize: '12px',
+              }}
+            >
+              ✕
+            </button>
+          </div>
+          <div style={{ fontSize: '13px', opacity: 0.95, lineHeight: 1.5 }}>
+            {castError.includes('LG') || castError.includes('Samsung') || castError.includes('Cast tab') ? (
+              <>
+                <p style={{ margin: '0 0 8px 0' }}>LG & Samsung TVs use screen mirroring:</p>
+                <ol style={{ margin: 0, paddingLeft: '20px', fontSize: '12px' }}>
+                  <li>Click Chrome menu (⋮) → Cast</li>
+                  <li>Click "Sources" dropdown</li>
+                  <li>Select "Cast tab"</li>
+                  <li>Choose your TV</li>
+                </ol>
+              </>
+            ) : (
+              <p style={{ margin: 0 }}>{castError}</p>
+            )}
+          </div>
         </div>
       )}
 
@@ -3318,7 +3341,11 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
               onClick={handleCastClick} 
               className={`${styles.btn} ${cast.isCasting || cast.isAirPlayActive ? styles.active : ''}`}
               data-player-control="cast"
-              title={cast.isCasting || cast.isAirPlayActive ? 'Stop casting' : cast.isAirPlayAvailable ? 'AirPlay' : 'Cast to TV'}
+              title={cast.isCasting || cast.isAirPlayActive 
+                ? 'Stop casting' 
+                : cast.isAirPlayAvailable 
+                  ? 'AirPlay to Apple TV' 
+                  : 'Cast (Chromecast supported, LG/Samsung use Cast Tab)'}
             >
               {cast.isAirPlayAvailable ? (
                 // AirPlay icon
