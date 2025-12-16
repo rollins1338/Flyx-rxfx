@@ -255,17 +255,26 @@ export function PresenceProvider({ children }: PresenceProviderProps) {
   }, []);
 
   // Handle mouse movement for behavioral analysis and entropy tracking
+  // Throttled to reduce CPU usage
+  const lastMouseMoveRef = useRef(0);
   const handleMouseMove = useCallback((event: MouseEvent) => {
+    const now = performance.now();
+    
+    // Throttle to every 100ms
+    if (now - lastMouseMoveRef.current < 100) {
+      return;
+    }
+    lastMouseMoveRef.current = now;
+    
     if (behaviorAnalyzerRef.current) {
       behaviorAnalyzerRef.current.recordMouseMove(event.clientX, event.clientY);
     }
     
     // Track mouse positions for entropy calculation
-    const now = performance.now();
     mousePositionsRef.current.push({ x: event.clientX, y: event.clientY, t: now });
     
-    // Keep last 500 positions
-    if (mousePositionsRef.current.length > 500) {
+    // Keep last 200 positions (reduced from 500)
+    if (mousePositionsRef.current.length > 200) {
       mousePositionsRef.current.shift();
     }
     

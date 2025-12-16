@@ -185,6 +185,11 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastFetchedKey = useRef('');
   const volumeIndicatorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Throttling refs to prevent excessive updates
+  const lastTimeUpdateRef = useRef<number>(0);
+  const lastWatchTimeUpdateRef = useRef<number>(0);
+  const sourceConfirmedWorkingRef = useRef<boolean>(false);
 
   // Pinch-to-zoom for mobile
   const [showZoomIndicator, setShowZoomIndicator] = useState(false);
@@ -695,6 +700,9 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
 
     const video = videoRef.current;
     console.log('[VideoPlayer] Initializing HLS with URL:', streamUrl);
+    
+    // Reset source confirmation flag for new stream
+    sourceConfirmedWorkingRef.current = false;
 
     if (streamUrl.includes('.m3u8') || streamUrl.includes('stream-proxy') || streamUrl.includes('/stream/') || streamUrl.includes('/animekai')) {
       if (Hls.isSupported()) {
@@ -728,32 +736,21 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
         hls.attachMedia(video);
         console.log('[HLS] Source loaded and media attached');
 
-        // Debug: Log all HLS events
-        hls.on(Hls.Events.MANIFEST_LOADING, () => {
-          console.log('[HLS] Loading manifest...');
-        });
-        
+        // HLS events - minimal logging to avoid performance issues
         hls.on(Hls.Events.MANIFEST_LOADED, (_event, data) => {
           console.log('[HLS] Manifest loaded:', data.levels?.length, 'levels');
         });
 
-        hls.on(Hls.Events.LEVEL_LOADING, (_event, data) => {
-          console.log('[HLS] Loading level:', data.level);
-        });
-
-        hls.on(Hls.Events.LEVEL_LOADED, (_event, data) => {
-          console.log('[HLS] Level loaded:', data.level, 'fragments:', data.details?.fragments?.length);
-        });
-
-        hls.on(Hls.Events.FRAG_LOADING, (_event, data) => {
-          console.log('[HLS] Loading fragment:', data.frag?.sn);
-        });
-
         hls.on(Hls.Events.FRAG_LOADED, (_event, data) => {
-          console.log('[HLS] Fragment loaded:', data.frag?.sn, 'bytes:', data.payload?.byteLength);
+          // Only log first few fragments to avoid console spam
+          const fragSn = typeof data.frag?.sn === 'number' ? data.frag.sn : -1;
+          if (fragSn >= 0 && fragSn < 3) {
+            console.log('[HLS] Fragment loaded:', fragSn, 'bytes:', data.payload?.byteLength);
+          }
           
-          // Mark current source as confirmed working when first fragment loads
-          if (data.frag?.sn === 0 || data.frag?.sn === 1) {
+          // Mark current source as confirmed working when first fragment loads (only once)
+          if ((fragSn === 0 || fragSn === 1) && !sourceConfirmedWorkingRef.current) {
+            sourceConfirmedWorkingRef.current = true;
             setAvailableSources(prev => {
               const updated = [...prev];
               if (updated[currentSourceIndex] && updated[currentSourceIndex].status !== 'working') {
@@ -1113,6 +1110,14 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     };
 
     const handleTimeUpdate = () => {
+      const now = Date.now();
+      
+      // Throttle UI updates to max 4 times per second (250ms)
+      if (now - lastTimeUpdateRef.current < 250) {
+        return;
+      }
+      lastTimeUpdateRef.current = now;
+      
       setCurrentTime(video.currentTime);
       if (video.buffered.length > 0) {
         setBuffered((video.buffered.end(video.buffered.length - 1) / video.duration) * 100);
@@ -1144,17 +1149,20 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
         const progress = (video.currentTime / video.duration) * 100;
         const currentTimeRounded = Math.floor(video.currentTime);
 
-        // Enhanced watch time tracking - update every second when playing
-        updateWatchTime({
-          contentId: tmdbId,
-          contentType: mediaType,
-          contentTitle: title,
-          seasonNumber: season,
-          episodeNumber: episode,
-          currentPosition: video.currentTime,
-          duration: video.duration,
-          isPlaying: !video.paused,
-        });
+        // Enhanced watch time tracking - throttle to once per second
+        if (now - lastWatchTimeUpdateRef.current >= 1000) {
+          lastWatchTimeUpdateRef.current = now;
+          updateWatchTime({
+            contentId: tmdbId,
+            contentType: mediaType,
+            contentTitle: title,
+            seasonNumber: season,
+            episodeNumber: episode,
+            currentPosition: video.currentTime,
+            duration: video.duration,
+            isPlaying: !video.paused,
+          });
+        }
 
         if (currentTimeRounded > 0 && currentTimeRounded % 30 === 0) {
           trackWatchProgress(tmdbId, title || 'Unknown Title', mediaType, progress, video.currentTime, season, episode);

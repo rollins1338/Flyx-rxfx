@@ -68,20 +68,28 @@ export function initGlobalBehavioralTracking(): void {
 
   console.log('[BehavioralTracker] Initializing global tracking...');
 
-  // Mouse movement tracking
+  // Mouse movement tracking - throttled to reduce CPU usage
+  let lastMouseTime = 0;
   document.addEventListener(
     'mousemove',
     (e) => {
       const now = performance.now();
+      
+      // Throttle mouse position recording to every 50ms
+      if (now - lastMouseTime < 50) {
+        return;
+      }
+      lastMouseTime = now;
+      
       mousePositions.push({ x: e.clientX, y: e.clientY, t: now });
 
-      // Keep last 1000 positions
-      if (mousePositions.length > 1000) {
+      // Keep last 500 positions (reduced from 1000)
+      if (mousePositions.length > 500) {
         mousePositions.shift();
       }
 
-      // Recalculate entropy every 100ms max
-      if (now - lastEntropyCalculation > 100) {
+      // Recalculate entropy every 500ms (increased from 100ms)
+      if (now - lastEntropyCalculation > 500) {
         mouseEntropy = calculateMouseEntropy(mousePositions);
         lastEntropyCalculation = now;
 
