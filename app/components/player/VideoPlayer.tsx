@@ -244,30 +244,34 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     onSingleTap: handleSingleTap,
   });
 
+  // Cast callbacks - memoized to prevent useCast from re-initializing
+  const handleCastConnect = useCallback(() => {
+    console.log('[VideoPlayer] Cast/AirPlay connected');
+    setCastError(null);
+  }, []);
+  
+  const handleCastDisconnect = useCallback(() => {
+    console.log('[VideoPlayer] Cast/AirPlay disconnected');
+    setIsCastOverlayVisible(false);
+  }, []);
+  
+  const handleCastError = useCallback((error: string) => {
+    console.error('[VideoPlayer] Cast error:', error);
+    setCastError(error);
+    if (castErrorTimeoutRef.current) {
+      clearTimeout(castErrorTimeoutRef.current);
+    }
+    castErrorTimeoutRef.current = setTimeout(() => {
+      setCastError(null);
+    }, 5000);
+  }, []);
+
   // Cast to TV functionality (Chromecast + AirPlay)
   const cast = useCast({
-    videoRef: videoRef, // Pass video ref for AirPlay support
-    onConnect: () => {
-      console.log('[VideoPlayer] Cast/AirPlay connected');
-      setCastError(null);
-    },
-    onDisconnect: () => {
-      console.log('[VideoPlayer] Cast/AirPlay disconnected');
-      setIsCastOverlayVisible(false);
-    },
-    onError: (error) => {
-      console.error('[VideoPlayer] Cast error:', error);
-      // Show cast error toast
-      setCastError(error);
-      // Clear previous timeout
-      if (castErrorTimeoutRef.current) {
-        clearTimeout(castErrorTimeoutRef.current);
-      }
-      // Auto-hide after 5 seconds
-      castErrorTimeoutRef.current = setTimeout(() => {
-        setCastError(null);
-      }, 5000);
-    },
+    videoRef: videoRef,
+    onConnect: handleCastConnect,
+    onDisconnect: handleCastDisconnect,
+    onError: handleCastError,
   });
 
   // Build cast media object

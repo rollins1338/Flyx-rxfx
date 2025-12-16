@@ -169,6 +169,16 @@ export function useCast(options: UseCastOptions = {}) {
   const isSafariRef = useRef(false);
   const isAndroidRef = useRef(false);
   const isChromeRef = useRef(false);
+  
+  // Store callbacks in refs to avoid re-running effects when they change
+  const onConnectRef = useRef(options.onConnect);
+  const onDisconnectRef = useRef(options.onDisconnect);
+  const onErrorRef = useRef(options.onError);
+  
+  // Keep refs in sync
+  useEffect(() => { onConnectRef.current = options.onConnect; }, [options.onConnect]);
+  useEffect(() => { onDisconnectRef.current = options.onDisconnect; }, [options.onDisconnect]);
+  useEffect(() => { onErrorRef.current = options.onError; }, [options.onError]);
 
   // Detect platform on mount
   useEffect(() => {
@@ -218,7 +228,7 @@ export function useCast(options: UseCastOptions = {}) {
                 deviceName: session.displayName || 'Chromecast',
                 lastError: null,
               }));
-              options.onConnect?.();
+              onConnectRef.current?.();
               
               // Listen for session updates
               session.addUpdateListener((isAlive: boolean) => {
@@ -232,7 +242,7 @@ export function useCast(options: UseCastOptions = {}) {
                     isCasting: false,
                     deviceName: null,
                   }));
-                  options.onDisconnect?.();
+                  onDisconnectRef.current?.();
                 }
               });
             },
@@ -260,7 +270,7 @@ export function useCast(options: UseCastOptions = {}) {
     };
 
     initCastSDK();
-  }, [options.onConnect, options.onDisconnect]);
+  }, []); // Empty deps - only run once on mount
 
   // Check for Remote Playback API and AirPlay availability
   useEffect(() => {
@@ -311,13 +321,13 @@ export function useCast(options: UseCastOptions = {}) {
       const handleConnect = () => {
         console.log('[useCast] Remote Playback: connected');
         setState(prev => ({ ...prev, isConnected: true, isCasting: true, lastError: null }));
-        options.onConnect?.();
+        onConnectRef.current?.();
       };
 
       const handleDisconnect = () => {
         console.log('[useCast] Remote Playback: disconnected');
         setState(prev => ({ ...prev, isConnected: false, isCasting: false }));
-        options.onDisconnect?.();
+        onDisconnectRef.current?.();
       };
 
       remote.addEventListener('connecting', handleConnecting);
@@ -334,7 +344,7 @@ export function useCast(options: UseCastOptions = {}) {
         }
       };
     }
-  }, [options.videoRef, options.onConnect, options.onDisconnect]);
+  }, [options.videoRef]); // Only re-run when videoRef changes
 
   // Listen for AirPlay state changes (Safari/iOS)
   useEffect(() => {
@@ -360,9 +370,9 @@ export function useCast(options: UseCastOptions = {}) {
       }));
       
       if (isWireless) {
-        options.onConnect?.();
+        onConnectRef.current?.();
       } else {
-        options.onDisconnect?.();
+        onDisconnectRef.current?.();
       }
     };
 
@@ -374,7 +384,7 @@ export function useCast(options: UseCastOptions = {}) {
       video.removeEventListener('webkitplaybacktargetavailabilitychanged', handleAirPlayAvailability);
       video.removeEventListener('webkitcurrentplaybacktargetiswirelesschanged', handleAirPlayChange);
     };
-  }, [options.videoRef, options.onConnect, options.onDisconnect]);
+  }, [options.videoRef]); // Only re-run when videoRef changes
 
   // Request cast session - shows device picker
   const requestSession = useCallback(async () => {
@@ -382,7 +392,7 @@ export function useCast(options: UseCastOptions = {}) {
     if (!video) {
       const error = 'No video element available';
       setState(prev => ({ ...prev, lastError: error }));
-      options.onError?.(error);
+      onErrorRef.current?.(error);
       return false;
     }
 
@@ -421,7 +431,7 @@ export function useCast(options: UseCastOptions = {}) {
         if (isIOSRef.current) {
           const error = 'AirPlay is not available. Make sure your Apple TV or AirPlay device is on the same network.';
           setState(prev => ({ ...prev, lastError: error }));
-          options.onError?.(error);
+          onErrorRef.current?.(error);
           return false;
         }
         // On desktop Safari, continue to try other methods
@@ -462,7 +472,7 @@ export function useCast(options: UseCastOptions = {}) {
               deviceName: session.displayName || 'Chromecast',
               lastError: null,
             }));
-            options.onConnect?.();
+            onConnectRef.current?.();
             
             // Listen for session updates
             session.addUpdateListener((isAlive: boolean) => {
@@ -477,7 +487,7 @@ export function useCast(options: UseCastOptions = {}) {
                   deviceName: null,
                   playerState: 'IDLE',
                 }));
-                options.onDisconnect?.();
+                onDisconnectRef.current?.();
               }
             });
             
@@ -503,7 +513,7 @@ export function useCast(options: UseCastOptions = {}) {
             }
             
             setState(prev => ({ ...prev, lastError: errorMessage }));
-            options.onError?.(errorMessage);
+            onErrorRef.current?.(errorMessage);
             resolve(false);
           }
         );
@@ -520,9 +530,9 @@ export function useCast(options: UseCastOptions = {}) {
       error = 'For LG/Samsung smart TVs, use Chrome menu (⋮) → Cast → Sources → Cast tab. For Chromecast, make sure it\'s on the same network.';
     }
     setState(prev => ({ ...prev, lastError: error }));
-    options.onError?.(error);
+    onErrorRef.current?.(error);
     return false;
-  }, [options]);
+  }, [options.videoRef]); // Only depends on videoRef
 
   // Load media on cast device
   const loadMedia = useCallback(async (media: CastMedia) => {
@@ -588,7 +598,7 @@ export function useCast(options: UseCastOptions = {}) {
               console.error('[useCast] Failed to load media on Chromecast:', error);
               const errorMessage = error.description || 'Failed to load media on Chromecast';
               setState(prev => ({ ...prev, lastError: errorMessage }));
-              options.onError?.(errorMessage);
+              onErrorRef.current?.(errorMessage);
               resolve(false);
             }
           );
@@ -602,7 +612,7 @@ export function useCast(options: UseCastOptions = {}) {
     // For Remote Playback API and AirPlay, the video element's current source is used
     // No need to load media separately - just return connected state
     return state.isConnected || state.isAirPlayActive;
-  }, [state.isConnected, state.isAirPlayActive, options]);
+  }, [state.isConnected, state.isAirPlayActive]);
 
   // Stop casting / stop media
   const stop = useCallback(() => {
@@ -659,8 +669,8 @@ export function useCast(options: UseCastOptions = {}) {
       playerState: 'IDLE',
     }));
     
-    options.onDisconnect?.();
-  }, [stop, options]);
+    onDisconnectRef.current?.();
+  }, [stop]);
 
   // Play or pause media on cast device
   const playOrPause = useCallback(() => {
