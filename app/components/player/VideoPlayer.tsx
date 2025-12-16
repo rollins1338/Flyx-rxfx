@@ -42,12 +42,13 @@ interface VideoPlayerProps {
     isNextSeason?: boolean;
   } | null;
   onNextEpisode?: () => void;
+  onBack?: () => void; // Callback for back navigation (to details page)
   autoplay?: boolean; // Auto-start playback (used when navigating from previous episode)
   malId?: number; // MyAnimeList ID for anime (used for accurate episode mapping)
   malTitle?: string; // MAL title for the specific season/entry
 }
 
-export default function VideoPlayer({ tmdbId, mediaType, season, episode, title, nextEpisode, onNextEpisode, autoplay = false, malId, malTitle }: VideoPlayerProps) {
+export default function VideoPlayer({ tmdbId, mediaType, season, episode, title, nextEpisode, onNextEpisode, onBack, autoplay = false, malId, malTitle }: VideoPlayerProps) {
   // Debug: Log nextEpisode prop
   useEffect(() => {
     console.log('[VideoPlayer] nextEpisode prop received:', nextEpisode);
@@ -134,6 +135,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
   const [autoPlayCountdown, setAutoPlayCountdownState] = useState<number | null>(null);
   const [playerPrefs, setPlayerPrefs] = useState<PlayerPreferences>(getPlayerPreferences());
   const autoPlayTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const hasNavigatedToNextRef = useRef<boolean>(false); // Prevent repeated auto-next triggers on iOS
   
   // Refs to access current values in event handlers (avoid stale closures)
   const nextEpisodeRef = useRef(nextEpisode);
@@ -521,6 +523,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     // Reset next episode state when content changes (prevents auto-skip bug)
     setShowNextEpisodeButton(false);
     setAutoPlayCountdownState(null);
+    hasNavigatedToNextRef.current = false; // Reset navigation flag for new content
     if (autoPlayTimerRef.current) {
       clearTimeout(autoPlayTimerRef.current);
       autoPlayTimerRef.current = null;
@@ -1131,23 +1134,26 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
       }
 
       // Show next episode button based on user preference (use refs for current values)
-      const currentNextEpisode = nextEpisodeRef.current;
-      const currentPrefs = playerPrefsRef.current;
-      const isButtonShowing = showNextEpisodeButtonRef.current;
-      if (currentNextEpisode && video.duration > 0) {
-        const timeRemaining = video.duration - video.currentTime;
-        const showBeforeEnd = currentPrefs.showNextEpisodeBeforeEnd || 90;
-        if (timeRemaining <= showBeforeEnd && !isButtonShowing) {
-          // Show the button and start countdown if auto-play is enabled
-          setShowNextEpisodeButton(true);
-          if (currentPrefs.autoPlayNextEpisode) {
-            console.log('[VideoPlayer] Starting countdown - time remaining:', timeRemaining);
-            setAutoPlayCountdownState(currentPrefs.autoPlayCountdown);
+      // Skip if we've already navigated to next episode (prevents iOS repeated triggers)
+      if (!hasNavigatedToNextRef.current) {
+        const currentNextEpisode = nextEpisodeRef.current;
+        const currentPrefs = playerPrefsRef.current;
+        const isButtonShowing = showNextEpisodeButtonRef.current;
+        if (currentNextEpisode && video.duration > 0) {
+          const timeRemaining = video.duration - video.currentTime;
+          const showBeforeEnd = currentPrefs.showNextEpisodeBeforeEnd || 90;
+          if (timeRemaining <= showBeforeEnd && !isButtonShowing) {
+            // Show the button and start countdown if auto-play is enabled
+            setShowNextEpisodeButton(true);
+            if (currentPrefs.autoPlayNextEpisode) {
+              console.log('[VideoPlayer] Starting countdown - time remaining:', timeRemaining);
+              setAutoPlayCountdownState(currentPrefs.autoPlayCountdown);
+            }
+          } else if (timeRemaining > showBeforeEnd && isButtonShowing) {
+            // Hide button if we're no longer in the "show before end" window (e.g., user seeked back)
+            setShowNextEpisodeButton(false);
+            setAutoPlayCountdownState(null);
           }
-        } else if (timeRemaining > showBeforeEnd && isButtonShowing) {
-          // Hide button if we're no longer in the "show before end" window (e.g., user seeked back)
-          setShowNextEpisodeButton(false);
-          setAutoPlayCountdownState(null);
         }
       }
 
@@ -1258,6 +1264,13 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     const handleEnded = () => {
       console.log('[VideoPlayer] Video ended event fired');
       setIsPlaying(false);
+      
+      // Prevent repeated triggers (iOS can fire ended event multiple times)
+      if (hasNavigatedToNextRef.current) {
+        console.log('[VideoPlayer] Already navigated to next episode, ignoring ended event');
+        return;
+      }
+      
       // Use refs for current values (avoid stale closures)
       const currentNextEpisode = nextEpisodeRef.current;
       const currentOnNextEpisode = onNextEpisodeRef.current;
@@ -1381,6 +1394,14 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     
     // When countdown reaches 0, navigate to next episode
     if (autoPlayCountdown <= 0) {
+      // Prevent repeated triggers (iOS can fire ended event multiple times)
+      if (hasNavigatedToNextRef.current) {
+        console.log('[VideoPlayer] Already navigated to next episode, ignoring');
+        setAutoPlayCountdownState(null);
+        setShowNextEpisodeButton(false);
+        return;
+      }
+      
       const currentNextEpisode = nextEpisodeRef.current;
       const currentOnNextEpisode = onNextEpisodeRef.current;
       console.log('[VideoPlayer] Countdown reached 0!', { 
@@ -1395,6 +1416,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
       
       if (currentNextEpisode && currentOnNextEpisode) {
         console.log('[VideoPlayer] AUTO-NAVIGATING to next episode NOW!');
+        hasNavigatedToNextRef.current = true; // Mark as navigated
         // Call immediately - no delay needed
         currentOnNextEpisode();
       } else {
@@ -1743,7 +1765,13 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
             setFocusedRow(-1);
             setFocusedControlIndex(-1);
           } else {
-            window.history.back();
+            // Use onBack callback if provided (navigates to details page)
+            // Otherwise fall back to browser history
+            if (onBack) {
+              onBack();
+            } else {
+              window.history.back();
+            }
           }
           break;
         case 'n':

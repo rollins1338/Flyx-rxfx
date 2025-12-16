@@ -348,6 +348,7 @@ function WatchContent() {
         </button>
 
         <VideoPlayer
+          key={`${contentId}-${seasonId}-${episodeId}`}
           tmdbId={contentId}
           mediaType={mediaType}
           season={seasonId}
@@ -355,6 +356,7 @@ function WatchContent() {
           title={title}
           nextEpisode={nextEpisodeProp}
           onNextEpisode={handleNextEpisode}
+          onBack={handleBack}
           autoplay={shouldAutoplay}
           malId={malId ? parseInt(malId) : undefined}
           malTitle={malTitle}
