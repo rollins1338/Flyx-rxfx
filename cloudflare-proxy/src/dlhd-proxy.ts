@@ -51,54 +51,158 @@ const CDN_PATTERNS = {
 const serverKeyCache = new Map<string, { serverKey: string; playerDomain: string; fetchedAt: number }>();
 const SERVER_KEY_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
-// In-memory cache for auth tokens (per channel)
-const authTokenCache = new Map<string, { token: string; fetchedAt: number }>();
-const AUTH_TOKEN_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes (tokens valid for ~5 hours)
+// In-memory cache for session data (per channel)
+// Now includes auth token AND heartbeat session
+const sessionCache = new Map<string, { 
+  token: string; 
+  hbUrl: string | null;
+  channelKey: string;
+  sessionEstablished: boolean;
+  sessionExpiry: number; // Unix timestamp when session expires
+  fetchedAt: number 
+}>();
+// Session cache TTL - refresh 2 minutes before expiry or every 20 minutes max
+const SESSION_CACHE_TTL_MS = 20 * 60 * 1000; // 20 minutes max
+const SESSION_EXPIRY_BUFFER_MS = 2 * 60 * 1000; // Refresh 2 minutes before expiry
 
 /**
- * Fetch auth token from the player page for a given channel
- * This is the key discovery - the token allows key fetching from any IP!
+ * Fetch session data from the player page and establish heartbeat session
+ * DLHD now requires: 1) Get auth token, 2) Call heartbeat to establish session, 3) Fetch key
+ * 
+ * Heartbeat endpoint: https://<server>.kiko2.ru/heartbeat
+ * Required headers: Authorization: Bearer <token>, X-Channel-Key: premium<channel>
  */
-async function fetchAuthToken(channel: string, logger: any): Promise<string | null> {
-  const cached = authTokenCache.get(channel);
-  if (cached && (Date.now() - cached.fetchedAt) < AUTH_TOKEN_CACHE_TTL_MS) {
-    logger.debug('Using cached auth token', { channel });
-    return cached.token;
+async function getSessionForChannel(channel: string, logger: any): Promise<{ token: string; channelKey: string; success: boolean } | null> {
+  const cached = sessionCache.get(channel);
+  const now = Date.now();
+  
+  // Check if cached session is still valid
+  if (cached && cached.sessionEstablished) {
+    const cacheAge = now - cached.fetchedAt;
+    const sessionExpiresAt = cached.sessionExpiry * 1000; // Convert to ms
+    const timeUntilExpiry = sessionExpiresAt - now;
+    
+    // Use cache if: within TTL AND session won't expire in next 2 minutes
+    if (cacheAge < SESSION_CACHE_TTL_MS && timeUntilExpiry > SESSION_EXPIRY_BUFFER_MS) {
+      logger.debug('Using cached session', { channel, timeUntilExpiry: Math.round(timeUntilExpiry / 1000) + 's' });
+      return { token: cached.token, channelKey: cached.channelKey, success: true };
+    }
+    
+    logger.info('Session expiring soon, refreshing', { channel, timeUntilExpiry: Math.round(timeUntilExpiry / 1000) + 's' });
   }
   
-  logger.info('Fetching fresh auth token', { channel });
+  logger.info('Establishing new session for channel', { channel });
   
   try {
-    const url = `https://epicplayplay.cfd/premiumtv/daddyhd.php?id=${channel}`;
-    const response = await fetch(url, {
+    // Step 1: Fetch player page to get AUTH_TOKEN
+    const playerUrl = `https://epicplayplay.cfd/premiumtv/daddyhd.php?id=${channel}`;
+    const playerResponse = await fetch(playerUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Referer': 'https://daddyhd.com/',
       }
     });
     
-    if (!response.ok) {
-      logger.warn('Failed to fetch player page', { status: response.status });
+    if (!playerResponse.ok) {
+      logger.warn('Failed to fetch player page', { status: playerResponse.status });
       return null;
     }
     
-    const html = await response.text();
+    const html = await playerResponse.text();
     
-    // Extract AUTH_TOKEN from the page
-    const match = html.match(/AUTH_TOKEN\s*=\s*["']([^"']+)["']/);
-    if (match) {
-      const token = match[1];
-      authTokenCache.set(channel, { token, fetchedAt: Date.now() });
-      logger.info('Got auth token', { channel, tokenPreview: token.substring(0, 20) + '...' });
-      return token;
+    // Extract AUTH_TOKEN
+    const tokenMatch = html.match(/AUTH_TOKEN\s*=\s*["']([^"']+)["']/);
+    if (!tokenMatch) {
+      logger.warn('No auth token found in player page', { channel });
+      return null;
+    }
+    const token = tokenMatch[1];
+    
+    // Extract CHANNEL_KEY
+    const channelKeyMatch = html.match(/CHANNEL_KEY\s*=\s*["']([^"']+)["']/);
+    const channelKey = channelKeyMatch ? channelKeyMatch[1] : `premium${channel}`;
+    
+    logger.info('Got player data', { 
+      channel, 
+      tokenPreview: token.substring(0, 20) + '...', 
+      channelKey 
+    });
+    
+    // Step 2: Call heartbeat to establish session
+    // Heartbeat URL is on the same server as the key (e.g., chevy.kiko2.ru/heartbeat)
+    // We'll try known servers
+    const heartbeatServers = ['chevy', 'zeko'];
+    let sessionEstablished = false;
+    let sessionExpiry = Math.floor(Date.now() / 1000) + 3600; // Default 1 hour if not provided
+    
+    for (const server of heartbeatServers) {
+      try {
+        const hbUrl = `https://${server}.kiko2.ru/heartbeat`;
+        logger.info('Calling heartbeat', { server, channelKey });
+        
+        const hbResponse = await fetch(hbUrl, {
+          method: 'GET',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Authorization': `Bearer ${token}`,
+            'X-Channel-Key': channelKey,
+            'Origin': 'https://epicplayplay.cfd',
+            'Referer': 'https://epicplayplay.cfd/',
+          }
+        });
+        
+        const hbText = await hbResponse.text();
+        logger.info('Heartbeat response', { server, status: hbResponse.status, response: hbText.substring(0, 100) });
+        
+        // Check if heartbeat was successful and parse expiry
+        if (hbResponse.ok && (hbText.includes('"ok"') || hbText.includes('"status":"ok"'))) {
+          sessionEstablished = true;
+          
+          // Parse expiry from response: {"expiry":1765944911,"message":"Session created","status":"ok"}
+          try {
+            const hbJson = JSON.parse(hbText);
+            if (hbJson.expiry) {
+              sessionExpiry = hbJson.expiry;
+              const expiresIn = sessionExpiry - Math.floor(Date.now() / 1000);
+              logger.info('Session established with expiry', { server, channel, expiresInSeconds: expiresIn });
+            }
+          } catch {
+            logger.warn('Could not parse heartbeat JSON, using default expiry');
+          }
+          
+          break;
+        }
+      } catch (hbError) {
+        logger.warn('Heartbeat call failed', { server, error: (hbError as Error).message });
+      }
     }
     
-    logger.warn('No auth token found in player page', { channel });
-    return null;
+    if (!sessionEstablished) {
+      logger.error('Failed to establish session on any server', { channel });
+    }
+    
+    // Cache the session with expiry time
+    sessionCache.set(channel, { 
+      token, 
+      hbUrl: null, 
+      channelKey,
+      sessionEstablished,
+      sessionExpiry,
+      fetchedAt: Date.now() 
+    });
+    
+    return { token, channelKey, success: sessionEstablished };
   } catch (error) {
-    logger.error('Error fetching auth token', error as Error);
+    logger.error('Error establishing session', error as Error);
     return null;
   }
+}
+
+/**
+ * Clear session cache for a channel (call when key fetch fails with E2 error)
+ */
+function clearSessionCache(channel: string) {
+  sessionCache.delete(channel);
 }
 
 /**
@@ -210,20 +314,29 @@ export async function handleDLHDRequest(request: Request, env: Env): Promise<Res
 
 
 function handleHealthCheck(env: Env, origin: string | null): Response {
-  // RPI proxy is no longer required! We use direct auth token method.
+  // RPI proxy is no longer required! We use session-based auth with heartbeat.
   const hasRpiProxy = !!(env.RPI_PROXY_URL && env.RPI_PROXY_KEY);
+  
+  // Get session info for debugging
+  const sessions = Array.from(sessionCache.entries()).map(([channel, data]) => ({
+    channel,
+    hasToken: !!data.token,
+    hasHbUrl: !!data.hbUrl,
+    sessionEstablished: data.sessionEstablished,
+    ageMinutes: Math.round((Date.now() - data.fetchedAt) / 60000),
+  }));
   
   return jsonResponse({
     status: 'healthy',
-    method: 'direct-auth-token',
-    description: 'DLHD keys fetched directly using auth token (no RPI proxy needed)',
+    method: 'session-with-heartbeat',
+    description: 'DLHD keys fetched using auth token + heartbeat session',
     rpiProxy: {
       configured: hasRpiProxy,
-      note: 'RPI proxy is optional - direct auth token method is preferred',
+      note: 'RPI proxy is optional fallback',
     },
-    authTokenCache: {
-      size: authTokenCache.size,
-      channels: Array.from(authTokenCache.keys()),
+    sessionCache: {
+      size: sessionCache.size,
+      sessions,
     },
     timestamp: new Date().toISOString(),
   }, 200, origin);
@@ -337,19 +450,19 @@ async function handleKeyProxy(url: URL, env: Env, logger: any, origin: string | 
       return jsonResponse({ error: 'Invalid key URL format' }, 400, origin);
     }
     
-    // Fetch auth token for this channel
-    const authToken = await fetchAuthToken(channel, logger);
-    if (!authToken) {
-      logger.error('Failed to get auth token', { channel });
+    // Get session for this channel (includes heartbeat)
+    const session = await getSessionForChannel(channel, logger);
+    if (!session || !session.success) {
+      logger.error('Failed to establish session', { channel });
       return jsonResponse({ 
-        error: 'Failed to get auth token',
+        error: 'Failed to establish session',
         channel,
-        hint: 'Could not fetch auth token from player page',
+        hint: 'Could not fetch auth token or establish heartbeat session. The heartbeat endpoint may have changed.',
       }, 502, origin);
     }
     
-    // Fetch key directly with Authorization header (no RPI proxy needed!)
-    logger.info('Fetching key with auth token', { channel, tokenPreview: authToken.substring(0, 20) + '...' });
+    // Fetch key with Authorization header and X-Channel-Key
+    logger.info('Fetching key with session', { channel, channelKey: session.channelKey, tokenPreview: session.token.substring(0, 20) + '...' });
     
     const keyResponse = await fetch(keyUrl, {
       headers: {
@@ -357,50 +470,95 @@ async function handleKeyProxy(url: URL, env: Env, logger: any, origin: string | 
         'Accept': '*/*',
         'Origin': 'https://epicplayplay.cfd',
         'Referer': 'https://epicplayplay.cfd/',
-        'Authorization': `Bearer ${authToken}`,
-        'X-Channel-Key': `premium${channel}`,
+        'Authorization': `Bearer ${session.token}`,
+        'X-Channel-Key': session.channelKey,
       },
     });
     
     const keyData = await keyResponse.arrayBuffer();
+    const keyText = new TextDecoder().decode(keyData);
+    
+    // Check for E2 error (session not established)
+    if (keyText.includes('"E2"') || keyText.includes('heartbeat')) {
+      // Clear session cache and retry once
+      logger.warn('Got E2 error, clearing session and retrying', { channel, response: keyText });
+      clearSessionCache(channel);
+      
+      // Retry with fresh session
+      const freshSession = await getSessionForChannel(channel, logger);
+      if (freshSession && freshSession.success) {
+        const retryResponse = await fetch(keyUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': '*/*',
+            'Origin': 'https://epicplayplay.cfd',
+            'Referer': 'https://epicplayplay.cfd/',
+            'Authorization': `Bearer ${freshSession.token}`,
+            'X-Channel-Key': freshSession.channelKey,
+          },
+        });
+        
+        const retryData = await retryResponse.arrayBuffer();
+        if (retryData.byteLength === 16) {
+          const retryText = new TextDecoder().decode(retryData);
+          if (!retryText.includes('error') && !retryText.includes('"E')) {
+            logger.info('Key fetched successfully after retry', { size: retryData.byteLength, channel });
+            return new Response(retryData, {
+              status: 200,
+              headers: {
+                'Content-Type': 'application/octet-stream',
+                'Content-Length': '16',
+                ...corsHeaders(origin),
+                'Cache-Control': 'private, max-age=30',
+                'X-Fetched-By': 'session-with-heartbeat-retry',
+              },
+            });
+          }
+        }
+      }
+      
+      // Retry failed too
+      return jsonResponse({ 
+        error: 'Session establishment failed',
+        response: keyText,
+        hint: 'DLHD requires heartbeat session - check if HB_URL is available',
+      }, 502, origin);
+    }
     
     // Check if we got a valid key
     if (keyData.byteLength === 16) {
-      const keyText = new TextDecoder().decode(keyData);
-      if (keyText.includes('error') || keyText.includes('E3')) {
+      if (keyText.includes('error') || keyText.includes('"E')) {
         // Token might be expired, clear cache
-        authTokenCache.delete(channel);
+        clearSessionCache(channel);
         logger.error('Key server returned error', { response: keyText, channel });
         return jsonResponse({ 
           error: 'Key server returned error',
           response: keyText,
-          hint: 'Auth token may be expired, will retry with fresh token',
+          hint: 'Session may be expired, will retry with fresh session',
         }, 502, origin);
       }
       
       // Valid 16-byte key!
-      logger.info('Key fetched successfully (direct)', { size: keyData.byteLength, channel });
+      logger.info('Key fetched successfully', { size: keyData.byteLength, channel });
       return new Response(keyData, {
         status: 200,
         headers: {
           'Content-Type': 'application/octet-stream',
           'Content-Length': '16',
           ...corsHeaders(origin),
-          // Keys are valid for a short time, allow brief caching to reduce load
           'Cache-Control': 'private, max-age=30',
-          'X-Fetched-By': 'direct-auth-token',
+          'X-Fetched-By': 'session-with-heartbeat',
         },
       });
     }
     
     // Invalid key size
     logger.warn('Invalid key size', { size: keyData.byteLength, status: keyResponse.status });
-    const preview = new TextDecoder().decode(keyData).substring(0, 200);
     return jsonResponse({ 
       error: 'Invalid key data', 
       size: keyData.byteLength,
       expected: 16,
-      preview,
+      preview: keyText.substring(0, 200),
     }, 502, origin);
     
   } catch (error) {
