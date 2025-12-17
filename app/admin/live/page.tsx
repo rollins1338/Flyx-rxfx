@@ -127,7 +127,7 @@ export default function AdminLivePage() {
 
   return (
     <div>
-      <div style={{ marginBottom: '32px', paddingBottom: '20px', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
+      <div style={{ marginBottom: '32px', paddingBottom: '20px', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', position: 'relative', zIndex: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -141,16 +141,16 @@ export default function AdminLivePage() {
               Real-time user activity • Last updated: {lastUpdate ? lastUpdate.toLocaleTimeString() : 'Loading...'}
             </p>
           </div>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', position: 'relative', zIndex: 20 }}>
             <select value={refreshRate} onChange={(e) => setRefreshRate(parseInt(e.target.value))} style={{ padding: '8px 12px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '8px', color: '#f8fafc', fontSize: '14px' }}>
               <option value={5}>5s refresh</option>
               <option value={10}>10s refresh</option>
               <option value={30}>30s refresh</option>
             </select>
-            <button onClick={() => setViewMode('dashboard')} style={{ padding: '8px 16px', background: viewMode === 'dashboard' ? '#7877c6' : 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '8px', color: viewMode === 'dashboard' ? 'white' : '#94a3b8', cursor: 'pointer', fontSize: '14px' }}>📊 Dashboard</button>
-            <button onClick={() => setViewMode('realtime')} style={{ padding: '8px 16px', background: viewMode === 'realtime' ? '#7877c6' : 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '8px', color: viewMode === 'realtime' ? 'white' : '#94a3b8', cursor: 'pointer', fontSize: '14px' }}>🔴 Sessions</button>
-            <button onClick={() => setViewMode('summary')} style={{ padding: '8px 16px', background: viewMode === 'summary' ? '#7877c6' : 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '8px', color: viewMode === 'summary' ? 'white' : '#94a3b8', cursor: 'pointer', fontSize: '14px' }}>📈 Content</button>
-            <button onClick={() => setViewMode('map')} style={{ padding: '8px 16px', background: viewMode === 'map' ? '#7877c6' : 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '8px', color: viewMode === 'map' ? 'white' : '#94a3b8', cursor: 'pointer', fontSize: '14px' }}>🌍 Map</button>
+            <TabButton active={viewMode === 'dashboard'} onClick={() => setViewMode('dashboard')}>📊 Dashboard</TabButton>
+            <TabButton active={viewMode === 'realtime'} onClick={() => setViewMode('realtime')}>🔴 Sessions</TabButton>
+            <TabButton active={viewMode === 'summary'} onClick={() => setViewMode('summary')}>📈 Content</TabButton>
+            <TabButton active={viewMode === 'map'} onClick={() => setViewMode('map')}>🌍 Map</TabButton>
           </div>
         </div>
       </div>
@@ -351,5 +351,32 @@ function ActivityTypeBar({ label, count, total, color, icon }: { label: string; 
         <div style={{ height: '100%', width: `${percentage}%`, background: color, borderRadius: '4px', transition: 'width 0.3s' }} />
       </div>
     </div>
+  );
+}
+
+function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onClick();
+      }}
+      style={{
+        padding: '8px 16px',
+        background: active ? '#7877c6' : 'rgba(255, 255, 255, 0.05)',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        borderRadius: '8px',
+        color: active ? 'white' : '#94a3b8',
+        cursor: 'pointer',
+        fontSize: '14px',
+        pointerEvents: 'auto',
+        position: 'relative',
+        zIndex: 100,
+      }}
+    >
+      {children}
+    </button>
   );
 }

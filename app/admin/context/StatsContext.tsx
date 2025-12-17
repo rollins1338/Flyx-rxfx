@@ -8,6 +8,19 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 
+// Peak stats interface
+interface PeakStats {
+  date: string;
+  peakTotal: number;
+  peakWatching: number;
+  peakLiveTV: number;
+  peakBrowsing: number;
+  peakTotalTime: number;
+  peakWatchingTime: number;
+  peakLiveTVTime: number;
+  peakBrowsingTime: number;
+}
+
 // Unified stats interface - SINGLE SOURCE OF TRUTH
 // All counts use DISTINCT user_id to avoid duplicates
 interface UnifiedStats {
@@ -18,6 +31,9 @@ interface UnifiedStats {
   liveWatching: number;       // Users watching VOD content
   liveBrowsing: number;       // Users browsing (not watching)
   liveTVViewers: number;      // Users watching Live TV
+  
+  // Peak stats (persisted in DB, updated server-side)
+  peakStats: PeakStats | null;
   
   // User metrics (user_activity table) - all counts are UNIQUE users
   totalUsers: number;
@@ -75,6 +91,7 @@ const defaultStats: UnifiedStats = {
   liveWatching: 0,
   liveBrowsing: 0,
   liveTVViewers: 0,
+  peakStats: null,
   totalUsers: 0,
   activeToday: 0,
   activeThisWeek: 0,
@@ -148,6 +165,9 @@ export function StatsProvider({ children }: { children: ReactNode }) {
           liveWatching: data.realtime?.watching || 0,
           liveBrowsing: data.realtime?.browsing || 0,
           liveTVViewers: data.realtime?.livetv || 0,
+          
+          // Peak stats (from DB, updated server-side)
+          peakStats: data.peakStats || null,
           
           // User metrics (all unique user counts)
           totalUsers: data.users?.total || 0,

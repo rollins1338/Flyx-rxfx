@@ -9,30 +9,11 @@
  * - Users actively watching content (VOD)
  * - Users watching Live TV
  * - Users browsing (not watching anything)
- * - Persistent peak tracking (stored in DB)
+ * - Persistent peak tracking (stored in DB, updated server-side)
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useStats } from '../context/StatsContext';
-
-interface PeakStats {
-  date: string;
-  peakTotal: number;
-  peakWatching: number;
-  peakLiveTV: number;
-  peakBrowsing: number;
-  peakTotalTime: number;
-  peakWatchingTime: number;
-  peakLiveTVTime: number;
-  peakBrowsingTime: number;
-}
-
-interface ActivityBreakdown {
-  watching: number;
-  livetv: number;
-  browsing: number;
-  total: number;
-}
 
 interface HistoryPoint {
   time: number;
@@ -45,70 +26,28 @@ interface HistoryPoint {
 export default function ImprovedLiveDashboard() {
   const { stats: unifiedStats, loading: statsLoading, refresh: refreshStats } = useStats();
   
-  const [peakStats, setPeakStats] = useState<PeakStats | null>(null);
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [refreshRate, setRefreshRate] = useState(10); // seconds
-  const peakUpdateRef = useRef<NodeJS.Timeout | null>(null);
 
   // Current activity breakdown from unified stats
-  const currentActivity: ActivityBreakdown = {
+  const currentActivity = {
     watching: unifiedStats.liveWatching,
     livetv: unifiedStats.liveTVViewers,
     browsing: unifiedStats.liveBrowsing,
     total: unifiedStats.liveUsers,
   };
+  
+  // Peak stats come from unified stats (updated server-side)
+  const peakStats = unifiedStats.peakStats;
 
-  // Fetch peak stats from database
-  const fetchPeakStats = useCallback(async () => {
-    try {
-      const response = await fetch('/api/admin/peak-stats');
-      const data = await response.json();
-      if (data.success && data.today) {
-        setPeakStats(data.today);
-      }
-    } catch (error) {
-      console.error('Failed to fetch peak stats:', error);
-    }
-  }, []);
-
-  // Update peak stats if current values are higher
-  const updatePeakStats = useCallback(async () => {
-    // Don't update if no users or if stats are still loading
-    if (currentActivity.total === 0 || statsLoading) return;
-    
-    try {
-      const response = await fetch('/api/admin/peak-stats', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          total: currentActivity.total,
-          watching: currentActivity.watching,
-          livetv: currentActivity.livetv,
-          browsing: currentActivity.browsing,
-        }),
-      });
-      const data = await response.json();
-      if (data.success && data.peaks) {
-        setPeakStats(data.peaks);
-      }
-    } catch (error) {
-      console.error('Failed to update peak stats:', error);
-    }
-  }, [currentActivity, statsLoading]);
-
-  // Initial fetch
-  useEffect(() => {
-    fetchPeakStats();
-  }, [fetchPeakStats]);
-
-  // Update history and check peaks when stats change
+  // Update history when stats change
   useEffect(() => {
     if (statsLoading) return;
     
     setLastUpdate(new Date());
     
-    // Add to history - always add a point even if values are 0
+    // Add to history
     setHistory(prev => {
       const newPoint: HistoryPoint = {
         time: Date.now(),
@@ -128,25 +67,7 @@ export default function ImprovedLiveDashboard() {
       // Keep last 60 data points (10 minutes at 10s intervals)
       return newHistory.slice(-60);
     });
-
-    // Debounce peak updates to avoid too many DB writes
-    if (peakUpdateRef.current) {
-      clearTimeout(peakUpdateRef.current);
-    }
-    
-    // Only update peaks if there are actual users
-    if (currentActivity.total > 0) {
-      peakUpdateRef.current = setTimeout(() => {
-        updatePeakStats();
-      }, 3000); // Update peaks every 3 seconds max
-    }
-
-    return () => {
-      if (peakUpdateRef.current) {
-        clearTimeout(peakUpdateRef.current);
-      }
-    };
-  }, [unifiedStats, statsLoading, updatePeakStats, currentActivity]);
+  }, [unifiedStats, statsLoading, currentActivity.total, currentActivity.watching, currentActivity.livetv, currentActivity.browsing]);
 
   // Auto-refresh stats
   useEffect(() => {

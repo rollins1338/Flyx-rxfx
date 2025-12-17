@@ -313,6 +313,27 @@ export async function GET(request: NextRequest) {
       console.error('Error fetching page view stats:', e);
     }
 
+    // ============================================
+    // 7. UPDATE PEAK STATS (server-side tracking)
+    // This ensures peaks are tracked even when admin isn't watching
+    // ============================================
+    let peakStats = null;
+    try {
+      if (realtime.totalActive > 0) {
+        peakStats = await updatePeakStats(adapter, isNeon, now, {
+          total: realtime.totalActive,
+          watching: realtime.watching,
+          livetv: realtime.livetv,
+          browsing: realtime.browsing,
+        });
+      } else {
+        // Just fetch current peaks without updating
+        peakStats = await getPeakStats(adapter, isNeon);
+      }
+    } catch (e) {
+      console.error('Error updating peak stats:', e);
+    }
+
     const responseData = {
       success: true,
       realtime,
@@ -321,6 +342,7 @@ export async function GET(request: NextRequest) {
       geographic,
       devices,
       pageViews,
+      peakStats,
       // Include time ranges for transparency
       timeRanges: {
         realtime: '2 minutes (from live_activity heartbeat, 1 min for truly active)',
@@ -351,4 +373,172 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+
+// ============================================
+// PEAK STATS HELPER FUNCTIONS
+// ============================================
+
+function getTodayDate(): string {
+  return new Date().toISOString().split('T')[0];
+}
+
+async function getPeakStats(adapter: any, isNeon: boolean) {
+  const today = getTodayDate();
+  const query = isNeon
+    ? `SELECT * FROM peak_stats WHERE date = $1`
+    : `SELECT * FROM peak_stats WHERE date = ?`;
+  
+  try {
+    const result = await adapter.query(query, [today]);
+    if (result.length > 0) {
+      const row = result[0];
+      return {
+        date: row.date,
+        peakTotal: parseInt(row.peak_total) || 0,
+        peakWatching: parseInt(row.peak_watching) || 0,
+        peakLiveTV: parseInt(row.peak_livetv) || 0,
+        peakBrowsing: parseInt(row.peak_browsing) || 0,
+        peakTotalTime: parseInt(row.peak_total_time) || 0,
+        peakWatchingTime: parseInt(row.peak_watching_time) || 0,
+        peakLiveTVTime: parseInt(row.peak_livetv_time) || 0,
+        peakBrowsingTime: parseInt(row.peak_browsing_time) || 0,
+      };
+    }
+  } catch (e) {
+    // Table might not exist
+  }
+  return null;
+}
+
+async function updatePeakStats(
+  adapter: any, 
+  isNeon: boolean, 
+  now: number,
+  current: { total: number; watching: number; livetv: number; browsing: number }
+) {
+  const today = getTodayDate();
+  
+  // Ensure table exists
+  const createTableQuery = isNeon
+    ? `CREATE TABLE IF NOT EXISTS peak_stats (
+        date TEXT PRIMARY KEY,
+        peak_total INTEGER DEFAULT 0,
+        peak_watching INTEGER DEFAULT 0,
+        peak_livetv INTEGER DEFAULT 0,
+        peak_browsing INTEGER DEFAULT 0,
+        peak_total_time BIGINT,
+        peak_watching_time BIGINT,
+        peak_livetv_time BIGINT,
+        peak_browsing_time BIGINT,
+        last_updated BIGINT,
+        created_at BIGINT
+      )`
+    : `CREATE TABLE IF NOT EXISTS peak_stats (
+        date TEXT PRIMARY KEY,
+        peak_total INTEGER DEFAULT 0,
+        peak_watching INTEGER DEFAULT 0,
+        peak_livetv INTEGER DEFAULT 0,
+        peak_browsing INTEGER DEFAULT 0,
+        peak_total_time INTEGER,
+        peak_watching_time INTEGER,
+        peak_livetv_time INTEGER,
+        peak_browsing_time INTEGER,
+        last_updated INTEGER,
+        created_at INTEGER DEFAULT(strftime('%s', 'now'))
+      )`;
+  
+  await adapter.execute(createTableQuery);
+  
+  // Get existing peaks
+  const selectQuery = isNeon
+    ? `SELECT * FROM peak_stats WHERE date = $1`
+    : `SELECT * FROM peak_stats WHERE date = ?`;
+  
+  const existing = await adapter.query(selectQuery, [today]);
+  
+  if (existing.length === 0) {
+    // Insert new record
+    const insertQuery = isNeon
+      ? `INSERT INTO peak_stats (date, peak_total, peak_watching, peak_livetv, peak_browsing, 
+          peak_total_time, peak_watching_time, peak_livetv_time, peak_browsing_time, last_updated, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+      : `INSERT INTO peak_stats (date, peak_total, peak_watching, peak_livetv, peak_browsing,
+          peak_total_time, peak_watching_time, peak_livetv_time, peak_browsing_time, last_updated)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    
+    const params = isNeon
+      ? [today, current.total, current.watching, current.livetv, current.browsing, now, now, now, now, now, now]
+      : [today, current.total, current.watching, current.livetv, current.browsing, now, now, now, now, now];
+    
+    await adapter.execute(insertQuery, params);
+    
+    return {
+      date: today,
+      peakTotal: current.total,
+      peakWatching: current.watching,
+      peakLiveTV: current.livetv,
+      peakBrowsing: current.browsing,
+      peakTotalTime: now,
+      peakWatchingTime: now,
+      peakLiveTVTime: now,
+      peakBrowsingTime: now,
+    };
+  }
+  
+  // Update only if higher
+  const row = existing[0];
+  const currentPeakTotal = parseInt(row.peak_total) || 0;
+  const currentPeakWatching = parseInt(row.peak_watching) || 0;
+  const currentPeakLiveTV = parseInt(row.peak_livetv) || 0;
+  const currentPeakBrowsing = parseInt(row.peak_browsing) || 0;
+  
+  const newPeakTotal = current.total > currentPeakTotal ? current.total : currentPeakTotal;
+  const newPeakWatching = current.watching > currentPeakWatching ? current.watching : currentPeakWatching;
+  const newPeakLiveTV = current.livetv > currentPeakLiveTV ? current.livetv : currentPeakLiveTV;
+  const newPeakBrowsing = current.browsing > currentPeakBrowsing ? current.browsing : currentPeakBrowsing;
+  
+  const newPeakTotalTime = current.total > currentPeakTotal ? now : (parseInt(row.peak_total_time) || now);
+  const newPeakWatchingTime = current.watching > currentPeakWatching ? now : (parseInt(row.peak_watching_time) || now);
+  const newPeakLiveTVTime = current.livetv > currentPeakLiveTV ? now : (parseInt(row.peak_livetv_time) || now);
+  const newPeakBrowsingTime = current.browsing > currentPeakBrowsing ? now : (parseInt(row.peak_browsing_time) || now);
+  
+  const hasChanges = 
+    newPeakTotal > currentPeakTotal ||
+    newPeakWatching > currentPeakWatching ||
+    newPeakLiveTV > currentPeakLiveTV ||
+    newPeakBrowsing > currentPeakBrowsing;
+  
+  if (hasChanges) {
+    const updateQuery = isNeon
+      ? `UPDATE peak_stats SET 
+          peak_total = $1, peak_watching = $2, peak_livetv = $3, peak_browsing = $4,
+          peak_total_time = $5, peak_watching_time = $6, peak_livetv_time = $7, peak_browsing_time = $8,
+          last_updated = $9
+         WHERE date = $10`
+      : `UPDATE peak_stats SET 
+          peak_total = ?, peak_watching = ?, peak_livetv = ?, peak_browsing = ?,
+          peak_total_time = ?, peak_watching_time = ?, peak_livetv_time = ?, peak_browsing_time = ?,
+          last_updated = ?
+         WHERE date = ?`;
+    
+    await adapter.execute(updateQuery, [
+      newPeakTotal, newPeakWatching, newPeakLiveTV, newPeakBrowsing,
+      newPeakTotalTime, newPeakWatchingTime, newPeakLiveTVTime, newPeakBrowsingTime,
+      now, today
+    ]);
+  }
+  
+  return {
+    date: today,
+    peakTotal: newPeakTotal,
+    peakWatching: newPeakWatching,
+    peakLiveTV: newPeakLiveTV,
+    peakBrowsing: newPeakBrowsing,
+    peakTotalTime: newPeakTotalTime,
+    peakWatchingTime: newPeakWatchingTime,
+    peakLiveTVTime: newPeakLiveTVTime,
+    peakBrowsingTime: newPeakBrowsingTime,
+  };
 }
