@@ -125,6 +125,16 @@ export default {
 // ALL known server keys - try them all before giving up
 const ALL_SERVER_KEYS = ['zeko', 'wind', 'nfs', 'ddy6', 'chevy', 'top1/cdn'];
 
+// Both CDN domains to try (some servers work on one but not the other)
+const CDN_DOMAINS = ['kiko2.ru', 'giokko.ru'];
+
+function constructM3U8UrlWithDomain(serverKey: string, channelKey: string, domain: string): string {
+  if (serverKey === 'top1/cdn') {
+    return `https://top1.${domain}/top1/cdn/${channelKey}/mono.css`;
+  }
+  return `https://${serverKey}new.${domain}/${serverKey}/${channelKey}/mono.css`;
+}
+
 async function handlePlaylistRequest(channel: string, proxyOrigin: string, env: Env, logger: any): Promise<Response> {
   const channelKey = `premium${channel}`;
   
@@ -139,78 +149,85 @@ async function handlePlaylistRequest(channel: string, proxyOrigin: string, env: 
     ...ALL_SERVER_KEYS.filter(k => k !== initialServerKey)
   ];
   
-  logger.info('Will try servers in order', { servers: serverKeysToTry });
+  logger.info('Will try servers in order', { servers: serverKeysToTry, domains: CDN_DOMAINS });
   
-  const triedServers: string[] = [];
+  const triedCombinations: string[] = [];
   let lastError = '';
   
+  // Try each server with BOTH domains before moving to next server
   for (const serverKey of serverKeysToTry) {
-    triedServers.push(serverKey);
-    
-    try {
-      const m3u8Url = constructM3U8Url(serverKey, channelKey);
-      logger.info('Trying M3U8 URL', { serverKey, url: m3u8Url, attempt: triedServers.length });
+    for (const domain of CDN_DOMAINS) {
+      const combo = `${serverKey}@${domain}`;
+      triedCombinations.push(combo);
       
-      const cacheBustUrl = `${m3u8Url}?_t=${Date.now()}`;
-      const fetchStart = Date.now();
-      const response = await fetchViaProxy(cacheBustUrl, env, logger);
-      const content = await response.text();
-      
-      logger.debug('M3U8 fetched', { 
-        serverKey,
-        duration: Date.now() - fetchStart,
-        contentLength: content.length,
-      });
-      
-      if (content.includes('#EXTM3U') || content.includes('#EXT-X-')) {
-        // Valid M3U8 found!
-        logger.info('Found working server!', { serverKey, channel, triedCount: triedServers.length });
+      try {
+        const m3u8Url = constructM3U8UrlWithDomain(serverKey, channelKey, domain);
+        logger.info('Trying M3U8 URL', { serverKey, domain, url: m3u8Url, attempt: triedCombinations.length });
         
-        // Cache this server for future requests
-        serverKeyCache.set(channelKey, {
+        const cacheBustUrl = `${m3u8Url}?_t=${Date.now()}`;
+        const fetchStart = Date.now();
+        const response = await fetchViaProxy(cacheBustUrl, env, logger);
+        const content = await response.text();
+        
+        logger.debug('M3U8 fetched', { 
           serverKey,
-          playerDomain,
-          fetchedAt: Date.now(),
+          domain,
+          duration: Date.now() - fetchStart,
+          contentLength: content.length,
         });
         
-        // Parse and rewrite M3U8
-        const { keyUrl, iv } = parseM3U8(content);
-        const proxiedM3U8 = generateProxiedM3U8(content, keyUrl, proxyOrigin);
+        if (content.includes('#EXTM3U') || content.includes('#EXT-X-')) {
+          // Valid M3U8 found!
+          logger.info('Found working server!', { serverKey, domain, channel, triedCount: triedCombinations.length });
+          
+          // Cache this server for future requests
+          serverKeyCache.set(channelKey, {
+            serverKey,
+            playerDomain,
+            fetchedAt: Date.now(),
+          });
+          
+          // Parse and rewrite M3U8
+          const { keyUrl, iv } = parseM3U8(content);
+          const proxiedM3U8 = generateProxiedM3U8(content, keyUrl, proxyOrigin);
 
-        const res = new Response(proxiedM3U8, {
-          status: 200,
-          headers: {
-            'Content-Type': 'application/vnd.apple.mpegurl',
-            ...corsHeaders(),
-            'Cache-Control': 'no-store, no-cache, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0',
-            'X-DLHD-Channel': channel,
-            'X-DLHD-Server-Key': serverKey,
-            'X-DLHD-IV': iv || '',
-            'X-Servers-Tried': triedServers.join(','),
-          },
-        });
+          const res = new Response(proxiedM3U8, {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/vnd.apple.mpegurl',
+              ...corsHeaders(),
+              'Cache-Control': 'no-store, no-cache, must-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0',
+              'X-DLHD-Channel': channel,
+              'X-DLHD-Server-Key': serverKey,
+              'X-DLHD-Domain': domain,
+              'X-DLHD-IV': iv || '',
+              'X-Combinations-Tried': triedCombinations.length.toString(),
+            },
+          });
 
-        logger.requestEnd(res);
-        return res;
+          logger.requestEnd(res);
+          return res;
+        }
+        
+        lastError = `Invalid M3U8 from ${serverKey}@${domain}: ${content.substring(0, 100)}`;
+        logger.warn('Invalid M3U8 content', { serverKey, domain, preview: content.substring(0, 50) });
+      } catch (err) {
+        lastError = `Error from ${serverKey}@${domain}: ${(err as Error).message}`;
+        logger.warn('M3U8 fetch failed', { serverKey, domain, error: (err as Error).message });
       }
-      
-      lastError = `Invalid M3U8 from ${serverKey}: ${content.substring(0, 100)}`;
-      logger.warn('Invalid M3U8 content, trying next server', { serverKey, preview: content.substring(0, 50) });
-    } catch (err) {
-      lastError = `Error from ${serverKey}: ${(err as Error).message}`;
-      logger.warn('M3U8 fetch failed, trying next server', { serverKey, error: (err as Error).message });
     }
   }
   
-  // ALL servers failed
-  logger.error('ALL servers failed!', { channel, triedServers, lastError });
+  // ALL server/domain combinations failed
+  logger.error('ALL combinations failed!', { channel, triedCombinations, lastError });
   return jsonResponse({ 
     error: 'Failed to fetch M3U8 from any server', 
     details: lastError,
-    triedServers,
-    totalServersTried: triedServers.length,
+    triedCombinations,
+    totalCombinationsTried: triedCombinations.length,
+    hint: 'All known DLHD server/domain combinations returned errors. The channel may be offline.',
   }, 502);
 }
 

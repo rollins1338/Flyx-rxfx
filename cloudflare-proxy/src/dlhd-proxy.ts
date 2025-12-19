@@ -55,51 +55,43 @@ const CDN_PATTERNS = {
     `https://top1.kiko2.ru/top1/cdn/${channelKey}/mono.css`,
 };
 
-// In-memory cache for server keys
+// In-memory cache for server keys only (NOT auth tokens - those must be fresh)
 const serverKeyCache = new Map<string, { serverKey: string; playerDomain: string; fetchedAt: number }>();
 const SERVER_KEY_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
-// In-memory cache for session data (per channel)
-// Now includes auth token AND heartbeat session
-const sessionCache = new Map<string, { 
-  token: string; 
-  hbUrl: string | null;
-  channelKey: string;
-  sessionEstablished: boolean;
-  sessionExpiry: number; // Unix timestamp when session expires
-  fetchedAt: number 
-}>();
-// Session cache TTL - refresh 2 minutes before expiry or every 20 minutes max
-const SESSION_CACHE_TTL_MS = 20 * 60 * 1000; // 20 minutes max
-const SESSION_EXPIRY_BUFFER_MS = 2 * 60 * 1000; // Refresh 2 minutes before expiry
+// NO SESSION CACHING - always fetch fresh auth tokens
+// Stale tokens cause E2/E3 errors and break playback
 
 /**
- * Fetch session data from the player page and establish heartbeat session
- * DLHD now requires: 1) Get auth token, 2) Call heartbeat to establish session, 3) Fetch key
+ * Generate CLIENT_TOKEN for heartbeat authentication
+ * This mimics the browser's generateClientToken() function
  * 
- * Heartbeat endpoint: https://<server>.kiko2.ru/heartbeat
- * Required headers: Authorization: Bearer <token>, X-Channel-Key: premium<channel>
+ * Format: base64(channelKey|country|timestamp|userAgent|fingerprint)
+ * Where fingerprint = userAgent|screen|timezone|language
  */
-async function getSessionForChannel(channel: string, logger: any): Promise<{ token: string; channelKey: string; success: boolean } | null> {
-  const cached = sessionCache.get(channel);
-  const now = Date.now();
-  
-  // Check if cached session is still valid
-  if (cached && cached.sessionEstablished) {
-    const cacheAge = now - cached.fetchedAt;
-    const sessionExpiresAt = cached.sessionExpiry * 1000; // Convert to ms
-    const timeUntilExpiry = sessionExpiresAt - now;
-    
-    // Use cache if: within TTL AND session won't expire in next 2 minutes
-    if (cacheAge < SESSION_CACHE_TTL_MS && timeUntilExpiry > SESSION_EXPIRY_BUFFER_MS) {
-      logger.debug('Using cached session', { channel, timeUntilExpiry: Math.round(timeUntilExpiry / 1000) + 's' });
-      return { token: cached.token, channelKey: cached.channelKey, success: true };
-    }
-    
-    logger.info('Session expiring soon, refreshing', { channel, timeUntilExpiry: Math.round(timeUntilExpiry / 1000) + 's' });
-  }
-  
-  logger.info('Establishing new session for channel', { channel });
+function generateClientToken(channelKey: string, country: string, timestamp: string, userAgent: string): string {
+  // Simulate browser fingerprint
+  const screen = '1920x1080'; // Common resolution
+  const tz = 'America/New_York'; // Common timezone
+  const lang = 'en-US';
+  const fingerprint = `${userAgent}|${screen}|${tz}|${lang}`;
+  const signData = `${channelKey}|${country}|${timestamp}|${userAgent}|${fingerprint}`;
+  return btoa(signData);
+}
+
+// btoa is available globally in Cloudflare Workers
+// This is just a type declaration to make TypeScript happy
+declare function btoa(str: string): string;
+
+/**
+ * Fetch FRESH session data from the player page
+ * NO CACHING - always fetch fresh to avoid stale token issues
+ * 
+ * DLHD now requires: 1) Get auth token, 2) Call heartbeat to establish session, 3) Fetch key
+ */
+async function getSessionForChannel(channel: string, logger: any, preferredServer?: string): Promise<{ token: string; channelKey: string; country: string; timestamp: string; success: boolean } | null> {
+  // NO CACHING - always fetch fresh auth token
+  logger.info('Fetching FRESH session for channel (no cache)', { channel, preferredServer });
   
   try {
     // Step 1: Fetch player page to get AUTH_TOKEN
@@ -130,88 +122,40 @@ async function getSessionForChannel(channel: string, logger: any): Promise<{ tok
     const channelKeyMatch = html.match(/CHANNEL_KEY\s*=\s*["']([^"']+)["']/);
     const channelKey = channelKeyMatch ? channelKeyMatch[1] : `premium${channel}`;
     
+    // Extract AUTH_COUNTRY
+    const countryMatch = html.match(/AUTH_COUNTRY\s*=\s*["']([^"']+)["']/);
+    const country = countryMatch ? countryMatch[1] : 'US';
+    
+    // Extract AUTH_TS (timestamp)
+    const tsMatch = html.match(/AUTH_TS\s*=\s*["']([^"']+)["']/);
+    const timestamp = tsMatch ? tsMatch[1] : String(Math.floor(Date.now() / 1000));
+    
     logger.info('Got player data', { 
       channel, 
       tokenPreview: token.substring(0, 20) + '...', 
-      channelKey 
-    });
-    
-    // Step 2: Call heartbeat to establish session
-    // Heartbeat URL is on the same server as the key (e.g., zeko.kiko2.ru/heartbeat)
-    // NOTE: As of Dec 2024, only 'zeko' is reliably working (chevy returns 404)
-    const heartbeatServers = ['zeko'];
-    let sessionEstablished = false;
-    let sessionExpiry = Math.floor(Date.now() / 1000) + 3600; // Default 1 hour if not provided
-    
-    for (const server of heartbeatServers) {
-      try {
-        const hbUrl = `https://${server}.kiko2.ru/heartbeat`;
-        logger.info('Calling heartbeat', { server, channelKey });
-        
-        const hbResponse = await fetch(hbUrl, {
-          method: 'GET',
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Authorization': `Bearer ${token}`,
-            'X-Channel-Key': channelKey,
-            'Origin': 'https://epicplayplay.cfd',
-            'Referer': 'https://epicplayplay.cfd/',
-          }
-        });
-        
-        const hbText = await hbResponse.text();
-        logger.info('Heartbeat response', { server, status: hbResponse.status, response: hbText.substring(0, 100) });
-        
-        // Check if heartbeat was successful and parse expiry
-        if (hbResponse.ok && (hbText.includes('"ok"') || hbText.includes('"status":"ok"'))) {
-          sessionEstablished = true;
-          
-          // Parse expiry from response: {"expiry":1765944911,"message":"Session created","status":"ok"}
-          try {
-            const hbJson = JSON.parse(hbText);
-            if (hbJson.expiry) {
-              sessionExpiry = hbJson.expiry;
-              const expiresIn = sessionExpiry - Math.floor(Date.now() / 1000);
-              logger.info('Session established with expiry', { server, channel, expiresInSeconds: expiresIn });
-            }
-          } catch {
-            logger.warn('Could not parse heartbeat JSON, using default expiry');
-          }
-          
-          break;
-        }
-      } catch (hbError) {
-        logger.warn('Heartbeat call failed', { server, error: (hbError as Error).message });
-      }
-    }
-    
-    if (!sessionEstablished) {
-      logger.error('Failed to establish session on any server', { channel });
-    }
-    
-    // Cache the session with expiry time
-    sessionCache.set(channel, { 
-      token, 
-      hbUrl: null, 
       channelKey,
-      sessionEstablished,
-      sessionExpiry,
-      fetchedAt: Date.now() 
+      country,
+      timestamp
     });
     
-    return { token, channelKey, success: sessionEstablished };
+    // NOTE: Heartbeat calls from Cloudflare Workers are blocked (403)
+    // The heartbeat endpoint requires residential IP / browser origin
+    // Key fetching will be done via RPI proxy which handles auth internally
+    // We just need the token for the key request
+    const sessionEstablished = true; // RPI proxy will handle session
+    const sessionExpiry = Math.floor(Date.now() / 1000) + 3600; // Default 1 hour
+    
+    logger.info('Got FRESH session (no caching)', { channel, preferredServer });
+    
+    // NO CACHING - return fresh data directly
+    return { token, channelKey, country, timestamp, success: sessionEstablished };
   } catch (error) {
     logger.error('Error establishing session', error as Error);
     return null;
   }
 }
 
-/**
- * Clear session cache for a channel (call when key fetch fails with E2 error)
- */
-function clearSessionCache(channel: string) {
-  sessionCache.delete(channel);
-}
+// No session cache to clear - we don't cache sessions anymore
 
 /**
  * Extract channel number from key URL
@@ -322,32 +266,23 @@ export async function handleDLHDRequest(request: Request, env: Env): Promise<Res
 
 
 function handleHealthCheck(env: Env, origin: string | null): Response {
-  // RPI proxy is no longer required! We use session-based auth with heartbeat.
-  const hasRpiProxy = !!(env.RPI_PROXY_URL && env.RPI_PROXY_KEY);
-  
-  // Get session info for debugging
-  const sessions = Array.from(sessionCache.entries()).map(([channel, data]) => ({
-    channel,
-    hasToken: !!data.token,
-    hasHbUrl: !!data.hbUrl,
-    sessionEstablished: data.sessionEstablished,
-    ageMinutes: Math.round((Date.now() - data.fetchedAt) / 60000),
-  }));
-  
   return jsonResponse({
     status: 'healthy',
-    method: 'session-with-heartbeat',
-    description: 'DLHD keys fetched using auth token + heartbeat session',
-    rpiProxy: {
-      configured: hasRpiProxy,
-      note: 'RPI proxy is optional fallback',
-    },
-    sessionCache: {
-      size: sessionCache.size,
-      sessions,
-    },
+    method: 'fresh-auth-every-request',
+    description: 'DLHD keys fetched via RPI proxy with fresh auth token every request (no caching)',
+    rpiProxyConfigured: !!(env.RPI_PROXY_URL && env.RPI_PROXY_KEY),
     timestamp: new Date().toISOString(),
   }, 200, origin);
+}
+
+// Both CDN domains to try (some servers work on one but not the other)
+const CDN_DOMAINS = ['kiko2.ru', 'giokko.ru'];
+
+function constructM3U8UrlWithDomain(serverKey: string, channelKey: string, domain: string): string {
+  if (serverKey === 'top1/cdn') {
+    return `https://top1.${domain}/top1/cdn/${channelKey}/mono.css`;
+  }
+  return `https://${serverKey}new.${domain}/${serverKey}/${channelKey}/mono.css`;
 }
 
 async function handlePlaylistRequest(
@@ -366,89 +301,115 @@ async function handlePlaylistRequest(
   // Build list of ALL servers to try:
   // 1. First try the server from lookup (if we got one)
   // 2. Then try ALL other known servers
-  // This ensures we don't give up until we've tried everything
   const serverKeysToTry = [
     initialServerKey,
     ...ALL_SERVER_KEYS.filter(k => k !== initialServerKey)
   ];
   
-  logger.info('Will try servers in order', { servers: serverKeysToTry });
+  logger.info('Will try servers in order', { servers: serverKeysToTry, domains: CDN_DOMAINS });
   
-  const triedServers: string[] = [];
+  const triedCombinations: string[] = [];
   let lastError = '';
   
+  // Try each server with BOTH domains before moving to next server
   for (const serverKey of serverKeysToTry) {
-    triedServers.push(serverKey);
-    
-    try {
-      // Fetch M3U8 directly (no RPI proxy needed for M3U8)
-      const m3u8Url = constructM3U8Url(serverKey, channelKey);
-      logger.info('Trying M3U8 URL', { serverKey, url: m3u8Url, attempt: triedServers.length });
+    for (const domain of CDN_DOMAINS) {
+      const combo = `${serverKey}@${domain}`;
+      triedCombinations.push(combo);
       
-      const response = await fetch(`${m3u8Url}?_t=${Date.now()}`, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Referer': 'https://epicplayplay.cfd/',
-        },
-      });
-      const content = await response.text();
-      
-      if (content.includes('#EXTM3U') || content.includes('#EXT-X-')) {
-        // Valid M3U8 found - cache this server key for future requests
-        serverKeyCache.set(channelKey, {
-          serverKey,
-          playerDomain,
-          fetchedAt: Date.now(),
-        });
+      try {
+        const m3u8Url = constructM3U8UrlWithDomain(serverKey, channelKey, domain);
+        logger.info('Trying M3U8 URL', { serverKey, domain, url: m3u8Url, attempt: triedCombinations.length });
         
-        logger.info('Found working server!', { serverKey, channel, triedCount: triedServers.length });
-        
-        // Rewrite M3U8 to proxy key and segments
-        const { keyUrl, iv } = parseM3U8(content);
-        const proxiedM3U8 = generateProxiedM3U8(content, keyUrl, proxyOrigin, m3u8Url);
-        
-        // Log the key URL transformation for debugging
-        const keyLineMatch = proxiedM3U8.match(/#EXT-X-KEY[^\n]*/);
-        logger.info('M3U8 processed', { 
-          hasKey: !!keyUrl, 
-          originalKeyUrl: keyUrl?.substring(0, 80),
-          iv: iv?.substring(0, 16),
-          rewrittenKeyLine: keyLineMatch?.[0]?.substring(0, 120)
-        });
-
-        return new Response(proxiedM3U8, {
-          status: 200,
+        const response = await fetch(`${m3u8Url}?_t=${Date.now()}`, {
           headers: {
-            'Content-Type': 'application/vnd.apple.mpegurl',
-            ...corsHeaders(origin),
-            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-            'Pragma': 'no-cache',
-            'Expires': '0',
-            'X-DLHD-Channel': channel,
-            'X-DLHD-Server-Key': serverKey,
-            'X-DLHD-IV': iv || '',
-            'X-Servers-Tried': triedServers.join(','),
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Referer': 'https://epicplayplay.cfd/',
           },
         });
+        const content = await response.text();
+        
+        if (content.includes('#EXTM3U') || content.includes('#EXT-X-')) {
+          // Valid M3U8 found - cache this server key for future requests
+          serverKeyCache.set(channelKey, {
+            serverKey,
+            playerDomain,
+            fetchedAt: Date.now(),
+          });
+          
+          logger.info('Found working server!', { serverKey, domain, channel, triedCount: triedCombinations.length });
+          
+          // Rewrite M3U8 to proxy key and segments
+          // IMPORTANT: Rewrite key URL to use the SAME server that served the M3U8
+          // The M3U8 might contain a key URL pointing to a different server (e.g., chevy)
+          // but the session is established with the server that served the M3U8 (e.g., zeko)
+          const { keyUrl, iv } = parseM3U8(content);
+          const rewrittenKeyUrl = rewriteKeyUrlToServer(keyUrl, serverKey, domain);
+          const proxiedM3U8 = generateProxiedM3U8(content, keyUrl, proxyOrigin, m3u8Url, rewrittenKeyUrl);
+          
+          // Log the key URL transformation for debugging
+          const keyLineMatch = proxiedM3U8.match(/#EXT-X-KEY[^\n]*/);
+          logger.info('M3U8 processed', { 
+            hasKey: !!keyUrl, 
+            originalKeyUrl: keyUrl?.substring(0, 80),
+            rewrittenKeyUrl: rewrittenKeyUrl?.substring(0, 80),
+            iv: iv?.substring(0, 16),
+            rewrittenKeyLine: keyLineMatch?.[0]?.substring(0, 120)
+          });
+
+          return new Response(proxiedM3U8, {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/vnd.apple.mpegurl',
+              ...corsHeaders(origin),
+              'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+              'Pragma': 'no-cache',
+              'Expires': '0',
+              'X-DLHD-Channel': channel,
+              'X-DLHD-Server-Key': serverKey,
+              'X-DLHD-Domain': domain,
+              'X-DLHD-IV': iv || '',
+              'X-Combinations-Tried': triedCombinations.length.toString(),
+            },
+          });
+        }
+        
+        lastError = `Invalid M3U8 from ${serverKey}@${domain}: ${content.substring(0, 100)}`;
+        logger.warn('Invalid M3U8 content', { serverKey, domain, status: response.status, preview: content.substring(0, 50) });
+      } catch (err) {
+        lastError = `Error from ${serverKey}@${domain}: ${(err as Error).message}`;
+        logger.warn('M3U8 fetch failed', { serverKey, domain, error: (err as Error).message });
       }
-      
-      lastError = `Invalid M3U8 from ${serverKey}: ${content.substring(0, 100)}`;
-      logger.warn('Invalid M3U8 content, trying next server', { serverKey, status: response.status, preview: content.substring(0, 50) });
-    } catch (err) {
-      lastError = `Error from ${serverKey}: ${(err as Error).message}`;
-      logger.warn('M3U8 fetch failed, trying next server', { serverKey, error: (err as Error).message });
     }
   }
   
-  // ALL servers failed - this is bad
-  logger.error('ALL servers failed!', { channel, triedServers, lastError });
+  // ALL server/domain combinations failed
+  logger.error('ALL combinations failed!', { channel, triedCombinations, lastError });
   return jsonResponse({ 
     error: 'Failed to fetch M3U8 from any server', 
     details: lastError,
-    triedServers,
-    totalServersTried: triedServers.length,
-    hint: 'All known DLHD servers returned errors. The channel may be offline or DLHD infrastructure may have changed.',
+    triedCombinations,
+    totalCombinationsTried: triedCombinations.length,
+    hint: 'All known DLHD server/domain combinations returned errors. The channel may be offline or DLHD infrastructure may have changed.',
   }, 502, origin);
+}
+
+/**
+ * Extract server and domain from key URL
+ * e.g., https://zeko.kiko2.ru/key/premium51/5886978 -> { server: 'zeko', domain: 'kiko2.ru' }
+ */
+function extractServerFromKeyUrl(keyUrl: string): { server: string; domain: string } | null {
+  try {
+    const url = new URL(keyUrl);
+    const hostname = url.hostname; // e.g., zeko.kiko2.ru
+    const parts = hostname.split('.');
+    if (parts.length >= 3) {
+      const server = parts[0]; // zeko
+      const domain = parts.slice(1).join('.'); // kiko2.ru
+      return { server, domain };
+    }
+  } catch {}
+  return null;
 }
 
 async function handleKeyProxy(url: URL, env: Env, logger: any, origin: string | null): Promise<Response> {
@@ -467,103 +428,165 @@ async function handleKeyProxy(url: URL, env: Env, logger: any, origin: string | 
     
     logger.info('Key proxy request', { keyUrl: keyUrl.substring(0, 80) });
     
-    // Extract channel from key URL
+    // Extract channel and server info
     const channel = extractChannelFromKeyUrl(keyUrl);
+    const serverInfo = extractServerFromKeyUrl(keyUrl);
+    
     if (!channel) {
-      logger.warn('Could not extract channel from key URL', { keyUrl });
-      return jsonResponse({ error: 'Invalid key URL format' }, 400, origin);
+      return jsonResponse({ error: 'Could not extract channel from key URL' }, 400, origin);
     }
     
-    // Get session for this channel (includes heartbeat)
-    const session = await getSessionForChannel(channel, logger);
-    if (!session || !session.success) {
-      logger.error('Failed to establish session', { channel });
-      return jsonResponse({ 
-        error: 'Failed to establish session',
-        channel,
-        hint: 'Could not fetch auth token or establish heartbeat session. The heartbeat endpoint may have changed.',
-      }, 502, origin);
+    if (!serverInfo) {
+      return jsonResponse({ error: 'Could not extract server from key URL' }, 400, origin);
     }
     
-    // Fetch key with Authorization header and X-Channel-Key
-    logger.info('Fetching key with session', { channel, channelKey: session.channelKey, tokenPreview: session.token.substring(0, 20) + '...' });
+    // Get session (auth token) for this channel
+    const session = await getSessionForChannel(channel, logger, serverInfo.server);
+    if (!session) {
+      logger.error('Failed to get session for key fetch', { channel });
+      return jsonResponse({ error: 'Failed to get auth token for channel' }, 502, origin);
+    }
     
-    const keyResponse = await fetch(keyUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': '*/*',
-        'Origin': 'https://epicplayplay.cfd',
-        'Referer': 'https://epicplayplay.cfd/',
-        'Authorization': `Bearer ${session.token}`,
-        'X-Channel-Key': session.channelKey,
-      },
+    // Generate CLIENT_TOKEN for authentication
+    const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+    const clientToken = generateClientToken(session.channelKey, session.country, session.timestamp, userAgent);
+    
+    logger.info('Generated client token', { 
+      channelKey: session.channelKey,
+      country: session.country,
+      timestamp: session.timestamp,
+      clientTokenPreview: clientToken.substring(0, 30) + '...'
     });
     
-    const keyData = await keyResponse.arrayBuffer();
-    const keyText = new TextDecoder().decode(keyData);
+    // Step 1: Call heartbeat via RPI proxy (residential IP required)
+    // The heartbeat endpoint blocks datacenter IPs (returns anti-bot challenge)
+    // RPI proxy has /heartbeat endpoint that handles auth and CLIENT_TOKEN
+    logger.info('Calling heartbeat via RPI proxy', { channel, server: 'chevy' });
     
-    // Check for E2 error (session not established)
-    if (keyText.includes('"E2"') || keyText.includes('heartbeat')) {
-      // Clear session cache and retry once
-      logger.warn('Got E2 error, clearing session and retrying', { channel, response: keyText });
-      clearSessionCache(channel);
-      
-      // Retry with fresh session
-      const freshSession = await getSessionForChannel(channel, logger);
-      if (freshSession && freshSession.success) {
-        const retryResponse = await fetch(keyUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': '*/*',
-            'Origin': 'https://epicplayplay.cfd',
-            'Referer': 'https://epicplayplay.cfd/',
-            'Authorization': `Bearer ${freshSession.token}`,
-            'X-Channel-Key': freshSession.channelKey,
-          },
+    let hbSuccess = false;
+    let hbStatus = 0;
+    let hbResponseText = '';
+    
+    if (env.RPI_PROXY_URL && env.RPI_PROXY_KEY) {
+      try {
+        let rpiBaseUrl = env.RPI_PROXY_URL;
+        if (!rpiBaseUrl.startsWith('http://') && !rpiBaseUrl.startsWith('https://')) {
+          rpiBaseUrl = `http://${rpiBaseUrl}`;
+        }
+        
+        const hbProxyUrl = `${rpiBaseUrl}/heartbeat?channel=${channel}&server=chevy&domain=kiko2.ru`;
+        const hbResponse = await fetch(hbProxyUrl, {
+          headers: { 'X-API-Key': env.RPI_PROXY_KEY },
         });
         
-        const retryData = await retryResponse.arrayBuffer();
-        if (retryData.byteLength === 16) {
-          const retryText = new TextDecoder().decode(retryData);
-          if (!retryText.includes('error') && !retryText.includes('"E')) {
-            logger.info('Key fetched successfully after retry', { size: retryData.byteLength, channel });
-            return new Response(retryData, {
-              status: 200,
-              headers: {
-                'Content-Type': 'application/octet-stream',
-                'Content-Length': '16',
-                ...corsHeaders(origin),
-                'Cache-Control': 'private, max-age=30',
-                'X-Fetched-By': 'session-with-heartbeat-retry',
-              },
-            });
-          }
-        }
+        hbStatus = hbResponse.status;
+        hbResponseText = await hbResponse.text();
+        hbSuccess = hbResponse.ok && hbResponseText.includes('"success":true');
+        logger.info('Heartbeat via RPI proxy', { status: hbStatus, success: hbSuccess, response: hbResponseText.substring(0, 150) });
+      } catch (hbError) {
+        logger.warn('Heartbeat via RPI proxy failed', { error: (hbError as Error).message });
       }
+    } else {
+      logger.warn('RPI proxy not configured - heartbeat will fail, key fetch will return E2');
+    }
+    
+    if (!hbSuccess) {
+      logger.warn('Heartbeat failed - key fetch may fail with E2', { hbStatus, hbResponse: hbResponseText.substring(0, 100) });
+    }
+    
+    // Step 2: Fetch key via RPI proxy (CRITICAL: session is IP-bound!)
+    // The heartbeat session is bound to RPI's residential IP, so the key fetch
+    // MUST also come from RPI's IP. Fetching directly from CF Worker fails
+    // because the key server sees a different IP than the heartbeat session.
+    logger.info('Fetching key via RPI proxy (session is IP-bound)', { 
+      channel, 
+      server: serverInfo.server,
+      keyUrl: keyUrl.substring(0, 80)
+    });
+    
+    let keyData: ArrayBuffer;
+    let keyText: string;
+    
+    if (env.RPI_PROXY_URL && env.RPI_PROXY_KEY) {
+      try {
+        let rpiBaseUrl = env.RPI_PROXY_URL;
+        if (!rpiBaseUrl.startsWith('http://') && !rpiBaseUrl.startsWith('https://')) {
+          rpiBaseUrl = `https://${rpiBaseUrl}`;
+        }
+        
+        // Use /proxy endpoint which handles key auth internally via fetchKeyWithAuth()
+        const keyProxyUrl = `${rpiBaseUrl}/proxy?url=${encodeURIComponent(keyUrl)}`;
+        const keyResponse = await fetch(keyProxyUrl, {
+          headers: { 'X-API-Key': env.RPI_PROXY_KEY },
+        });
+        
+        keyData = await keyResponse.arrayBuffer();
+        keyText = new TextDecoder().decode(keyData);
+        
+        logger.info('Key response via RPI proxy', { 
+          status: keyResponse.status, 
+          size: keyData.byteLength,
+          preview: keyText.substring(0, 50)
+        });
+      } catch (rpiError) {
+        logger.error('RPI proxy key fetch failed', rpiError as Error);
+        return jsonResponse({
+          error: 'RPI proxy key fetch failed',
+          message: rpiError instanceof Error ? rpiError.message : String(rpiError),
+        }, 502, origin);
+      }
+    } else {
+      // Fallback to direct fetch (will likely fail with E2)
+      logger.warn('RPI proxy not configured - falling back to direct fetch (may fail)');
       
-      // Retry failed too
+      const keyResponse = await fetch(keyUrl, {
+        headers: {
+          'User-Agent': userAgent,
+          'Accept': '*/*',
+          'Origin': 'https://epicplayplay.cfd',
+          'Referer': 'https://epicplayplay.cfd/',
+          'Authorization': `Bearer ${session.token}`,
+          'X-Channel-Key': session.channelKey,
+          'X-Client-Token': clientToken,
+          'X-User-Agent': userAgent,
+        },
+      });
+      
+      keyData = await keyResponse.arrayBuffer();
+      keyText = new TextDecoder().decode(keyData);
+    }
+    
+    // Check for E2 error (session not established)
+    if (keyText.includes('"E2"') || keyText.includes('Session must be created')) {
+      logger.warn('E2 error - heartbeat failed to establish session', { channel, hbStatus });
       return jsonResponse({ 
-        error: 'Session establishment failed',
+        error: 'Session not established (E2)',
+        hint: 'Heartbeat was called but session not established. Server may be blocking CF IPs.',
+        heartbeatStatus: hbStatus,
+        heartbeatResponse: hbResponseText.substring(0, 100),
         response: keyText,
-        hint: 'DLHD requires heartbeat session - check if HB_URL is available',
       }, 502, origin);
     }
     
-    // Check if we got a valid key
+    // Check for E3 error (token expired)
+    if (keyText.includes('"E3"') || keyText.includes('Token expired')) {
+      logger.warn('E3 error - token expired', { channel });
+      return jsonResponse({ 
+        error: 'Token expired (E3)',
+        hint: 'Auth token expired. Retry to get fresh token.',
+        response: keyText,
+      }, 502, origin);
+    }
+    
+    // Check if we got a valid key (AES-128 keys are exactly 16 bytes)
     if (keyData.byteLength === 16) {
-      if (keyText.includes('error') || keyText.includes('"E')) {
-        // Token might be expired, clear cache
-        clearSessionCache(channel);
-        logger.error('Key server returned error', { response: keyText, channel });
-        return jsonResponse({ 
-          error: 'Key server returned error',
-          response: keyText,
-          hint: 'Session may be expired, will retry with fresh session',
-        }, 502, origin);
+      // Make sure it's not JSON error that happens to be 16 bytes
+      if (keyText.startsWith('{') || keyText.startsWith('[')) {
+        logger.error('Got JSON error instead of key', { response: keyText });
+        return jsonResponse({ error: 'Key server returned error', response: keyText }, 502, origin);
       }
       
-      // Valid 16-byte key!
-      logger.info('Key fetched successfully', { size: keyData.byteLength, channel });
+      logger.info('Key fetched successfully via RPI proxy', { size: keyData.byteLength, channel, server: serverInfo.server });
       return new Response(keyData, {
         status: 200,
         headers: {
@@ -571,18 +594,20 @@ async function handleKeyProxy(url: URL, env: Env, logger: any, origin: string | 
           'Content-Length': '16',
           ...corsHeaders(origin),
           'Cache-Control': 'private, max-age=30',
-          'X-Fetched-By': 'session-with-heartbeat',
+          'X-Fetched-By': 'rpi-proxy-residential',
         },
       });
     }
     
-    // Invalid key size
-    logger.warn('Invalid key size', { size: keyData.byteLength, status: keyResponse.status });
+    // Invalid key size - might be an error response
+    logger.warn('Invalid key size', { size: keyData.byteLength, preview: keyText.substring(0, 100) });
     return jsonResponse({ 
       error: 'Invalid key data', 
       size: keyData.byteLength,
       expected: 16,
       preview: keyText.substring(0, 200),
+      heartbeatStatus: hbStatus,
+      heartbeatResponse: hbResponseText.substring(0, 100),
     }, 502, origin);
     
   } catch (error) {
@@ -750,43 +775,75 @@ function parseM3U8(content: string): { keyUrl: string | null; iv: string | null 
 }
 
 /**
+ * Rewrite key URL to ALWAYS use chevy.kiko2.ru
+ * 
+ * IMPORTANT: Only chevy.kiko2.ru has a working heartbeat endpoint!
+ * Other servers (zeko, wind, nfs, ddy6) return 404 for /heartbeat.
+ * Since we need heartbeat to establish session before fetching keys,
+ * we MUST use chevy for all key requests.
+ * 
+ * Example:
+ *   Original: https://zeko.giokko.ru/key/premium51/5886978
+ *   Rewritten: https://chevy.kiko2.ru/key/premium51/5886978
+ */
+function rewriteKeyUrlToServer(keyUrl: string | null, _serverKey: string, _domain: string): string | null {
+  if (!keyUrl) return null;
+  
+  // Extract the path part (e.g., /key/premium51/5886978)
+  const pathMatch = keyUrl.match(/\/key\/premium\d+\/\d+/);
+  if (!pathMatch) return keyUrl; // Can't parse, return original
+  
+  // ALWAYS use chevy.kiko2.ru - it's the only server with working heartbeat
+  return `https://chevy.kiko2.ru${pathMatch[0]}`;
+}
+
+/**
  * Generate proxied M3U8 with key and segment URLs rewritten to go through our proxy
  * 
  * @param originalM3U8 - The original M3U8 content
  * @param keyUrl - The extracted key URL (may be relative or absolute)
  * @param proxyOrigin - The origin of our proxy (e.g., https://cf-worker.example.com)
  * @param m3u8BaseUrl - The base URL of the original M3U8 (for resolving relative URLs)
+ * @param rewrittenKeyUrl - The key URL rewritten to use the correct server (optional)
  */
 function generateProxiedM3U8(
   originalM3U8: string, 
-  keyUrl: string | null, 
+  _keyUrl: string | null, 
   proxyOrigin: string,
-  m3u8BaseUrl?: string
+  m3u8BaseUrl?: string,
+  _rewrittenKeyUrl?: string | null
 ): string {
   let modified = originalM3U8;
 
-  // Proxy the key URL (MUST go through RPI proxy)
-  if (keyUrl) {
-    // Resolve relative key URLs to absolute
-    let absoluteKeyUrl = keyUrl;
-    if (!keyUrl.startsWith('http://') && !keyUrl.startsWith('https://')) {
+  // Rewrite ALL key URLs in the M3U8 to go through our proxy
+  // Live streams can have multiple #EXT-X-KEY tags with different key IDs
+  // We need to rewrite ALL of them, not just the first one
+  // Also, ALWAYS rewrite to use chevy.kiko2.ru since it's the only server with working heartbeat
+  modified = modified.replace(/URI="([^"]+)"/g, (match, originalKeyUrl) => {
+    let absoluteKeyUrl = originalKeyUrl;
+    
+    // Resolve relative URLs
+    if (!absoluteKeyUrl.startsWith('http://') && !absoluteKeyUrl.startsWith('https://')) {
       if (m3u8BaseUrl) {
-        // Resolve relative URL against M3U8 base URL
         try {
           const base = new URL(m3u8BaseUrl);
-          absoluteKeyUrl = new URL(keyUrl, base.origin + base.pathname.replace(/\/[^/]*$/, '/')).toString();
+          absoluteKeyUrl = new URL(absoluteKeyUrl, base.origin + base.pathname.replace(/\/[^/]*$/, '/')).toString();
         } catch {
-          // If URL parsing fails, try simple concatenation
           const baseWithoutFile = m3u8BaseUrl.replace(/\/[^/]*$/, '/');
-          absoluteKeyUrl = baseWithoutFile + keyUrl;
+          absoluteKeyUrl = baseWithoutFile + absoluteKeyUrl;
         }
       }
     }
     
+    // Rewrite key URL to use chevy.kiko2.ru (only server with working heartbeat)
+    const keyPathMatch = absoluteKeyUrl.match(/\/key\/premium\d+\/\d+/);
+    if (keyPathMatch) {
+      absoluteKeyUrl = `https://chevy.kiko2.ru${keyPathMatch[0]}`;
+    }
+    
     const proxiedKeyUrl = `${proxyOrigin}/dlhd/key?url=${encodeURIComponent(absoluteKeyUrl)}`;
-    // Simple replacement - just replace the original key URL with the proxied one
-    modified = modified.replace(`URI="${keyUrl}"`, `URI="${proxiedKeyUrl}"`);
-  }
+    return `URI="${proxiedKeyUrl}"`;
+  });
 
   // Remove ENDLIST for live streams
   modified = modified.replace(/\n?#EXT-X-ENDLIST\s*$/m, '');
@@ -804,9 +861,15 @@ function generateProxiedM3U8(
     
     // Check if it's a segment URL (absolute or relative)
     const isAbsoluteUrl = trimmed.startsWith('http://') || trimmed.startsWith('https://');
+    
+    // DLHD segment URLs are base64-encoded paths on giokko.ru/kiko2.ru domains
+    // They DON'T end in .ts - they're long encoded strings like:
+    // https://chevy.giokko.ru/X0VASEVfSxdQB1oeUF9LVwtCBgVBRBlbXQkcVRBHAAJfXFFWQhZLCQ...
+    const isDlhdSegment = trimmed.includes('.giokko.ru/') || trimmed.includes('.kiko2.ru/');
     const isSegmentFile = trimmed.endsWith('.ts') || trimmed.includes('.ts?') || 
                           trimmed.includes('redirect.giokko.ru') || 
-                          trimmed.includes('whalesignal.ai');
+                          trimmed.includes('whalesignal.ai') ||
+                          isDlhdSegment;
     
     if (isAbsoluteUrl && isSegmentFile) {
       // Don't proxy the M3U8 playlist URL itself

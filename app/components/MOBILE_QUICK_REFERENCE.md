@@ -382,6 +382,61 @@ input {
 }
 ```
 
+## Mobile Video Player
+
+### Usage
+
+```tsx
+import MobileVideoPlayer from '@/app/components/player/MobileVideoPlayer';
+
+<MobileVideoPlayer
+  tmdbId="12345"
+  mediaType="movie"
+  title="Movie Title"
+  streamUrl="https://..."
+  onBack={() => router.back()}
+  onError={(error) => console.error(error)}
+/>
+```
+
+### Gestures
+
+| Gesture | Action |
+|---------|--------|
+| Single tap | Toggle controls |
+| Double tap left | Rewind 10s |
+| Double tap right | Forward 10s |
+| Horizontal swipe | Seek through video |
+| Vertical swipe (left) | Adjust brightness |
+| Vertical swipe (right) | Adjust volume |
+
+### Features
+
+- Native HLS on iOS Safari (better battery/performance)
+- HLS.js on Android with optimized config
+- Automatic quality adaptation
+- Picture-in-Picture support
+- Fullscreen with orientation lock
+- Safe area handling for notched devices
+- Reduced motion support
+
+### iOS-Specific
+
+```tsx
+// iOS uses native HLS - no HLS.js needed
+// Fullscreen uses webkitEnterFullscreen on video element
+// AirPlay supported via x-webkit-airplay attribute
+```
+
+### Android-Specific
+
+```tsx
+// Uses HLS.js with mobile-optimized config
+// Smaller buffers for faster start
+// Conservative bandwidth estimation
+// Orientation lock on fullscreen
+```
+
 ## Resources
 
 - [Full Guide](./MOBILE_OPTIMIZATION_GUIDE.md)

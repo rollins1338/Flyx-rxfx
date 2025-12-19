@@ -1,0 +1,332 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import dynamic from 'next/dynamic';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { getStreamProxyUrl } from '@/app/lib/proxy-config';
+
+// Dynamically import players to reduce initial bundle size
+const DesktopVideoPlayer = dynamic(
+  () => import('./VideoPlayer'),
+  { 
+    ssr: false,
+    loading: () => <PlayerLoadingState message="Loading player..." />
+  }
+);
+
+const MobileVideoPlayer = dynamic(
+  () => import('./MobileVideoPlayer'),
+  { 
+    ssr: false,
+    loading: () => <PlayerLoadingState message="Loading player..." />
+  }
+);
+
+// Loading state component
+function PlayerLoadingState({ message }: { message: string }) {
+  return (
+    <div style={{
+      position: 'absolute',
+      inset: 0,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: '#000',
+      color: 'white',
+      gap: '1rem',
+    }}>
+      <div style={{
+        width: '48px',
+        height: '48px',
+        border: '3px solid rgba(255, 255, 255, 0.2)',
+        borderTopColor: '#e50914',
+        borderRadius: '50%',
+        animation: 'spin 0.8s linear infinite',
+      }} />
+      <p style={{ fontSize: '0.9rem', color: 'rgba(255, 255, 255, 0.8)' }}>{message}</p>
+      <style jsx>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+interface VideoPlayerWrapperProps {
+  tmdbId: string;
+  mediaType: 'movie' | 'tv';
+  season?: number;
+  episode?: number;
+  title?: string;
+  nextEpisode?: {
+    season: number;
+    episode: number;
+    title?: string;
+    isNextSeason?: boolean;
+  } | null;
+  onNextEpisode?: () => void;
+  onBack?: () => void;
+  autoplay?: boolean;
+  malId?: number;
+  malTitle?: string;
+  // Force a specific player mode (for testing)
+  forceMode?: 'mobile' | 'desktop';
+}
+
+export default function VideoPlayerWrapper(props: VideoPlayerWrapperProps) {
+  const mobileInfo = useIsMobile();
+  const [streamData, setStreamData] = useState<{
+    url: string;
+    sources: Array<{ title: string; url: string; quality?: string; requiresSegmentProxy?: boolean }>;
+    currentIndex: number;
+    provider: string;
+  } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const { tmdbId, mediaType, season, episode, forceMode, malId, malTitle } = props;
+
+  // Determine if we should use mobile player
+  const useMobilePlayer = forceMode === 'mobile' || 
+    (forceMode !== 'desktop' && mobileInfo.isMobile && mobileInfo.screenWidth < 1024);
+
+  // Fetch stream sources
+  const fetchSources = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Check provider availability first
+      const providersRes = await fetch('/api/providers');
+      const providersData = await providersRes.json();
+      
+      const availability = {
+        vidsrc: providersData.providers?.vidsrc?.enabled ?? false,
+        '1movies': providersData.providers?.['1movies']?.enabled ?? true,
+        videasy: providersData.providers?.videasy?.enabled ?? true,
+        animekai: providersData.providers?.animekai?.enabled ?? true,
+      };
+
+      // Check if anime content
+      let isAnime = false;
+      try {
+        const animeRes = await fetch(`/api/content/check-anime?tmdbId=${tmdbId}&type=${mediaType}`);
+        if (animeRes.ok) {
+          const animeData = await animeRes.json();
+          isAnime = animeData.isAnime === true;
+        }
+      } catch (e) {
+        console.warn('[VideoPlayerWrapper] Anime check failed:', e);
+      }
+
+      // Build provider order
+      const providerOrder: string[] = [];
+      if (isAnime && availability.animekai) providerOrder.push('animekai');
+      if (availability.vidsrc) providerOrder.push('vidsrc');
+      if (availability['1movies']) providerOrder.push('1movies');
+      providerOrder.push('videasy');
+
+      // Try each provider
+      for (const provider of providerOrder) {
+        const params = new URLSearchParams({
+          tmdbId,
+          type: mediaType,
+          provider,
+        });
+
+        if (mediaType === 'tv' && season && episode) {
+          params.append('season', season.toString());
+          params.append('episode', episode.toString());
+        }
+        
+        if (malId) params.append('malId', malId.toString());
+        if (malTitle) params.append('malTitle', malTitle);
+
+        try {
+          const response = await fetch(`/api/stream/extract?${params}`, {
+            cache: 'no-store',
+          });
+          const data = await response.json();
+
+          if (data.sources && data.sources.length > 0) {
+            const sources = data.sources;
+            const actualProvider = data.provider || provider;
+            
+            // Get the first source URL
+            let sourceUrl = sources[0].url;
+            
+            // Apply proxy if needed
+            if (sources[0].requiresSegmentProxy) {
+              const isAlreadyProxied = sourceUrl.includes('/api/stream-proxy') || 
+                sourceUrl.includes('/stream/') ||
+                sourceUrl.includes('/animekai');
+              
+              if (!isAlreadyProxied) {
+                sourceUrl = getStreamProxyUrl(
+                  sources[0].directUrl || sourceUrl,
+                  actualProvider,
+                  sources[0].referer || ''
+                );
+              }
+            }
+
+            setStreamData({
+              url: sourceUrl,
+              sources: sources.map((s: any) => ({
+                title: s.title || s.quality || 'Source',
+                url: s.url,
+                quality: s.quality,
+                requiresSegmentProxy: s.requiresSegmentProxy,
+              })),
+              currentIndex: 0,
+              provider: actualProvider,
+            });
+            setIsLoading(false);
+            return;
+          }
+        } catch (e) {
+          console.warn(`[VideoPlayerWrapper] ${provider} failed:`, e);
+        }
+      }
+
+      // All providers failed
+      setError('No streams available. Please try again later.');
+      setIsLoading(false);
+    } catch (e) {
+      console.error('[VideoPlayerWrapper] Error fetching sources:', e);
+      setError('Failed to load video. Please try again.');
+      setIsLoading(false);
+    }
+  }, [tmdbId, mediaType, season, episode, malId, malTitle]);
+
+  // Fetch sources on mount
+  useEffect(() => {
+    fetchSources();
+  }, [fetchSources]);
+
+  // Handle source change
+  const handleSourceChange = useCallback((index: number) => {
+    if (!streamData || index >= streamData.sources.length) return;
+
+    const source = streamData.sources[index];
+    let sourceUrl = source.url;
+
+    // Apply proxy if needed
+    if (source.requiresSegmentProxy) {
+      const isAlreadyProxied = sourceUrl.includes('/api/stream-proxy') || 
+        sourceUrl.includes('/stream/') ||
+        sourceUrl.includes('/animekai');
+      
+      if (!isAlreadyProxied) {
+        sourceUrl = getStreamProxyUrl(
+          sourceUrl,
+          streamData.provider,
+          ''
+        );
+      }
+    }
+
+    setStreamData(prev => prev ? {
+      ...prev,
+      url: sourceUrl,
+      currentIndex: index,
+    } : null);
+  }, [streamData]);
+
+  // Handle errors from player
+  const handlePlayerError = useCallback((errorMsg: string) => {
+    console.error('[VideoPlayerWrapper] Player error:', errorMsg);
+    
+    // Try next source if available
+    if (streamData && streamData.currentIndex < streamData.sources.length - 1) {
+      handleSourceChange(streamData.currentIndex + 1);
+    } else {
+      setError(errorMsg);
+    }
+  }, [streamData, handleSourceChange]);
+
+  // Loading state
+  if (isLoading) {
+    return <PlayerLoadingState message="Finding best source..." />;
+  }
+
+  // Error state
+  if (error || !streamData) {
+    return (
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#000',
+        color: 'white',
+        gap: '1rem',
+        padding: '2rem',
+        textAlign: 'center',
+      }}>
+        <div style={{ fontSize: '3rem' }}>⚠️</div>
+        <h3 style={{ margin: 0, fontSize: '1.25rem' }}>Playback Error</h3>
+        <p style={{ margin: 0, color: 'rgba(255, 255, 255, 0.7)', maxWidth: '300px' }}>
+          {error || 'Failed to load video'}
+        </p>
+        <button
+          onClick={fetchSources}
+          style={{
+            padding: '0.75rem 2rem',
+            background: '#e50914',
+            border: 'none',
+            borderRadius: '8px',
+            color: 'white',
+            fontSize: '1rem',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  // Render appropriate player
+  if (useMobilePlayer) {
+    return (
+      <MobileVideoPlayer
+        tmdbId={props.tmdbId}
+        mediaType={props.mediaType}
+        season={props.season}
+        episode={props.episode}
+        title={props.title}
+        streamUrl={streamData.url}
+        onBack={props.onBack}
+        onError={handlePlayerError}
+        onSourceChange={handleSourceChange}
+        availableSources={streamData.sources}
+        currentSourceIndex={streamData.currentIndex}
+        nextEpisode={props.nextEpisode}
+        onNextEpisode={props.onNextEpisode}
+      />
+    );
+  }
+
+  // Desktop player - pass all original props
+  return (
+    <DesktopVideoPlayer
+      tmdbId={props.tmdbId}
+      mediaType={props.mediaType}
+      season={props.season}
+      episode={props.episode}
+      title={props.title}
+      nextEpisode={props.nextEpisode}
+      onNextEpisode={props.onNextEpisode}
+      onBack={props.onBack}
+      autoplay={props.autoplay}
+      malId={props.malId}
+      malTitle={props.malTitle}
+    />
+  );
+}
