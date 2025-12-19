@@ -3,10 +3,26 @@
 import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import styles from './WatchPage.module.css';
 
-const VideoPlayer = dynamic(
+// Desktop video player
+const DesktopVideoPlayer = dynamic(
   () => import('../../../components/player/VideoPlayer'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className={styles.loading}>
+        <div className={styles.spinner} />
+        <p>Loading player...</p>
+      </div>
+    )
+  }
+);
+
+// Mobile-optimized video player
+const MobileVideoPlayer = dynamic(
+  () => import('../../../components/player/MobileVideoPlayer'),
   {
     ssr: false,
     loading: () => (
@@ -47,6 +63,7 @@ function WatchContent() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
+  const mobileInfo = useIsMobile();
 
   const contentId = params.id as string;
   const mediaType = searchParams.get('type') as 'movie' | 'tv';
@@ -66,8 +83,29 @@ function WatchContent() {
   const seasonId = season ? parseInt(season) : undefined;
   const episodeId = episode ? parseInt(episode) : undefined;
 
+  // Determine if we should use mobile player (mobile device OR small screen)
+  const useMobilePlayer = mobileInfo.isMobile || mobileInfo.screenWidth < 768;
+  
+  // Debug log for mobile detection
+  useEffect(() => {
+    console.log('[WatchPage] Mobile detection:', {
+      isMobile: mobileInfo.isMobile,
+      isIOS: mobileInfo.isIOS,
+      isAndroid: mobileInfo.isAndroid,
+      screenWidth: mobileInfo.screenWidth,
+      useMobilePlayer,
+    });
+  }, [mobileInfo, useMobilePlayer]);
+
   const [nextEpisode, setNextEpisode] = useState<NextEpisodeInfo | null>(null);
   const [, setIsLoadingNextEpisode] = useState(false);
+  
+  // Mobile player state
+  const [mobileStreamUrl, setMobileStreamUrl] = useState<string | null>(null);
+  const [mobileSources, setMobileSources] = useState<Array<{ title: string; url: string; quality?: string }>>([]);
+  const [mobileSourceIndex, setMobileSourceIndex] = useState(0);
+  const [mobileLoading, setMobileLoading] = useState(true);
+  const [mobileError, setMobileError] = useState<string | null>(null);
 
   // Fetch season data to determine next episode
   const fetchNextEpisodeInfo = useCallback(async () => {
@@ -250,6 +288,79 @@ function WatchContent() {
     fetchNextEpisodeInfo();
   }, [fetchNextEpisodeInfo]);
 
+  // Fetch stream URL for mobile player
+  const fetchMobileStream = useCallback(async () => {
+    if (!useMobilePlayer || !contentId || !mediaType) return;
+    
+    setMobileLoading(true);
+    setMobileError(null);
+    
+    try {
+      // Build provider order
+      const providerOrder = ['videasy', '1movies'];
+      
+      for (const provider of providerOrder) {
+        const params = new URLSearchParams({
+          tmdbId: contentId,
+          type: mediaType,
+          provider,
+        });
+
+        if (mediaType === 'tv' && seasonId && episodeId) {
+          params.append('season', seasonId.toString());
+          params.append('episode', episodeId.toString());
+        }
+        
+        if (malId) params.append('malId', malId);
+        if (malTitle) params.append('malTitle', malTitle);
+
+        try {
+          const response = await fetch(`/api/stream/extract?${params}`, { cache: 'no-store' });
+          const data = await response.json();
+
+          if (data.sources && data.sources.length > 0) {
+            const sources = data.sources.map((s: any) => ({
+              title: s.title || s.quality || 'Source',
+              url: s.url,
+              quality: s.quality,
+            }));
+            
+            setMobileSources(sources);
+            setMobileStreamUrl(sources[0].url);
+            setMobileSourceIndex(0);
+            setMobileLoading(false);
+            console.log('[WatchPage] Mobile stream loaded:', sources[0].url?.substring(0, 50));
+            return;
+          }
+        } catch (e) {
+          console.warn(`[WatchPage] ${provider} failed:`, e);
+        }
+      }
+
+      setMobileError('No streams available');
+      setMobileLoading(false);
+    } catch (e) {
+      console.error('[WatchPage] Error fetching mobile stream:', e);
+      setMobileError('Failed to load video');
+      setMobileLoading(false);
+    }
+  }, [useMobilePlayer, contentId, mediaType, seasonId, episodeId, malId, malTitle]);
+
+  // Fetch mobile stream when needed
+  useEffect(() => {
+    if (useMobilePlayer) {
+      fetchMobileStream();
+    }
+  }, [useMobilePlayer, fetchMobileStream]);
+
+  // Handle mobile source change
+  const handleMobileSourceChange = useCallback((index: number) => {
+    if (index >= 0 && index < mobileSources.length) {
+      setMobileSourceIndex(index);
+      setMobileStreamUrl(mobileSources[index].url);
+    }
+  }, [mobileSources]);
+
   // Debug: Log when nextEpisode changes
   useEffect(() => {
     console.log('[WatchPage] nextEpisode state updated:', nextEpisode);
@@ -340,6 +451,67 @@ function WatchContent() {
     isNextSeason: nextEpisode.isNextSeason,
   } : null;
 
+  // Mobile player rendering
+  if (useMobilePlayer) {
+    // Show loading state for mobile
+    if (mobileLoading) {
+      return (
+        <div className={styles.container} data-tv-skip-navigation="true">
+          <div className={styles.playerWrapper}>
+            <div className={styles.loading}>
+              <div className={styles.spinner} />
+              <p>Finding best source...</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Show error state for mobile
+    if (mobileError || !mobileStreamUrl) {
+      return (
+        <div className={styles.container} data-tv-skip-navigation="true">
+          <div className={styles.playerWrapper}>
+            <div className={styles.error}>
+              <h2>Playback Error</h2>
+              <p>{mobileError || 'Failed to load video'}</p>
+              <button onClick={fetchMobileStream} className={styles.backButton}>
+                Retry
+              </button>
+              <button onClick={handleBack} className={styles.backButton}>
+                Go Back
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className={styles.container} data-tv-skip-navigation="true">
+        <div className={styles.playerWrapper}>
+          <MobileVideoPlayer
+            key={`mobile-${contentId}-${seasonId}-${episodeId}`}
+            tmdbId={contentId}
+            mediaType={mediaType}
+            season={seasonId}
+            episode={episodeId}
+            title={title}
+            streamUrl={mobileStreamUrl}
+            onBack={handleBack}
+            onError={(err) => setMobileError(err)}
+            onSourceChange={handleMobileSourceChange}
+            availableSources={mobileSources}
+            currentSourceIndex={mobileSourceIndex}
+            nextEpisode={nextEpisodeProp}
+            onNextEpisode={handleNextEpisode}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop player rendering
   return (
     <div className={styles.container} data-tv-skip-navigation="true">
       <div className={styles.playerWrapper}>
@@ -347,7 +519,7 @@ function WatchContent() {
           ← Back
         </button>
 
-        <VideoPlayer
+        <DesktopVideoPlayer
           key={`${contentId}-${seasonId}-${episodeId}`}
           tmdbId={contentId}
           mediaType={mediaType}
