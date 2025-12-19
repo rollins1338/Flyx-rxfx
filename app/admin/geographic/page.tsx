@@ -13,6 +13,46 @@ interface GeoMetrics {
   regionBreakdown: Array<{ region: string; count: number }>;
 }
 
+// Helper functions defined at module level to avoid hoisting issues
+function getRegion(countryCode: string): string {
+  const regions: Record<string, string[]> = {
+    'North America': ['US', 'CA', 'MX'],
+    'Europe': ['GB', 'DE', 'FR', 'IT', 'ES', 'NL', 'BE', 'SE', 'NO', 'DK', 'FI', 'PL', 'AT', 'CH', 'IE', 'PT'],
+    'Asia Pacific': ['JP', 'KR', 'CN', 'IN', 'AU', 'NZ', 'SG', 'HK', 'TW', 'TH', 'MY', 'PH', 'ID', 'VN'],
+    'Latin America': ['BR', 'AR', 'CL', 'CO', 'PE', 'VE'],
+    'Middle East': ['AE', 'SA', 'IL', 'TR', 'EG'],
+    'Africa': ['ZA', 'NG', 'KE', 'MA'],
+  };
+  
+  for (const [region, countries] of Object.entries(regions)) {
+    if (countries.includes(countryCode)) return region;
+  }
+  return 'Other';
+}
+
+function getCountryName(code: string): string {
+  if (!code || code === 'Unknown' || code === 'Local') return code || 'Unknown';
+  try {
+    const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+    return regionNames.of(code) || code;
+  } catch {
+    return code;
+  }
+}
+
+function getRegionEmoji(region: string): string {
+  const emojis: Record<string, string> = {
+    'North America': '🌎',
+    'Europe': '🌍',
+    'Asia Pacific': '🌏',
+    'Latin America': '🌎',
+    'Middle East': '🏜️',
+    'Africa': '🌍',
+    'Other': '🌐',
+  };
+  return emojis[region] || '🌐';
+}
+
 export default function AdminGeographicPage() {
   const { setIsLoading } = useAdmin();
   // Use unified stats - SINGLE SOURCE OF TRUTH (already cached)
@@ -70,32 +110,6 @@ export default function AdminGeographicPage() {
   useEffect(() => {
     setIsLoading(statsLoading);
   }, [statsLoading, setIsLoading]);
-
-  const getRegion = (countryCode: string): string => {
-    const regions: Record<string, string[]> = {
-      'North America': ['US', 'CA', 'MX'],
-      'Europe': ['GB', 'DE', 'FR', 'IT', 'ES', 'NL', 'BE', 'SE', 'NO', 'DK', 'FI', 'PL', 'AT', 'CH', 'IE', 'PT'],
-      'Asia Pacific': ['JP', 'KR', 'CN', 'IN', 'AU', 'NZ', 'SG', 'HK', 'TW', 'TH', 'MY', 'PH', 'ID', 'VN'],
-      'Latin America': ['BR', 'AR', 'CL', 'CO', 'PE', 'VE'],
-      'Middle East': ['AE', 'SA', 'IL', 'TR', 'EG'],
-      'Africa': ['ZA', 'NG', 'KE', 'MA'],
-    };
-    
-    for (const [region, countries] of Object.entries(regions)) {
-      if (countries.includes(countryCode)) return region;
-    }
-    return 'Other';
-  };
-
-  const getCountryName = (code: string): string => {
-    if (code === 'Unknown' || code === 'Local') return code;
-    try {
-      const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
-      return regionNames.of(code) || code;
-    } catch {
-      return code;
-    }
-  };
 
   if (statsLoading) {
     return (
@@ -456,17 +470,4 @@ export default function AdminGeographicPage() {
       )}
     </div>
   );
-}
-
-function getRegionEmoji(region: string): string {
-  const emojis: Record<string, string> = {
-    'North America': '🌎',
-    'Europe': '🌍',
-    'Asia Pacific': '🌏',
-    'Latin America': '🌎',
-    'Middle East': '🏜️',
-    'Africa': '🌍',
-    'Other': '🌐',
-  };
-  return emojis[region] || '🌐';
 }
