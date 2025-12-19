@@ -112,6 +112,11 @@ function WatchContent() {
   // Anime state for mobile player
   const [isAnimeContent, setIsAnimeContent] = useState(false);
   const [audioPref, setAudioPref] = useState<AnimeAudioPreference>(() => getAnimeAudioPreference());
+  
+  // Debug: Log anime state changes
+  useEffect(() => {
+    console.log('[WatchPage] isAnimeContent changed:', isAnimeContent);
+  }, [isAnimeContent]);
 
   // Fetch season data to determine next episode
   const fetchNextEpisodeInfo = useCallback(async () => {
@@ -389,7 +394,9 @@ function WatchContent() {
               
               // For anime, try to find a source matching the audio preference
               let selectedIndex = 0;
-              if (isAnime && provider === 'animekai') {
+              if (provider === 'animekai') {
+                // If we're using animekai, this is anime content
+                setIsAnimeContent(true);
                 const matchingIndex = sources.findIndex((s: any) => 
                   s.title && sourceMatchesAudioPref(s.title, currentAudioPref)
                 );

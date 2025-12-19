@@ -140,6 +140,11 @@ export default function MobileVideoPlayer({
   // Ref to track if we've attempted auto-fullscreen
   const hasAttemptedAutoFullscreenRef = useRef(false);
 
+  // Debug: Log anime props
+  useEffect(() => {
+    console.log('[MobilePlayer] Anime props:', { isAnime, audioPref, hasOnAudioPrefChange: !!onAudioPrefChange });
+  }, [isAnime, audioPref, onAudioPrefChange]);
+
   // Watch progress tracking
   const {
     loadProgress,
@@ -960,8 +965,17 @@ export default function MobileVideoPlayer({
         </div>
       )}
 
+      {/* Lock indicator - tap anywhere on it to unlock */}
       {isLocked && showControls && (
-        <div className={styles.lockIndicator} onClick={(e) => { e.stopPropagation(); toggleLock(); }}>
+        <div 
+          className={styles.lockIndicator} 
+          onClick={(e) => { 
+            e.stopPropagation(); 
+            setIsLocked(false);
+            triggerHaptic('medium');
+          }}
+          onTouchEnd={(e) => e.stopPropagation()}
+        >
           <span>🔒 Tap to unlock</span>
         </div>
       )}
@@ -1191,7 +1205,11 @@ export default function MobileVideoPlayer({
 
       {/* Unlock Button - only show briefly when tapped while locked */}
       {isLocked && showControls && (
-        <button className={styles.unlockButton} onClick={(e) => { e.stopPropagation(); toggleLock(); }} onTouchEnd={(e) => e.stopPropagation()}>
+        <button className={styles.unlockButton} onClick={(e) => { 
+          e.stopPropagation(); 
+          setIsLocked(false);
+          triggerHaptic('medium');
+        }} onTouchEnd={(e) => e.stopPropagation()}>
           🔓
         </button>
       )}
