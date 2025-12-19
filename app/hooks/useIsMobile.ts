@@ -96,11 +96,31 @@ export function useIsMobile(): MobileInfo {
 
   useEffect(() => {
     // Initial detection
-    setMobileInfo(detectMobile());
+    const initialInfo = detectMobile();
+    setMobileInfo(initialInfo);
 
-    // Update on resize/orientation change
+    // Only update on resize if the device type changes (not just dimensions)
+    // This prevents video player resets on orientation change
     const handleResize = () => {
-      setMobileInfo(detectMobile());
+      const newInfo = detectMobile();
+      setMobileInfo(prev => {
+        // Only update if device detection changed, not just screen dimensions
+        if (prev.isMobile !== newInfo.isMobile ||
+            prev.isIOS !== newInfo.isIOS ||
+            prev.isAndroid !== newInfo.isAndroid ||
+            prev.isTablet !== newInfo.isTablet ||
+            prev.supportsHLS !== newInfo.supportsHLS) {
+          return newInfo;
+        }
+        // Update dimensions but keep the same object reference if nothing else changed
+        // Actually, just return prev to prevent re-renders on rotation
+        return {
+          ...prev,
+          screenWidth: newInfo.screenWidth,
+          screenHeight: newInfo.screenHeight,
+          isLandscape: newInfo.isLandscape,
+        };
+      });
     };
 
     window.addEventListener('resize', handleResize);

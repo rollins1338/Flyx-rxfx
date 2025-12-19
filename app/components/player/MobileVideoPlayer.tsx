@@ -326,9 +326,22 @@ export default function MobileVideoPlayer({
     abrBandWidthUpFactor: 0.5,
   }), []);
 
+  // Track the last initialized stream URL to prevent re-initialization on rotation
+  const lastInitializedUrlRef = useRef<string | null>(null);
+  
   // Initialize HLS
   useEffect(() => {
     if (!streamUrl || !videoRef.current) return;
+    
+    // Skip re-initialization if we already initialized this URL
+    if (lastInitializedUrlRef.current === streamUrl && hlsRef.current) {
+      console.log('[MobilePlayer] Skipping HLS re-init, already initialized for:', streamUrl.substring(0, 50));
+      return;
+    }
+    
+    console.log('[MobilePlayer] Initializing HLS for:', streamUrl.substring(0, 50));
+    lastInitializedUrlRef.current = streamUrl;
+    
     const video = videoRef.current;
     setIsLoading(true);
     setError(null);

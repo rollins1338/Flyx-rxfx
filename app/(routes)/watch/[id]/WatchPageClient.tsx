@@ -85,7 +85,12 @@ function WatchContent() {
   const episodeId = episode ? parseInt(episode) : undefined;
 
   // Determine if we should use mobile player (mobile device OR small screen)
-  const useMobilePlayer = mobileInfo.isMobile || mobileInfo.screenWidth < 768;
+  // Use a ref to lock in the initial decision and prevent switching on rotation
+  const initialUseMobilePlayerRef = useRef<boolean | null>(null);
+  if (initialUseMobilePlayerRef.current === null && mobileInfo.screenWidth > 0) {
+    initialUseMobilePlayerRef.current = mobileInfo.isMobile || mobileInfo.screenWidth < 768;
+  }
+  const useMobilePlayer = initialUseMobilePlayerRef.current ?? (mobileInfo.isMobile || mobileInfo.screenWidth < 768);
   
   // Debug log for mobile detection
   useEffect(() => {
