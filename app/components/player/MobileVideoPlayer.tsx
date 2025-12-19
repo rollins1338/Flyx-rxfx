@@ -314,6 +314,21 @@ export default function MobileVideoPlayer({
     setIsLoading(true);
     setError(null);
 
+    // Autoplay helper function
+    const attemptAutoplay = () => {
+      // Try to autoplay with sound first
+      video.muted = false;
+      video.play().catch((e) => {
+        console.log('[MobilePlayer] Autoplay with sound failed, trying muted:', e);
+        // If autoplay with sound fails, try muted autoplay
+        video.muted = true;
+        video.play().catch((e2) => {
+          console.log('[MobilePlayer] Muted autoplay also failed:', e2);
+          // User will need to tap to play
+        });
+      });
+    };
+
     // iOS Safari: Use native HLS
     if (mobileInfo.isIOS && mobileInfo.supportsHLS) {
       video.src = streamUrl;
@@ -321,6 +336,16 @@ export default function MobileVideoPlayer({
       const handleLoadedMetadata = () => {
         setDuration(video.duration);
         setIsLoading(false);
+        // Autoplay on iOS
+        attemptAutoplay();
+      };
+      
+      const handleCanPlay = () => {
+        setIsLoading(false);
+        // Also try autoplay on canplay event as backup
+        if (video.paused) {
+          attemptAutoplay();
+        }
       };
       
       const handleError = () => {
@@ -331,10 +356,12 @@ export default function MobileVideoPlayer({
       };
 
       video.addEventListener('loadedmetadata', handleLoadedMetadata);
+      video.addEventListener('canplay', handleCanPlay);
       video.addEventListener('error', handleError);
 
       return () => {
         video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+        video.removeEventListener('canplay', handleCanPlay);
         video.removeEventListener('error', handleError);
       };
     }
@@ -347,10 +374,16 @@ export default function MobileVideoPlayer({
       hls.loadSource(streamUrl);
       hls.attachMedia(video);
 
-      hls.on(Hls.Events.MANIFEST_PARSED, () => setIsLoading(false));
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        console.log('[MobilePlayer] HLS manifest parsed, starting autoplay');
+        setIsLoading(false);
+        // Autoplay after manifest is parsed
+        attemptAutoplay();
+      });
 
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (data.fatal) {
+          console.error('[MobilePlayer] HLS fatal error:', data.type, data.details);
           if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
             hls.startLoad();
           } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
@@ -369,7 +402,12 @@ export default function MobileVideoPlayer({
       };
     }
 
+    // Fallback for browsers with native HLS support (non-iOS)
     video.src = streamUrl;
+    video.addEventListener('loadedmetadata', () => {
+      setIsLoading(false);
+      attemptAutoplay();
+    });
   }, [streamUrl, mobileInfo.isIOS, mobileInfo.supportsHLS, hlsConfig, onError]);
 
   // Video event handlers
@@ -668,7 +706,12 @@ export default function MobileVideoPlayer({
       <div className={`${styles.controls} ${showControls && !isLocked ? styles.visible : ''}`}>
         {/* Top Bar */}
         <div className={styles.topBar}>
-          <button className={styles.iconButton} onClick={onBack} aria-label="Go back">
+          <button 
+            className={styles.iconButton} 
+            onClick={(e) => { e.stopPropagation(); onBack?.(); }} 
+            onTouchEnd={(e) => { e.stopPropagation(); }}
+            aria-label="Go back"
+          >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
               <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
             </svg>
@@ -682,12 +725,22 @@ export default function MobileVideoPlayer({
           </div>
 
           <div className={styles.topButtons}>
-            <button className={styles.iconButton} onClick={toggleLock} aria-label="Lock controls">
+            <button 
+              className={styles.iconButton} 
+              onClick={(e) => { e.stopPropagation(); toggleLock(); }} 
+              onTouchEnd={(e) => { e.stopPropagation(); }}
+              aria-label="Lock controls"
+            >
               <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z" />
               </svg>
             </button>
-            <button className={styles.iconButton} onClick={() => setShowSourceMenu(true)} aria-label="Change source">
+            <button 
+              className={styles.iconButton} 
+              onClick={(e) => { e.stopPropagation(); setShowSourceMenu(true); }} 
+              onTouchEnd={(e) => { e.stopPropagation(); }}
+              aria-label="Change source"
+            >
               <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" />
               </svg>
@@ -697,14 +750,24 @@ export default function MobileVideoPlayer({
 
         {/* Center Controls */}
         <div className={styles.centerControls}>
-          <button className={styles.centerButton} onClick={() => skip(-10)} aria-label="Rewind 10 seconds">
+          <button 
+            className={styles.centerButton} 
+            onClick={(e) => { e.stopPropagation(); skip(-10); }} 
+            onTouchEnd={(e) => { e.stopPropagation(); }}
+            aria-label="Rewind 10 seconds"
+          >
             <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" />
             </svg>
             <span>10</span>
           </button>
           
-          <button className={styles.playButton} onClick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'}>
+          <button 
+            className={styles.playButton} 
+            onClick={(e) => { e.stopPropagation(); togglePlay(); }} 
+            onTouchEnd={(e) => { e.stopPropagation(); }}
+            aria-label={isPlaying ? 'Pause' : 'Play'}
+          >
             {isPlaying ? (
               <svg width="44" height="44" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
@@ -716,7 +779,12 @@ export default function MobileVideoPlayer({
             )}
           </button>
           
-          <button className={styles.centerButton} onClick={() => skip(10)} aria-label="Forward 10 seconds">
+          <button 
+            className={styles.centerButton} 
+            onClick={(e) => { e.stopPropagation(); skip(10); }} 
+            onTouchEnd={(e) => { e.stopPropagation(); }}
+            aria-label="Forward 10 seconds"
+          >
             <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z" />
             </svg>
@@ -744,21 +812,32 @@ export default function MobileVideoPlayer({
             <div className={styles.bottomButtons}>
               <button 
                 className={styles.speedButton} 
-                onClick={() => setShowSpeedMenu(true)}
+                onClick={(e) => { e.stopPropagation(); setShowSpeedMenu(true); }}
+                onTouchEnd={(e) => { e.stopPropagation(); }}
                 aria-label="Playback speed"
               >
                 {playbackSpeed}x
               </button>
               
               {nextEpisode && (
-                <button className={styles.iconButton} onClick={onNextEpisode} aria-label="Next episode">
+                <button 
+                  className={styles.iconButton} 
+                  onClick={(e) => { e.stopPropagation(); onNextEpisode?.(); }} 
+                  onTouchEnd={(e) => { e.stopPropagation(); }}
+                  aria-label="Next episode"
+                >
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
                   </svg>
                 </button>
               )}
               
-              <button className={styles.iconButton} onClick={toggleFullscreen} aria-label="Toggle fullscreen">
+              <button 
+                className={styles.iconButton} 
+                onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} 
+                onTouchEnd={(e) => { e.stopPropagation(); }}
+                aria-label="Toggle fullscreen"
+              >
                 {isFullscreen ? (
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z" />
@@ -832,7 +911,12 @@ export default function MobileVideoPlayer({
 
       {/* Unlock Button (when locked) */}
       {isLocked && (
-        <button className={styles.unlockButton} onClick={toggleLock} aria-label="Unlock controls">
+        <button 
+          className={styles.unlockButton} 
+          onClick={(e) => { e.stopPropagation(); toggleLock(); }} 
+          onTouchEnd={(e) => { e.stopPropagation(); }}
+          aria-label="Unlock controls"
+        >
           <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 17c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm6-9h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6h1.9c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm0 12H6V10h12v10z" />
           </svg>

@@ -98,8 +98,11 @@
   animation: doubleTapPop 0.6s ease-out forwards;
 }
 
-.doubleTapIndicator.left { }
-.doubleTapIndicator.right { }
+/* Side indicators - can be customized if needed */
+.doubleTapIndicator.left,
+.doubleTapIndicator.right {
+  opacity: 1;
+}
 
 .doubleTapRipple {
   position: absolute;
@@ -338,6 +341,15 @@
   border-radius: 50%;
   color: white;
   flex-shrink: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.iconButton svg {
+  fill: currentColor;
+  color: white;
+  pointer-events: none;
 }
 
 .iconButton:active {
@@ -394,6 +406,15 @@
   border-radius: 50%;
   color: white;
   position: relative;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.centerButton svg {
+  fill: currentColor;
+  color: white;
+  pointer-events: none;
 }
 
 .centerButton span {
@@ -419,15 +440,21 @@
   border-radius: 50%;
   color: white;
   box-shadow: 0 4px 20px rgba(229, 9, 20, 0.4);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.playButton svg {
+  fill: currentColor;
+  color: white;
+  margin-left: 3px;
+  pointer-events: none;
 }
 
 .playButton:active {
   transform: scale(0.95);
   background: rgba(229, 9, 20, 1);
-}
-
-.playButton svg {
-  margin-left: 3px;
 }
 
 /* Bottom Bar */
@@ -519,6 +546,9 @@
   color: white;
   font-size: 0.85rem;
   font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .speedButton:active {
@@ -645,6 +675,15 @@
   border-radius: 50%;
   color: white;
   z-index: 35;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.unlockButton svg {
+  fill: currentColor;
+  color: white;
+  pointer-events: none;
 }
 
 .unlockButton:active {
