@@ -320,8 +320,10 @@ function WatchContent() {
     
     try {
       // Check if this is anime content (has malId)
-      const isAnime = !!malId;
-      setIsAnimeContent(isAnime);
+      // Only set to true here - don't reset to false as animekai might succeed later
+      if (malId) {
+        setIsAnimeContent(true);
+      }
       
       // Check provider availability first
       let providerAvailability = { vidsrc: true, '1movies': true, videasy: true, animekai: true };
@@ -343,7 +345,8 @@ function WatchContent() {
       // For non-anime: VidSrc, 1movies, Videasy
       const providerOrder: string[] = [];
       
-      if (isAnime && providerAvailability.animekai) {
+      // Use malId to determine if we should try animekai first
+      if (malId && providerAvailability.animekai) {
         providerOrder.push('animekai');
       }
       if (providerAvailability.vidsrc) {
@@ -356,7 +359,7 @@ function WatchContent() {
         providerOrder.push('videasy');
       }
       
-      console.log(`[WatchPage] Mobile provider order: ${providerOrder.join(' → ')} (isAnime=${isAnime})`);
+      console.log(`[WatchPage] Mobile provider order: ${providerOrder.join(' → ')} (malId=${malId})`);
       
       for (const provider of providerOrder) {
         const params = new URLSearchParams({
@@ -396,6 +399,7 @@ function WatchContent() {
               let selectedIndex = 0;
               if (provider === 'animekai') {
                 // If we're using animekai, this is anime content
+                console.log('[WatchPage] AnimeKai succeeded - setting isAnimeContent to TRUE');
                 setIsAnimeContent(true);
                 const matchingIndex = sources.findIndex((s: any) => 
                   s.title && sourceMatchesAudioPref(s.title, currentAudioPref)
@@ -410,7 +414,7 @@ function WatchContent() {
               setMobileLoading(false);
               console.log(`[WatchPage] ✓ Mobile stream loaded from ${provider}:`, 
                 sources[selectedIndex].url?.substring(0, 50), 
-                isAnime ? `(${currentAudioPref})` : '');
+                provider === 'animekai' ? `(${currentAudioPref})` : '');
               return;
             }
           }

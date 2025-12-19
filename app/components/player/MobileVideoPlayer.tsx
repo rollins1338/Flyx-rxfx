@@ -993,12 +993,20 @@ export default function MobileVideoPlayer({
             )}
           </div>
           <div className={styles.topButtons}>
+            {/* DEBUG: Show anime status - remove after debugging */}
+            <span style={{ color: isAnime ? 'lime' : 'red', fontSize: '10px', marginRight: '8px' }}>
+              {isAnime ? '🎌' : '📺'}
+            </span>
             {/* Sub/Dub Toggle for Anime */}
-            {isAnime && onAudioPrefChange && (
+            {isAnime && (
               <button 
                 className={styles.subDubToggle} 
                 onClick={(e) => { 
                   e.stopPropagation(); 
+                  if (!onAudioPrefChange) {
+                    console.warn('[MobilePlayer] onAudioPrefChange not provided!');
+                    return;
+                  }
                   const newPref = audioPref === 'sub' ? 'dub' : 'sub';
                   // Pass current playback time to preserve position
                   onAudioPrefChange(newPref, currentTime);
