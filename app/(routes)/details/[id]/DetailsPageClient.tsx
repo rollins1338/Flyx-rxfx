@@ -634,12 +634,10 @@ export default function DetailsPageClient({
       }
     }
     
-    // Fallback: use browser history if available
-    if (window.history.length > 2) {
-      router.back();
-    } else {
-      router.push('/');
-    }
+    // Fallback: always go to home page instead of using router.back()
+    // This prevents going back to the video player when user navigates:
+    // home -> details -> watch -> back (to details) -> back (should go home, not watch)
+    router.push('/');
   };
 
   return (
