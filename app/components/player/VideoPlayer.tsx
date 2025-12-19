@@ -1821,14 +1821,14 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     return () => window.removeEventListener('keydown', handleKeyPress, true);
   }, [currentTime, volume, showResumePrompt, showControls, focusedRow, focusedControlIndex, showSubtitles, showSettings, showServerMenu]);
 
-  // Ctrl + Scroll wheel for subtitle sync adjustment
+  // Alt + Scroll wheel for subtitle sync adjustment (using Alt instead of Ctrl to avoid browser zoom)
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
     const handleWheel = (e: WheelEvent) => {
-      // Only handle when Ctrl is pressed and subtitles are active
-      if (!e.ctrlKey || !currentSubtitle) return;
+      // Only handle when Alt is pressed and subtitles are active
+      if (!e.altKey || !currentSubtitle) return;
       
       e.preventDefault();
       e.stopPropagation();

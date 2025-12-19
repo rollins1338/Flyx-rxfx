@@ -136,6 +136,9 @@ export default function MobileVideoPlayer({
   
   // Ref to track pending seek time (for resuming after source change)
   const pendingSeekTimeRef = useRef<number | null>(initialTime > 0 ? initialTime : null);
+  
+  // Ref to track if we've attempted auto-fullscreen
+  const hasAttemptedAutoFullscreenRef = useRef(false);
 
   // Watch progress tracking
   const {
@@ -452,6 +455,31 @@ export default function MobileVideoPlayer({
     const onPlay = () => { 
       setIsPlaying(true);
       handleWatchResume(video.currentTime, video.duration);
+      
+      // Auto-enter fullscreen on first play for native mobile experience
+      if (!hasAttemptedAutoFullscreenRef.current && !isFullscreen) {
+        hasAttemptedAutoFullscreenRef.current = true;
+        // Small delay to ensure video is playing before requesting fullscreen
+        setTimeout(async () => {
+          try {
+            const container = containerRef.current;
+            if (!container) return;
+            
+            // Enter fullscreen - let users naturally rotate their device
+            if ((video as any).webkitEnterFullscreen) {
+              // iOS Safari - use native video fullscreen
+              (video as any).webkitEnterFullscreen();
+            } else if ((container as any).webkitRequestFullscreen) {
+              await (container as any).webkitRequestFullscreen();
+            } else if (container.requestFullscreen) {
+              await container.requestFullscreen();
+            }
+          } catch (e) {
+            // Fullscreen not allowed - continue playing inline
+            console.log('[MobilePlayer] Fullscreen not available, playing inline');
+          }
+        }, 100);
+      }
     };
     const onPause = () => { 
       setIsPlaying(false); 
@@ -491,7 +519,7 @@ export default function MobileVideoPlayer({
       video.removeEventListener('durationchange', onDurationChange);
       video.removeEventListener('ended', onEnded);
     };
-  }, [isGestureActive, resetControlsTimeout, handleProgress, handleWatchPause, handleWatchResume, showResumePrompt]);
+  }, [isGestureActive, resetControlsTimeout, handleProgress, handleWatchPause, handleWatchResume, showResumePrompt, isFullscreen]);
 
   // Orientation detection
   useEffect(() => {
@@ -562,24 +590,30 @@ export default function MobileVideoPlayer({
     };
   }, []);
 
+  // Simple fullscreen toggle - native experience, no forced orientation
   const toggleFullscreen = useCallback(async () => {
     const video = videoRef.current;
     const container = containerRef.current;
     if (!video || !container) return;
+    
     try {
       if (!isFullscreen) {
-        if ((video as any).webkitEnterFullscreen) (video as any).webkitEnterFullscreen();
-        else if ((container as any).webkitRequestFullscreen) await (container as any).webkitRequestFullscreen();
-        else if (container.requestFullscreen) await container.requestFullscreen();
-        if (screen.orientation && 'lock' in screen.orientation) {
-          try { await (screen.orientation as any).lock('landscape'); } catch {}
+        // Enter fullscreen - use native iOS fullscreen for best experience
+        if ((video as any).webkitEnterFullscreen) {
+          (video as any).webkitEnterFullscreen();
+        } else if ((container as any).webkitRequestFullscreen) {
+          await (container as any).webkitRequestFullscreen();
+        } else if (container.requestFullscreen) {
+          await container.requestFullscreen();
         }
       } else {
-        if ((video as any).webkitExitFullscreen) (video as any).webkitExitFullscreen();
-        else if ((document as any).webkitExitFullscreen) (document as any).webkitExitFullscreen();
-        else if (document.exitFullscreen) await document.exitFullscreen();
-        if (screen.orientation && 'unlock' in screen.orientation) {
-          try { (screen.orientation as any).unlock(); } catch {}
+        // Exit fullscreen
+        if ((video as any).webkitExitFullscreen) {
+          (video as any).webkitExitFullscreen();
+        } else if ((document as any).webkitExitFullscreen) {
+          (document as any).webkitExitFullscreen();
+        } else if (document.exitFullscreen) {
+          await document.exitFullscreen();
         }
       }
     } catch (e) { console.error('[MobilePlayer] Fullscreen error:', e); }
