@@ -125,11 +125,11 @@ export default function TrafficV2Page() {
         }
       />
 
-      {/* Key Stats */}
+      {/* Key Stats - Use unified stats as primary source */}
       <Grid cols="auto-fit" minWidth="160px" gap="16px">
-        <StatCard title="Total Hits" value={trafficData?.totals?.total_hits || 0} icon="📊" color={colors.primary} />
-        <StatCard title="Unique Visitors" value={trafficData?.totals?.unique_visitors || 0} icon="👥" color={colors.success} />
-        <StatCard title="Human Traffic" value={trafficData?.totals?.human_hits || 0} icon="🧑" color={colors.info} />
+        <StatCard title="Total Hits" value={trafficData?.totals?.total_hits || unifiedStats.pageViews || 0} icon="📊" color={colors.primary} />
+        <StatCard title="Unique Visitors" value={trafficData?.totals?.unique_visitors || unifiedStats.uniqueVisitors || 0} icon="👥" color={colors.success} />
+        <StatCard title="Human Traffic" value={trafficData?.totals?.human_hits || unifiedStats.pageViews || 0} icon="🧑" color={colors.info} />
         <StatCard title="Bot Traffic" value={trafficData?.totals?.bot_hits || 0} icon="🤖" color={colors.warning} />
         <StatCard 
           title="Bot %" 
