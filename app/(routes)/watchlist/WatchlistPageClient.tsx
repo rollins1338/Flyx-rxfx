@@ -47,32 +47,40 @@ export default function WatchlistPageClient() {
     
     setLoadingRecs(true);
     try {
-      // Get recommendations based on first few items in watchlist
-      const sampleItems = items.slice(0, 3);
+      // Get recommendations based on ALL items (up to 5) for better results
+      const sampleItems = items.slice(0, 5);
       const allRecs: RecommendedItem[] = [];
-      const seenIds = new Set(items.map(i => i.id));
+      const seenIds = new Set(items.map(i => String(i.id)));
       
-      for (const item of sampleItems) {
+      // Fetch recommendations for each item in parallel
+      const fetchPromises = sampleItems.map(async (item) => {
         try {
           const response = await fetch(
             `/api/content/recommendations?id=${item.id}&type=${item.mediaType}`
           );
           if (response.ok) {
             const data = await response.json();
-            const recs = (data.results || data || []).slice(0, 8);
-            
-            for (const rec of recs) {
-              if (!seenIds.has(rec.id)) {
-                seenIds.add(rec.id);
-                allRecs.push({
-                  ...rec,
-                  matchReason: `Because you added "${item.title}"`,
-                });
-              }
-            }
+            return { item, recs: data.results || [] };
           }
         } catch (err) {
           console.error('[Watchlist] Error fetching recs for', item.id, err);
+        }
+        return { item, recs: [] };
+      });
+      
+      const results = await Promise.all(fetchPromises);
+      
+      // Process all results
+      for (const { item, recs } of results) {
+        for (const rec of recs.slice(0, 10)) {
+          const recId = String(rec.id);
+          if (!seenIds.has(recId)) {
+            seenIds.add(recId);
+            allRecs.push({
+              ...rec,
+              matchReason: `Because you added "${item.title}"`,
+            });
+          }
         }
       }
       
@@ -246,27 +254,33 @@ export default function WatchlistPageClient() {
                 <div className="flex items-center justify-between mb-3 md:mb-5">
                   <h2 className="text-base sm:text-lg md:text-2xl font-bold text-white flex items-center gap-2 md:gap-3">
                     <span>✨</span> Based on Your List
-                    {loadingRecs && (
-                      <span className="text-xs text-gray-500 font-normal ml-2">Loading...</span>
-                    )}
                   </h2>
-                  <div className="hidden sm:flex gap-2">
-                    <button
-                      onClick={() => scroll('left')}
-                      className="w-8 h-8 md:w-9 md:h-9 bg-white/5 hover:bg-white/10 active:bg-white/20 border border-white/10 rounded-full flex items-center justify-center text-white transition-all"
-                    >
-                      ‹
-                    </button>
-                    <button
-                      onClick={() => scroll('right')}
-                      className="w-8 h-8 md:w-9 md:h-9 bg-white/5 hover:bg-white/10 active:bg-white/20 border border-white/10 rounded-full flex items-center justify-center text-white transition-all"
-                    >
-                      ›
-                    </button>
-                  </div>
+                  {recommendations.length > 0 && (
+                    <div className="hidden sm:flex gap-2">
+                      <button
+                        onClick={() => scroll('left')}
+                        className="w-8 h-8 md:w-9 md:h-9 bg-white/5 hover:bg-white/10 active:bg-white/20 border border-white/10 rounded-full flex items-center justify-center text-white transition-all"
+                      >
+                        ‹
+                      </button>
+                      <button
+                        onClick={() => scroll('right')}
+                        className="w-8 h-8 md:w-9 md:h-9 bg-white/5 hover:bg-white/10 active:bg-white/20 border border-white/10 rounded-full flex items-center justify-center text-white transition-all"
+                      >
+                        ›
+                      </button>
+                    </div>
+                  )}
                 </div>
 
-                {recommendations.length > 0 ? (
+                {loadingRecs ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+                      <p className="text-gray-400 text-sm">Finding recommendations...</p>
+                    </div>
+                  </div>
+                ) : recommendations.length > 0 ? (
                   <div
                     ref={scrollRef}
                     className="flex gap-2.5 sm:gap-3 md:gap-4 overflow-x-auto scrollbar-hide pb-4 -mx-2 px-2 snap-x snap-mandatory md:snap-none"
@@ -281,10 +295,15 @@ export default function WatchlistPageClient() {
                       />
                     ))}
                   </div>
-                ) : !loadingRecs && (
-                  <p className="text-gray-500 text-center py-8">
-                    Add more items to get personalized recommendations
-                  </p>
+                ) : (
+                  <div className="text-center py-8 px-4">
+                    <p className="text-gray-400 mb-2">
+                      No recommendations found for your current list.
+                    </p>
+                    <p className="text-gray-500 text-sm">
+                      Try adding different movies or shows to get personalized suggestions!
+                    </p>
+                  </div>
                 )}
               </div>
             </section>

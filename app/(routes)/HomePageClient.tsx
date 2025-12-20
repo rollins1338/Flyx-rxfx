@@ -214,7 +214,7 @@ export default function HomePageClient({
 
         {/* Immersive Hero Section */}
         {currentHero && (
-          <section className="relative h-[85vh] overflow-hidden">
+          <section className="relative h-[100svh] sm:h-[85vh] overflow-hidden">
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentHeroIndex}
@@ -233,9 +233,9 @@ export default function HomePageClient({
                   }}
                 />
 
-                {/* Gradient Overlays */}
-                <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/30" />
+                {/* Gradient Overlays - stronger on mobile for readability */}
+                <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/60 to-black/30 sm:from-black/80 sm:via-black/40 sm:to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-black/30 sm:via-transparent" />
 
                 {/* Subtle gradient overlay for depth */}
                 <div className="absolute inset-0 bg-gradient-to-br from-purple-900/10 via-transparent to-pink-900/10 pointer-events-none" />
@@ -243,8 +243,8 @@ export default function HomePageClient({
             </AnimatePresence>
 
             {/* Hero Content */}
-            <div className="relative z-10 h-full flex items-center">
-              <div className="container mx-auto px-6 lg:px-8">
+            <div className="relative z-10 h-full flex items-end sm:items-center pb-32 sm:pb-0">
+              <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="max-w-5xl">
                   <motion.div
                     initial={{ opacity: 0, y: 50 }}
@@ -252,138 +252,117 @@ export default function HomePageClient({
                     transition={{ duration: 0.8, delay: 0.3 }}
                   >
                     {/* Featured Content Marquee */}
-                    <div className="mb-8">
+                    <div className="mb-4 sm:mb-8">
                       <motion.div
                         initial={{ opacity: 0, x: -30 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.8 }}
                       >
-                        <div className="flex items-center gap-4 mb-4">
-                          <div className="px-3 py-1 bg-gradient-to-r from-purple-600/80 to-pink-600/80 backdrop-blur-md rounded-full text-white text-sm font-semibold">
+                        <div className="flex items-center gap-2 sm:gap-4 mb-2 sm:mb-4 flex-wrap">
+                          <div className="px-2 py-0.5 sm:px-3 sm:py-1 bg-gradient-to-r from-purple-600/80 to-pink-600/80 backdrop-blur-md rounded-full text-white text-xs sm:text-sm font-semibold">
                             NOW FEATURED
                           </div>
-                          <div className="flex items-center gap-2 text-yellow-400">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                          <div className="flex items-center gap-1 sm:gap-2 text-yellow-400">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="sm:w-4 sm:h-4">
                               <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                             </svg>
-                            <span className="text-white text-sm font-medium">
-                              {(currentHero.vote_average || currentHero.rating || 0).toFixed(1)} / 10
+                            <span className="text-white text-xs sm:text-sm font-medium">
+                              {(currentHero.vote_average || currentHero.rating || 0).toFixed(1)}
                             </span>
                           </div>
+                          <span className="px-2 py-0.5 bg-white/10 rounded text-[10px] sm:text-xs uppercase tracking-wide text-white/80">
+                            {currentHero.mediaType === 'movie' ? 'Movie' : 'Series'}
+                          </span>
                         </div>
 
                         {/* Animated Title */}
-                        <div className="relative mb-6">
+                        <div className="relative mb-3 sm:mb-6">
                           <motion.h1
                             key={currentHeroIndex}
                             initial={{ opacity: 0, y: 30 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -20 }}
                             transition={{ duration: 0.8, ease: "easeOut" }}
-                            className="text-4xl md:text-6xl lg:text-7xl font-black text-white pb-3"
-                            style={{ lineHeight: 1.2 }}
+                            className="text-2xl sm:text-4xl md:text-6xl lg:text-7xl font-black text-white"
+                            style={{ lineHeight: 1.1 }}
                           >
                             {currentHero.title || currentHero.name || 'Featured Content'}
                           </motion.h1>
                         </div>
 
-                        {/* Description with fade animation */}
+                        {/* Description - hidden on very small screens */}
                         <motion.div
                           key={`desc-${currentHeroIndex}`}
                           initial={{ opacity: 0, y: 20 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: -20 }}
                           transition={{ duration: 0.6, delay: 0.3 }}
-                          className="mb-6"
+                          className="mb-4 sm:mb-6 hidden xs:block"
                         >
-                          <p className="text-lg md:text-xl text-gray-300 max-w-3xl leading-relaxed line-clamp-3">
-                            {currentHero.overview || 'Experience premium entertainment with stunning visuals and immersive storytelling that will captivate your imagination.'}
+                          <p className="text-sm sm:text-lg md:text-xl text-gray-300 max-w-3xl leading-relaxed line-clamp-2 sm:line-clamp-3">
+                            {currentHero.overview || 'Experience premium entertainment with stunning visuals and immersive storytelling.'}
                           </p>
                         </motion.div>
                       </motion.div>
                     </div>
 
-                    {/* Brand Title */}
-                    <div className="mb-8">
-                      <h2 className="text-2xl md:text-3xl font-bold text-white/60 mb-2">
-                        <span className="bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent">
-                          FlyX
-                        </span>
-                        <span className="text-white/40 ml-2">Stream Beyond</span>
-                      </h2>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex flex-col sm:flex-row gap-4 mb-12">
+                    {/* Action Buttons - horizontal on mobile */}
+                    <div className="flex flex-row gap-2 sm:gap-4 mb-4 sm:mb-8">
                       <motion.button
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                         onClick={() => handleContentClick(currentHero, 'hero_play')}
-                        className="px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-full text-lg shadow-2xl hover:shadow-purple-500/25 transition-all duration-300 flex items-center justify-center gap-3"
+                        className="flex-1 sm:flex-none px-4 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-full text-sm sm:text-lg shadow-2xl hover:shadow-purple-500/25 transition-all duration-300 flex items-center justify-center gap-2 sm:gap-3"
                         data-tv-focusable="true"
                         data-tv-group="hero-actions"
                         data-tv-primary="true"
                       >
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="sm:w-6 sm:h-6">
                           <path d="M8 5v14l11-7z" />
                         </svg>
-                        Watch Now
+                        <span className="hidden xs:inline">Watch Now</span>
+                        <span className="xs:hidden">Play</span>
                       </motion.button>
 
-                      <WatchlistButton item={currentHero} variant="full" />
+                      <WatchlistButton item={currentHero} variant="icon" className="sm:hidden" />
+                      <div className="hidden sm:block">
+                        <WatchlistButton item={currentHero} variant="full" />
+                      </div>
 
                       <motion.button
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                         onClick={() => handleContentClick(currentHero, 'hero_info')}
-                        className="px-8 py-4 bg-white/10 backdrop-blur-md text-white font-semibold rounded-full text-lg border border-white/20 hover:bg-white/20 transition-all duration-300 flex items-center justify-center gap-3"
+                        className="px-4 sm:px-8 py-3 sm:py-4 bg-white/10 backdrop-blur-md text-white font-semibold rounded-full text-sm sm:text-lg border border-white/20 hover:bg-white/20 transition-all duration-300 flex items-center justify-center gap-2 sm:gap-3"
                         data-tv-focusable="true"
                         data-tv-group="hero-actions"
                       >
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="sm:w-6 sm:h-6">
                           <circle cx="12" cy="12" r="10" />
                           <path d="M12 16v-4" />
                           <path d="M12 8h.01" />
                         </svg>
-                        More Info
+                        <span className="hidden sm:inline">More Info</span>
+                        <span className="sm:hidden">Info</span>
                       </motion.button>
                     </div>
-
-                    {/* Featured Content Info */}
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: 0.6 }}
-                      className="flex items-center gap-6 text-sm text-gray-400"
-                    >
-                      <span className="flex items-center gap-2">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                        </svg>
-                        {(currentHero.vote_average || currentHero.rating || 0).toFixed(1)}
-                      </span>
-                      <span>{new Date(currentHero.release_date || currentHero.first_air_date || currentHero.releaseDate || '').getFullYear()}</span>
-                      <span className="px-2 py-1 bg-white/10 rounded text-xs uppercase tracking-wide">
-                        {currentHero.mediaType === 'movie' ? 'Movie' : 'TV Series'}
-                      </span>
-                    </motion.div>
                   </motion.div>
                 </div>
               </div>
 
-              {/* Hero Navigation */}
+              {/* Hero Navigation - hidden on mobile, shown on tablet+ */}
               {heroItems.length > 1 && (
-                <div className="absolute bottom-8 right-8 flex gap-6">
+                <div className="absolute bottom-24 sm:bottom-8 right-4 sm:right-8 hidden sm:flex gap-3 sm:gap-6">
                   <motion.button
                     whileHover={{ scale: 1.1, boxShadow: "0 10px 30px rgba(255, 255, 255, 0.2)" }}
                     whileTap={{ scale: 0.9 }}
                     onClick={() => handleHeroNavigation('prev')}
-                    className="w-20 h-20 bg-gradient-to-r from-white/10 to-white/5 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:from-white/20 hover:to-white/10 transition-all duration-300 border border-white/30 shadow-2xl"
+                    className="w-12 h-12 sm:w-20 sm:h-20 bg-gradient-to-r from-white/10 to-white/5 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:from-white/20 hover:to-white/10 transition-all duration-300 border border-white/30 shadow-2xl"
                     data-tv-focusable="true"
                     data-tv-group="hero-nav"
                     aria-label="Previous slide"
                   >
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" className="sm:w-8 sm:h-8">
                       <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
                     </svg>
                   </motion.button>
@@ -391,26 +370,26 @@ export default function HomePageClient({
                     whileHover={{ scale: 1.1, boxShadow: "0 10px 30px rgba(255, 255, 255, 0.2)" }}
                     whileTap={{ scale: 0.9 }}
                     onClick={() => handleHeroNavigation('next')}
-                    className="w-20 h-20 bg-gradient-to-r from-white/10 to-white/5 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:from-white/20 hover:to-white/10 transition-all duration-300 border border-white/30 shadow-2xl"
+                    className="w-12 h-12 sm:w-20 sm:h-20 bg-gradient-to-r from-white/10 to-white/5 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:from-white/20 hover:to-white/10 transition-all duration-300 border border-white/30 shadow-2xl"
                     data-tv-focusable="true"
                     data-tv-group="hero-nav"
                     aria-label="Next slide"
                   >
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" className="sm:w-8 sm:h-8">
                       <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
                     </svg>
                   </motion.button>
                 </div>
               )}
 
-              {/* Hero Indicators - Skip from TV navigation */}
+              {/* Hero Indicators - repositioned for mobile */}
               {heroItems.length > 1 && (
-                <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex gap-3">
+                <div className="absolute bottom-20 sm:bottom-8 left-1/2 transform -translate-x-1/2 flex gap-2 sm:gap-3">
                   {heroItems.map((_, index) => (
                     <button
                       key={index}
                       onClick={() => setCurrentHeroIndex(index)}
-                      className={`w-3 h-3 rounded-full transition-all duration-300 ${index === currentHeroIndex ? 'bg-white w-12' : 'bg-white/40'
+                      className={`h-2 sm:h-3 rounded-full transition-all duration-300 ${index === currentHeroIndex ? 'bg-white w-6 sm:w-12' : 'bg-white/40 w-2 sm:w-3'
                         }`}
                       data-tv-skip="true"
                       tabIndex={-1}
@@ -420,11 +399,11 @@ export default function HomePageClient({
               )}
             </div>
 
-            {/* Scroll Indicator */}
+            {/* Scroll Indicator - hidden on mobile */}
             <motion.div
               animate={{ y: [0, 10, 0] }}
               transition={{ duration: 2, repeat: Infinity }}
-              className="absolute bottom-8 left-8 text-white/60"
+              className="absolute bottom-8 left-8 text-white/60 hidden md:block"
             >
               <div className="flex flex-col items-center gap-2">
                 <span className="text-sm font-medium">Scroll to explore</span>
@@ -439,8 +418,8 @@ export default function HomePageClient({
 
         {/* Main Content */}
         <main className="relative z-10 bg-gradient-to-b from-black via-gray-900 to-black">
-          {/* Search Section */}
-          <section className="py-20 px-6">
+          {/* Search Section - smaller on mobile */}
+          <section className="py-10 sm:py-20 px-4 sm:px-6">
             <div className="container mx-auto text-center">
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
@@ -448,7 +427,7 @@ export default function HomePageClient({
                 viewport={{ once: true }}
                 transition={{ duration: 0.6 }}
               >
-                <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
+                <h2 className="text-2xl sm:text-4xl md:text-5xl font-bold text-white mb-4 sm:mb-6">
                   What do you want to watch?
                 </h2>
                 <div className="max-w-2xl mx-auto relative">
@@ -462,15 +441,16 @@ export default function HomePageClient({
                         handleSearch(searchQuery);
                       }
                     }}
-                    placeholder="Search movies, TV shows, actors..."
-                    className="w-full px-6 py-4 pl-14 bg-white/10 backdrop-blur-md border border-white/20 rounded-full text-white placeholder-gray-400 text-lg focus:outline-none focus:border-purple-500 transition-all duration-300"
+                    placeholder="Search movies, TV shows..."
+                    className="w-full px-4 sm:px-6 py-3 sm:py-4 pl-11 sm:pl-14 bg-white/10 backdrop-blur-md border border-white/20 rounded-full text-white placeholder-gray-400 text-base sm:text-lg focus:outline-none focus:border-purple-500 transition-all duration-300"
+                    style={{ fontSize: '16px' }} // Prevent iOS zoom
                     data-tv-focusable="true"
                     data-tv-group="search"
                   />
                   <svg
-                    className="absolute left-5 top-1/2 transform -translate-y-1/2 text-gray-400"
-                    width="22"
-                    height="22"
+                    className="absolute left-4 sm:left-5 top-1/2 transform -translate-y-1/2 text-gray-400"
+                    width="18"
+                    height="18"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -484,7 +464,7 @@ export default function HomePageClient({
                   {searchQuery && (
                     <button
                       onClick={() => handleSearch(searchQuery)}
-                      className="absolute right-2 top-1/2 transform -translate-y-1/2 px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-full font-semibold hover:from-purple-700 hover:to-pink-700 transition-all duration-300"
+                      className="absolute right-1.5 sm:right-2 top-1/2 transform -translate-y-1/2 px-4 sm:px-6 py-1.5 sm:py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-full text-sm sm:text-base font-semibold hover:from-purple-700 hover:to-pink-700 transition-all duration-300"
                     >
                       Search
                     </button>
@@ -498,7 +478,7 @@ export default function HomePageClient({
           <ContinueWatching />
 
           {/* Content Sections */}
-          <div className="space-y-12 mb-20">
+          <div className="space-y-6 sm:space-y-12 mb-12 sm:mb-20">
             <ContentSection
               title="Trending Now"
               items={trendingToday}
@@ -552,7 +532,7 @@ export default function HomePageClient({
           </div>
 
           {/* Explore by Genre */}
-          <section className="py-20 px-6">
+          <section className="py-10 sm:py-20 px-4 sm:px-6">
             <div className="container mx-auto">
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
@@ -560,10 +540,10 @@ export default function HomePageClient({
                 viewport={{ once: true }}
                 transition={{ duration: 0.6 }}
               >
-                <h2 className="text-4xl font-bold text-white mb-12 text-center">
+                <h2 className="text-2xl sm:text-4xl font-bold text-white mb-6 sm:mb-12 text-center">
                   Explore by Genre
                 </h2>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4">
                   {[
                     {
                       name: 'Action',
@@ -603,17 +583,17 @@ export default function HomePageClient({
                       whileHover={{ scale: 1.05, y: -5 }}
                       whileTap={{ scale: 0.95 }}
                       viewport={{ once: true }}
-                      transition={{ delay: index * 0.1 }}
+                      transition={{ delay: index * 0.05 }}
                       onClick={() => {
                         trackEvent('genre_clicked', { genre: genre.name });
                         handleSearch(genre.name);
                       }}
-                      className={`relative p-6 rounded-2xl bg-gradient-to-br ${genre.gradient} text-white font-semibold text-center overflow-hidden group`}
+                      className={`relative p-3 sm:p-6 rounded-xl sm:rounded-2xl bg-gradient-to-br ${genre.gradient} text-white font-semibold text-center overflow-hidden group min-h-[70px] sm:min-h-0`}
                     >
-                      <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-all duration-300" />
+                      <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 group-active:bg-black/30 transition-all duration-300" />
                       <div className="relative z-10">
-                        <div className="text-3xl mb-2">{genre.icon}</div>
-                        <div className="text-sm font-semibold">{genre.name}</div>
+                        <div className="text-xl sm:text-3xl mb-1 sm:mb-2">{genre.icon}</div>
+                        <div className="text-xs sm:text-sm font-semibold">{genre.name}</div>
                       </div>
                     </motion.button>
                   ))}
@@ -622,25 +602,25 @@ export default function HomePageClient({
             </div>
           </section>
 
-          {/* Features Showcase */}
-          <section className="py-20 px-6 bg-gradient-to-r from-purple-900/20 to-pink-900/20">
+          {/* Features Showcase - hidden on mobile for cleaner experience */}
+          <section className="hidden sm:block py-12 sm:py-20 px-4 sm:px-6 bg-gradient-to-r from-purple-900/20 to-pink-900/20">
             <div className="container mx-auto">
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.6 }}
-                className="text-center mb-16"
+                className="text-center mb-10 sm:mb-16"
               >
-                <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
+                <h2 className="text-2xl sm:text-4xl md:text-5xl font-bold text-white mb-4 sm:mb-6">
                   Why Choose FlyX?
                 </h2>
-                <p className="text-xl text-gray-300 max-w-3xl mx-auto">
+                <p className="text-base sm:text-xl text-gray-300 max-w-3xl mx-auto px-4">
                   Experience entertainment like never before with our cutting-edge platform
                 </p>
               </motion.div>
 
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8">
                 {[
                   {
                     icon: (
@@ -805,7 +785,7 @@ function ContentSection({
 
   const scroll = (direction: 'left' | 'right') => {
     if (scrollRef.current) {
-      const scrollAmount = 600;
+      const scrollAmount = window.innerWidth < 640 ? 280 : 600;
       scrollRef.current.scrollBy({
         left: direction === 'left' ? -scrollAmount : scrollAmount,
         behavior: 'smooth'
@@ -813,8 +793,23 @@ function ContentSection({
     }
   };
 
+  // Get icon for title
+  const getIcon = () => {
+    if (title.includes('Trending')) return <span className="text-xl sm:text-3xl">🔥</span>;
+    if (title.includes('Blockbuster')) return <span className="text-xl sm:text-3xl">🎬</span>;
+    if (title.includes('TV')) return <span className="text-xl sm:text-3xl">📺</span>;
+    if (title.includes('Acclaimed')) return <span className="text-xl sm:text-3xl">⭐</span>;
+    if (title.includes('Action')) return <span className="text-xl sm:text-3xl">⚡</span>;
+    if (title.includes('Laugh')) return <span className="text-xl sm:text-3xl">😂</span>;
+    if (title.includes('Sci-Fi')) return <span className="text-xl sm:text-3xl">🚀</span>;
+    if (title.includes('Chills')) return <span className="text-xl sm:text-3xl">👻</span>;
+    if (title.includes('Anime')) return <span className="text-xl sm:text-3xl">🎌</span>;
+    if (title.includes('Real')) return <span className="text-xl sm:text-3xl">🌍</span>;
+    return null;
+  };
+
   return (
-    <section className="py-12 px-6">
+    <section className="py-4 sm:py-12 px-3 sm:px-6">
       <div className="container mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 30 }}
@@ -822,86 +817,47 @@ function ContentSection({
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
         >
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3">
-              {title.includes('Trending') && (
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-orange-500">
-                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-                </svg>
-              )}
-              {title.includes('Blockbuster') && (
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-purple-500">
-                  <path d="M19.82 2H4.18C2.97 2 2 2.97 2 4.18v15.64C2 21.03 2.97 22 4.18 22h15.64c1.21 0 2.18-.97 2.18-2.18V4.18C22 2.97 21.03 2 19.82 2zM7 16l5-5 5 5H7z" />
-                </svg>
-              )}
-              {title.includes('TV') && (
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-blue-500">
-                  <rect x="2" y="7" width="20" height="15" rx="2" ry="2" />
-                  <polyline points="17 2 12 7 7 2" />
-                </svg>
-              )}
-              {title.includes('Acclaimed') && (
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-yellow-500">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                </svg>
-              )}
-              {title.includes('Action') && (
-                <span className="text-3xl">⚡</span>
-              )}
-              {title.includes('Laugh') && (
-                <span className="text-3xl">😂</span>
-              )}
-              {title.includes('Sci-Fi') && (
-                <span className="text-3xl">🚀</span>
-              )}
-              {title.includes('Chills') && (
-                <span className="text-3xl">👻</span>
-              )}
-              {title.includes('Anime') && (
-                <span className="text-3xl">🎌</span>
-              )}
-              {title.includes('Real') && (
-                <span className="text-3xl">🌍</span>
-              )}
+          <div className="flex items-center justify-between mb-3 sm:mb-8">
+            <h2 className="text-base sm:text-2xl md:text-3xl font-bold text-white flex items-center gap-2 sm:gap-3">
+              {getIcon()}
               <span>{title}</span>
             </h2>
-            <div className="flex gap-4">
+            {/* Hide scroll buttons on mobile - users swipe instead */}
+            <div className="hidden sm:flex gap-2 sm:gap-4">
               {reduceMotion ? (
-                // Simple buttons for low-end devices
                 <>
                   <button
                     onClick={() => scroll('left')}
-                    className="w-20 h-20 bg-gradient-to-r from-purple-600/20 to-pink-600/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:from-purple-600/30 hover:to-pink-600/30 transition-all duration-300 border border-white/20 shadow-xl"
+                    className="w-10 h-10 sm:w-20 sm:h-20 bg-gradient-to-r from-purple-600/20 to-pink-600/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:from-purple-600/30 hover:to-pink-600/30 transition-all duration-300 border border-white/20 shadow-xl"
                     data-tv-skip="true"
                     tabIndex={-1}
                   >
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="sm:w-8 sm:h-8">
                       <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
                     </svg>
                   </button>
                   <button
                     onClick={() => scroll('right')}
-                    className="w-20 h-20 bg-gradient-to-r from-purple-600/20 to-pink-600/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:from-purple-600/30 hover:to-pink-600/30 transition-all duration-300 border border-white/20 shadow-xl"
+                    className="w-10 h-10 sm:w-20 sm:h-20 bg-gradient-to-r from-purple-600/20 to-pink-600/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:from-purple-600/30 hover:to-pink-600/30 transition-all duration-300 border border-white/20 shadow-xl"
                     data-tv-skip="true"
                     tabIndex={-1}
                   >
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="sm:w-8 sm:h-8">
                       <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
                     </svg>
                   </button>
                 </>
               ) : (
-                // Animated buttons for capable devices
                 <>
                   <motion.button
                     whileHover={{ scale: 1.1, boxShadow: "0 8px 25px rgba(120, 119, 198, 0.4)" }}
                     whileTap={{ scale: 0.9 }}
                     onClick={() => scroll('left')}
-                    className="w-20 h-20 bg-gradient-to-r from-purple-600/20 to-pink-600/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:from-purple-600/30 hover:to-pink-600/30 transition-all duration-300 border border-white/20 shadow-xl"
+                    className="w-10 h-10 sm:w-20 sm:h-20 bg-gradient-to-r from-purple-600/20 to-pink-600/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:from-purple-600/30 hover:to-pink-600/30 transition-all duration-300 border border-white/20 shadow-xl"
                     data-tv-skip="true"
                     tabIndex={-1}
                   >
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="sm:w-8 sm:h-8">
                       <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
                     </svg>
                   </motion.button>
@@ -909,11 +865,11 @@ function ContentSection({
                     whileHover={{ scale: 1.1, boxShadow: "0 8px 25px rgba(120, 119, 198, 0.4)" }}
                     whileTap={{ scale: 0.9 }}
                     onClick={() => scroll('right')}
-                    className="w-20 h-20 bg-gradient-to-r from-purple-600/20 to-pink-600/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:from-purple-600/30 hover:to-pink-600/30 transition-all duration-300 border border-white/20 shadow-xl"
+                    className="w-10 h-10 sm:w-20 sm:h-20 bg-gradient-to-r from-purple-600/20 to-pink-600/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:from-purple-600/30 hover:to-pink-600/30 transition-all duration-300 border border-white/20 shadow-xl"
                     data-tv-skip="true"
                     tabIndex={-1}
                   >
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="sm:w-8 sm:h-8">
                       <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
                     </svg>
                   </motion.button>
@@ -924,8 +880,8 @@ function ContentSection({
 
           <div
             ref={scrollRef}
-            className="flex gap-6 overflow-x-auto scrollbar-hide pb-8 pt-4 px-2"
-            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            className="flex gap-2.5 sm:gap-6 overflow-x-auto scrollbar-hide pb-4 sm:pb-8 pt-2 sm:pt-4 px-1 sm:px-2 snap-x snap-mandatory sm:snap-none"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
             data-tv-scroll-container="true"
             data-tv-group={`content-${title.toLowerCase().replace(/\s+/g, '-')}`}
           >
@@ -933,40 +889,40 @@ function ContentSection({
               // Card content shared between both versions
               const cardContent = (
                 <>
-                  <div className={`relative rounded-xl bg-gray-800 shadow-2xl overflow-hidden ${reduceMotion ? 'transition-transform duration-200 hover:scale-[1.02] hover:-translate-y-1' : ''}`}>
-                    <div className="overflow-hidden rounded-xl">
+                  <div className={`relative rounded-lg sm:rounded-xl bg-gray-800 shadow-lg sm:shadow-2xl overflow-hidden ${reduceMotion ? 'transition-transform duration-200 hover:scale-[1.02] hover:-translate-y-1' : ''}`}>
+                    <div className="overflow-hidden rounded-lg sm:rounded-xl">
                       <img
                         src={`https://image.tmdb.org/t/p/w500${item.poster_path || item.posterPath || ''}`}
                         alt={item.title || item.name || 'Content'}
-                        className={`w-full h-80 md:h-96 object-cover ${reduceMotion ? '' : 'group-hover:scale-110'} transition-transform duration-500`}
+                        className={`w-full aspect-[2/3] object-cover ${reduceMotion ? '' : 'group-hover:scale-110'} transition-transform duration-500`}
                         loading="lazy"
                       />
                     </div>
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
 
-                    {/* Play Button Overlay */}
+                    {/* Play Button Overlay - smaller on mobile */}
                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none">
-                      <div className="w-20 h-20 bg-gradient-to-r from-purple-600/80 to-pink-600/80 backdrop-blur-md rounded-full flex items-center justify-center shadow-2xl border border-white/20">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="white" strokeWidth="0">
+                      <div className="w-12 h-12 sm:w-20 sm:h-20 bg-gradient-to-r from-purple-600/80 to-pink-600/80 backdrop-blur-md rounded-full flex items-center justify-center shadow-2xl border border-white/20">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="white" strokeWidth="0" className="sm:w-7 sm:h-7">
                           <path d="M8 5v14l11-7z" />
                         </svg>
                       </div>
                     </div>
 
-                    {/* Rating Badge */}
-                    <div className="absolute top-4 right-4 px-3 py-2 bg-gradient-to-r from-yellow-500/90 to-orange-500/90 backdrop-blur-md rounded-full text-white text-sm font-bold flex items-center gap-2 shadow-lg border border-white/20">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    {/* Rating Badge - smaller on mobile */}
+                    <div className="absolute top-2 right-2 sm:top-4 sm:right-4 px-1.5 py-0.5 sm:px-3 sm:py-2 bg-gradient-to-r from-yellow-500/90 to-orange-500/90 backdrop-blur-md rounded-full text-white text-[10px] sm:text-sm font-bold flex items-center gap-1 sm:gap-2 shadow-lg border border-white/20">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" className="sm:w-3.5 sm:h-3.5">
                         <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                       </svg>
                       {(item.vote_average || item.rating || 0).toFixed(1)}
                     </div>
                   </div>
 
-                  <div className="p-4">
-                    <h3 className="text-white font-semibold text-lg mb-2 line-clamp-2">
+                  <div className="p-1.5 sm:p-4">
+                    <h3 className="text-white font-medium sm:font-semibold text-xs sm:text-lg mb-0.5 sm:mb-2 line-clamp-1 sm:line-clamp-2">
                       {item.title || item.name || 'Untitled'}
                     </h3>
-                    <p className="text-gray-400 text-sm">
+                    <p className="text-gray-400 text-[10px] sm:text-sm">
                       {new Date(item.release_date || item.first_air_date || item.releaseDate || '').getFullYear()}
                     </p>
                   </div>
@@ -986,7 +942,7 @@ function ContentSection({
                   key={item.id}
                   onClick={() => onItemClick(item)}
                   onKeyDown={handleKeyDown}
-                  className="flex-shrink-0 w-56 md:w-64 cursor-pointer group p-2"
+                  className="flex-shrink-0 w-28 sm:w-56 md:w-64 cursor-pointer group snap-start"
                   data-tv-focusable="true"
                   tabIndex={0}
                   role="button"
@@ -1002,9 +958,10 @@ function ContentSection({
                   whileInView={{ opacity: 1, x: 0 }}
                   viewport={{ once: true }}
                   transition={{ delay: Math.min(index * 0.05, 0.3) }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={() => onItemClick(item)}
                   onKeyDown={handleKeyDown}
-                  className="flex-shrink-0 w-56 md:w-64 cursor-pointer group p-2"
+                  className="flex-shrink-0 w-28 sm:w-56 md:w-64 cursor-pointer group snap-start"
                   data-tv-focusable="true"
                   tabIndex={0}
                   role="button"
