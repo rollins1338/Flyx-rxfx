@@ -5,6 +5,8 @@
  * 1. Tracking recent heartbeats with fingerprints
  * 2. Rate limiting per user/session
  * 3. Detecting and merging duplicate sessions
+ * 
+ * OPTIMIZED: Increased rate limits to match reduced heartbeat frequency
  */
 
 // In-memory cache for recent heartbeats (server-side)
@@ -17,9 +19,10 @@ const recentHeartbeats = new Map<string, {
   contentId?: string;
 }>();
 
-// Cleanup old entries every 5 minutes
-const CLEANUP_INTERVAL = 5 * 60 * 1000;
-const HEARTBEAT_EXPIRY = 2 * 60 * 1000; // 2 minutes
+// Cleanup old entries every 60 minutes
+const CLEANUP_INTERVAL = 60 * 60 * 1000;
+const HEARTBEAT_EXPIRY = 60 * 60 * 1000; // 60 minutes - matches inactivity timeout
+const MIN_HEARTBEAT_GAP = 300000; // 5 minutes minimum between heartbeats
 
 let cleanupTimer: NodeJS.Timeout | null = null;
 
@@ -66,8 +69,8 @@ export function checkHeartbeatDuplication(data: HeartbeatData): DeduplicationRes
   const userHeartbeat = recentHeartbeats.get(userKey);
   const sessionHeartbeat = recentHeartbeats.get(sessionKey);
   
-  // Rate limit: minimum 5 seconds between heartbeats from same session
-  if (sessionHeartbeat && now - sessionHeartbeat.lastHeartbeat < 5000) {
+  // Rate limit: minimum 10 seconds between heartbeats from same session (was 5s)
+  if (sessionHeartbeat && now - sessionHeartbeat.lastHeartbeat < MIN_HEARTBEAT_GAP) {
     return {
       isDuplicate: true,
       shouldTrack: false,

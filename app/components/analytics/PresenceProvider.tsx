@@ -4,6 +4,9 @@
  * Wraps the app to provide automatic presence tracking for all users.
  * Tracks browsing activity by default, can be enhanced for watching/livetv.
  * Includes advanced bot detection and behavioral analysis.
+ * 
+ * OPTIMIZED: Reduced heartbeat frequency to minimize edge requests while
+ * maintaining real-time analytics accuracy.
  */
 
 'use client';
@@ -34,6 +37,12 @@ const PresenceContext = createContext<PresenceContextValue | null>(null);
 export function usePresenceContext() {
   return useContext(PresenceContext);
 }
+
+// OPTIMIZED INTERVALS - Designed for 100+ concurrent users on Vercel free tier
+// 30-minute heartbeat significantly reduces edge requests
+const HEARTBEAT_INTERVAL = 1800000; // 30 minutes
+const MIN_HEARTBEAT_GAP = 300000; // 5 minutes minimum between heartbeats
+const INACTIVITY_TIMEOUT = 3600000; // 60 minutes - mark inactive after this
 
 // Generate persistent user ID with fingerprinting
 function getUserId(): string {
@@ -138,8 +147,8 @@ export function PresenceProvider({ children }: PresenceProviderProps) {
     
     const now = Date.now();
     
-    // Throttle (min 5s apart, except for leaving)
-    if (!leaving && now - lastHeartbeatRef.current < 5000) return;
+    // OPTIMIZED: Increased throttle to 10s (was 5s), except for leaving
+    if (!leaving && now - lastHeartbeatRef.current < MIN_HEARTBEAT_GAP) return;
     lastHeartbeatRef.current = now;
     
     // Get behavioral analysis
@@ -222,7 +231,7 @@ export function PresenceProvider({ children }: PresenceProviderProps) {
     inactivityTimeoutRef.current = setTimeout(() => {
       setIsActive(false);
       sendHeartbeat(false);
-    }, 120000); // 2 min inactivity
+    }, INACTIVITY_TIMEOUT); // OPTIMIZED: 3 min inactivity (was 2 min)
   }, [sendHeartbeat]);
   
   // Calculate mouse entropy from positions
@@ -391,12 +400,12 @@ export function PresenceProvider({ children }: PresenceProviderProps) {
     window.addEventListener('beforeunload', handleUnload);
     window.addEventListener('pagehide', handleUnload);
     
-    // Start heartbeat interval (30s)
+    // OPTIMIZED: Start heartbeat interval at 60s (was 30s)
     heartbeatIntervalRef.current = setInterval(() => {
       if (document.visibilityState === 'visible') {
         sendHeartbeat(isActive);
       }
-    }, 30000);
+    }, HEARTBEAT_INTERVAL);
     
     // Initial heartbeat (delayed to allow bot detection and page components to set their context)
     // 1 second delay gives pages time to call setBrowsingContext

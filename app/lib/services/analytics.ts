@@ -349,14 +349,12 @@ class AnalyticsService {
   
   /**
    * Start page tracking interval
+   * OPTIMIZED: Only sync on page exit, not periodically
+   * This dramatically reduces requests while still capturing accurate data
    */
   private startPageTracking(): void {
-    if (this.pageTrackingInterval) return;
-    
-    // Sync page view data every 30 seconds
-    this.pageTrackingInterval = setInterval(() => {
-      this.syncCurrentPageView();
-    }, 30000);
+    // No periodic syncing - only sync on page exit/navigation
+    // Page view data is captured on beforeunload and visibilitychange
   }
   
   /**
@@ -758,14 +756,17 @@ class AnalyticsService {
 
   /**
    * Start watch time sync interval
+   * OPTIMIZED: Increased to 30 minutes to reduce edge requests
+   * Watch time is still synced on pause/complete/exit for accuracy
    */
   private startWatchTimeSyncInterval(): void {
     if (this.watchTimeSyncInterval) return;
     
-    // Sync watch time every 15 seconds
+    // Sync watch time every 30 minutes
+    // Critical events (pause, complete, exit) still sync immediately
     this.watchTimeSyncInterval = setInterval(() => {
       this.syncAllWatchTime();
-    }, 15000);
+    }, 1800000);
   }
 
   /**
