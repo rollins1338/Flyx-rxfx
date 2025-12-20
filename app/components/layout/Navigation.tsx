@@ -452,7 +452,6 @@ export const Navigation: React.FC<NavigationProps> = ({
                 <path d="M21 21l-4.35-4.35" strokeWidth="2.5" strokeLinecap="round" />
               </svg>
             </div>
-            <span>Search</span>
           </button>
           <button
             className={`${styles.bottomNavItem} ${pathname === '/series' || pathname.startsWith('/series') ? styles.active : ''}`}
