@@ -121,7 +121,7 @@ export default function ReverseEngineeringPage() {
               <div className="provider-card">
                 <div className="provider-status working">✓ Working</div>
                 <h3>DLHD Live TV</h3>
-                <p>AES-128 HLS with session-based auth. Requires heartbeat to establish session before key fetch. Updated December 2024.</p>
+                <p>AES-128 HLS with session-based auth. Requires heartbeat to establish session before key fetch. Updated December 2025.</p>
               </div>
               <div className="provider-card">
                 <div className="provider-status working">✓ Working</div>
@@ -233,9 +233,9 @@ const authToken = match[1];
 // Token looks like: "713384aaecd20309fbc8..."`}</code></pre>
             </div>
 
-            <h3>The Algorithm (Updated December 2024)</h3>
+            <h3>The Algorithm (Updated December 2025)</h3>
             <p>
-              DLHD added a <strong>heartbeat session requirement</strong> in December 2024. Simply having 
+              DLHD added a <strong>heartbeat session requirement</strong> in December 2025. Simply having 
               the auth token is no longer enough—you must establish a session via the heartbeat endpoint first.
             </p>
             <div className="algorithm-flow">
@@ -276,7 +276,7 @@ const authToken = match[1];
               </div>
             </div>
             
-            <h3>Heartbeat Session (New in Dec 2024)</h3>
+            <h3>Heartbeat Session (New in Dec 2025)</h3>
             <p>
               Without calling the heartbeat endpoint first, key requests return error <code>E2: &quot;Session must be created via heartbeat first&quot;</code>.
             </p>
@@ -369,7 +369,7 @@ const { expiry, status } = await response.json();
   const { token, channelKey } = await getAuthToken(channel);
   if (!token) throw new Error('Failed to get auth token');
   
-  // Step 2: Establish heartbeat session (required since Dec 2024)
+  // Step 2: Establish heartbeat session (required since Dec 2025)
   const hbResponse = await fetch('https://chevy.kiko2.ru/heartbeat', {
     headers: {
       'Authorization': \`Bearer \${token}\`,
@@ -430,7 +430,7 @@ const { expiry, status } = await response.json();
               &quot;When requests fail from code but work in browser, don&apos;t assume IP blocking. 
               Check what headers the browser is actually sending. The answer is usually in the 
               JavaScript. And when that stops working, check if they added a session requirement.&quot;
-              <cite>- Field Notes, December 2024</cite>
+              <cite>- Field Notes, December 2025</cite>
             </blockquote>
             <p>
               This crack evolved over time. First we discovered the Bearer token (worked for months), 
@@ -641,7 +641,7 @@ function is1moviesCdnUrl(url) {
             <p>VidSrc uses multiple encoding formats. Our static decoders handle all of them:</p>
             
             <div className="code-block">
-              <div className="code-header"><span>HEX Format (Primary - December 2024)</span></div>
+              <div className="code-header"><span>HEX Format (Primary - December 2025)</span></div>
               <pre><code>{`// Algorithm: Reverse → Subtract 1 from each char → Hex decode
 function decodeHexFormat(encoded) {
   // Step 1: Reverse the string
