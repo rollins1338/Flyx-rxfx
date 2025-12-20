@@ -184,7 +184,19 @@ export async function GET(request: NextRequest) {
     // 3. CONTENT METRICS (from watch_sessions)
     // Use validated timestamps and reasonable bounds
     // ============================================
-    let content = { totalSessions: 0, totalWatchTime: 0, avgDuration: 0, completionRate: 0, allTimeWatchTime: 0 };
+    let content = { 
+      totalSessions: 0, 
+      totalWatchTime: 0, 
+      avgDuration: 0, 
+      completionRate: 0, 
+      allTimeWatchTime: 0,
+      completedSessions: 0,
+      totalPauses: 0,
+      totalSeeks: 0,
+      movieSessions: 0,
+      tvSessions: 0,
+      uniqueContentWatched: 0
+    };
     try {
       // Count sessions from last 24h with valid data
       const contentQuery = isNeon
@@ -192,14 +204,26 @@ export async function GET(request: NextRequest) {
              COUNT(*) as total_sessions,
              COALESCE(SUM(CASE WHEN total_watch_time > 0 AND total_watch_time < 86400 THEN total_watch_time ELSE 0 END), 0) as total_watch_time,
              COALESCE(AVG(CASE WHEN total_watch_time > 0 AND total_watch_time < 86400 THEN total_watch_time ELSE NULL END), 0) as avg_duration,
-             COALESCE(AVG(CASE WHEN completion_percentage >= 0 AND completion_percentage <= 100 THEN completion_percentage ELSE NULL END), 0) as avg_completion
+             COALESCE(AVG(CASE WHEN completion_percentage >= 0 AND completion_percentage <= 100 THEN completion_percentage ELSE NULL END), 0) as avg_completion,
+             SUM(CASE WHEN is_completed = TRUE OR completion_percentage >= 90 THEN 1 ELSE 0 END) as completed_sessions,
+             COALESCE(SUM(pause_count), 0) as total_pauses,
+             COALESCE(SUM(seek_count), 0) as total_seeks,
+             SUM(CASE WHEN content_type = 'movie' THEN 1 ELSE 0 END) as movie_sessions,
+             SUM(CASE WHEN content_type = 'tv' THEN 1 ELSE 0 END) as tv_sessions,
+             COUNT(DISTINCT content_id) as unique_content
            FROM watch_sessions 
            WHERE started_at >= $1 AND started_at <= $2`
         : `SELECT 
              COUNT(*) as total_sessions,
              COALESCE(SUM(CASE WHEN total_watch_time > 0 AND total_watch_time < 86400 THEN total_watch_time ELSE 0 END), 0) as total_watch_time,
              COALESCE(AVG(CASE WHEN total_watch_time > 0 AND total_watch_time < 86400 THEN total_watch_time ELSE NULL END), 0) as avg_duration,
-             COALESCE(AVG(CASE WHEN completion_percentage >= 0 AND completion_percentage <= 100 THEN completion_percentage ELSE NULL END), 0) as avg_completion
+             COALESCE(AVG(CASE WHEN completion_percentage >= 0 AND completion_percentage <= 100 THEN completion_percentage ELSE NULL END), 0) as avg_completion,
+             SUM(CASE WHEN is_completed = 1 OR completion_percentage >= 90 THEN 1 ELSE 0 END) as completed_sessions,
+             COALESCE(SUM(pause_count), 0) as total_pauses,
+             COALESCE(SUM(seek_count), 0) as total_seeks,
+             SUM(CASE WHEN content_type = 'movie' THEN 1 ELSE 0 END) as movie_sessions,
+             SUM(CASE WHEN content_type = 'tv' THEN 1 ELSE 0 END) as tv_sessions,
+             COUNT(DISTINCT content_id) as unique_content
            FROM watch_sessions 
            WHERE started_at >= ? AND started_at <= ?`;
       
@@ -210,6 +234,12 @@ export async function GET(request: NextRequest) {
         content.totalWatchTime = Math.round(parseFloat(contentResult[0].total_watch_time) / 60) || 0; // Convert to minutes
         content.avgDuration = Math.round(parseFloat(contentResult[0].avg_duration) / 60) || 0; // Convert to minutes
         content.completionRate = Math.round(parseFloat(contentResult[0].avg_completion)) || 0;
+        content.completedSessions = parseInt(contentResult[0].completed_sessions) || 0;
+        content.totalPauses = parseInt(contentResult[0].total_pauses) || 0;
+        content.totalSeeks = parseInt(contentResult[0].total_seeks) || 0;
+        content.movieSessions = parseInt(contentResult[0].movie_sessions) || 0;
+        content.tvSessions = parseInt(contentResult[0].tv_sessions) || 0;
+        content.uniqueContentWatched = parseInt(contentResult[0].unique_content) || 0;
       }
       
       // Also get all-time watch time for reference
@@ -220,6 +250,47 @@ export async function GET(request: NextRequest) {
       content.allTimeWatchTime = Math.round(parseFloat(allTimeResult[0]?.total || 0) / 60) || 0; // Convert to minutes
     } catch (e) {
       console.error('Error fetching content stats:', e);
+    }
+
+    // ============================================
+    // 3b. TOP CONTENT (most watched)
+    // ============================================
+    let topContent: Array<{ contentId: string; contentTitle: string; contentType: string; watchCount: number; totalWatchTime: number }> = [];
+    try {
+      const topContentQuery = isNeon
+        ? `SELECT 
+             content_id,
+             content_title,
+             content_type,
+             COUNT(*) as watch_count,
+             SUM(total_watch_time) as total_watch_time
+           FROM watch_sessions 
+           WHERE started_at >= $1 AND started_at <= $2 AND content_title IS NOT NULL
+           GROUP BY content_id, content_title, content_type
+           ORDER BY watch_count DESC
+           LIMIT 10`
+        : `SELECT 
+             content_id,
+             content_title,
+             content_type,
+             COUNT(*) as watch_count,
+             SUM(total_watch_time) as total_watch_time
+           FROM watch_sessions 
+           WHERE started_at >= ? AND started_at <= ? AND content_title IS NOT NULL
+           GROUP BY content_id, content_title, content_type
+           ORDER BY watch_count DESC
+           LIMIT 10`;
+      
+      const topContentResult = await adapter.query(topContentQuery, [oneWeekAgo, now]);
+      topContent = topContentResult.map((row: any) => ({
+        contentId: row.content_id,
+        contentTitle: row.content_title || 'Unknown',
+        contentType: row.content_type || 'unknown',
+        watchCount: parseInt(row.watch_count) || 0,
+        totalWatchTime: Math.round(parseFloat(row.total_watch_time) / 60) || 0,
+      }));
+    } catch (e) {
+      console.error('Error fetching top content:', e);
     }
 
     // ============================================
@@ -339,6 +410,7 @@ export async function GET(request: NextRequest) {
       realtime,
       users,
       content,
+      topContent,
       geographic,
       devices,
       pageViews,

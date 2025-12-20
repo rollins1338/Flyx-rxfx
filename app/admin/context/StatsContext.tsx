@@ -49,6 +49,15 @@ interface UnifiedStats {
   allTimeWatchTime: number; // in minutes (all time)
   avgSessionDuration: number;
   completionRate: number;
+  completedSessions: number;
+  totalPauses: number;
+  totalSeeks: number;
+  movieSessions: number;
+  tvSessions: number;
+  uniqueContentWatched: number;
+  
+  // Top content (last 7 days)
+  topContent: Array<{ contentId: string; contentTitle: string; contentType: string; watchCount: number; totalWatchTime: number }>;
   
   // Page views (analytics_events table) - last 24h
   pageViews: number;
@@ -103,6 +112,13 @@ const defaultStats: UnifiedStats = {
   allTimeWatchTime: 0,
   avgSessionDuration: 0,
   completionRate: 0,
+  completedSessions: 0,
+  totalPauses: 0,
+  totalSeeks: 0,
+  movieSessions: 0,
+  tvSessions: 0,
+  uniqueContentWatched: 0,
+  topContent: [],
   pageViews: 0,
   uniqueVisitors: 0,
   topCountries: [],
@@ -183,6 +199,15 @@ export function StatsProvider({ children }: { children: ReactNode }) {
           allTimeWatchTime: data.content?.allTimeWatchTime || 0,
           avgSessionDuration: data.content?.avgDuration || 0,
           completionRate: data.content?.completionRate || 0,
+          completedSessions: data.content?.completedSessions || 0,
+          totalPauses: data.content?.totalPauses || 0,
+          totalSeeks: data.content?.totalSeeks || 0,
+          movieSessions: data.content?.movieSessions || 0,
+          tvSessions: data.content?.tvSessions || 0,
+          uniqueContentWatched: data.content?.uniqueContentWatched || 0,
+          
+          // Top content (last 7 days)
+          topContent: data.topContent || [],
           
           // Page views (last 24h)
           pageViews: data.pageViews?.total || 0,
