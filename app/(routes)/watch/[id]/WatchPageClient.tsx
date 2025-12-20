@@ -327,7 +327,11 @@ function WatchContent() {
 
   // Fetch stream URL for mobile player with proper provider fallback
   const fetchMobileStream = useCallback(async (audioPreference?: AnimeAudioPreference) => {
-    if (!useMobilePlayer || !contentId || !mediaType) return;
+    if (!useMobilePlayer || !contentId || !mediaType) {
+      console.log('[WatchPage] fetchMobileStream skipped - missing required params');
+      setMobileLoading(false);
+      return;
+    }
     
     console.log('[WatchPage] fetchMobileStream called, current isAnimeContent:', isAnimeDetectedRef.current);
     
@@ -335,6 +339,13 @@ function WatchContent() {
     setMobileError(null);
     
     const currentAudioPref = audioPreference || audioPref;
+    
+    // Add timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      console.error('[WatchPage] Mobile stream fetch timed out after 30s');
+      setMobileError('Request timed out. Please try again.');
+      setMobileLoading(false);
+    }, 30000);
     
     try {
       // Check if this is anime content (has malId) or was previously detected as anime
@@ -430,6 +441,7 @@ function WatchContent() {
               
               setMobileStreamUrl(sources[selectedIndex].url);
               setMobileSourceIndex(selectedIndex);
+              clearTimeout(timeoutId);
               setMobileLoading(false);
               console.log(`[WatchPage] ✓ Mobile stream loaded from ${provider}:`, 
                 sources[selectedIndex].url?.substring(0, 50), 
@@ -443,9 +455,11 @@ function WatchContent() {
         }
       }
 
+      clearTimeout(timeoutId);
       setMobileError('No streams available from any provider');
       setMobileLoading(false);
     } catch (e) {
+      clearTimeout(timeoutId);
       console.error('[WatchPage] Error fetching mobile stream:', e);
       setMobileError('Failed to load video');
       setMobileLoading(false);
@@ -469,19 +483,32 @@ function WatchContent() {
   // Fetch mobile stream when needed - only on initial mount or content change
   // Using a ref to prevent refetch on orientation change
   const hasFetchedStreamRef = useRef(false);
+  const fetchAttemptedRef = useRef(false);
   
   useEffect(() => {
-    // Only fetch if we haven't already and we're using mobile player
-    if (useMobilePlayer && !hasFetchedStreamRef.current && !mobileStreamUrl) {
+    // Only fetch if we're using mobile player and haven't successfully fetched yet
+    if (useMobilePlayer && !hasFetchedStreamRef.current && !mobileStreamUrl && !fetchAttemptedRef.current) {
       console.log('[WatchPage] Initial mobile stream fetch');
-      hasFetchedStreamRef.current = true;
-      fetchMobileStream();
+      fetchAttemptedRef.current = true;
+      fetchMobileStream().then(() => {
+        hasFetchedStreamRef.current = true;
+      }).catch((err) => {
+        console.error('[WatchPage] Mobile stream fetch failed:', err);
+        // Reset attempt flag so user can retry
+        fetchAttemptedRef.current = false;
+      });
     }
   }, [useMobilePlayer, mobileStreamUrl, fetchMobileStream]);
   
-  // Reset fetch flag when content changes
+  // Reset fetch flags when content changes
   useEffect(() => {
+    console.log('[WatchPage] Content changed, resetting fetch flags');
     hasFetchedStreamRef.current = false;
+    fetchAttemptedRef.current = false;
+    setMobileStreamUrl(null);
+    setMobileSources([]);
+    setMobileLoading(true);
+    setMobileError(null);
   }, [contentId, seasonId, episodeId]);
 
   // Handle mobile source change
