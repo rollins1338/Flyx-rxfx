@@ -11,7 +11,7 @@ const sections = [
   { id: 'literature', title: 'Literature Review' },
   { id: 'methodology', title: 'Methodology' },
   { id: 'architecture', title: 'System Architecture' },
-  { id: 'heist', title: 'The Heist' },
+  { id: 'heist', title: 'Security Research' },
   { id: 'implementation', title: 'Implementation' },
   { id: 'features', title: 'Feature Evolution' },
   { id: 'results', title: 'Results & Analysis' },
@@ -55,12 +55,12 @@ export default function AboutPage() {
       <header className="about-header">
         <div className="journal-badge">Journal of Questionable Software Engineering • Vol. 1, Issue 2 • December 2025</div>
         <div className="last-updated">Last updated: December 13, 2025</div>
-        <h1>Flyx: An Empirical Study in Stealing from Thieves While Maintaining Moral Superiority</h1>
+        <h1>Flyx: A Case Study in Privacy-Respecting Streaming Architecture and Web Security Research</h1>
         <p className="subtitle">
-          A comprehensive analysis of building ethical streaming infrastructure by reverse engineering 
-          the security measures of criminals who profit from content they do not own, featuring extensive 
-          documentation of late-night debugging sessions, an alarming amount of Monster Energy consumption,
-          and the ongoing evolution from legacy providers to modern extraction pipelines.
+          An academic exploration of building user-respecting streaming infrastructure, documenting 
+          modern web security patterns, obfuscation techniques, and the technical feasibility of 
+          privacy-first design in media applications—featuring extensive documentation of reverse 
+          engineering methodologies and the ongoing evolution of extraction pipelines.
         </p>
         <div className="author">
           <span className="avatar">V</span>
@@ -108,55 +108,48 @@ export default function AboutPage() {
             <h2>Abstract</h2>
             <div className="abstract-box">
               <p>
-                This paper presents Flyx, a fully-functional video streaming platform developed over 
-                seven months (and counting) to test a hypothesis that many would consider obvious but few have bothered 
-                to prove: that free streaming services do not actually require malicious advertising, 
-                invasive tracking, cryptocurrency miners, or user interfaces designed by someone who 
-                genuinely hates humanity. The pirate streaming ecosystem has long operated under the 
-                assumption that exploitation is the price of free content. We challenge this assumption 
-                by building something that works without being terrible.
+                This paper presents Flyx, a research project and technology demonstration exploring 
+                privacy-respecting streaming architecture. Developed over seven months, the project 
+                investigates whether modern web applications can deliver media content without 
+                invasive tracking, malicious advertising, or exploitative user interfaces. The 
+                findings demonstrate that privacy-first design is technically and economically 
+                viable in streaming applications.
               </p>
               <p>
-                Through systematic reverse engineering of third-party streaming providers (entities that 
-                themselves profit from content they do not own) we demonstrate that it is entirely possible 
-                to extract and serve video content without subjecting users to the digital equivalent of 
-                walking through a minefield blindfolded. Our findings suggest that the prevalence of 
-                exploitative practices in pirate streaming reflects a choice to prioritize profit over 
-                basic human decency, not a technical or economic necessity.
+                Through systematic analysis of third-party streaming providers, we document various 
+                security patterns, obfuscation techniques, and authentication mechanisms. This 
+                research contributes to the broader understanding of web security while demonstrating 
+                that user-respecting alternatives are achievable.
               </p>
               <p>
-                <strong>Update (December 2025):</strong> Since initial publication, the platform has 
-                undergone significant evolution. Legacy providers like 2Embed and MoviesAPI have been 
-                deprecated in favor of more reliable sources: Vidsrc and Videasy now form the backbone 
-                of our extraction pipeline. AnimeKai integration provides dedicated anime streaming with 
-                sub/dub toggle. The public response has been overwhelming—thousands of users, viral Reddit 
-                posts, and the delicious irony of pirate sites updating their obfuscation in response to 
-                our work. The cat-and-mouse game continues, and we are winning.
+                <strong>Update (December 2025):</strong> The platform has undergone significant 
+                evolution. Legacy providers have been deprecated in favor of more reliable sources: 
+                Vidsrc and Videasy now form the backbone of our extraction pipeline. AnimeKai 
+                integration provides dedicated anime streaming with sub/dub toggle. The public 
+                response has validated the core hypothesis—users prefer privacy-respecting alternatives 
+                when they exist and work properly.
               </p>
               <p>
                 <strong>December 2025 Feature Drop:</strong> Chromecast &amp; AirPlay casting, full TV 
                 remote navigation, 29-language subtitle support with sync adjustment, pinch-to-zoom on 
                 mobile, continue watching with progress tracking, auto-play next episode, and region 
-                filtering. The platform that was &quot;good enough&quot; is now genuinely good.
+                filtering.
               </p>
               <p>
-                <strong>Latest Crack (December 2025):</strong> 111movies has been fully reverse engineered. 
-                AES-256-CBC encryption with custom alphabet substitution—cracked without Puppeteer. 
-                See our <Link href="/reverse-engineering">technical documentation</Link> for the complete 
-                breakdown including extracted keys and working code.
+                <strong>Latest Research (December 2025):</strong> 111movies security architecture has 
+                been fully documented. AES-256-CBC encryption with custom alphabet substitution—analyzed 
+                without browser automation. See our <Link href="/reverse-engineering">technical documentation</Link> 
+                for the complete breakdown.
               </p>
               <p>
-                <strong>Live TV Breakthrough (December 2025):</strong> DLHD live TV streams now work 
-                through our Cloudflare proxy. The key server appeared to block datacenter IPs, but 
-                reverse engineering their obfuscated JavaScript player revealed the real protection: 
-                Bearer token authentication. With the correct auth token extracted from the player page, 
-                key requests work from ANY IP. No residential proxy needed. 
-                See the <Link href="/reverse-engineering#dlhd">full technical breakdown</Link>.
+                <strong>Live TV Research (December 2025):</strong> DLHD live TV streams analyzed through 
+                our Cloudflare proxy. Reverse engineering their obfuscated JavaScript player revealed 
+                Bearer token authentication patterns. See the <Link href="/reverse-engineering#dlhd">full 
+                technical breakdown</Link>.
               </p>
               <p>
-                <strong>Keywords:</strong> Streaming Architecture, Reverse Engineering, Ethical Design, 
-                Obfuscation Analysis, JavaScript Archaeology, Sleep Deprivation, Monster Energy Dependency,
-                Vidsrc, Videasy, AnimeKai, 111movies, DLHD, Live TV, AES-256-CBC, AES-128, Bearer Token,
+                <strong>Keywords:</strong> Streaming Architecture, Reverse Engineering, Privacy-First Design, 
+                Obfuscation Analysis, Web Security Research, AES-256-CBC, AES-128, Bearer Token Authentication,
                 Chromecast, AirPlay, TV Navigation, OpenSubtitles
               </p>
             </div>
@@ -216,174 +209,110 @@ export default function AboutPage() {
               profitable choice, certainly, but a choice nonetheless.
             </p>
 
-            <h3>1.3 The Hypothesis</h3>
+            <h3>1.3 Research Questions</h3>
             <p>
-              This project began with a simple question: what if someone built a streaming platform 
-              that was not actively hostile to its users? What if, instead of treating visitors as 
-              resources to be extracted, we treated them as people who just wanted to watch a movie 
-              without their browser catching fire?
+              This project began with fundamental questions about streaming architecture: Can a 
+              streaming platform be built that respects user privacy? What are the technical 
+              requirements for privacy-first media delivery? How do existing providers protect 
+              their systems, and what can we learn from analyzing these protections?
             </p>
             <blockquote>
               &quot;The best way to prove something is possible is to do it. The second best way is to 
               write a really long document about doing it and hope people believe you.&quot;
-              <cite>- Ancient Proverb (Source: We Made It Up)</cite>
+              <cite>- Research Philosophy</cite>
             </blockquote>
             <p>
-              We chose the first option, then wrote the document anyway because we are overachievers 
-              with poor time management skills.
+              We chose the first option, then wrote the document anyway for academic completeness.
             </p>
 
             <h3>1.4 Scope and Contributions</h3>
             <p>
-              This paper makes the following contributions to the field of &quot;things that should 
-              have been obvious but apparently needed proving&quot;:
+              This research makes the following contributions:
             </p>
             <ul>
               <li>
-                <strong>Proof of Concept:</strong> A fully functional streaming platform that operates 
-                without advertisements, tracking, malware, or contempt for its users.
+                <strong>Proof of Concept:</strong> A functional streaming platform demonstrating 
+                privacy-respecting architecture without advertisements, tracking, or exploitative patterns.
               </li>
               <li>
-                <strong>Reverse Engineering Documentation:</strong> Comprehensive analysis of the 
-                obfuscation and security measures employed by pirate streaming providers, including 
-                detailed accounts of the author&apos;s descent into madness while debugging minified 
-                JavaScript at 3 AM. <Link href="/reverse-engineering" className="inline-link">
+                <strong>Security Research Documentation:</strong> Comprehensive analysis of obfuscation 
+                and security measures employed by streaming providers, contributing to the broader 
+                understanding of web security patterns. <Link href="/reverse-engineering" className="inline-link">
                 Read the full technical breakdown →</Link>
               </li>
               <li>
                 <strong>Architectural Reference:</strong> A blueprint for building privacy-respecting 
-                streaming applications that other developers can use, ignore, or print out and use as 
-                kindling, depending on their preferences.
+                streaming applications that other developers and researchers can reference.
               </li>
               <li>
-                <strong>Economic Analysis:</strong> Evidence that the &quot;we need aggressive 
-                monetization to survive&quot; argument is, to use the technical term, complete nonsense.
+                <strong>Feasibility Analysis:</strong> Evidence that privacy-first design is technically 
+                and economically viable for streaming applications.
               </li>
               <li>
-                <strong>Public Validation:</strong> Thousands of users proving that people will choose 
-                the ethical option when it actually exists and works properly.
+                <strong>Public Validation:</strong> User feedback demonstrating demand for privacy-respecting 
+                alternatives in the streaming space.
               </li>
             </ul>
           </section>
 
-          {/* Public Reception */}
           <section id="reception">
-            <h2>2. Public Reception: The Internet Responds</h2>
+            <h2>2. Public Response and Validation</h2>
             
-            <h3>2.1 The Reddit Effect</h3>
+            <h3>2.1 Community Feedback</h3>
             <p className="lead">
-              We posted about Flyx on Reddit expecting maybe a few dozen people to care. We were 
-              wrong. Spectacularly, wonderfully wrong.
+              The project received significant attention after being shared publicly, validating 
+              the core hypothesis that users prefer privacy-respecting alternatives.
             </p>
             <p>
-              The post went viral. Thousands of upvotes. Hundreds of comments. People sharing their 
-              own horror stories about pirate streaming sites. Developers asking how we cracked 
-              specific obfuscation schemes. Users thanking us for building something that does not 
-              make them want to throw their laptop out a window.
-            </p>
-            <p>
-              The response validated everything we suspected: people are desperate for alternatives 
-              to the exploitative garbage that dominates the pirate streaming ecosystem. They are 
-              not choosing malware-riddled sites because they like malware. They are choosing them 
-              because they thought there was no other option.
-            </p>
-            <p>
-              Now there is.
+              The response demonstrated strong demand for streaming solutions that prioritize user 
+              experience over monetization. Users shared their experiences with existing streaming 
+              options and expressed appreciation for a privacy-first approach.
             </p>
 
-            <h3>2.2 The Feedback Loop</h3>
+            <h3>2.2 Feature Development</h3>
             <p>
-              With users came feedback. Lots of feedback. Feature requests, bug reports, suggestions, 
-              and the occasional message from someone who just wanted to say thanks. We listened to 
-              all of it.
+              User feedback drove rapid feature development. The most requested capabilities were 
+              implemented based on community input:
             </p>
             <div className="feedback-highlights">
               <div className="feedback-item">
                 <span className="feedback-icon">📺</span>
                 <div>
-                  <h4>&quot;Can I cast this to my TV?&quot;</h4>
-                  <p>Asked approximately 847 times. We added Chromecast and AirPlay support. You can 
-                  now watch on your TV without HDMI cables like it&apos;s 2010.</p>
+                  <h4>Casting Support</h4>
+                  <p>Chromecast and AirPlay support for TV viewing without additional hardware.</p>
                 </div>
               </div>
               <div className="feedback-item">
                 <span className="feedback-icon">📝</span>
                 <div>
-                  <h4>&quot;The subtitles are out of sync&quot;</h4>
-                  <p>A universal complaint about streaming. We added subtitle sync adjustment—hit G/H 
-                  to shift timing by 0.5 seconds. Plus 29 languages via OpenSubtitles with quality 
-                  scoring to auto-pick the best version.</p>
+                  <h4>Subtitle Synchronization</h4>
+                  <p>29 languages via OpenSubtitles with quality scoring and sync adjustment controls.</p>
                 </div>
               </div>
               <div className="feedback-item">
                 <span className="feedback-icon">🎮</span>
                 <div>
-                  <h4>&quot;I want to use this on my Fire TV&quot;</h4>
-                  <p>Built full spatial navigation from scratch. Arrow keys navigate everything. 
-                  Works on any device with a D-pad. The entire UI is now TV-friendly.</p>
+                  <h4>TV Navigation</h4>
+                  <p>Full spatial navigation for devices with D-pad controls (Fire TV, Android TV).</p>
                 </div>
               </div>
               <div className="feedback-item">
                 <span className="feedback-icon">🎌</span>
                 <div>
-                  <h4>&quot;Anime support when?&quot;</h4>
-                  <p>AnimeKai integration with sub/dub toggle. One click to switch between Japanese 
-                  audio with subtitles and English dub. Remembers your preference.</p>
+                  <h4>Anime Integration</h4>
+                  <p>AnimeKai integration with sub/dub toggle and preference memory.</p>
                 </div>
               </div>
             </div>
 
-            <h3>2.3 The Pirate Sites Notice</h3>
+            <h3>2.3 Research Impact</h3>
             <p>
-              Here is where it gets interesting. Some of the pirate sites we reverse engineered have 
-              noticed Flyx. A few have started changing their obfuscation. One even added a new layer 
-              of protection specifically designed to break our extraction.
-            </p>
-            <p>
-              Let that sink in: they are spending engineering resources to protect their ability to 
-              serve you malware. Not to protect content they do not own. To protect their ad revenue 
-              from people like us who want to give users the content without the cancer.
-            </p>
-            <blockquote>
-              &quot;The fact that they are updating their obfuscation in response to us is the 
-              highest compliment they could pay. It means we are hurting their bottom line. Good.&quot;
-              <cite>- Field Notes, December 2025</cite>
-            </blockquote>
-            <p>
-              We cracked their new protections within days. The cat-and-mouse game continues, and 
-              we are winning.
+              The security research aspects of the project have contributed to broader understanding 
+              of web obfuscation techniques. Some providers have updated their protection mechanisms 
+              in response, providing additional case studies for ongoing research.
             </p>
 
-            <h3>2.4 The Unexpected Alliance</h3>
-            <p>
-              And then something truly bizarre happened.
-            </p>
-            <p>
-              One of the site owners we cracked reached out. Not with a cease and desist. Not with 
-              threats. With <em>information about their competitors</em>.
-            </p>
-            <p>
-              Let that sink in. A pirate site operator, whose obfuscation we had just broken, decided 
-              that helping us crack their competition was more valuable than fighting us. They offered 
-              up details about how rival sites structure their protection, where their weaknesses are, 
-              and how to bypass their defenses.
-            </p>
-            <blockquote>
-              &quot;There is no honor among thieves. But apparently there is spite, and spite is 
-              just as useful.&quot;
-              <cite>- Field Notes, December 2025</cite>
-            </blockquote>
-            <p>
-              The pirate streaming ecosystem is eating itself. They are so busy competing for ad 
-              revenue that they will sabotage each other to get ahead. Meanwhile, we are over here 
-              building something that does not exploit anyone, and they are handing us the keys to 
-              their rivals&apos; kingdoms.
-            </p>
-            <p>
-              You cannot make this stuff up.
-            </p>
-
-            <h3>2.4 The Numbers</h3>
+            <h3>2.4 Usage Metrics</h3>
             <div className="stats-grid">
               <div className="stat">
                 <span className="stat-value">10K+</span>
@@ -689,34 +618,31 @@ export default function AboutPage() {
 
           {/* The Heist */}
           <section id="heist">
-            <h2>6. The Heist: Reverse Engineering Stream Providers</h2>
+            <h2>6. Security Research: Analyzing Stream Provider Protection</h2>
             
-            <h3>5.1 The Irony</h3>
+            <h3>5.1 Research Motivation</h3>
             <p className="lead">
-              Here is the delicious irony at the heart of this project: the streaming providers we 
-              needed to crack are not legitimate businesses. They are pirates themselves, profiting 
-              from content they do not own by wrapping it in malware, pop-ups, and cryptocurrency 
-              miners. Our job was to break into their systems and steal what they had already stolen, 
-              then serve it without the exploitation.
+              This project serves as a practical study in web security, obfuscation analysis, and 
+              privacy-respecting architecture. The streaming providers we analyzed employ sophisticated 
+              protection mechanisms that provide valuable case studies in modern web security patterns.
+              Understanding these systems contributes to broader knowledge in the security research community.
             </p>
             <p>
-              We are, in essence, robbing the robbers. And we feel absolutely no guilt about it.
+              Our goal was to document and analyze these protection mechanisms while building a 
+              demonstration platform that prioritizes user privacy and experience.
             </p>
             <blockquote>
-              &quot;These sites make millions from advertisements and malware while hiding behind 
-              layers of obfuscation that would make nation-state hackers proud. They are not 
-              protecting intellectual property. They are protecting their revenue stream from people 
-              like us who want to give users the content without the cancer.&quot;
-              <cite>- Field Notes, 3 AM, Week 7</cite>
+              &quot;Understanding how systems protect themselves—even systems operating in legal gray 
+              areas—provides valuable insights for security researchers and developers building 
+              legitimate applications.&quot;
+              <cite>- Research Notes, Week 7</cite>
             </blockquote>
 
-            <h3>5.2 The Battlefield</h3>
+            <h3>5.2 Technical Challenges</h3>
             <p>
-              Picture this: you find a pirate streaming site. It works. Videos play. But when you 
-              try to extract the actual stream URL to use in your own player (to strip away the 
-              pop-ups and malware) you hit a wall. Not just one wall. A fortress of walls, each more 
-              devious than the last. These criminals have invested serious engineering talent into 
-              making sure nobody can do what we were trying to do.
+              Modern streaming providers employ multiple layers of protection. Analyzing these systems 
+              reveals sophisticated security patterns that are instructive for anyone working in web 
+              security or application development.
             </p>
 
             <div className="challenge">
@@ -807,98 +733,77 @@ export default function AboutPage() {
               </p>
             </div>
 
-            <h3>5.3 War Stories</h3>
+            <h3>5.3 Case Studies</h3>
             <p>
-              Every provider was a different puzzle. Different obfuscation, different tricks, different 
-              ways to make our lives difficult. Here are the ones that nearly broke us, and how we broke 
-              them instead.
+              Each provider presented unique technical challenges. Documenting these provides valuable 
+              reference material for security researchers and developers.
             </p>
 
             <div className="war-story">
-              <h4>The Vidsrc Evolution: Learning from the Past</h4>
+              <h4>Case Study: Vidsrc Architecture Analysis</h4>
               <p>
-                After months of battling 2Embed and MoviesAPI, we made a strategic pivot. Vidsrc 
-                emerged as a more reliable foundation, with cleaner architecture and more predictable 
-                behavior. But do not let that fool you: their obfuscation was still formidable. 
-                Multiple layers of encoding, rotating keys, and timestamp-based token generation 
-                that expired faster than you could say &quot;network request.&quot;
+                After analyzing multiple providers, Vidsrc emerged as an interesting case study with 
+                cleaner architecture and more predictable behavior. Their protection included 
+                multiple layers of encoding, rotating keys, and timestamp-based token generation.
               </p>
               <p>
-                The real game-changer was Videasy. Where other providers buried their streams under 
-                mountains of JavaScript spaghetti, Videasy took a different approach. Still protected, 
-                still obfuscated, but with patterns we could recognize and exploit. Their token 
-                system used predictable seeds derived from content metadata.
+                Videasy presented a different approach to protection. Their token system used 
+                predictable seeds derived from content metadata, demonstrating an alternative 
+                security model.
               </p>
               <p>
-                <strong>The Breakthrough:</strong> Instead of fighting each provider&apos;s unique 
-                obfuscation, we built a unified extraction pipeline. Vidsrc for reliability, Videasy 
-                for speed, with automatic fallback between them. Extraction times dropped from 
-                5+ seconds to under 200 milliseconds. The old providers (2Embed, MoviesAPI) became 
-                backup options rather than primary sources.
+                <strong>Key Finding:</strong> Building a unified extraction pipeline that handles 
+                multiple provider architectures proved more maintainable than provider-specific 
+                solutions. Extraction times improved from 5+ seconds to under 200 milliseconds.
               </p>
             </div>
 
             <div className="war-story">
-              <h4>111movies: The AES-256 Fortress (December 2025)</h4>
+              <h4>Case Study: 111movies AES-256 Implementation (December 2025)</h4>
               <p>
-                111movies looked impenetrable at first. A Next.js frontend with heavily obfuscated 
-                JavaScript, API calls that returned 403 unless you knew the secret handshake, and 
-                an encoding scheme that made our heads spin. The encoded strings were 783 characters 
-                of apparent gibberish. No obvious patterns. No clear entry point.
+                111movies presented an interesting security architecture. A Next.js frontend with 
+                heavily obfuscated JavaScript, API calls requiring specific authentication, and 
+                a multi-layer encoding scheme.
               </p>
               <p>
-                We spent days deobfuscating their webpack bundles. String arrays with Base64-encoded 
-                values. Decoder functions that rotated indices. Control flow flattening that turned 
-                simple logic into spaghetti. But buried in the chaos, we found it: <code>createCipheriv</code>. 
-                They were using AES-256-CBC encryption.
+                Analysis of their webpack bundles revealed string arrays with Base64-encoded values, 
+                decoder functions with rotating indices, and control flow flattening. The key 
+                discovery: <code>createCipheriv</code> indicating AES-256-CBC encryption.
               </p>
               <p>
-                The keys were hidden in plain sight—byte arrays passed to the cipher function. A 32-byte 
-                AES key, a 16-byte IV, and a 9-byte XOR key for post-processing. The encoding flow: 
-                encrypt → hex → XOR → UTF-8 → Base64 → alphabet substitution. Five layers of obfuscation, 
-                all cracked without touching a browser.
+                The encoding flow: encrypt → hex → XOR → UTF-8 → Base64 → alphabet substitution. 
+                Five layers of obfuscation providing a comprehensive case study in layered security.
               </p>
               <p>
-                <strong>The Breakthrough:</strong> The API was returning 403 even with correct encoding. 
-                Hours of comparing our requests to browser requests revealed the culprit: a missing 
-                <code>X-Requested-With: XMLHttpRequest</code> header. One header. That was it. Add 
-                the header, get the streams. 10 sources per movie, 1080p quality, zero ads.
+                <strong>Key Finding:</strong> The API required a specific <code>X-Requested-With: XMLHttpRequest</code> 
+                header—a common but often overlooked security check.
               </p>
               <p>
                 <Link href="/reverse-engineering#111movies" className="war-story-link">
-                  → Full technical breakdown with extracted keys
+                  → Full technical documentation
                 </Link>
               </p>
             </div>
 
             <div className="war-story">
-              <h4>SuperEmbed&apos;s Decoy Trap: The One That Fought Back</h4>
+              <h4>Case Study: Bot Detection Analysis</h4>
               <p>
-                SuperEmbed was paranoid. Canvas fingerprinting. WebGL checks. Timing analysis on 
-                every interaction. But their cruelest trick was the decoy streams. Fail their bot 
-                detection and they do not block you. They give you a stream that works perfectly for 
-                exactly 30 seconds, then dies. You think you have won. You deploy your code. Users 
-                start complaining. You realize you have been played.
+                Some providers implement sophisticated bot detection including canvas fingerprinting, 
+                WebGL checks, and timing analysis. Understanding these mechanisms is valuable for 
+                both security researchers and developers building legitimate automation tools.
               </p>
               <p>
-                We burned a week on stealth techniques. Puppeteer plugins. Fake mouse movements. 
-                Randomized timing. Nothing worked consistently. Their detection was too good.
-              </p>
-              <p>
-                <strong>The Breakthrough:</strong> We stopped trying to fool their JavaScript and 
-                started ignoring it entirely. Their validation happened client-side, in the browser. 
-                But the actual stream endpoint? It just needed the right parameters. We traced the 
-                network requests, found the endpoint, figured out what parameters it expected, and 
-                called it directly. No browser. No JavaScript. No bot detection. Just a clean HTTP 
-                request that returned the real stream every time.
+                <strong>Key Finding:</strong> Client-side validation can often be bypassed by 
+                understanding the underlying API requirements. Direct HTTP requests with proper 
+                headers proved more reliable than browser automation approaches.
               </p>
             </div>
 
-            <h3>5.4 The Numbers</h3>
+            <h3>5.4 Research Metrics</h3>
             <div className="stats-grid">
               <div className="stat">
                 <span className="stat-value">15+</span>
-                <span className="stat-label">Obfuscation schemes cracked</span>
+                <span className="stat-label">Security patterns documented</span>
               </div>
               <div className="stat">
                 <span className="stat-value">180ms</span>
@@ -909,8 +814,8 @@ export default function AboutPage() {
                 <span className="stat-label">First-try success rate</span>
               </div>
               <div className="stat">
-                <span className="stat-value">∞</span>
-                <span className="stat-label">Monsters consumed</span>
+                <span className="stat-value">5+</span>
+                <span className="stat-label">Encryption schemes analyzed</span>
               </div>
             </div>
           </section>
@@ -983,8 +888,8 @@ export default function AboutPage() {
             <p>
               After the initial public release, we went into overdrive. Ten days of intense development, 
               driven by user feedback and our own frustration with missing features. The result was a 
-              platform that went from &quot;functional proof of concept&quot; to &quot;actually 
-              competitive with commercial services.&quot;
+              platform that went from &quot;functional proof of concept&quot; to &quot;genuinely 
+              useful for research and demonstration purposes.&quot;
             </p>
 
             <h3>8.2 Casting: Finally, Your TV</h3>
@@ -1303,7 +1208,8 @@ export default function AboutPage() {
               Then thousands of people started using it. They sent feedback. They requested features. 
               They shared their own horror stories about the pirate streaming ecosystem. And we 
               listened. Ten days of intense development later, the platform went from &quot;functional 
-              proof of concept&quot; to something that genuinely competes with commercial services.
+              proof of concept&quot; to something genuinely useful—a real demonstration that 
+              privacy-respecting streaming is technically feasible.
             </p>
             <p>
               Chromecast. AirPlay. TV remote navigation. 29-language subtitles with sync adjustment. 
