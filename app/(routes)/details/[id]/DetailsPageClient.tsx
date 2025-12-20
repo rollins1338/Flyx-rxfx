@@ -54,10 +54,12 @@ import styles from './DetailsPage.module.css';
 // Related Content Section with horizontal scroll and navigation buttons
 function RelatedContentSection({
   items,
-  onItemSelect
+  onItemSelect,
+  reduceMotion = true
 }: {
   items: MediaItem[];
   onItemSelect: (id: string) => void;
+  reduceMotion?: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -74,42 +76,35 @@ function RelatedContentSection({
   return (
     <section className="py-12 px-6">
       <div className="container mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-        >
+        <div>
           <div className="flex items-center justify-between mb-8">
             <h2 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3">
               <span className="text-3xl">✨</span>
               <span>You May Also Like</span>
             </h2>
             <div className="flex gap-4">
-              <motion.button
-                whileHover={{ scale: 1.1, boxShadow: "0 8px 25px rgba(120, 119, 198, 0.4)" }}
-                whileTap={{ scale: 0.9 }}
+              <button
+                type="button"
                 onClick={() => scroll('left')}
-                className="w-16 h-16 bg-gradient-to-r from-purple-600/20 to-pink-600/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:from-purple-600/30 hover:to-pink-600/30 transition-all duration-300 border border-white/20 shadow-xl"
+                className="w-16 h-16 bg-gradient-to-r from-purple-600/20 to-pink-600/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:from-purple-600/30 hover:to-pink-600/30 transition-all duration-300 border border-white/20 shadow-xl active:scale-90"
                 data-tv-skip="true"
                 tabIndex={-1}
               >
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
                 </svg>
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.1, boxShadow: "0 8px 25px rgba(120, 119, 198, 0.4)" }}
-                whileTap={{ scale: 0.9 }}
+              </button>
+              <button
+                type="button"
                 onClick={() => scroll('right')}
-                className="w-16 h-16 bg-gradient-to-r from-purple-600/20 to-pink-600/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:from-purple-600/30 hover:to-pink-600/30 transition-all duration-300 border border-white/20 shadow-xl"
+                className="w-16 h-16 bg-gradient-to-r from-purple-600/20 to-pink-600/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:from-purple-600/30 hover:to-pink-600/30 transition-all duration-300 border border-white/20 shadow-xl active:scale-90"
                 data-tv-skip="true"
                 tabIndex={-1}
               >
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
                 </svg>
-              </motion.button>
+              </button>
             </div>
           </div>
 
@@ -120,13 +115,9 @@ function RelatedContentSection({
             data-tv-scroll-container="true"
             data-tv-group="related-content"
           >
-            {items.map((item, index) => (
-              <motion.div
+            {items.map((item) => (
+              <div
                 key={item.id}
-                initial={{ opacity: 0, x: 50 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: index * 0.05 }}
                 onClick={() => onItemSelect(String(item.id))}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
@@ -140,16 +131,12 @@ function RelatedContentSection({
                 role="button"
                 aria-label={`${item.title || item.name}`}
               >
-                <motion.div
-                  whileHover={{ scale: 1.05, y: -8 }}
-                  transition={{ duration: 0.3, ease: "easeOut" }}
-                  className="relative rounded-xl bg-gray-800 shadow-2xl overflow-hidden"
-                >
+                <div className={`relative rounded-xl bg-gray-800 shadow-2xl overflow-hidden ${reduceMotion ? '' : 'hover:scale-105 hover:-translate-y-2'} transition-transform duration-300`}>
                   <div className="overflow-hidden rounded-xl">
                     <img
                       src={item.posterPath || `https://image.tmdb.org/t/p/w500${item.poster_path || ''}`}
                       alt={item.title || item.name || 'Content'}
-                      className="w-full h-72 md:h-80 object-cover group-hover:scale-110 transition-transform duration-500"
+                      className={`w-full h-72 md:h-80 object-cover ${reduceMotion ? '' : 'group-hover:scale-110'} transition-transform duration-500`}
                       loading="lazy"
                     />
                   </div>
@@ -171,7 +158,7 @@ function RelatedContentSection({
                     </svg>
                     {(item.vote_average || item.rating || 0).toFixed(1)}
                   </div>
-                </motion.div>
+                </div>
 
                 <div className="p-3">
                   <h3 className="text-white font-semibold text-base mb-1 line-clamp-2">
@@ -181,10 +168,10 @@ function RelatedContentSection({
                     {new Date(item.release_date || item.first_air_date || item.releaseDate || '').getFullYear() || ''}
                   </p>
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
-        </motion.div>
+        </div>
       </div>
     </section>
   );
@@ -225,6 +212,12 @@ export default function DetailsPageClient({
   const [seasonData, setSeasonData] = useState<Season | null>(null);
   const [loadingEpisodes, setLoadingEpisodes] = useState(false);
   const [episodeProgress, setEpisodeProgress] = useState<Record<number, number>>({});
+  const [reduceMotion, setReduceMotion] = useState(true);
+  
+  // Check for reduced motion on mount
+  useEffect(() => {
+    setReduceMotion(shouldReduceAnimations());
+  }, []);
   
   // MAL-specific state for anime - used to split TMDB seasons into MAL parts
   const [isAnime, setIsAnime] = useState<boolean>(false);
@@ -860,7 +853,8 @@ export default function DetailsPageClient({
       {relatedContent.length > 0 && (
         <RelatedContentSection 
           items={relatedContent} 
-          onItemSelect={handleRelatedSelect} 
+          onItemSelect={handleRelatedSelect}
+          reduceMotion={reduceMotion}
         />
       )}
     </div>
