@@ -1,0 +1,116 @@
+/* Mobile Bottom Navigation - Clean Rewrite */
+.bottomNav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: rgba(10, 10, 15, 0.98);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 0.5rem 0;
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* Base nav item - all items including search */
+.navItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #888);
+  font-size: 0.65rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s ease;
+  min-width: 56px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.navItem:active {
+  transform: scale(0.95);
+}
+
+/* Icon container */
+.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+
+.icon svg {
+  width: 22px;
+  height: 22px;
+  transition: all 0.2s ease;
+}
+
+/* Label */
+.label {
+  line-height: 1;
+}
+
+/* Active state - cyan highlight */
+.navItem.active {
+  color: var(--neon-cyan, #00f5ff);
+}
+
+.navItem.active .icon svg {
+  stroke: var(--neon-cyan, #00f5ff);
+  filter: drop-shadow(0 0 6px rgba(0, 245, 255, 0.5));
+}
+
+/* Search item - prominent center button */
+.searchItem {
+  position: relative;
+  padding: 0.5rem 0.75rem;
+}
+
+.searchIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, var(--neon-cyan, #00f5ff), var(--neon-purple, #8b5cf6));
+  border-radius: 50%;
+  box-shadow: 0 4px 16px rgba(0, 245, 255, 0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.searchIcon svg {
+  width: 22px;
+  height: 22px;
+  stroke: white;
+}
+
+.searchItem:active .searchIcon {
+  transform: scale(0.92);
+}
+
+.searchItem.active .searchIcon {
+  box-shadow: 0 4px 20px rgba(0, 245, 255, 0.5);
+}
+
+/* Hide label for search button */
+.searchItem .label {
+  display: none;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .navItem,
+  .searchIcon,
+  .icon svg {
+    transition: none;
+  }
+}
