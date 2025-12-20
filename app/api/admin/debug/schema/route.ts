@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     const adapter = db.getAdapter();
     const isNeon = db.isUsingNeon();
 
-    const tables = ['user_activity', 'live_activity', 'watch_sessions', 'analytics_events', 'page_views'];
+    const tables = ['user_activity', 'live_activity', 'watch_sessions', 'analytics_events', 'page_views', 'server_hits', 'referrer_stats'];
     const schema: Record<string, any> = {};
     const rowCounts: Record<string, number> = {};
 

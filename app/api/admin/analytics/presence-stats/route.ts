@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
           FROM live_activity
           WHERE is_active = 1 AND last_heartbeat >= ?
           GROUP BY activity_type
-        `, [strictCutoff, cutoffTime]);
+        `, [cutoffTime, strictCutoff]);
 
     // Get validation score distribution from user_activity
     const validationScores = isNeon
@@ -229,7 +229,7 @@ export async function GET(request: NextRequest) {
             COUNT(DISTINCT session_id) as total_sessions
           FROM live_activity
           WHERE is_active = 1 AND last_heartbeat >= ?
-        `, [strictCutoff, cutoffTime]);
+        `, [cutoffTime, strictCutoff]);
 
     return NextResponse.json({
       success: true,
