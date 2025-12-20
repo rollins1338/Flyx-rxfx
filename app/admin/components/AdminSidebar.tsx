@@ -17,7 +17,8 @@ import {
     MessageSquare,
     Tv,
     Database,
-    Megaphone
+    Megaphone,
+    Globe
 } from 'lucide-react';
 
 export default function AdminSidebar() {
@@ -28,6 +29,7 @@ export default function AdminSidebar() {
         { icon: TrendingUp, label: 'Insights', href: '/admin/insights' },
         { icon: BarChart3, label: 'Analytics', href: '/admin/analytics' },
         { icon: MousePointerClick, label: 'Engagement', href: '/admin/engagement' },
+        { icon: Globe, label: 'Traffic Sources', href: '/admin/traffic' },
         { icon: Users, label: 'Users', href: '/admin/users' },
         { icon: Film, label: 'Content', href: '/admin/content' },
         { icon: Map, label: 'Geographic', href: '/admin/geographic' },

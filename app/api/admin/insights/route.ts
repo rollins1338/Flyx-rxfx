@@ -199,47 +199,102 @@ export async function GET(request: NextRequest) {
     // ============================================
     let referrers: Array<{ referrer: string; count: number }> = [];
     try {
-      const referrerQuery = isNeon
+      // First try to get from the new referrer_stats table
+      const referrerStatsQuery = isNeon
         ? `SELECT 
              COALESCE(
                CASE 
-                 WHEN metadata->>'referrer' IS NULL OR metadata->>'referrer' = '' THEN 'Direct'
-                 WHEN metadata->>'referrer' LIKE '%google%' THEN 'Google'
-                 WHEN metadata->>'referrer' LIKE '%reddit%' THEN 'Reddit'
-                 WHEN metadata->>'referrer' LIKE '%twitter%' OR metadata->>'referrer' LIKE '%x.com%' THEN 'Twitter'
-                 WHEN metadata->>'referrer' LIKE '%facebook%' THEN 'Facebook'
-                 WHEN metadata->>'referrer' LIKE '%discord%' THEN 'Discord'
-                 WHEN metadata->>'referrer' LIKE '%youtube%' THEN 'YouTube'
+                 WHEN referrer_domain IS NULL OR referrer_domain = '' THEN 'Direct'
+                 WHEN referrer_domain LIKE '%google%' THEN 'Google'
+                 WHEN referrer_domain LIKE '%reddit%' THEN 'Reddit'
+                 WHEN referrer_domain LIKE '%twitter%' OR referrer_domain LIKE '%x.com%' THEN 'Twitter'
+                 WHEN referrer_domain LIKE '%facebook%' THEN 'Facebook'
+                 WHEN referrer_domain LIKE '%discord%' THEN 'Discord'
+                 WHEN referrer_domain LIKE '%youtube%' THEN 'YouTube'
+                 WHEN referrer_domain LIKE '%t.co%' THEN 'Twitter'
+                 WHEN referrer_domain LIKE '%linkedin%' THEN 'LinkedIn'
+                 WHEN referrer_domain LIKE '%instagram%' THEN 'Instagram'
+                 WHEN referrer_domain LIKE '%tiktok%' THEN 'TikTok'
                  ELSE 'Other'
                END,
                'Direct'
              ) as referrer,
-             COUNT(DISTINCT COALESCE(user_id, session_id)) as count
-           FROM analytics_events
-           WHERE event_type = 'page_view' AND timestamp >= $1 AND timestamp <= $2
+             SUM(hit_count) as count
+           FROM referrer_stats
+           WHERE last_hit >= $1
            GROUP BY referrer
            ORDER BY count DESC`
         : `SELECT 
              COALESCE(
                CASE 
-                 WHEN JSON_EXTRACT(metadata, '$.referrer') IS NULL OR JSON_EXTRACT(metadata, '$.referrer') = '' THEN 'Direct'
-                 WHEN JSON_EXTRACT(metadata, '$.referrer') LIKE '%google%' THEN 'Google'
-                 WHEN JSON_EXTRACT(metadata, '$.referrer') LIKE '%reddit%' THEN 'Reddit'
-                 WHEN JSON_EXTRACT(metadata, '$.referrer') LIKE '%twitter%' OR JSON_EXTRACT(metadata, '$.referrer') LIKE '%x.com%' THEN 'Twitter'
-                 WHEN JSON_EXTRACT(metadata, '$.referrer') LIKE '%facebook%' THEN 'Facebook'
-                 WHEN JSON_EXTRACT(metadata, '$.referrer') LIKE '%discord%' THEN 'Discord'
-                 WHEN JSON_EXTRACT(metadata, '$.referrer') LIKE '%youtube%' THEN 'YouTube'
+                 WHEN referrer_domain IS NULL OR referrer_domain = '' THEN 'Direct'
+                 WHEN referrer_domain LIKE '%google%' THEN 'Google'
+                 WHEN referrer_domain LIKE '%reddit%' THEN 'Reddit'
+                 WHEN referrer_domain LIKE '%twitter%' OR referrer_domain LIKE '%x.com%' THEN 'Twitter'
+                 WHEN referrer_domain LIKE '%facebook%' THEN 'Facebook'
+                 WHEN referrer_domain LIKE '%discord%' THEN 'Discord'
+                 WHEN referrer_domain LIKE '%youtube%' THEN 'YouTube'
+                 WHEN referrer_domain LIKE '%t.co%' THEN 'Twitter'
+                 WHEN referrer_domain LIKE '%linkedin%' THEN 'LinkedIn'
+                 WHEN referrer_domain LIKE '%instagram%' THEN 'Instagram'
+                 WHEN referrer_domain LIKE '%tiktok%' THEN 'TikTok'
                  ELSE 'Other'
                END,
                'Direct'
              ) as referrer,
-             COUNT(DISTINCT COALESCE(user_id, session_id)) as count
-           FROM analytics_events
-           WHERE event_type = 'page_view' AND timestamp >= ? AND timestamp <= ?
+             SUM(hit_count) as count
+           FROM referrer_stats
+           WHERE last_hit >= ?
            GROUP BY referrer
            ORDER BY count DESC`;
       
-      const referrerResult = await adapter.query(referrerQuery, [startTime, now]);
+      let referrerResult = await adapter.query(referrerStatsQuery, [startTime]);
+      
+      // If no data from referrer_stats, fall back to analytics_events
+      if (!referrerResult || referrerResult.length === 0) {
+        const fallbackQuery = isNeon
+          ? `SELECT 
+               COALESCE(
+                 CASE 
+                   WHEN metadata->>'referrer' IS NULL OR metadata->>'referrer' = '' THEN 'Direct'
+                   WHEN metadata->>'referrer' LIKE '%google%' THEN 'Google'
+                   WHEN metadata->>'referrer' LIKE '%reddit%' THEN 'Reddit'
+                   WHEN metadata->>'referrer' LIKE '%twitter%' OR metadata->>'referrer' LIKE '%x.com%' THEN 'Twitter'
+                   WHEN metadata->>'referrer' LIKE '%facebook%' THEN 'Facebook'
+                   WHEN metadata->>'referrer' LIKE '%discord%' THEN 'Discord'
+                   WHEN metadata->>'referrer' LIKE '%youtube%' THEN 'YouTube'
+                   ELSE 'Other'
+                 END,
+                 'Direct'
+               ) as referrer,
+               COUNT(DISTINCT COALESCE(user_id, session_id)) as count
+             FROM analytics_events
+             WHERE event_type = 'page_view' AND timestamp >= $1 AND timestamp <= $2
+             GROUP BY referrer
+             ORDER BY count DESC`
+          : `SELECT 
+               COALESCE(
+                 CASE 
+                   WHEN JSON_EXTRACT(metadata, '$.referrer') IS NULL OR JSON_EXTRACT(metadata, '$.referrer') = '' THEN 'Direct'
+                   WHEN JSON_EXTRACT(metadata, '$.referrer') LIKE '%google%' THEN 'Google'
+                   WHEN JSON_EXTRACT(metadata, '$.referrer') LIKE '%reddit%' THEN 'Reddit'
+                   WHEN JSON_EXTRACT(metadata, '$.referrer') LIKE '%twitter%' OR JSON_EXTRACT(metadata, '$.referrer') LIKE '%x.com%' THEN 'Twitter'
+                   WHEN JSON_EXTRACT(metadata, '$.referrer') LIKE '%facebook%' THEN 'Facebook'
+                   WHEN JSON_EXTRACT(metadata, '$.referrer') LIKE '%discord%' THEN 'Discord'
+                   WHEN JSON_EXTRACT(metadata, '$.referrer') LIKE '%youtube%' THEN 'YouTube'
+                   ELSE 'Other'
+                 END,
+                 'Direct'
+               ) as referrer,
+               COUNT(DISTINCT COALESCE(user_id, session_id)) as count
+             FROM analytics_events
+             WHERE event_type = 'page_view' AND timestamp >= ? AND timestamp <= ?
+             GROUP BY referrer
+             ORDER BY count DESC`;
+        
+        referrerResult = await adapter.query(fallbackQuery, [startTime, now]);
+      }
+      
       referrers = referrerResult.map((r: any) => ({
         referrer: r.referrer || 'Direct',
         count: parseInt(r.count) || 0,
