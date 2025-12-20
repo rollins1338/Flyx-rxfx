@@ -10,6 +10,8 @@
  * - Tab visibility tracking
  * - Behavioral analysis validation
  * - Accurate "truly active" user counts
+ * - Deduplication to prevent counting same user multiple times
+ * - Referrer tracking for traffic source analysis
  * 
  * Note: All bot detection happens client-side. If a bot bypasses client detection,
  * they simply won't send heartbeats, which is fine - they won't be counted.
@@ -18,6 +20,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeDB, getDB } from '@/lib/db/neon-connection';
 import { getLocationFromHeaders } from '@/app/lib/utils/geolocation';
+import { checkHeartbeatDuplication, generateDeduplicationFingerprint } from '@/lib/utils/presence-deduplication';
 
 // Validation thresholds
 const VALIDATION_CONFIG = {
@@ -43,6 +46,9 @@ interface PresencePayload {
   isActive: boolean;
   isVisible: boolean;
   isLeaving?: boolean;
+  // Referrer tracking
+  referrer?: string;
+  entryPage?: string;
   validation?: {
     isBot: boolean;
     botConfidence?: number;
@@ -59,6 +65,10 @@ interface PresencePayload {
     mouseEntropy?: number;
     mouseSamples?: number;
     scrollSamples?: number;
+    // Screen info for fingerprinting
+    screenResolution?: string;
+    timezone?: string;
+    language?: string;
   };
   timestamp: number;
 }
@@ -74,6 +84,40 @@ export async function POST(request: NextRequest) {
         { error: 'Missing required fields' },
         { status: 400 }
       );
+    }
+    
+    const userAgent = request.headers.get('user-agent') || '';
+    const serverReferrer = request.headers.get('referer') || data.referrer;
+    
+    // Generate server-side fingerprint for deduplication
+    const serverFingerprint = generateDeduplicationFingerprint({
+      userId: data.userId,
+      userAgent,
+      screenResolution: data.validation?.screenResolution,
+      timezone: data.validation?.timezone,
+      language: data.validation?.language,
+    });
+    
+    // Check for duplicate heartbeats
+    const dedupeResult = checkHeartbeatDuplication({
+      userId: data.userId,
+      sessionId: data.sessionId,
+      fingerprint: data.validation?.fingerprint || serverFingerprint,
+      activityType: data.activityType,
+      contentId: data.contentId,
+      timestamp: data.timestamp,
+    });
+    
+    if (!dedupeResult.shouldTrack) {
+      console.log('[Presence] Skipped duplicate/rate-limited:', {
+        userId: data.userId.substring(0, 8),
+        reason: dedupeResult.reason,
+      });
+      return NextResponse.json({
+        success: true,
+        tracked: false,
+        reason: dedupeResult.reason,
+      });
     }
     
     // Validate client-side bot detection results
@@ -98,8 +142,6 @@ export async function POST(request: NextRequest) {
         confidence: combinedConfidence,
       });
     }
-    
-    const userAgent = request.headers.get('user-agent') || '';
     
     await initializeDB();
     const db = getDB();
@@ -162,6 +204,8 @@ export async function POST(request: NextRequest) {
       mouseEntropy: data.validation?.mouseEntropy?.toFixed(3),
       mouseSamples: data.validation?.mouseSamples,
       isLeaving: data.isLeaving,
+      isDuplicate: dedupeResult.isDuplicate,
+      referrer: serverReferrer?.substring(0, 50),
     });
     
     return NextResponse.json({
@@ -169,6 +213,7 @@ export async function POST(request: NextRequest) {
       tracked: true,
       isTrulyActive,
       validationScore,
+      deduplicated: dedupeResult.isDuplicate,
     });
     
   } catch (error) {

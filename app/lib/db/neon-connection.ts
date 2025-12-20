@@ -395,6 +395,37 @@ class DatabaseConnection {
         entry_count INTEGER DEFAULT 0,
         exit_count INTEGER DEFAULT 0,
         updated_at BIGINT
+      )`,
+
+      // Server-side hit tracking (non-browser hits, bots, API calls)
+      `CREATE TABLE IF NOT EXISTS server_hits (
+        id TEXT PRIMARY KEY,
+        page_path TEXT NOT NULL,
+        ip_hash TEXT,
+        user_agent TEXT,
+        source_type TEXT,
+        source_name TEXT,
+        is_bot BOOLEAN DEFAULT FALSE,
+        referrer_full TEXT,
+        referrer_domain TEXT,
+        referrer_path TEXT,
+        referrer_source TEXT,
+        referrer_medium TEXT,
+        country TEXT,
+        city TEXT,
+        region TEXT,
+        timestamp BIGINT NOT NULL,
+        created_at BIGINT
+      )`,
+
+      // Aggregated referrer statistics
+      `CREATE TABLE IF NOT EXISTS referrer_stats (
+        referrer_domain TEXT PRIMARY KEY,
+        hit_count INTEGER DEFAULT 0,
+        last_hit BIGINT,
+        referrer_medium TEXT,
+        created_at BIGINT,
+        updated_at BIGINT
       )`
     ];
 
@@ -428,7 +459,13 @@ class DatabaseConnection {
       'CREATE INDEX IF NOT EXISTS idx_user_engagement_last ON user_engagement(last_visit DESC)',
       'CREATE INDEX IF NOT EXISTS idx_session_details_user ON session_details(user_id)',
       'CREATE INDEX IF NOT EXISTS idx_session_details_started ON session_details(started_at DESC)',
-      'CREATE INDEX IF NOT EXISTS idx_page_metrics_views ON page_metrics(total_views DESC)'
+      'CREATE INDEX IF NOT EXISTS idx_page_metrics_views ON page_metrics(total_views DESC)',
+      // Server hits indexes
+      'CREATE INDEX IF NOT EXISTS idx_server_hits_timestamp ON server_hits(timestamp DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_server_hits_page ON server_hits(page_path)',
+      'CREATE INDEX IF NOT EXISTS idx_server_hits_source ON server_hits(source_type)',
+      'CREATE INDEX IF NOT EXISTS idx_server_hits_referrer ON server_hits(referrer_domain)',
+      'CREATE INDEX IF NOT EXISTS idx_referrer_stats_hits ON referrer_stats(hit_count DESC)'
     ];
 
     for (const table of tables) {
@@ -719,6 +756,37 @@ class DatabaseConnection {
         entry_count INTEGER DEFAULT 0,
         exit_count INTEGER DEFAULT 0,
         updated_at INTEGER DEFAULT(strftime('%s', 'now'))
+      )`,
+
+      // Server-side hit tracking (SQLite)
+      `CREATE TABLE IF NOT EXISTS server_hits(
+        id TEXT PRIMARY KEY,
+        page_path TEXT NOT NULL,
+        ip_hash TEXT,
+        user_agent TEXT,
+        source_type TEXT,
+        source_name TEXT,
+        is_bot INTEGER DEFAULT 0,
+        referrer_full TEXT,
+        referrer_domain TEXT,
+        referrer_path TEXT,
+        referrer_source TEXT,
+        referrer_medium TEXT,
+        country TEXT,
+        city TEXT,
+        region TEXT,
+        timestamp INTEGER NOT NULL,
+        created_at INTEGER DEFAULT(strftime('%s', 'now'))
+      )`,
+
+      // Aggregated referrer statistics (SQLite)
+      `CREATE TABLE IF NOT EXISTS referrer_stats(
+        referrer_domain TEXT PRIMARY KEY,
+        hit_count INTEGER DEFAULT 0,
+        last_hit INTEGER,
+        referrer_medium TEXT,
+        created_at INTEGER DEFAULT(strftime('%s', 'now')),
+        updated_at INTEGER DEFAULT(strftime('%s', 'now'))
       )`
     ];
 
@@ -752,7 +820,13 @@ class DatabaseConnection {
       'CREATE INDEX IF NOT EXISTS idx_user_engagement_last ON user_engagement(last_visit DESC)',
       'CREATE INDEX IF NOT EXISTS idx_session_details_user ON session_details(user_id)',
       'CREATE INDEX IF NOT EXISTS idx_session_details_started ON session_details(started_at DESC)',
-      'CREATE INDEX IF NOT EXISTS idx_page_metrics_views ON page_metrics(total_views DESC)'
+      'CREATE INDEX IF NOT EXISTS idx_page_metrics_views ON page_metrics(total_views DESC)',
+      // Server hits indexes (SQLite)
+      'CREATE INDEX IF NOT EXISTS idx_server_hits_timestamp ON server_hits(timestamp DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_server_hits_page ON server_hits(page_path)',
+      'CREATE INDEX IF NOT EXISTS idx_server_hits_source ON server_hits(source_type)',
+      'CREATE INDEX IF NOT EXISTS idx_server_hits_referrer ON server_hits(referrer_domain)',
+      'CREATE INDEX IF NOT EXISTS idx_referrer_stats_hits ON referrer_stats(hit_count DESC)'
     ];
 
     for (const table of tables) {

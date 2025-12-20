@@ -156,6 +156,9 @@ export function PresenceProvider({ children }: PresenceProviderProps) {
       isActive: active,
       isVisible: document.visibilityState === 'visible',
       isLeaving: leaving,
+      // Referrer tracking
+      referrer: document.referrer || undefined,
+      entryPage: typeof window !== 'undefined' ? window.location.pathname : undefined,
       validation: {
         isBot: botResult?.isBot || false,
         botConfidence: botResult?.confidence || 0,
@@ -172,6 +175,10 @@ export function PresenceProvider({ children }: PresenceProviderProps) {
         mouseEntropy: globalBehavior.mouseEntropy,
         mouseSamples: globalBehavior.mouseSamples,
         scrollSamples: globalBehavior.scrollSamples,
+        // Screen info for fingerprinting/deduplication
+        screenResolution: typeof window !== 'undefined' ? `${screen.width}x${screen.height}` : undefined,
+        timezone: typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : undefined,
+        language: typeof navigator !== 'undefined' ? navigator.language : undefined,
       },
       timestamp: now,
     };

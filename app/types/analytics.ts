@@ -94,3 +94,105 @@ export interface PerformanceMetrics {
   context: Record<string, any>;
   timestamp: number;
 }
+
+
+// Server hit tracking types
+export interface ServerHit {
+  id: string;
+  pagePath: string;
+  ipHash: string;
+  userAgent: string;
+  sourceType: 'browser' | 'bot' | 'api' | 'social' | 'rss' | 'unknown';
+  sourceName: string;
+  isBot: boolean;
+  referrerFull: string | null;
+  referrerDomain: string | null;
+  referrerPath: string | null;
+  referrerSource: string;
+  referrerMedium: string;
+  country: string | null;
+  city: string | null;
+  region: string | null;
+  timestamp: number;
+  createdAt: number;
+}
+
+export interface ReferrerStats {
+  referrerDomain: string;
+  hitCount: number;
+  lastHit: number;
+  referrerMedium: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+// Presence tracking types
+export interface PresenceHeartbeat {
+  userId: string;
+  sessionId: string;
+  activityType: 'browsing' | 'watching' | 'livetv';
+  contentId?: string;
+  contentTitle?: string;
+  contentType?: 'movie' | 'tv';
+  seasonNumber?: number;
+  episodeNumber?: number;
+  isActive: boolean;
+  isVisible: boolean;
+  isLeaving?: boolean;
+  referrer?: string;
+  entryPage?: string;
+  validation?: PresenceValidation;
+  timestamp: number;
+}
+
+export interface PresenceValidation {
+  isBot: boolean;
+  botConfidence: number;
+  botReasons: string[];
+  fingerprint?: string;
+  hasInteracted: boolean;
+  interactionCount: number;
+  timeSinceLastInteraction: number | null;
+  behaviorIsBot: boolean;
+  behaviorConfidence: number;
+  behaviorReasons: string[];
+  mouseEntropy: number;
+  mouseSamples: number;
+  scrollSamples: number;
+  screenResolution?: string;
+  timezone?: string;
+  language?: string;
+}
+
+export interface DeduplicationResult {
+  isDuplicate: boolean;
+  shouldTrack: boolean;
+  reason?: string;
+  mergedSessionId?: string;
+}
+
+// Traffic source analytics types
+export interface TrafficSourceStats {
+  sourceType: string;
+  sourceName: string;
+  hitCount: number;
+  uniqueVisitors: number;
+}
+
+export interface ReferrerAnalytics {
+  referrerDomain: string;
+  referrerMedium: string;
+  hitCount: number;
+  lastHit: number;
+}
+
+export interface BotAnalytics {
+  sourceName: string;
+  hitCount: number;
+}
+
+export interface HourlyTrafficPattern {
+  hour: number;
+  hitCount: number;
+  botHits: number;
+}
