@@ -327,8 +327,10 @@ function WatchContent() {
 
   // Fetch stream URL for mobile player with proper provider fallback
   const fetchMobileStream = useCallback(async (audioPreference?: AnimeAudioPreference) => {
-    if (!useMobilePlayer || !contentId || !mediaType) {
-      console.log('[WatchPage] fetchMobileStream skipped - missing required params');
+    // Note: Don't check useMobilePlayer here - the caller is responsible for that check
+    // This avoids stale closure issues since useMobilePlayer is intentionally not in deps
+    if (!contentId || !mediaType) {
+      console.log('[WatchPage] fetchMobileStream skipped - missing contentId or mediaType');
       setMobileLoading(false);
       return;
     }
@@ -483,33 +485,28 @@ function WatchContent() {
   // Fetch mobile stream when needed - only on initial mount or content change
   // Using a ref to prevent refetch on orientation change
   const hasFetchedStreamRef = useRef(false);
-  const fetchAttemptedRef = useRef(false);
+  const lastFetchedContentRef = useRef<string | null>(null);
   
   useEffect(() => {
-    // Only fetch if we're using mobile player and haven't successfully fetched yet
-    if (useMobilePlayer && !hasFetchedStreamRef.current && !mobileStreamUrl && !fetchAttemptedRef.current) {
-      console.log('[WatchPage] Initial mobile stream fetch');
-      fetchAttemptedRef.current = true;
-      fetchMobileStream().then(() => {
-        hasFetchedStreamRef.current = true;
-      }).catch((err) => {
-        console.error('[WatchPage] Mobile stream fetch failed:', err);
-        // Reset attempt flag so user can retry
-        fetchAttemptedRef.current = false;
-      });
+    // Create a unique key for this content
+    const contentKey = `${contentId}-${seasonId}-${episodeId}`;
+    
+    // Only fetch if we're using mobile player and this is new content
+    if (useMobilePlayer && lastFetchedContentRef.current !== contentKey) {
+      console.log('[WatchPage] Initial mobile stream fetch for:', contentKey);
+      lastFetchedContentRef.current = contentKey;
+      hasFetchedStreamRef.current = false;
+      
+      // Reset state for new content
+      setMobileStreamUrl(null);
+      setMobileSources([]);
+      setMobileError(null);
+      setMobileLoading(true);
+      
+      // Fetch the stream
+      fetchMobileStream();
     }
-  }, [useMobilePlayer, mobileStreamUrl, fetchMobileStream]);
-  
-  // Reset fetch flags when content changes
-  useEffect(() => {
-    console.log('[WatchPage] Content changed, resetting fetch flags');
-    hasFetchedStreamRef.current = false;
-    fetchAttemptedRef.current = false;
-    setMobileStreamUrl(null);
-    setMobileSources([]);
-    setMobileLoading(true);
-    setMobileError(null);
-  }, [contentId, seasonId, episodeId]);
+  }, [useMobilePlayer, contentId, seasonId, episodeId, fetchMobileStream]);
 
   // Handle mobile source change
   const handleMobileSourceChange = useCallback((index: number, currentTime: number = 0) => {
