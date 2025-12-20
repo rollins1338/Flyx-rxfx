@@ -21,10 +21,8 @@ import {
   SearchInput,
   Select,
   Badge,
-  Button,
   formatDuration,
   formatDate,
-  formatNumber,
   colors,
   gradients,
   getCompletionColor,
@@ -238,7 +236,7 @@ export default function AnalyticsV2Page() {
       )}
 
       {activeTab === 'trends' && (
-        <TrendsTab sessions={sessions} timeRange={timeRange} />
+        <TrendsTab sessions={sessions} />
       )}
 
       {activeTab === 'engagement' && engagementMetrics && (
@@ -384,7 +382,7 @@ function BreakdownTab({ analytics }: { analytics: Analytics }) {
   );
 }
 
-function TrendsTab({ sessions, timeRange }: { sessions: WatchSession[]; timeRange: string }) {
+function TrendsTab({ sessions }: { sessions: WatchSession[] }) {
   // Group sessions by day
   const dailyData = useMemo(() => {
     const grouped: Record<string, { sessions: number; watchTime: number }> = {};
