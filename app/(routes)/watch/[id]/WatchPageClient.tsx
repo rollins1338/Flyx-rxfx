@@ -520,6 +520,11 @@ function WatchContent() {
     }
   }, [mobileSources]);
 
+  // Memoize error handler to prevent MobileVideoPlayer re-initialization on rotation
+  const handleMobileError = useCallback((err: string) => {
+    setMobileError(err);
+  }, []);
+
   // Debug: Log when nextEpisode changes
   useEffect(() => {
     console.log('[WatchPage] nextEpisode state updated:', nextEpisode);
@@ -670,7 +675,7 @@ function WatchContent() {
             title={title}
             streamUrl={mobileStreamUrl}
             onBack={handleBack}
-            onError={(err) => setMobileError(err)}
+            onError={handleMobileError}
             onSourceChange={handleMobileSourceChange}
             availableSources={mobileSources}
             currentSourceIndex={mobileSourceIndex}

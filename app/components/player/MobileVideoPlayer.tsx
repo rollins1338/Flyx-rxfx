@@ -150,6 +150,12 @@ export default function MobileVideoPlayer({
   
   // Ref to track if we've attempted auto-fullscreen
   const hasAttemptedAutoFullscreenRef = useRef(false);
+  
+  // Store onError in a ref to avoid re-initialization when callback changes
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
 
   // Debug: Log anime props
   useEffect(() => {
@@ -409,7 +415,7 @@ export default function MobileVideoPlayer({
         const err = video.error;
         setError(`Playback error: ${err?.message || 'Unknown error'}`);
         setIsLoading(false);
-        onError?.(err?.message || 'Playback failed');
+        onErrorRef.current?.(err?.message || 'Playback failed');
       };
       video.addEventListener('loadedmetadata', handleLoadedMetadata);
       video.addEventListener('canplay', handleCanPlay);
@@ -449,7 +455,7 @@ export default function MobileVideoPlayer({
           else {
             setError('Playback failed. Try another source.');
             setIsLoading(false);
-            onError?.('Fatal playback error');
+            onErrorRef.current?.('Fatal playback error');
           }
         }
       });
@@ -465,8 +471,9 @@ export default function MobileVideoPlayer({
       attemptAutoplay();
     });
   // Note: isIOS and supportsHLS are locked refs, so they won't cause re-runs
+  // onError is intentionally excluded - it's only used for error callbacks, not initialization
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [streamUrl, hlsConfig, onError]);
+  }, [streamUrl, hlsConfig]);
 
   // Hide controls after 2 seconds when playing (stay visible when paused)
   useEffect(() => {
