@@ -525,6 +525,27 @@ class DatabaseConnection {
     } catch (migrationError) {
       console.warn('Migration warning (may be safe to ignore):', migrationError);
     }
+    
+    // Migration v3: Add behavioral tracking columns to user_activity
+    try {
+      const behavioralColumns = await this.adapter.query(`
+        SELECT column_name FROM information_schema.columns 
+        WHERE table_name = 'user_activity' AND column_name = 'mouse_entropy_avg'
+      `);
+      
+      if (behavioralColumns.length === 0) {
+        console.log('Running migration: Adding behavioral tracking columns to user_activity...');
+        await this.adapter.execute('ALTER TABLE user_activity ADD COLUMN IF NOT EXISTS mouse_entropy_avg REAL DEFAULT 0');
+        await this.adapter.execute('ALTER TABLE user_activity ADD COLUMN IF NOT EXISTS total_mouse_samples INTEGER DEFAULT 0');
+        await this.adapter.execute('ALTER TABLE user_activity ADD COLUMN IF NOT EXISTS total_scroll_samples INTEGER DEFAULT 0');
+        await this.adapter.execute('ALTER TABLE user_activity ADD COLUMN IF NOT EXISTS human_score REAL DEFAULT 50');
+        await this.adapter.execute('ALTER TABLE user_activity ADD COLUMN IF NOT EXISTS last_validation_score REAL DEFAULT 0');
+        await this.adapter.execute('CREATE INDEX IF NOT EXISTS idx_user_activity_human_score ON user_activity(human_score)');
+        console.log('✓ Behavioral tracking columns added');
+      }
+    } catch (migrationError) {
+      console.warn('Behavioral migration warning (may be safe to ignore):', migrationError);
+    }
   }
 
   private async createSQLiteTables(): Promise<void> {
@@ -881,6 +902,25 @@ class DatabaseConnection {
       console.log('✓ SQLite geo column migrations complete');
     } catch (migrationError) {
       console.warn('SQLite migration warning (may be safe to ignore):', migrationError);
+    }
+    
+    // Migration v3: Add behavioral tracking columns to user_activity
+    try {
+      const userActivityInfo = await this.adapter.query(`PRAGMA table_info(user_activity)`);
+      const hasMouseEntropy = userActivityInfo.some((col: any) => col.name === 'mouse_entropy_avg');
+      
+      if (!hasMouseEntropy) {
+        console.log('Running SQLite migration: Adding behavioral tracking columns to user_activity...');
+        await this.adapter.execute('ALTER TABLE user_activity ADD COLUMN mouse_entropy_avg REAL DEFAULT 0');
+        await this.adapter.execute('ALTER TABLE user_activity ADD COLUMN total_mouse_samples INTEGER DEFAULT 0');
+        await this.adapter.execute('ALTER TABLE user_activity ADD COLUMN total_scroll_samples INTEGER DEFAULT 0');
+        await this.adapter.execute('ALTER TABLE user_activity ADD COLUMN human_score REAL DEFAULT 50');
+        await this.adapter.execute('ALTER TABLE user_activity ADD COLUMN last_validation_score REAL DEFAULT 0');
+        await this.adapter.execute('CREATE INDEX IF NOT EXISTS idx_user_activity_human_score ON user_activity(human_score)');
+        console.log('✓ SQLite behavioral tracking columns added');
+      }
+    } catch (migrationError) {
+      console.warn('SQLite behavioral migration warning (may be safe to ignore):', migrationError);
     }
   }
 
