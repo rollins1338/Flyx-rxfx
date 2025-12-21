@@ -8,6 +8,7 @@ import { useWatchProgress } from '@/lib/hooks/useWatchProgress';
 import styles from './MobileVideoPlayer.module.css';
 
 type AudioPreference = 'sub' | 'dub';
+type Provider = 'vidsrc' | '1movies' | 'flixer' | 'videasy' | 'animekai';
 
 interface SubtitleTrack {
   id: string;
@@ -27,7 +28,7 @@ interface MobileVideoPlayerProps {
   onBack?: () => void;
   onError?: (error: string) => void;
   onSourceChange?: (sourceIndex: number, currentTime: number) => void;
-  availableSources?: Array<{ title: string; url: string; quality?: string }>;
+  availableSources?: Array<{ title: string; url: string; quality?: string; provider?: string }>;
   currentSourceIndex?: number;
   nextEpisode?: { season: number; episode: number; title?: string } | null;
   onNextEpisode?: () => void;
@@ -39,6 +40,11 @@ interface MobileVideoPlayerProps {
   initialTime?: number;
   // IMDB ID for fetching subtitles
   imdbId?: string;
+  // Provider selection props
+  currentProvider?: Provider;
+  availableProviders?: Provider[];
+  onProviderChange?: (provider: Provider, currentTime: number) => void;
+  loadingProvider?: boolean;
 }
 
 const formatTime = (seconds: number): string => {
@@ -57,6 +63,15 @@ const triggerHaptic = (type: 'light' | 'medium' | 'heavy' = 'light') => {
     const duration = type === 'light' ? 10 : type === 'medium' ? 25 : 50;
     navigator.vibrate(duration);
   }
+};
+
+// Provider display names
+const PROVIDER_NAMES: Record<Provider, string> = {
+  vidsrc: 'VidSrc',
+  '1movies': '1movies',
+  flixer: 'Flixer',
+  videasy: 'Videasy',
+  animekai: 'AnimeKai',
 };
 
 export default function MobileVideoPlayer({
@@ -78,6 +93,10 @@ export default function MobileVideoPlayer({
   onAudioPrefChange,
   initialTime = 0,
   imdbId,
+  currentProvider,
+  availableProviders = [],
+  onProviderChange,
+  loadingProvider = false,
 }: MobileVideoPlayerProps) {
   const mobileInfo = useIsMobile();
   
@@ -1142,23 +1161,58 @@ export default function MobileVideoPlayer({
               <h3>Select Source</h3>
               <button className={styles.menuClose} onClick={() => setShowSourceMenu(false)}>✕</button>
             </div>
+            
+            {/* Provider Tabs */}
+            {availableProviders.length > 1 && (
+              <div className={styles.providerTabs}>
+                {availableProviders.map(provider => (
+                  <button
+                    key={provider}
+                    className={`${styles.providerTab} ${provider === currentProvider ? styles.active : ''}`}
+                    onClick={() => {
+                      if (provider !== currentProvider && onProviderChange) {
+                        onProviderChange(provider, currentTime);
+                        triggerHaptic('light');
+                      }
+                    }}
+                    disabled={loadingProvider}
+                  >
+                    {PROVIDER_NAMES[provider]}
+                  </button>
+                ))}
+              </div>
+            )}
+            
+            {/* Loading indicator */}
+            {loadingProvider && (
+              <div className={styles.loadingIndicator}>
+                <span>Loading sources...</span>
+              </div>
+            )}
+            
             <div className={styles.menuList}>
-              {availableSources.map((source, index) => (
-                <button
-                  key={index}
-                  className={`${styles.menuItem} ${index === currentSourceIndex ? styles.active : ''}`}
-                  onClick={() => { 
-                    // Pass current playback time to preserve position
-                    onSourceChange?.(index, currentTime); 
-                    setShowSourceMenu(false); 
-                    triggerHaptic('light'); 
-                  }}
-                >
-                  <span>{source.title || `Source ${index + 1}`}</span>
-                  {source.quality && <span className={styles.quality}>{source.quality}</span>}
-                  {index === currentSourceIndex && <span className={styles.checkmark}>✓</span>}
-                </button>
-              ))}
+              {!loadingProvider && availableSources.length === 0 ? (
+                <div className={styles.noSources}>
+                  No sources available from {currentProvider ? PROVIDER_NAMES[currentProvider] : 'this provider'}
+                </div>
+              ) : (
+                availableSources.map((source, index) => (
+                  <button
+                    key={index}
+                    className={`${styles.menuItem} ${index === currentSourceIndex ? styles.active : ''}`}
+                    onClick={() => { 
+                      // Pass current playback time to preserve position
+                      onSourceChange?.(index, currentTime); 
+                      setShowSourceMenu(false); 
+                      triggerHaptic('light'); 
+                    }}
+                  >
+                    <span>{source.title || `Source ${index + 1}`}</span>
+                    {source.quality && <span className={styles.quality}>{source.quality}</span>}
+                    {index === currentSourceIndex && <span className={styles.checkmark}>✓</span>}
+                  </button>
+                ))
+              )}
             </div>
           </div>
         </div>

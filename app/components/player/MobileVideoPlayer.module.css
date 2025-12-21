@@ -778,6 +778,63 @@
   font-weight: 700;
 }
 
+/* Provider Tabs */
+.providerTabs {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.providerTabs::-webkit-scrollbar {
+  display: none;
+}
+
+.providerTab {
+  flex-shrink: 0;
+  padding: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.providerTab:active {
+  transform: scale(0.95);
+}
+
+.providerTab.active {
+  background: #e50914;
+  border-color: #e50914;
+  color: white;
+}
+
+.providerTab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.loadingIndicator {
+  padding: 1rem;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.9rem;
+}
+
+.noSources {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.9rem;
+}
+
 /* Unlock Button */
 .unlockButton {
   position: absolute;

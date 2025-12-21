@@ -121,6 +121,11 @@ function WatchContent() {
   const [mobileError, setMobileError] = useState<string | null>(null);
   const [mobileResumeTime, setMobileResumeTime] = useState(0); // Saved playback time for source/audio changes
   
+  // Provider state for mobile player
+  const [currentProvider, setCurrentProvider] = useState<'vidsrc' | '1movies' | 'flixer' | 'videasy' | 'animekai' | undefined>(undefined);
+  const [availableProviders, setAvailableProviders] = useState<Array<'vidsrc' | '1movies' | 'flixer' | 'videasy' | 'animekai'>>([]);
+  const [loadingProvider, setLoadingProvider] = useState(false);
+  
   // Anime state for mobile player
   const [isAnimeContent, setIsAnimeContent] = useState(false);
   const [audioPref, setAudioPref] = useState<AnimeAudioPreference>(() => getAnimeAudioPreference());
@@ -375,7 +380,7 @@ function WatchContent() {
       // Build provider order matching desktop player:
       // For ANIME: AnimeKai first, then VidSrc, 1movies, Flixer, Videasy
       // For non-anime: VidSrc, 1movies, Flixer, Videasy
-      const providerOrder: string[] = [];
+      const providerOrder: Array<'vidsrc' | '1movies' | 'flixer' | 'videasy' | 'animekai'> = [];
       
       // Use malId to determine if we should try animekai first
       if (malId && providerAvailability.animekai) {
@@ -393,6 +398,9 @@ function WatchContent() {
       if (providerAvailability.videasy) {
         providerOrder.push('videasy');
       }
+      
+      // Set available providers for the mobile player tabs
+      setAvailableProviders(providerOrder);
       
       console.log(`[WatchPage] Mobile provider order: ${providerOrder.join(' → ')} (malId=${malId})`);
       
@@ -429,6 +437,7 @@ function WatchContent() {
               }));
               
               setMobileSources(sources);
+              setCurrentProvider(provider); // Track which provider succeeded
               
               // For anime, try to find a source matching the audio preference
               let selectedIndex = 0;
@@ -485,6 +494,72 @@ function WatchContent() {
     // Refetch with new preference
     fetchMobileStream(newPref);
   }, [fetchMobileStream]);
+
+  // Handle provider change for mobile player
+  const handleProviderChange = useCallback(async (provider: 'vidsrc' | '1movies' | 'flixer' | 'videasy' | 'animekai', currentTime: number = 0) => {
+    // Save current playback time to resume after provider change
+    setMobileResumeTime(currentTime);
+    setLoadingProvider(true);
+    console.log('[WatchPage] Provider change to:', provider, 'saving time:', currentTime);
+    
+    const params = new URLSearchParams({
+      tmdbId: contentId,
+      type: mediaType,
+      provider,
+    });
+
+    if (mediaType === 'tv' && seasonId && episodeId) {
+      params.append('season', seasonId.toString());
+      params.append('episode', episodeId.toString());
+    }
+    
+    if (malId) params.append('malId', malId);
+    if (malTitle) params.append('malTitle', malTitle);
+
+    try {
+      const response = await fetch(`/api/stream/extract?${params}`, { cache: 'no-store' });
+      const data = await response.json();
+
+      if (data.success && data.sources && data.sources.length > 0) {
+        const validSources = data.sources.filter((s: any) => s.url && s.url.length > 0);
+        
+        if (validSources.length > 0) {
+          const sources = validSources.map((s: any) => ({
+            title: s.title || s.quality || `${provider} Source`,
+            url: s.url,
+            quality: s.quality,
+            provider: provider,
+          }));
+          
+          setMobileSources(sources);
+          setCurrentProvider(provider);
+          setMobileStreamUrl(sources[0].url);
+          setMobileSourceIndex(0);
+          
+          if (provider === 'animekai') {
+            isAnimeDetectedRef.current = true;
+            setIsAnimeContent(true);
+          }
+          
+          console.log(`[WatchPage] ✓ Provider changed to ${provider}:`, sources[0].url?.substring(0, 50));
+        } else {
+          setMobileSources([]);
+          setCurrentProvider(provider);
+          console.log(`[WatchPage] ${provider} returned no valid sources`);
+        }
+      } else {
+        setMobileSources([]);
+        setCurrentProvider(provider);
+        console.log(`[WatchPage] ${provider} returned no sources`);
+      }
+    } catch (e) {
+      console.error(`[WatchPage] Provider change to ${provider} failed:`, e);
+      setMobileSources([]);
+      setCurrentProvider(provider);
+    } finally {
+      setLoadingProvider(false);
+    }
+  }, [contentId, mediaType, seasonId, episodeId, malId, malTitle]);
 
   // Fetch mobile stream when needed - only on initial mount or content change
   // Using a ref to prevent refetch on orientation change
@@ -689,6 +764,10 @@ function WatchContent() {
             audioPref={audioPref}
             onAudioPrefChange={handleAudioPrefChange}
             initialTime={mobileResumeTime}
+            currentProvider={currentProvider}
+            availableProviders={availableProviders}
+            onProviderChange={handleProviderChange}
+            loadingProvider={loadingProvider}
           />
         </div>
       </div>

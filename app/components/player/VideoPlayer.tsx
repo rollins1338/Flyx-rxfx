@@ -3982,7 +3982,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                   ) : (
                     <div style={{ padding: '1rem', textAlign: 'center', color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem' }}>
                       {loadingProviders[menuProvider] ? 'Loading sources...' : 
-                       sourcesCache[menuProvider]?.length === 0 ? `No sources from ${menuProvider === 'animekai' ? 'AnimeKai' : menuProvider === 'vidsrc' ? 'VidSrc' : menuProvider === '1movies' ? '1movies' : 'Videasy'}` :
+                       sourcesCache[menuProvider]?.length === 0 ? `No sources from ${menuProvider === 'animekai' ? 'AnimeKai' : menuProvider === 'vidsrc' ? 'VidSrc' : menuProvider === '1movies' ? '1movies' : menuProvider === 'flixer' ? 'Flixer' : 'Videasy'}` :
                        'Click to load sources'}
                     </div>
                   )}
