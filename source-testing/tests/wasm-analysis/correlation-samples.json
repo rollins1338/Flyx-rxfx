@@ -1,0 +1,77 @@
+[
+  {
+    "key": "73dd82e4ec40fac02ab63fc2f82b1f48e9028a1e219bef246c16936c30fb14d5",
+    "sessionId": "1766278524.2208148",
+    "canvasBase64Length": 5028,
+    "canvasBase64First100": "iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObklEQVR4AezcfaxVRxEA8AVDaosavxqhiVKtxkabAAGFRC2amhib",
+    "fingerprint": {
+      "screenWidth": 800,
+      "screenHeight": 600,
+      "colorDepth": 24,
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "platform": "Win32",
+      "language": "en-US",
+      "timezone": 360
+    }
+  },
+  {
+    "key": "e67c630fd2e6c73e6e1c944aeaea7ff599b90233fbbf76f847ecfacaf48002d6",
+    "sessionId": "1766278531.2990630",
+    "canvasBase64Length": 5028,
+    "canvasBase64First100": "iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObklEQVR4AezcfaxVRxEA8AVDaosavxqhiVKtxkabAAGFRC2amhib",
+    "fingerprint": {
+      "screenWidth": 800,
+      "screenHeight": 600,
+      "colorDepth": 24,
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "platform": "Win32",
+      "language": "en-US",
+      "timezone": 360
+    }
+  },
+  {
+    "key": "c8aee689e3991f4a450cc2b216921483e5dbc927e17fbbbdee12de34d26ebb13",
+    "sessionId": "1766278537.3117838",
+    "canvasBase64Length": 5028,
+    "canvasBase64First100": "iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObklEQVR4AezcfaxVRxEA8AVDaosavxqhiVKtxkabAAGFRC2amhib",
+    "fingerprint": {
+      "screenWidth": 800,
+      "screenHeight": 600,
+      "colorDepth": 24,
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "platform": "Win32",
+      "language": "en-US",
+      "timezone": 360
+    }
+  },
+  {
+    "key": "b50436b80e77a57770ce634e40de0a2e5092815da70aaa0e5e157268069e8456",
+    "sessionId": "1766278543.5350585",
+    "canvasBase64Length": 5028,
+    "canvasBase64First100": "iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObklEQVR4AezcfaxVRxEA8AVDaosavxqhiVKtxkabAAGFRC2amhib",
+    "fingerprint": {
+      "screenWidth": 800,
+      "screenHeight": 600,
+      "colorDepth": 24,
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "platform": "Win32",
+      "language": "en-US",
+      "timezone": 360
+    }
+  },
+  {
+    "key": "cff3df470bbf79b7997d4f1eadf7d307c51765f46cf85f525fa99c56c7776a7f",
+    "sessionId": "1766278548.3430651",
+    "canvasBase64Length": 5028,
+    "canvasBase64First100": "iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObklEQVR4AezcfaxVRxEA8AVDaosavxqhiVKtxkabAAGFRC2amhib",
+    "fingerprint": {
+      "screenWidth": 800,
+      "screenHeight": 600,
+      "colorDepth": 24,
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "platform": "Win32",
+      "language": "en-US",
+      "timezone": 360
+    }
+  }
+]

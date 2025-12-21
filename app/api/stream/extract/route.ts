@@ -3,13 +3,14 @@
  * 
  * Provider Priority:
  * - For ANIME content: AnimeKai (PRIMARY) → Videasy (fallback)
- * - For other content: VidSrc (PRIMARY if enabled) → 1movies → Videasy → SmashyStream → MultiMovies → MultiEmbed
+ * - For other content: VidSrc (PRIMARY if enabled) → Flixer → 1movies → Videasy → SmashyStream → MultiMovies → MultiEmbed
  * 
  * GET /api/stream/extract?tmdbId=550&type=movie
  * GET /api/stream/extract?tmdbId=1396&type=tv&season=1&episode=1
  * GET /api/stream/extract?tmdbId=507089&type=movie&provider=videasy
  * GET /api/stream/extract?tmdbId=507089&type=movie&provider=animekai
  * GET /api/stream/extract?tmdbId=507089&type=movie&provider=vidsrc
+ * GET /api/stream/extract?tmdbId=507089&type=movie&provider=flixer
  * GET /api/stream/extract?tmdbId=507089&type=movie&provider=1movies
  * GET /api/stream/extract?tmdbId=507089&type=movie&provider=smashystream
  * GET /api/stream/extract?tmdbId=507089&type=movie&provider=multimovies
@@ -23,6 +24,7 @@ import { extractAnimeKaiStreams, fetchAnimeKaiSourceByName, isAnimeContent, ANIM
 import { extractMultiEmbedStreams, fetchMultiEmbedSourceByName, MULTI_EMBED_ENABLED } from '@/app/lib/services/multi-embed-extractor';
 import { extractSmashyStreamStreams, fetchSmashyStreamSourceByName, SMASHYSTREAM_ENABLED } from '@/app/lib/services/smashystream-extractor';
 import { extractMultiMoviesStreams, fetchMultiMoviesSourceByName, MULTIMOVIES_ENABLED } from '@/app/lib/services/multimovies-extractor';
+import { extractFlixerStreams, fetchFlixerSourceByName, FLIXER_ENABLED } from '@/app/lib/services/flixer-extractor';
 import { performanceMonitor } from '@/app/lib/utils/performance-monitor';
 import { getStreamProxyUrl, getAnimeKaiProxyUrl, isMegaUpCdnUrl, is1moviesCdnUrl, isAnimeKaiSource } from '@/app/lib/proxy-config';
 
@@ -170,13 +172,16 @@ export async function GET(request: NextRequest) {
       } else if (sourceName.includes('1movies') || provider === '1movies') {
         source = await fetchOneMoviesSourceByName(sourceName, tmdbId, type, season, episode);
         usedProvider = '1movies';
+      } else if (provider === 'flixer' || sourceName.includes('Flixer')) {
+        source = await fetchFlixerSourceByName(sourceName, tmdbId, type, season, episode);
+        usedProvider = 'flixer';
       } else if (provider === 'smashystream' || sourceName.includes('SmashyStream')) {
         source = await fetchSmashyStreamSourceByName(sourceName, tmdbId, type, season, episode);
         usedProvider = 'smashystream';
       } else if (provider === 'multimovies' || sourceName.includes('MultiMovies')) {
         source = await fetchMultiMoviesSourceByName(sourceName, tmdbId, type, season, episode);
         usedProvider = 'multimovies';
-      } else if (provider === 'multiembed' || ['Cloudy', 'XPrime', 'Hexa', 'Flixer'].includes(sourceName)) {
+      } else if (provider === 'multiembed' || ['Cloudy', 'XPrime', 'Hexa'].includes(sourceName)) {
         source = await fetchMultiEmbedSourceByName(sourceName, tmdbId, type, season, episode);
         usedProvider = 'multiembed';
       } else if (provider === 'videasy' || sourceName.includes('(')) {
@@ -393,6 +398,23 @@ export async function GET(request: NextRequest) {
         throw new Error(onemoviesResult.error || '1movies returned no sources');
       }
       
+      // If explicitly requesting flixer, use it directly
+      if (provider === 'flixer') {
+        if (!FLIXER_ENABLED) {
+          throw new Error('Flixer provider is disabled');
+        }
+        
+        console.log('[EXTRACT] Using Flixer (explicit request)...');
+        const flixerResult = await extractFlixerStreams(tmdbId, type, season, episode);
+        
+        if (flixerResult.sources.length > 0) {
+          console.log(`[EXTRACT] ✓ Flixer: ${flixerResult.sources.length} sources`);
+          return { sources: flixerResult.sources, provider: 'flixer' };
+        }
+        
+        throw new Error(flixerResult.error || 'Flixer returned no sources');
+      }
+      
       // If explicitly requesting videasy, use it directly
       if (provider === 'videasy') {
         console.log('[EXTRACT] Using Videasy (explicit request)...');
@@ -487,7 +509,7 @@ export async function GET(request: NextRequest) {
         throw new Error(multiEmbedResult.error || 'MultiEmbed returned no sources');
       }
       
-      // Default behavior: VidSrc FIRST (if enabled), then Videasy, then others
+      // Default behavior: VidSrc FIRST (if enabled), then Flixer, then 1movies, then others
       
       // Try VidSrc FIRST if enabled - it's the primary source
       if (VIDSRC_ENABLED) {
@@ -508,7 +530,24 @@ export async function GET(request: NextRequest) {
         console.log('[EXTRACT] VidSrc is DISABLED, skipping...');
       }
       
-      // Try 1movies as second option (between vidsrc and videasy)
+      // Try Flixer as SECOND option (pure fetch via Cloudflare Worker)
+      if (FLIXER_ENABLED) {
+        console.log('[EXTRACT] Trying fallback source: Flixer...');
+        try {
+          const flixerResult = await extractFlixerStreams(tmdbId, type, season, episode);
+          const workingFlixer = flixerResult.sources.filter(s => s.status === 'working');
+          
+          if (workingFlixer.length > 0) {
+            console.log(`[EXTRACT] ✓ Flixer succeeded with ${workingFlixer.length} working source(s)`);
+            return { sources: flixerResult.sources, provider: 'flixer' };
+          }
+          console.log(`[EXTRACT] Flixer: ${flixerResult.error || 'No working sources'}`);
+        } catch (flixerError) {
+          console.warn('[EXTRACT] Flixer failed:', flixerError instanceof Error ? flixerError.message : flixerError);
+        }
+      }
+      
+      // Try 1movies as third option
       if (ONEMOVIES_ENABLED) {
         console.log('[EXTRACT] Trying fallback source: 1movies...');
         try {
@@ -527,7 +566,7 @@ export async function GET(request: NextRequest) {
         console.log('[EXTRACT] 1movies is DISABLED, skipping...');
       }
       
-      // Try Videasy as third option (multi-language support)
+      // Try Videasy as fourth option (multi-language support)
       console.log('[EXTRACT] Trying fallback source: Videasy (multi-language)...');
       try {
         const videasyResult = await extractVideasyStreams(tmdbId, type, season, episode, true);

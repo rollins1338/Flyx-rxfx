@@ -5,6 +5,7 @@
  * Provider Priority:
  * - VidSrc: PRIMARY provider (if enabled via ENABLE_VIDSRC_PROVIDER=true)
  * - 1movies: 2nd backup provider (111movies.com)
+ * - Flixer: 3rd backup provider (flixer.sh)
  * - Videasy: Fallback provider with multi-language support (always enabled)
  * - AnimeKai: PRIMARY for anime content only (auto-detected)
  */
@@ -13,6 +14,7 @@ import { NextResponse } from 'next/server';
 import { VIDSRC_ENABLED } from '@/app/lib/services/vidsrc-extractor';
 import { ANIMEKAI_ENABLED } from '@/app/lib/services/animekai-extractor';
 import { ONEMOVIES_ENABLED } from '@/app/lib/services/onemovies-extractor';
+import { FLIXER_ENABLED } from '@/app/lib/services/flixer-extractor';
 
 export async function GET() {
   return NextResponse.json({
@@ -28,6 +30,12 @@ export async function GET() {
         name: '1movies',
         primary: false, // 2nd backup between vidsrc and videasy
         description: '111movies.com - Multiple servers with HLS streams',
+      },
+      flixer: {
+        enabled: FLIXER_ENABLED,
+        name: 'Flixer',
+        primary: false, // 3rd backup provider
+        description: 'Flixer.sh - TV shows and movies streaming',
       },
       videasy: {
         enabled: true,

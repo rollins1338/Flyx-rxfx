@@ -1,0 +1,15 @@
+{
+  "key": "003380e5da792d7adc946a848003d69555a3c78226fa578c586feab6dd67fd8f",
+  "sessionId": "1766277941.1878332",
+  "memorySnapshots": [],
+  "stringWrites": [],
+  "fingerprint": {
+    "screenWidth": 800,
+    "screenHeight": 600,
+    "colorDepth": 24,
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+    "platform": "Win32",
+    "language": "en-US",
+    "timezone": 360
+  }
+}

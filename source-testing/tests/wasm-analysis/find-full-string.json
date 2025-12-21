@@ -1,0 +1,23 @@
+{
+  "key": "ae276062807d1646dde38b8563e3a57d20c45dbd46732a19d3be34038a366f12",
+  "sessionId": "1766278356.7618285",
+  "timestamp": "1766278356",
+  "canvasBase64Length": 5028,
+  "found": [
+    {
+      "offset": 1119360,
+      "pngOffset": 1119441,
+      "length": 131,
+      "str": "24:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb:Win32:en-US:360:1766278356:iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObk"
+    }
+  ],
+  "fingerprint": {
+    "screenWidth": 800,
+    "screenHeight": 600,
+    "colorDepth": 24,
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+    "platform": "Win32",
+    "language": "en-US",
+    "timezone": 360
+  }
+}

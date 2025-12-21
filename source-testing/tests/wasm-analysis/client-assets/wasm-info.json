@@ -1,0 +1,32 @@
+{
+  "ready": true,
+  "functions": [
+    {
+      "name": "init",
+      "length": 1,
+      "toString": "async function __wbg_init(module_or_path) {\n    if (wasm !== undefined) return wasm;\n\n\n    if (typeof module_or_path !== 'undefined') {\n        if (Object.getPrototypeOf(module_or_path) === Object.prototype) {\n            ({module_or_path} = module_or_path)\n        } else {\n            console.warn('using deprecated parameters for the initialization function; pass a single object instead')\n        }\n    }\n\n    if (typeof module_or_path === 'undefined') {\n        module_or_path = new URL('img_dat"
+    },
+    {
+      "name": "process_img_data",
+      "length": 2,
+      "toString": "function process_img_data(a, api_key) {\n    const ptr0 = passStringToWasm0(a, wasm.__wbindgen_export_1, wasm.__wbindgen_export_2);\n    const len0 = WASM_VECTOR_LEN;\n    const ptr1 = passStringToWasm0(api_key, wasm.__wbindgen_export_1, wasm.__wbindgen_export_2);\n    const len1 = WASM_VECTOR_LEN;\n    const ret = wasm.process_img_data(ptr0, len0, ptr1, len1);\n    return takeObject(ret);\n}"
+    },
+    {
+      "name": "get_img_key",
+      "length": 0,
+      "toString": "function get_img_key() {\n    let deferred2_0;\n    let deferred2_1;\n    try {\n        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);\n        wasm.get_img_key(retptr);\n        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);\n        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);\n        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);\n        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);\n        var ptr1 = r0;\n        var len1 = r"
+    }
+  ],
+  "properties": [
+    {
+      "name": "ready",
+      "type": "boolean",
+      "value": "true"
+    },
+    {
+      "name": "key",
+      "type": "string",
+      "value": "6af59398641d4a39bc0d8810cc57c05c4fcb56de6bb269028e3c2a651c91d575"
+    }
+  ]
+}

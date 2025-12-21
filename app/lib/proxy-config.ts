@@ -239,3 +239,67 @@ export function isAnimeKaiSource(source: { title?: string; referer?: string }): 
   if (source.referer?.includes('animekai.to')) return true;
   return false;
 }
+
+
+// ============================================================================
+// Flixer Proxy Configuration
+// ============================================================================
+// Flixer uses WASM-based encryption that runs in the Cloudflare Worker.
+// The /flixer route handles key generation, API requests, and decryption.
+// ============================================================================
+
+/**
+ * Check if Flixer proxy is configured
+ * Requires NEXT_PUBLIC_CF_STREAM_PROXY_URL to be set
+ */
+export function isFlixerProxyConfigured(): boolean {
+  return !!process.env.NEXT_PUBLIC_CF_STREAM_PROXY_URL;
+}
+
+/**
+ * Get Flixer extraction URL via Cloudflare Worker
+ * 
+ * @param tmdbId - TMDB ID of the content
+ * @param type - 'movie' or 'tv'
+ * @param server - Server name (alpha, bravo, charlie, delta, echo, foxtrot)
+ * @param season - Season number (for TV)
+ * @param episode - Episode number (for TV)
+ * @returns URL to the Cloudflare /flixer/extract endpoint
+ */
+export function getFlixerExtractUrl(
+  tmdbId: string,
+  type: 'movie' | 'tv',
+  server: string = 'alpha',
+  season?: number,
+  episode?: number
+): string {
+  const cfProxyUrl = process.env.NEXT_PUBLIC_CF_STREAM_PROXY_URL;
+  
+  if (!cfProxyUrl) {
+    throw new Error('NEXT_PUBLIC_CF_STREAM_PROXY_URL is not set');
+  }
+  
+  // Strip /stream suffix if present
+  const baseUrl = cfProxyUrl.replace(/\/stream\/?$/, '');
+  
+  const params = new URLSearchParams({
+    tmdbId,
+    type,
+    server,
+  });
+  
+  if (type === 'tv' && season && episode) {
+    params.set('season', season.toString());
+    params.set('episode', episode.toString());
+  }
+  
+  return `${baseUrl}/flixer/extract?${params.toString()}`;
+}
+
+/**
+ * Check if a URL is from Flixer CDN
+ */
+export function isFlixerCdnUrl(url: string): boolean {
+  // Flixer uses Cloudflare Workers CDN
+  return url.includes('flixer') || url.includes('plsdontscrapemelove');
+}

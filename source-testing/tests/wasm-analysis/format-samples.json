@@ -1,0 +1,35 @@
+[
+  {
+    "embeddedKey": "890f6741f9eea14f3da78bd12760426dd98f23b4050735ef170a021a7b3c9603",
+    "sessionId": "1766277845.8877791",
+    "canvasBase64Length": 5028,
+    "screenWidth": 800,
+    "screenHeight": 600,
+    "colorDepth": 24,
+    "timezone": 360,
+    "platform": "Win32",
+    "language": "en-US"
+  },
+  {
+    "embeddedKey": "6ce65bf373b203674995fdbd4f10aa5af3f7e751828551e9a2177244cd88dae0",
+    "sessionId": "1766277851.9034264",
+    "canvasBase64Length": 5028,
+    "screenWidth": 800,
+    "screenHeight": 600,
+    "colorDepth": 24,
+    "timezone": 360,
+    "platform": "Win32",
+    "language": "en-US"
+  },
+  {
+    "embeddedKey": "c99c7ae0e670cd830dc25ac743799a9ed5907606459d0185ba4859c82b8efe22",
+    "sessionId": "1766277855.5569750",
+    "canvasBase64Length": 5028,
+    "screenWidth": 800,
+    "screenHeight": 600,
+    "colorDepth": 24,
+    "timezone": 360,
+    "platform": "Win32",
+    "language": "en-US"
+  }
+]

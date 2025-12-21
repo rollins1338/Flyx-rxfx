@@ -1,0 +1,163 @@
+[
+  {
+    "timestamp": 1700000000,
+    "fingerprint": "24:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb:Win32:en-US:0:1700000000:iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObk",
+    "fpHash": "54c52b1a96975f71b9be36e4a465266a09eaefeedcf68b9c3ac889061ecbd22e",
+    "key": "48d4fb5730cead3aa520e6ca277981e74b22013e8fbf42848b7348417aa347f2",
+    "xor": "1c11d04da659f24b1c9ed02e831ca78d42c8eed05349c918b1bbc147646895dc"
+  },
+  {
+    "timestamp": 1700000001,
+    "fingerprint": "24:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb:Win32:en-US:0:1700000001:iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObk",
+    "fpHash": "9651e9e4d5617929b3c7564252b3ee097b2eab17459500e0eac0f95e5105da3a",
+    "key": "800bb8714df5f8fcbdda7255429dcb109b87945987564b44ddc0303c183d234d",
+    "xor": "165a5195989481d50e1d2417102e2519e0a93f4ec2c34ba43700c9624938f977"
+  },
+  {
+    "timestamp": 1700000002,
+    "fingerprint": "24:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb:Win32:en-US:0:1700000002:iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObk",
+    "fpHash": "ac239dfdd473e1731e0a3b0f4d7ab3b3b9fbbcea927f52825e1887b2fa97b29d",
+    "key": "6e0ff85a9958e5b9c16ada0c47db5511a43f2204d556b7bfc95df7053cc12435",
+    "xor": "c22c65a74d2b04cadf60e1030aa1e6a21dc49eee4729e53d974570b7c65696a8"
+  },
+  {
+    "timestamp": 1700000003,
+    "fingerprint": "24:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb:Win32:en-US:0:1700000003:iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObk",
+    "fpHash": "f535fa31cafd61d9de7569bab33779da8a6c329af868f0a7be69bd2d01a93615",
+    "key": "cc0b9d6faacb36d0394721357651514a27afbe9b30938f8785d3ee67fcfb39ce",
+    "xor": "393e675e60365709e732488fc5662890adc38c01c8fb7f203bba534afd520fdb"
+  },
+  {
+    "timestamp": 1700000004,
+    "fingerprint": "24:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb:Win32:en-US:0:1700000004:iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObk",
+    "fpHash": "61e777d0536fc20bcbd2f39a53c39f4ee71bb9e915edb64b1223529c9f03c173",
+    "key": "d7b04742ae9799c4d974d82f736d21cad7fe6d76fd7e6ab9c7f8b493ebd53f99",
+    "xor": "b6573092fdf85bcf12a62bb520aebe8430e5d49fe893dcf2d5dbe60f74d6feea"
+  },
+  {
+    "timestamp": 1700000005,
+    "fingerprint": "24:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb:Win32:en-US:0:1700000005:iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObk",
+    "fpHash": "23f75c05276666ea4abaebbcffc5ca6984620d54fe1f70ac24bf3fe8ed2101c9",
+    "key": "e9c7b265f03191ed836a1d5da4aeaff3a0750a857590d6fa9d99b7ff07bd0b4a",
+    "xor": "ca30ee60d757f707c9d0f6e15b6b659a241707d18b8fa656b9268817ea9c0a83"
+  },
+  {
+    "timestamp": 1700000006,
+    "fingerprint": "24:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb:Win32:en-US:0:1700000006:iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObk",
+    "fpHash": "ffa7a151ece78ab1c6088d9fce36f4d34c66d2bd43cf63e2cddae88c55ba1461",
+    "key": "4a91bdfeea913e6b76de810541932fe13d0cdab568e62490fa4538e70bddb0e4",
+    "xor": "b5361caf0676b4dab0d60c9a8fa5db32716a08082b294772379fd06b5e67a485"
+  },
+  {
+    "timestamp": 1700000007,
+    "fingerprint": "24:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb:Win32:en-US:0:1700000007:iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObk",
+    "fpHash": "42dd70a4ddc15bf12e862a325ddf735841b281e254352ebde2c527faf8afe920",
+    "key": "b8159d9c6cc294fdb11f3c272cfa01455cfdf58eb3a6b1337bebaa27b90c00b2",
+    "xor": "fac8ed38b103cf0c9f9916157125721d1d4f746ce7939f8e992e8ddd41a3e992"
+  },
+  {
+    "timestamp": 1700000008,
+    "fingerprint": "24:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb:Win32:en-US:0:1700000008:iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObk",
+    "fpHash": "09f1ce7933ac382e3d741df992475aa28753e70c054e74c4e1f62050b4faecd1",
+    "key": "55a3fc52563f3b9d38e3aa686e00c6d96433fc587ac5ba0d2fe414f2b44eddf2",
+    "xor": "5c52322b659303b30597b791fc479c7be3601b547f8bcec9ce1234a200b43123"
+  },
+  {
+    "timestamp": 1700000009,
+    "fingerprint": "24:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb:Win32:en-US:0:1700000009:iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObk",
+    "fpHash": "7f97905aefdd5d54fb66ba566ee1e97580aeb59ad5cbbbf7677459cf4d56e3d1",
+    "key": "3ab212ac9689efb443738f15b4cec97641c9b66ee324a09fe97de47457c564c9",
+    "xor": "452582f67954b2e0b8153543da2f2003c16703f436ef1b688e09bdbb1a938718"
+  },
+  {
+    "timestamp": 1700000010,
+    "fingerprint": "24:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb:Win32:en-US:0:1700000010:iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObk",
+    "fpHash": "3d492079c0597c1da4125871ed9a4f7385fb231ea8377c619b658d79701b5e6d",
+    "key": "88c281aca77f0097e1267c24aeb79a36507a355eaad4889dc30029f3003c6c46",
+    "xor": "b58ba1d567267c8a45342455432dd545d581164002e3f4fc5865a48a7027322b"
+  },
+  {
+    "timestamp": 1700000011,
+    "fingerprint": "24:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb:Win32:en-US:0:1700000011:iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObk",
+    "fpHash": "054eef320eb70cc57bac2f69c1a00537e6664f6bb915860383d75766a6b6b54e",
+    "key": "482a94fcefdc6bb966a6e5812b5c5cdfb86ad6d3ef93374ac519fdb356f92bd2",
+    "xor": "4d647bcee16b677c1d0acae8eafc59e85e0c99b85686b14946ceaad5f04f9e9c"
+  },
+  {
+    "timestamp": 1700000012,
+    "fingerprint": "24:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb:Win32:en-US:0:1700000012:iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObk",
+    "fpHash": "2546df9f7a6a956ddb3c08c14c30a44e124576ccfad567a50836aff7598faba6",
+    "key": "3084ef95c78fdd370695a2e3efd2b2f15379f32d79b316d4a6a6c2e88df858ea",
+    "xor": "15c2300abde5485adda9aa22a3e216bf413c85e183667171ae906d1fd477f34c"
+  },
+  {
+    "timestamp": 1700000013,
+    "fingerprint": "24:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb:Win32:en-US:0:1700000013:iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObk",
+    "fpHash": "dd3d118ade2ca46239eb3fc0eec28b63f18e53138ca91ff91af5ac84cfca7cab",
+    "key": "5b1860db231ac732842ddbf4d5474cd558eff80e0f368553bd41f3bf1ce3613f",
+    "xor": "86257151fd366350bdc6e4343b85c7b6a961ab1d839f9aaaa7b45f3bd3291d94"
+  },
+  {
+    "timestamp": 1700000014,
+    "fingerprint": "24:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb:Win32:en-US:0:1700000014:iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObk",
+    "fpHash": "ef8bb4745c973dd3b0585fee59e2c628171b233b194afa9d09378b20f6d635f7",
+    "key": "12d4ab8cc38cbc49aa1fbf3d2b63b5f466e07e1bd9c0763fc2f7ef4e171fa28e",
+    "xor": "fd5f1ff89f1b819a1a47e0d3728173dc71fb5d20c08a8ca2cbc0646ee1c99779"
+  },
+  {
+    "timestamp": 1700000015,
+    "fingerprint": "24:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb:Win32:en-US:0:1700000015:iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObk",
+    "fpHash": "5b27f53187d1969284fe2a7d5649fb28c6460390e6578dff8041e4f0cf96374b",
+    "key": "c74b5ad199ffa1e4566a206a1be6942ed354c08a9bc470365e0a4e1848a20758",
+    "xor": "9c6cafe01e2e3776d2940a174daf6f061512c31a7d93fdc9de4baae887343013"
+  },
+  {
+    "timestamp": 1700000016,
+    "fingerprint": "24:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb:Win32:en-US:0:1700000016:iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObk",
+    "fpHash": "d73dcbbfcc7fe66cc39dc080c77dfbdf787eb2d6c236fa4be166f1547814296b",
+    "key": "eea61d7686d96c9b6fa94a75c791296533539fcc7ce0b30c35c162d70ed03690",
+    "xor": "399bd6c94aa68af7ac348af500ecd2ba4b2d2d1abed64947d4a7938376c41ffb"
+  },
+  {
+    "timestamp": 1700000017,
+    "fingerprint": "24:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb:Win32:en-US:0:1700000017:iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObk",
+    "fpHash": "3028420954afa61f0241882823cc435f033552684aba394e993357778b3bcbfc",
+    "key": "7aa48870115ca7717523aa206ae2d70d8e405751dd3bef241d61b22d54f507b8",
+    "xor": "4a8cca7945f3016e77622208492e94528d7505399781d66a8452e55adfcecc44"
+  },
+  {
+    "timestamp": 1700000018,
+    "fingerprint": "24:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb:Win32:en-US:0:1700000018:iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObk",
+    "fpHash": "ba98ad56aa7d682ff24fa33258c692b4fd522ccd747871f98a5d82c57063e00a",
+    "key": "0e187e7204c18f87ff154f4a78a74425373222b83dc3e53b097ac6f289aa4309",
+    "xor": "b480d324aebce7a80d5aec782061d691ca600e7549bb94c283274437f9c9a303"
+  },
+  {
+    "timestamp": 1700000019,
+    "fingerprint": "24:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb:Win32:en-US:0:1700000019:iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObk",
+    "fpHash": "c8fe651be9863b494e4c0bf2eb97b289b334f5cdd9d3153da4bba92eb507c756",
+    "key": "930db9c92ac954d9185f4de430f2080f73da53976c16a9a78fe8360362b5889b",
+    "xor": "5bf3dcd2c34f6f9056134616db65ba86c0eea65ab5c5bc9a2b539f2dd7b24fcd"
+  },
+  {
+    "timestamp": 1700000100,
+    "fingerprint": "24:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb:Win32:en-US:0:1700000100:iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObk",
+    "fpHash": "4bb81863454b992215bc0df88d7c2dd069d2f506f33abb9c0c92a9173f4bc1ee",
+    "key": "921674c16c97b262d164540d3d2bdf30a88dd43591bbe3d5aa4d072de2c3ec29",
+    "xor": "d9ae6ca229dc2b40c4d859f5b057f2e0c15f213362815849a6dfae3add882dc7"
+  },
+  {
+    "timestamp": 1700001000,
+    "fingerprint": "24:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb:Win32:en-US:0:1700001000:iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObk",
+    "fpHash": "580521a275f63e8e4e9f1cc6b71d80fb006d4ceeb3bbbb78fdd78f94e046b477",
+    "key": "9c9d9493fcedc4f268dfc17b8988a8d2cf6d4a28d85a44613adfd210609dd660",
+    "xor": "c498b531891bfa7c2640ddbd3e952829cf0006c66be1ff19c7085d8480db6217"
+  },
+  {
+    "timestamp": 1700010000,
+    "fingerprint": "24:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb:Win32:en-US:0:1700010000:iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObk",
+    "fpHash": "f3a71d3a9805dd706cebfe1904ea8067a58c5549e885c468080e9f12c59532bb",
+    "key": "f3307451b481ff706bd06f78bfcf57d60a992afafff026d066b6144a43dd6096",
+    "xor": "0097696b2c842200073b9161bb25d7b1af157fb31775e2b86eb88b588648522d"
+  }
+]

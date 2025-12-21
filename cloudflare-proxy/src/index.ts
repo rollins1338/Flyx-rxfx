@@ -29,6 +29,7 @@ import decoderSandbox from './decoder-sandbox';
 import { handleIPTVRequest } from './iptv-proxy';
 import { handleDLHDRequest } from './dlhd-proxy';
 import { handleAnimeKaiRequest } from './animekai-proxy';
+import { handleFlixerRequest } from './flixer-proxy';
 import { handleAnalyticsRequest } from './analytics-proxy';
 import { handleTMDBRequest } from './tmdb-proxy';
 import { createLogger, generateRequestId, type LogLevel } from './logger';
@@ -71,6 +72,7 @@ const metrics = {
   dlhdRequests: 0,
   decodeRequests: 0,
   animekaiRequests: 0,
+  flixerRequests: 0,
   analyticsRequests: 0,
   tmdbRequests: 0,
   startTime: Date.now(),
@@ -124,6 +126,7 @@ export default {
           dlhdRequests: metrics.dlhdRequests,
           decodeRequests: metrics.decodeRequests,
           animekaiRequests: metrics.animekaiRequests,
+          flixerRequests: metrics.flixerRequests,
           analyticsRequests: metrics.analyticsRequests,
           tmdbRequests: metrics.tmdbRequests,
         },
@@ -262,6 +265,20 @@ export default {
         metrics.errors++;
         logger.error('AnimeKai proxy error', error as Error);
         return errorResponse('AnimeKai proxy error', 500);
+      }
+    }
+
+    // Route to Flixer proxy (WASM-based extraction)
+    if (path.startsWith('/flixer')) {
+      metrics.flixerRequests++;
+      logger.info('Routing to Flixer proxy', { path });
+      
+      try {
+        return await handleFlixerRequest(request, env);
+      } catch (error) {
+        metrics.errors++;
+        logger.error('Flixer proxy error', error as Error);
+        return errorResponse('Flixer proxy error', 500);
       }
     }
 
@@ -428,6 +445,16 @@ export default {
           config: {
             rpiProxy: !!(env.RPI_PROXY_URL && env.RPI_PROXY_KEY) ? 'configured' : 'not configured',
           },
+        },
+        flixer: {
+          path: '/flixer/',
+          description: 'Flixer stream extraction via WASM-based decryption',
+          usage: '/flixer/extract?tmdbId=<id>&type=<movie|tv>&season=<n>&episode=<n>&server=<name>',
+          subRoutes: {
+            extract: '/flixer/extract - Extract m3u8 URL from Flixer',
+            health: '/flixer/health - Health check',
+          },
+          servers: ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot'],
         },
         analytics: {
           path: '/analytics/',

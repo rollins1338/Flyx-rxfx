@@ -1,0 +1,16 @@
+{
+  "data": {
+    "embeddedKey": "587793dd4b03852dba3f8f0a2d0cada9ab56ab0625e329c95fd7f7c65a39ae6f",
+    "sessionId": "1766277400.8945936",
+    "sha256Trace": {
+      "updates": [],
+      "finalizes": [],
+      "memorySnapshots": []
+    }
+  },
+  "data2": {
+    "embeddedKey": "946331838b958339dab5e3bd15fa7c4eeb80ee017e40c9dfb66b0271605a95e4",
+    "sessionId": "1766277409.1204745",
+    "strings": []
+  }
+}

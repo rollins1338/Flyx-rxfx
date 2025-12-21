@@ -357,13 +357,14 @@ function WatchContent() {
       }
       
       // Check provider availability first
-      let providerAvailability = { vidsrc: true, '1movies': true, videasy: true, animekai: true };
+      let providerAvailability = { vidsrc: true, '1movies': true, flixer: true, videasy: true, animekai: true };
       try {
         const providerRes = await fetch('/api/providers');
         const providerData = await providerRes.json();
         providerAvailability = {
           vidsrc: providerData.providers?.vidsrc?.enabled ?? true,
           '1movies': providerData.providers?.['1movies']?.enabled ?? true,
+          flixer: providerData.providers?.flixer?.enabled ?? true,
           videasy: providerData.providers?.videasy?.enabled ?? true,
           animekai: providerData.providers?.animekai?.enabled ?? true,
         };
@@ -372,8 +373,8 @@ function WatchContent() {
       }
       
       // Build provider order matching desktop player:
-      // For ANIME: AnimeKai first, then VidSrc, 1movies, Videasy
-      // For non-anime: VidSrc, 1movies, Videasy
+      // For ANIME: AnimeKai first, then VidSrc, 1movies, Flixer, Videasy
+      // For non-anime: VidSrc, 1movies, Flixer, Videasy
       const providerOrder: string[] = [];
       
       // Use malId to determine if we should try animekai first
@@ -385,6 +386,9 @@ function WatchContent() {
       }
       if (providerAvailability['1movies']) {
         providerOrder.push('1movies');
+      }
+      if (providerAvailability.flixer) {
+        providerOrder.push('flixer');
       }
       if (providerAvailability.videasy) {
         providerOrder.push('videasy');

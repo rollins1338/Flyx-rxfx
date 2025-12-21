@@ -1,0 +1,450 @@
+{
+  "wasmSize": 136881,
+  "numTypes": 39,
+  "numImports": 52,
+  "numExports": 11,
+  "numFunctions": 325,
+  "imports": [
+    "wbg.__wbg_now_807e54c39636c349",
+    "wbg.__wbindgen_string_new",
+    "wbg.__wbg_now_d18023d54d4e5500",
+    "wbg.__wbg_navigator_1577371c070c8947",
+    "wbg.__wbg_getElementsByTagName_f03d41ce466561e8",
+    "wbg.__wbg_length_347907d14a9ed873",
+    "wbg.__wbg_colorDepth_59677c81c61d599a",
+    "wbg.__wbg_platform_faf02c487289f206",
+    "wbg.__wbg_language_d871ec78ee8eec62",
+    "wbg.__wbg_new0_f788a2397c7ca929",
+    "wbg.__wbg_getTimezoneOffset_6b5752021c499c47",
+    "wbg.__wbg_localStorage_1406c99c39728187",
+    "wbg.__wbg_getItem_17f98dee3b43fa7e",
+    "wbg.__wbg_random_3ad904d98382defe",
+    "wbg.__wbg_setItem_212ecc915942ab0a",
+    "wbg.__wbg_createElement_8c9931a732ee2fea",
+    "wbg.__wbg_instanceof_HtmlCanvasElement_2ea67072a7624ac5",
+    "wbg.__wbg_setwidth_c5fed9f5e7f0b406",
+    "wbg.__wbg_setheight_da683a33fa99843c",
+    "wbg.__wbg_getContext_e9cf379449413580",
+    "wbg.__wbg_instanceof_CanvasRenderingContext2d_df82a4d3437bf1cc",
+    "wbg.__wbg_settextBaseline_c28d2a6aa4ff9d9d",
+    "wbg.__wbg_toDataURL_eaec332e848fe935",
+    "wbg.__wbg_reject_b3fcf99063186ff7",
+    "wbg.__wbg_new_23a2665fac83c611",
+    "wbg.__wbindgen_object_clone_ref",
+    "wbg.__wbindgen_is_undefined",
+    "wbg.__wbg_newnoargs_105ed471475aaf50",
+    "wbg.__wbg_call_672a4d21634d4a24",
+    "wbg.__wbg_static_accessor_GLOBAL_88a902d13a557d07",
+    "wbg.__wbg_static_accessor_GLOBAL_THIS_56578be7e9f832b0",
+    "wbg.__wbg_static_accessor_WINDOW_5de37043a91a9c40",
+    "wbg.__wbg_static_accessor_SELF_37c5d418e4bf5819",
+    "wbg.__wbg_call_7cccdd69e0791ae2",
+    "wbg.__wbindgen_throw",
+    "wbg.__wbindgen_object_drop_ref",
+    "wbg.__wbindgen_cb_drop",
+    "wbg.__wbg_then_44b73946d2fb3e7d",
+    "wbg.__wbg_queueMicrotask_97d92b4fcc8a61c5",
+    "wbg.__wbg_queueMicrotask_d3219def82552485",
+    "wbg.__wbindgen_is_function",
+    "wbg.__wbg_resolve_4851785c9c5f573d",
+    "wbg.__wbg_instanceof_Window_def73ea0955fc569",
+    "wbg.__wbg_setfont_42a163ef83420b93",
+    "wbg.__wbg_fillText_2a0055d8531355d1",
+    "wbg.__wbg_userAgent_12e9d8e62297563f",
+    "wbg.__wbg_width_679079836447b4b7",
+    "wbg.__wbg_height_614ba187d8cae9ca",
+    "wbg.__wbg_document_d249400bd7bd996d",
+    "wbg.__wbg_screen_8edf8699f70d98bc",
+    "wbg.__wbg_performance_c185c0cdc2766575",
+    "wbg.__wbindgen_closure_wrapper982"
+  ],
+  "exports": [
+    {
+      "name": "memory",
+      "kind": 2,
+      "index": 0
+    },
+    {
+      "name": "get_img_key",
+      "kind": 0,
+      "index": 57
+    },
+    {
+      "name": "process_img_data",
+      "kind": 0,
+      "index": 132
+    },
+    {
+      "name": "__wbindgen_export_0",
+      "kind": 0,
+      "index": 340
+    },
+    {
+      "name": "__wbindgen_export_1",
+      "kind": 0,
+      "index": 248
+    },
+    {
+      "name": "__wbindgen_export_2",
+      "kind": 0,
+      "index": 260
+    },
+    {
+      "name": "__wbindgen_export_3",
+      "kind": 1,
+      "index": 0
+    },
+    {
+      "name": "__wbindgen_add_to_stack_pointer",
+      "kind": 0,
+      "index": 363
+    },
+    {
+      "name": "__wbindgen_export_4",
+      "kind": 0,
+      "index": 339
+    },
+    {
+      "name": "__wbindgen_export_5",
+      "kind": 0,
+      "index": 301
+    },
+    {
+      "name": "__wbindgen_export_6",
+      "kind": 0,
+      "index": 298
+    }
+  ],
+  "largestFunctions": [
+    {
+      "funcIndex": 52,
+      "bodySize": 12271,
+      "totalLocals": 26,
+      "codeSize": 12264,
+      "codeOffset": 11
+    },
+    {
+      "funcIndex": 54,
+      "bodySize": 6047,
+      "totalLocals": 33,
+      "codeSize": 6044,
+      "codeOffset": 18268
+    },
+    {
+      "funcIndex": 53,
+      "bodySize": 5986,
+      "totalLocals": 45,
+      "codeSize": 5981,
+      "codeOffset": 12282
+    },
+    {
+      "funcIndex": 55,
+      "bodySize": 4997,
+      "totalLocals": 35,
+      "codeSize": 4992,
+      "codeOffset": 24319
+    },
+    {
+      "funcIndex": 56,
+      "bodySize": 4456,
+      "totalLocals": 9,
+      "codeSize": 4451,
+      "codeOffset": 29318
+    },
+    {
+      "funcIndex": 57,
+      "bodySize": 3854,
+      "totalLocals": 35,
+      "codeSize": 3847,
+      "codeOffset": 33778
+    },
+    {
+      "funcIndex": 58,
+      "bodySize": 2927,
+      "totalLocals": 38,
+      "codeSize": 2924,
+      "codeOffset": 37630
+    },
+    {
+      "funcIndex": 60,
+      "bodySize": 2688,
+      "totalLocals": 13,
+      "codeSize": 2683,
+      "codeOffset": 43145
+    },
+    {
+      "funcIndex": 59,
+      "bodySize": 2582,
+      "totalLocals": 14,
+      "codeSize": 2579,
+      "codeOffset": 40559
+    },
+    {
+      "funcIndex": 61,
+      "bodySize": 1967,
+      "totalLocals": 16,
+      "codeSize": 1964,
+      "codeOffset": 45833
+    },
+    {
+      "funcIndex": 62,
+      "bodySize": 1512,
+      "totalLocals": 10,
+      "codeSize": 1509,
+      "codeOffset": 47802
+    },
+    {
+      "funcIndex": 63,
+      "bodySize": 1190,
+      "totalLocals": 11,
+      "codeSize": 1185,
+      "codeOffset": 49318
+    },
+    {
+      "funcIndex": 64,
+      "bodySize": 1149,
+      "totalLocals": 12,
+      "codeSize": 1144,
+      "codeOffset": 50510
+    },
+    {
+      "funcIndex": 72,
+      "bodySize": 1110,
+      "totalLocals": 14,
+      "codeSize": 1103,
+      "codeOffset": 59054
+    },
+    {
+      "funcIndex": 67,
+      "bodySize": 1103,
+      "totalLocals": 6,
+      "codeSize": 1100,
+      "codeOffset": 53757
+    },
+    {
+      "funcIndex": 71,
+      "bodySize": 1093,
+      "totalLocals": 2,
+      "codeSize": 1090,
+      "codeOffset": 57955
+    },
+    {
+      "funcIndex": 70,
+      "bodySize": 1075,
+      "totalLocals": 5,
+      "codeSize": 1072,
+      "codeOffset": 56878
+    },
+    {
+      "funcIndex": 65,
+      "bodySize": 1058,
+      "totalLocals": 11,
+      "codeSize": 1055,
+      "codeOffset": 51659
+    },
+    {
+      "funcIndex": 66,
+      "bodySize": 1036,
+      "totalLocals": 5,
+      "codeSize": 1031,
+      "codeOffset": 52721
+    },
+    {
+      "funcIndex": 68,
+      "bodySize": 1032,
+      "totalLocals": 7,
+      "codeSize": 1029,
+      "codeOffset": 54862
+    }
+  ],
+  "cryptoStrings": [
+    {
+      "offset": 1048576,
+      "value": "removed\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\cipher-0.4.4\\src\\stream_core.rs"
+    },
+    {
+      "offset": 1049072,
+      "value": "}\"[{,:]removed\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\block-buffer-0.10.4\\src\\lib.rs"
+    },
+    {
+      "offset": 1049412,
+      "value": "removed\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\universal-hash-0.5.1\\src\\lib.rs"
+    },
+    {
+      "offset": 1050120,
+      "value": "removed\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\hmac-0.12.1\\src\\lib.rs"
+    },
+    {
+      "offset": 1050496,
+      "value": "StreamCipherError"
+    },
+    {
+      "offset": 1050532,
+      "value": "removed\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\ctr-0.9.2\\src\\flavors\\ctr32.rs"
+    },
+    {
+      "offset": 1051996,
+      "value": "E55removed\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\aes-0.8.4\\src\\soft\\fixslice32.rs"
+    },
+    {
+      "offset": 1059536,
+      "value": "assertion failed: noborrowassertion failed: digits < 40assertion failed: other > 0attempt to divide by zero"
+    },
+    {
+      "offset": 1076512,
+      "value": "closure invoked recursively or after being dropped"
+    }
+  ],
+  "potentialKeys": [
+    {
+      "offset": 1050665,
+      "entropy": 5,
+      "hex": "e6096a85ae67bb72f36e3c3af54fa57f520e518c68059babd9831f19cde05b63"
+    },
+    {
+      "offset": 1050666,
+      "entropy": 5,
+      "hex": "096a85ae67bb72f36e3c3af54fa57f520e518c68059babd9831f19cde05b6361"
+    },
+    {
+      "offset": 1050667,
+      "entropy": 5,
+      "hex": "6a85ae67bb72f36e3c3af54fa57f520e518c68059babd9831f19cde05b63616c"
+    },
+    {
+      "offset": 1051369,
+      "entropy": 5,
+      "hex": "00014142434445464748494a4b4c4d4e4f505152535455565758595a61626364"
+    },
+    {
+      "offset": 1051370,
+      "entropy": 5,
+      "hex": "014142434445464748494a4b4c4d4e4f505152535455565758595a6162636465"
+    },
+    {
+      "offset": 1051371,
+      "entropy": 5,
+      "hex": "4142434445464748494a4b4c4d4e4f505152535455565758595a616263646566"
+    },
+    {
+      "offset": 1051372,
+      "entropy": 5,
+      "hex": "42434445464748494a4b4c4d4e4f505152535455565758595a61626364656667"
+    },
+    {
+      "offset": 1051373,
+      "entropy": 5,
+      "hex": "434445464748494a4b4c4d4e4f505152535455565758595a6162636465666768"
+    },
+    {
+      "offset": 1051374,
+      "entropy": 5,
+      "hex": "4445464748494a4b4c4d4e4f505152535455565758595a616263646566676869"
+    },
+    {
+      "offset": 1051375,
+      "entropy": 5,
+      "hex": "45464748494a4b4c4d4e4f505152535455565758595a6162636465666768696a"
+    },
+    {
+      "offset": 1051376,
+      "entropy": 5,
+      "hex": "464748494a4b4c4d4e4f505152535455565758595a6162636465666768696a6b"
+    },
+    {
+      "offset": 1051377,
+      "entropy": 5,
+      "hex": "4748494a4b4c4d4e4f505152535455565758595a6162636465666768696a6b6c"
+    },
+    {
+      "offset": 1051378,
+      "entropy": 5,
+      "hex": "48494a4b4c4d4e4f505152535455565758595a6162636465666768696a6b6c6d"
+    },
+    {
+      "offset": 1051379,
+      "entropy": 5,
+      "hex": "494a4b4c4d4e4f505152535455565758595a6162636465666768696a6b6c6d6e"
+    },
+    {
+      "offset": 1051380,
+      "entropy": 5,
+      "hex": "4a4b4c4d4e4f505152535455565758595a6162636465666768696a6b6c6d6e6f"
+    },
+    {
+      "offset": 1051381,
+      "entropy": 5,
+      "hex": "4b4c4d4e4f505152535455565758595a6162636465666768696a6b6c6d6e6f70"
+    },
+    {
+      "offset": 1051382,
+      "entropy": 5,
+      "hex": "4c4d4e4f505152535455565758595a6162636465666768696a6b6c6d6e6f7071"
+    },
+    {
+      "offset": 1051383,
+      "entropy": 5,
+      "hex": "4d4e4f505152535455565758595a6162636465666768696a6b6c6d6e6f707172"
+    },
+    {
+      "offset": 1051384,
+      "entropy": 5,
+      "hex": "4e4f505152535455565758595a6162636465666768696a6b6c6d6e6f70717273"
+    },
+    {
+      "offset": 1051385,
+      "entropy": 5,
+      "hex": "4f505152535455565758595a6162636465666768696a6b6c6d6e6f7071727374"
+    },
+    {
+      "offset": 1051386,
+      "entropy": 5,
+      "hex": "505152535455565758595a6162636465666768696a6b6c6d6e6f707172737475"
+    },
+    {
+      "offset": 1051387,
+      "entropy": 5,
+      "hex": "5152535455565758595a6162636465666768696a6b6c6d6e6f70717273747576"
+    },
+    {
+      "offset": 1051388,
+      "entropy": 5,
+      "hex": "52535455565758595a6162636465666768696a6b6c6d6e6f7071727374757677"
+    },
+    {
+      "offset": 1051389,
+      "entropy": 5,
+      "hex": "535455565758595a6162636465666768696a6b6c6d6e6f707172737475767778"
+    },
+    {
+      "offset": 1051390,
+      "entropy": 5,
+      "hex": "5455565758595a6162636465666768696a6b6c6d6e6f70717273747576777879"
+    },
+    {
+      "offset": 1051391,
+      "entropy": 5,
+      "hex": "55565758595a6162636465666768696a6b6c6d6e6f707172737475767778797a"
+    },
+    {
+      "offset": 1051392,
+      "entropy": 5,
+      "hex": "565758595a6162636465666768696a6b6c6d6e6f707172737475767778797a30"
+    },
+    {
+      "offset": 1051393,
+      "entropy": 5,
+      "hex": "5758595a6162636465666768696a6b6c6d6e6f707172737475767778797a3031"
+    },
+    {
+      "offset": 1051394,
+      "entropy": 5,
+      "hex": "58595a6162636465666768696a6b6c6d6e6f707172737475767778797a303132"
+    },
+    {
+      "offset": 1051395,
+      "entropy": 5,
+      "hex": "595a6162636465666768696a6b6c6d6e6f707172737475767778797a30313233"
+    }
+  ]
+}

@@ -1,0 +1,2825 @@
+{
+  "key": "ae868817d1a149f9786e88ff1240a29450e2e5fe43248e5806ac92fdf9216871",
+  "sessionId": "1766279415.5944378",
+  "reads": [
+    {
+      "type": "navigator",
+      "prop": "language",
+      "value": "en-US"
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.17343294471888715
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.8503540499099556
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.8081285037172616
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279410390
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279410398
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279410406
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.7395546035881406
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279410415
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.3215871015004309
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279410416
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.5878016322288206
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279410417
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.3173562982547342
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279410418
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.9900014671524537
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279410421
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.8505303216860772
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.7701459982867863
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.08162773048675298
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.5931547014430673
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.3256171720105848
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.5390751727462649
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.6271144718949646
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.6386280702271425
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.7911820157848242
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.8984047826564372
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.38477221781662907
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.6638392426769462
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.9579700521659558
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.9718381930262381
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.8989537860438058
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.3708775341991477
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.8711199051793691
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.9994117609045395
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.9974151698666976
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.7294261130523431
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.3492190970782485
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.9668718671189013
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.3623158867165637
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.013644892828318378
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.875414341523595
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.41053909551643164
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.7932601282690005
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.9889337267388505
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.6203069281576623
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.7855060896553242
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.6215570907897094
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.07272604321536436
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.727238084968929
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.8292668447700919
+    },
+    {
+      "type": "navigator",
+      "prop": "language",
+      "value": "en-US"
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279410513
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.09784322577415228
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.3221450593535703
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.373972783230459
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.72254022454732
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.2840195521443545
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.2743760004816339
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.016270284836177762
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.7447233184680437
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.7868817392685257
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.27583279521055204
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.7219691533815723
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.573914101642841
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.592794626019035
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.06394113108964361
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.35384224217379145
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.20590275455693152
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.2453424115330518
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.23375585008694377
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.048857216534573755
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.9587431858065995
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.06762491573767093
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.6413593590545957
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.6862365890405299
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.22472211918542961
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.5534488090866735
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.7247880760739744
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.41217188426781104
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.1629611224490709
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.4578469046511855
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.41217985238124066
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.7752294367029148
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.6662645365030792
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "screen",
+      "prop": "availHeight",
+      "value": 600
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.5281720067492741
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.14216196991534413
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.23319382633823216
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.8000222235430341
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.15995381751797766
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.0700670433350431
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.6480552689094871
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.038768618320300985
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279410614
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279410928
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.7560366902062484
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.09543082864797725
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.8385784697179699
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.3869655941734442
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.8510131148625344
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.3172017242753712
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.6085084765958106
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.0227926742060105
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.13931259407259078
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.1047848745647404
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.052925134525706685
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.4489007469756917
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.5939438228581704
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.17727312796009087
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.6216910082330902
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.7610860395074058
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.11829689318476944
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.23810635526544333
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.9303945063483748
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.8441218187852761
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.9719754228816643
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.7422054553353726
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.3216934299724684
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.3404606261532759
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.5337452356787431
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.40401133564373715
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.15029630517420867
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.22951501413949826
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.8936413491556775
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.6904724160093627
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.34133804002821233
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.6121024466445981
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279412188
+    },
+    {
+      "type": "date",
+      "prop": "timezoneOffset",
+      "value": 360
+    },
+    {
+      "type": "screen",
+      "prop": "availHeight",
+      "value": 600
+    },
+    {
+      "type": "screen",
+      "prop": "height",
+      "value": 600
+    },
+    {
+      "type": "screen",
+      "prop": "width",
+      "value": 800
+    },
+    {
+      "type": "screen",
+      "prop": "availWidth",
+      "value": 800
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "navigator",
+      "prop": "platform",
+      "value": "Win32"
+    },
+    {
+      "type": "navigator",
+      "prop": "hardwareConcurrency",
+      "value": 4
+    },
+    {
+      "type": "navigator",
+      "prop": "hardwareConcurrency",
+      "value": 4
+    },
+    {
+      "type": "navigator",
+      "prop": "hardwareConcurrency",
+      "value": 4
+    },
+    {
+      "type": "navigator",
+      "prop": "deviceMemory",
+      "value": 8
+    },
+    {
+      "type": "navigator",
+      "prop": "deviceMemory",
+      "value": 8
+    },
+    {
+      "type": "screen",
+      "prop": "colorDepth",
+      "value": 24
+    },
+    {
+      "type": "screen",
+      "prop": "colorDepth",
+      "value": 24
+    },
+    {
+      "type": "navigator",
+      "prop": "language",
+      "value": "en-US"
+    },
+    {
+      "type": "navigator",
+      "prop": "language",
+      "value": "en-US"
+    },
+    {
+      "type": "navigator",
+      "prop": "languages",
+      "value": [
+        "en-US",
+        "en"
+      ]
+    },
+    {
+      "type": "navigator",
+      "prop": "languages",
+      "value": [
+        "en-US",
+        "en"
+      ]
+    },
+    {
+      "type": "navigator",
+      "prop": "languages",
+      "value": [
+        "en-US",
+        "en"
+      ]
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279412302
+    },
+    {
+      "type": "navigator",
+      "prop": "language",
+      "value": "en-US"
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279412322
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279412329
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.023802257035318353
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.5570846890187658
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.22382279568190244
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.1314594254188357
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.9807683098925818
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.7871763795573916
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.06746293782382551
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.7625507246553851
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.31641310614188345
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.3482007733929582
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.7347340230851386
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.9407150847381329
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.9230874332322426
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.23791362367438296
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.5129616151525783
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.16398477448600424
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.279877296208331
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.4703767403084753
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.9439253576158362
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.4513616535180106
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.3072558401643801
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.8988357611201063
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.23187048170394609
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.9857582008026816
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.043609118163539407
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.025900834156839636
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.05726182606332997
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.31387512028552544
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.8568854954471505
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.06372494778546822
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.37747236140237495
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.9430122979014826
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279412340
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279412353
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279412362
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.5175056558515411
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.4363291387589904
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279412380
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279412399
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279412412
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279412419
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279412424
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279412424
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279412435
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279412484
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279412489
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.934807779514599
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.6598800607342963
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279412518
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279412519
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279412519
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279412522
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.33068955831236846
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.07444273647552968
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.3811704098243238
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.21096149301482325
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.6840088332808771
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.769011541166246
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.9880616176950362
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.6308609962805786
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.5162896930016901
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.597647159049082
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.7311007566705554
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.1240024847952379
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.36825775858911347
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.5968586025757846
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.009623023207259052
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.8494698124914768
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.5607444441645986
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.1888567687181658
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.28533088735860035
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.18005279790002648
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.4953668237666232
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.18713086802797896
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.3543386512943292
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.6594610053587923
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.22191092868298146
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.2688716448788392
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.3998227241701505
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.4720709744573842
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.49453048412930734
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.7447261479218541
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.32993335476419827
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.5052865052327742
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "screen",
+      "prop": "width",
+      "value": 800
+    },
+    {
+      "type": "screen",
+      "prop": "height",
+      "value": 600
+    },
+    {
+      "type": "screen",
+      "prop": "availHeight",
+      "value": 600
+    },
+    {
+      "type": "navigator",
+      "prop": "language",
+      "value": "en-US"
+    },
+    {
+      "type": "navigator",
+      "prop": "maxTouchPoints",
+      "value": 0
+    },
+    {
+      "type": "date",
+      "prop": "timezoneOffset",
+      "value": 360
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413070
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413077
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413084
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.6343219835806738
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413086
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413086
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413094
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413111
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413128
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413144
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413161
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413177
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413193
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413211
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413228
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413244
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413261
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413278
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413295
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413311
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413327
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413345
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413362
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413378
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413395
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413410
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413429
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413452
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413461
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413477
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413494
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413512
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413527
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413544
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413562
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413577
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413594
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413600
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413600
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413601
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413602
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.6713845175242071
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.7791315087963154
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413612
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413613
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413613
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413616
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413623
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413629
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413643
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413660
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413677
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413694
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413710
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413727
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413744
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413760
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413777
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413794
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413811
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413827
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413843
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413861
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413877
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413894
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413910
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413927
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413943
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413960
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413977
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279413993
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414012
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414029
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414044
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414061
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414078
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414095
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414111
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414127
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414144
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414160
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414177
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414195
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414210
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414227
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414243
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414260
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414277
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414294
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414311
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414461
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414461
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414469
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414469
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414789
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414812
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414829
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414846
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414862
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414878
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414895
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414912
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414927
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414946
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414962
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414978
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279414995
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415012
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415028
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415045
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415061
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415077
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415094
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415112
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415128
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415144
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415160
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415178
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415194
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415210
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415227
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415244
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415261
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415277
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415294
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415311
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415327
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415360
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415378
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415395
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415410
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415427
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415446
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415461
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415477
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415494
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415511
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415527
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415544
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415561
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415577
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415594
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415611
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415627
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415645
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415660
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415677
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415689
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "screen",
+      "prop": "width",
+      "value": 800
+    },
+    {
+      "type": "screen",
+      "prop": "height",
+      "value": 600
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415695
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415697
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415699
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415699
+    },
+    {
+      "type": "screen",
+      "prop": "width",
+      "value": 800
+    },
+    {
+      "type": "screen",
+      "prop": "height",
+      "value": 600
+    },
+    {
+      "type": "screen",
+      "prop": "colorDepth",
+      "value": 24
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "navigator",
+      "prop": "platform",
+      "value": "Win32"
+    },
+    {
+      "type": "navigator",
+      "prop": "language",
+      "value": "en-US"
+    },
+    {
+      "type": "date",
+      "prop": "timezoneOffset",
+      "value": 360
+    },
+    {
+      "type": "storage",
+      "prop": "getItem",
+      "key": "tmdb_session_id",
+      "value": null
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415702
+    },
+    {
+      "type": "math",
+      "prop": "random",
+      "value": 0.5944378322598638
+    },
+    {
+      "type": "storage",
+      "prop": "setItem",
+      "key": "tmdb_session_id",
+      "value": "1766279415.5944378"
+    },
+    {
+      "type": "canvas",
+      "prop": "fillText",
+      "text": "TMDB Image Enhancement 🎬",
+      "x": 2,
+      "y": 2,
+      "font": "14px Arial"
+    },
+    {
+      "type": "canvas",
+      "prop": "fillText",
+      "text": "Processing capabilities test",
+      "x": 2,
+      "y": 20,
+      "font": "11px Arial"
+    },
+    {
+      "type": "canvas",
+      "prop": "toDataURL",
+      "length": 5050,
+      "preview": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObklEQVR4AezcfaxVRxEA8AVDaosavx"
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415795
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415797
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415811
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415827
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415844
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415847
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415848
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415861
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415877
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415894
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415897
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415897
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415897
+    },
+    {
+      "type": "date",
+      "prop": "now",
+      "value": 1766279415897
+    },
+    {
+      "type": "screen",
+      "prop": "width",
+      "value": 800
+    },
+    {
+      "type": "screen",
+      "prop": "height",
+      "value": 600
+    },
+    {
+      "type": "screen",
+      "prop": "colorDepth",
+      "value": 24
+    },
+    {
+      "type": "navigator",
+      "prop": "userAgent",
+      "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    {
+      "type": "navigator",
+      "prop": "platform",
+      "value": "Win32"
+    },
+    {
+      "type": "navigator",
+      "prop": "language",
+      "value": "en-US"
+    },
+    {
+      "type": "date",
+      "prop": "timezoneOffset",
+      "value": 360
+    },
+    {
+      "type": "storage",
+      "prop": "getItem",
+      "key": "tmdb_session_id",
+      "value": "1766279415.5944378"
+    },
+    {
+      "type": "canvas",
+      "prop": "fillText",
+      "text": "TMDB Image Enhancement 🎬",
+      "x": 2,
+      "y": 2,
+      "font": "14px Arial"
+    },
+    {
+      "type": "canvas",
+      "prop": "fillText",
+      "text": "Processing capabilities test",
+      "x": 2,
+      "y": 20,
+      "font": "11px Arial"
+    },
+    {
+      "type": "canvas",
+      "prop": "toDataURL",
+      "length": 5050,
+      "preview": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObklEQVR4AezcfaxVRxEA8AVDaosavx"
+    },
+    {
+      "type": "storage",
+      "prop": "getItem",
+      "key": "tmdb_session_id",
+      "value": "1766279415.5944378"
+    }
+  ],
+  "readOrder": [
+    "navigator.language=en-US",
+    "random=0.17343294471888715",
+    "random=0.8503540499099556",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "random=0.8081285037172616",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "now=1766279410390",
+    "now=1766279410398",
+    "now=1766279410406",
+    "random=0.7395546035881406",
+    "now=1766279410415",
+    "random=0.3215871015004309",
+    "now=1766279410416",
+    "random=0.5878016322288206",
+    "now=1766279410417",
+    "random=0.3173562982547342",
+    "now=1766279410418",
+    "random=0.9900014671524537",
+    "now=1766279410421",
+    "random=0.8505303216860772",
+    "random=0.7701459982867863",
+    "random=0.08162773048675298",
+    "random=0.5931547014430673",
+    "random=0.3256171720105848",
+    "random=0.5390751727462649",
+    "random=0.6271144718949646",
+    "random=0.6386280702271425",
+    "random=0.7911820157848242",
+    "random=0.8984047826564372",
+    "random=0.38477221781662907",
+    "random=0.6638392426769462",
+    "random=0.9579700521659558",
+    "random=0.9718381930262381",
+    "random=0.8989537860438058",
+    "random=0.3708775341991477",
+    "random=0.8711199051793691",
+    "random=0.9994117609045395",
+    "random=0.9974151698666976",
+    "random=0.7294261130523431",
+    "random=0.3492190970782485",
+    "random=0.9668718671189013",
+    "random=0.3623158867165637",
+    "random=0.013644892828318378",
+    "random=0.875414341523595",
+    "random=0.41053909551643164",
+    "random=0.7932601282690005",
+    "random=0.9889337267388505",
+    "random=0.6203069281576623",
+    "random=0.7855060896553242",
+    "random=0.6215570907897094",
+    "random=0.07272604321536436",
+    "random=0.727238084968929",
+    "random=0.8292668447700919",
+    "navigator.language=en-US",
+    "now=1766279410513",
+    "random=0.09784322577415228",
+    "random=0.3221450593535703",
+    "random=0.373972783230459",
+    "random=0.72254022454732",
+    "random=0.2840195521443545",
+    "random=0.2743760004816339",
+    "random=0.016270284836177762",
+    "random=0.7447233184680437",
+    "random=0.7868817392685257",
+    "random=0.27583279521055204",
+    "random=0.7219691533815723",
+    "random=0.573914101642841",
+    "random=0.592794626019035",
+    "random=0.06394113108964361",
+    "random=0.35384224217379145",
+    "random=0.20590275455693152",
+    "random=0.2453424115330518",
+    "random=0.23375585008694377",
+    "random=0.048857216534573755",
+    "random=0.9587431858065995",
+    "random=0.06762491573767093",
+    "random=0.6413593590545957",
+    "random=0.6862365890405299",
+    "random=0.22472211918542961",
+    "random=0.5534488090866735",
+    "random=0.7247880760739744",
+    "random=0.41217188426781104",
+    "random=0.1629611224490709",
+    "random=0.4578469046511855",
+    "random=0.41217985238124066",
+    "random=0.7752294367029148",
+    "random=0.6662645365030792",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "screen.availHeight=600",
+    "random=0.5281720067492741",
+    "random=0.14216196991534413",
+    "random=0.23319382633823216",
+    "random=0.8000222235430341",
+    "random=0.15995381751797766",
+    "random=0.0700670433350431",
+    "random=0.6480552689094871",
+    "random=0.038768618320300985",
+    "now=1766279410614",
+    "now=1766279410928",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "random=0.7560366902062484",
+    "random=0.09543082864797725",
+    "random=0.8385784697179699",
+    "random=0.3869655941734442",
+    "random=0.8510131148625344",
+    "random=0.3172017242753712",
+    "random=0.6085084765958106",
+    "random=0.0227926742060105",
+    "random=0.13931259407259078",
+    "random=0.1047848745647404",
+    "random=0.052925134525706685",
+    "random=0.4489007469756917",
+    "random=0.5939438228581704",
+    "random=0.17727312796009087",
+    "random=0.6216910082330902",
+    "random=0.7610860395074058",
+    "random=0.11829689318476944",
+    "random=0.23810635526544333",
+    "random=0.9303945063483748",
+    "random=0.8441218187852761",
+    "random=0.9719754228816643",
+    "random=0.7422054553353726",
+    "random=0.3216934299724684",
+    "random=0.3404606261532759",
+    "random=0.5337452356787431",
+    "random=0.40401133564373715",
+    "random=0.15029630517420867",
+    "random=0.22951501413949826",
+    "random=0.8936413491556775",
+    "random=0.6904724160093627",
+    "random=0.34133804002821233",
+    "random=0.6121024466445981",
+    "now=1766279412188",
+    "timezoneOffset=360",
+    "screen.availHeight=600",
+    "screen.height=600",
+    "screen.width=800",
+    "screen.availWidth=800",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "navigator.platform=Win32",
+    "navigator.hardwareConcurrency=4",
+    "navigator.hardwareConcurrency=4",
+    "navigator.hardwareConcurrency=4",
+    "navigator.deviceMemory=8",
+    "navigator.deviceMemory=8",
+    "screen.colorDepth=24",
+    "screen.colorDepth=24",
+    "navigator.language=en-US",
+    "navigator.language=en-US",
+    "navigator.languages=en-US,en",
+    "navigator.languages=en-US,en",
+    "navigator.languages=en-US,en",
+    "now=1766279412302",
+    "navigator.language=en-US",
+    "now=1766279412322",
+    "now=1766279412329",
+    "random=0.023802257035318353",
+    "random=0.5570846890187658",
+    "random=0.22382279568190244",
+    "random=0.1314594254188357",
+    "random=0.9807683098925818",
+    "random=0.7871763795573916",
+    "random=0.06746293782382551",
+    "random=0.7625507246553851",
+    "random=0.31641310614188345",
+    "random=0.3482007733929582",
+    "random=0.7347340230851386",
+    "random=0.9407150847381329",
+    "random=0.9230874332322426",
+    "random=0.23791362367438296",
+    "random=0.5129616151525783",
+    "random=0.16398477448600424",
+    "random=0.279877296208331",
+    "random=0.4703767403084753",
+    "random=0.9439253576158362",
+    "random=0.4513616535180106",
+    "random=0.3072558401643801",
+    "random=0.8988357611201063",
+    "random=0.23187048170394609",
+    "random=0.9857582008026816",
+    "random=0.043609118163539407",
+    "random=0.025900834156839636",
+    "random=0.05726182606332997",
+    "random=0.31387512028552544",
+    "random=0.8568854954471505",
+    "random=0.06372494778546822",
+    "random=0.37747236140237495",
+    "random=0.9430122979014826",
+    "now=1766279412340",
+    "now=1766279412353",
+    "now=1766279412362",
+    "random=0.5175056558515411",
+    "random=0.4363291387589904",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "now=1766279412380",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "now=1766279412399",
+    "now=1766279412412",
+    "now=1766279412419",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "now=1766279412424",
+    "now=1766279412424",
+    "now=1766279412435",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "now=1766279412484",
+    "now=1766279412489",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "random=0.934807779514599",
+    "random=0.6598800607342963",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "now=1766279412518",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "now=1766279412519",
+    "now=1766279412519",
+    "now=1766279412522",
+    "random=0.33068955831236846",
+    "random=0.07444273647552968",
+    "random=0.3811704098243238",
+    "random=0.21096149301482325",
+    "random=0.6840088332808771",
+    "random=0.769011541166246",
+    "random=0.9880616176950362",
+    "random=0.6308609962805786",
+    "random=0.5162896930016901",
+    "random=0.597647159049082",
+    "random=0.7311007566705554",
+    "random=0.1240024847952379",
+    "random=0.36825775858911347",
+    "random=0.5968586025757846",
+    "random=0.009623023207259052",
+    "random=0.8494698124914768",
+    "random=0.5607444441645986",
+    "random=0.1888567687181658",
+    "random=0.28533088735860035",
+    "random=0.18005279790002648",
+    "random=0.4953668237666232",
+    "random=0.18713086802797896",
+    "random=0.3543386512943292",
+    "random=0.6594610053587923",
+    "random=0.22191092868298146",
+    "random=0.2688716448788392",
+    "random=0.3998227241701505",
+    "random=0.4720709744573842",
+    "random=0.49453048412930734",
+    "random=0.7447261479218541",
+    "random=0.32993335476419827",
+    "random=0.5052865052327742",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "screen.width=800",
+    "screen.height=600",
+    "screen.availHeight=600",
+    "navigator.language=en-US",
+    "navigator.maxTouchPoints=0",
+    "timezoneOffset=360",
+    "now=1766279413070",
+    "now=1766279413077",
+    "now=1766279413084",
+    "random=0.6343219835806738",
+    "now=1766279413086",
+    "now=1766279413086",
+    "now=1766279413094",
+    "now=1766279413111",
+    "now=1766279413128",
+    "now=1766279413144",
+    "now=1766279413161",
+    "now=1766279413177",
+    "now=1766279413193",
+    "now=1766279413211",
+    "now=1766279413228",
+    "now=1766279413244",
+    "now=1766279413261",
+    "now=1766279413278",
+    "now=1766279413295",
+    "now=1766279413311",
+    "now=1766279413327",
+    "now=1766279413345",
+    "now=1766279413362",
+    "now=1766279413378",
+    "now=1766279413395",
+    "now=1766279413410",
+    "now=1766279413429",
+    "now=1766279413452",
+    "now=1766279413461",
+    "now=1766279413477",
+    "now=1766279413494",
+    "now=1766279413512",
+    "now=1766279413527",
+    "now=1766279413544",
+    "now=1766279413562",
+    "now=1766279413577",
+    "now=1766279413594",
+    "now=1766279413600",
+    "now=1766279413600",
+    "now=1766279413601",
+    "now=1766279413602",
+    "random=0.6713845175242071",
+    "random=0.7791315087963154",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "now=1766279413612",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "now=1766279413613",
+    "now=1766279413613",
+    "now=1766279413616",
+    "now=1766279413623",
+    "now=1766279413629",
+    "now=1766279413643",
+    "now=1766279413660",
+    "now=1766279413677",
+    "now=1766279413694",
+    "now=1766279413710",
+    "now=1766279413727",
+    "now=1766279413744",
+    "now=1766279413760",
+    "now=1766279413777",
+    "now=1766279413794",
+    "now=1766279413811",
+    "now=1766279413827",
+    "now=1766279413843",
+    "now=1766279413861",
+    "now=1766279413877",
+    "now=1766279413894",
+    "now=1766279413910",
+    "now=1766279413927",
+    "now=1766279413943",
+    "now=1766279413960",
+    "now=1766279413977",
+    "now=1766279413993",
+    "now=1766279414012",
+    "now=1766279414029",
+    "now=1766279414044",
+    "now=1766279414061",
+    "now=1766279414078",
+    "now=1766279414095",
+    "now=1766279414111",
+    "now=1766279414127",
+    "now=1766279414144",
+    "now=1766279414160",
+    "now=1766279414177",
+    "now=1766279414195",
+    "now=1766279414210",
+    "now=1766279414227",
+    "now=1766279414243",
+    "now=1766279414260",
+    "now=1766279414277",
+    "now=1766279414294",
+    "now=1766279414311",
+    "now=1766279414461",
+    "now=1766279414461",
+    "now=1766279414469",
+    "now=1766279414469",
+    "now=1766279414789",
+    "now=1766279414812",
+    "now=1766279414829",
+    "now=1766279414846",
+    "now=1766279414862",
+    "now=1766279414878",
+    "now=1766279414895",
+    "now=1766279414912",
+    "now=1766279414927",
+    "now=1766279414946",
+    "now=1766279414962",
+    "now=1766279414978",
+    "now=1766279414995",
+    "now=1766279415012",
+    "now=1766279415028",
+    "now=1766279415045",
+    "now=1766279415061",
+    "now=1766279415077",
+    "now=1766279415094",
+    "now=1766279415112",
+    "now=1766279415128",
+    "now=1766279415144",
+    "now=1766279415160",
+    "now=1766279415178",
+    "now=1766279415194",
+    "now=1766279415210",
+    "now=1766279415227",
+    "now=1766279415244",
+    "now=1766279415261",
+    "now=1766279415277",
+    "now=1766279415294",
+    "now=1766279415311",
+    "now=1766279415327",
+    "now=1766279415360",
+    "now=1766279415378",
+    "now=1766279415395",
+    "now=1766279415410",
+    "now=1766279415427",
+    "now=1766279415446",
+    "now=1766279415461",
+    "now=1766279415477",
+    "now=1766279415494",
+    "now=1766279415511",
+    "now=1766279415527",
+    "now=1766279415544",
+    "now=1766279415561",
+    "now=1766279415577",
+    "now=1766279415594",
+    "now=1766279415611",
+    "now=1766279415627",
+    "now=1766279415645",
+    "now=1766279415660",
+    "now=1766279415677",
+    "now=1766279415689",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "screen.width=800",
+    "screen.height=600",
+    "now=1766279415695",
+    "now=1766279415697",
+    "now=1766279415699",
+    "now=1766279415699",
+    "screen.width=800",
+    "screen.height=600",
+    "screen.colorDepth=24",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "navigator.platform=Win32",
+    "navigator.language=en-US",
+    "timezoneOffset=360",
+    "getItem(tmdb_session_id)=null",
+    "now=1766279415702",
+    "random=0.5944378322598638",
+    "setItem(tmdb_session_id)=1766279415.5944378",
+    "fillText(TMDB Image Enhancement 🎬,2,2,14px Arial)",
+    "fillText(Processing capabilities test,2,20,11px Arial)",
+    "toDataURL(len=5050)",
+    "now=1766279415795",
+    "now=1766279415797",
+    "now=1766279415811",
+    "now=1766279415827",
+    "now=1766279415844",
+    "now=1766279415847",
+    "now=1766279415848",
+    "now=1766279415861",
+    "now=1766279415877",
+    "now=1766279415894",
+    "now=1766279415897",
+    "now=1766279415897",
+    "now=1766279415897",
+    "now=1766279415897",
+    "screen.width=800",
+    "screen.height=600",
+    "screen.colorDepth=24",
+    "navigator.userAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb",
+    "navigator.platform=Win32",
+    "navigator.language=en-US",
+    "timezoneOffset=360",
+    "getItem(tmdb_session_id)=1766279415.5944378",
+    "fillText(TMDB Image Enhancement 🎬,2,2,14px Arial)",
+    "fillText(Processing capabilities test,2,20,11px Arial)",
+    "toDataURL(len=5050)",
+    "getItem(tmdb_session_id)=1766279415.5944378"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "key": "12ebdd955c3d91f5cfead71817f2ab494c13df5c909e8bd9fd1c8a4898bbeb65",
+  "sessionId": "1766278438.4928437",
+  "fpString": "24:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb:Win32:en-US:360:1766278438:iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObk",
+  "fingerprint": {
+    "screenWidth": 800,
+    "screenHeight": 600,
+    "colorDepth": 24,
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+    "platform": "Win32",
+    "language": "en-US",
+    "timezone": 360
+  },
+  "canvasBase64Length": 5028
+}
