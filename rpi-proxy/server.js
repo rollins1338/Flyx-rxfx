@@ -738,44 +738,67 @@ function proxyIPTVStream(targetUrl, mac, token, res, redirectCount = 0) {
 }
 
 /**
- * AnimeKai stream proxy - fetches MegaUp CDN streams from residential IP
- * MegaUp blocks:
+ * AnimeKai/Flixer stream proxy - fetches CDN streams from residential IP
+ * 
+ * MegaUp CDN (AnimeKai) blocks:
  *   1. Datacenter IPs (Cloudflare, AWS, etc.)
  *   2. Requests with Origin header
  *   3. Requests with Referer header (sometimes)
  * 
- * This proxy fetches WITHOUT Origin/Referer headers from a residential IP.
+ * Flixer CDN (p.XXXXX.workers.dev) blocks:
+ *   1. Datacenter IPs (Cloudflare, AWS, etc.)
+ *   2. Requests WITHOUT Referer header (requires https://flixer.sh/)
+ * 
+ * This proxy fetches from a residential IP with appropriate headers.
  * 
  * IMPORTANT: The User-Agent MUST be consistent with what's sent to enc-dec.app
  * for decryption. Pass ?ua=<user-agent> to use a custom User-Agent.
+ * Pass ?referer=<url> to include a Referer header (needed for Flixer CDN).
  */
-function proxyAnimeKaiStream(targetUrl, customUserAgent, res) {
+function proxyAnimeKaiStream(targetUrl, customUserAgent, customReferer, res) {
   // NO CACHING - always fetch fresh
 
   const url = new URL(targetUrl);
   const client = url.protocol === 'https:' ? https : http;
   
-  // CRITICAL: Do NOT send Origin or Referer headers - MegaUp blocks them
+  // Check if this is Flixer CDN (p.XXXXX.workers.dev)
+  const isFlixerCdn = url.hostname.match(/^p\.\d+\.workers\.dev$/);
+  
   // IMPORTANT: User-Agent MUST match what's sent to enc-dec.app for decryption
   const defaultUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
   const userAgent = customUserAgent || defaultUserAgent;
+  
+  // Build headers based on CDN type
+  const headers = {
+    'User-Agent': userAgent,
+    'Accept': '*/*',
+    'Accept-Encoding': 'identity', // Don't request compression for video
+    'Connection': 'keep-alive',
+  };
+  
+  // Flixer CDN REQUIRES Referer header, MegaUp CDN BLOCKS it
+  if (isFlixerCdn) {
+    // Flixer CDN needs Referer header
+    headers['Referer'] = customReferer || 'https://flixer.sh/';
+    console.log(`[AnimeKai] Flixer CDN detected - adding Referer: ${headers['Referer']}`);
+  } else if (customReferer) {
+    // Only add Referer if explicitly provided for non-Flixer CDNs
+    headers['Referer'] = customReferer;
+  }
+  // For MegaUp CDN (AnimeKai), do NOT send Origin or Referer headers
   
   const options = {
     hostname: url.hostname,
     port: url.port || (url.protocol === 'https:' ? 443 : 80),
     path: url.pathname + url.search,
     method: 'GET',
-    headers: {
-      'User-Agent': userAgent,
-      'Accept': '*/*',
-      'Accept-Encoding': 'identity', // Don't request compression for video
-      'Connection': 'keep-alive',
-    },
+    headers,
     timeout: 30000,
     rejectUnauthorized: false, // Some CDNs have cert issues
   };
 
   console.log(`[AnimeKai] ${targetUrl.substring(0, 100)}...`);
+  console.log(`[AnimeKai] Headers:`, JSON.stringify(headers, null, 2));
 
   const proxyReq = client.request(options, (proxyRes) => {
     const contentType = proxyRes.headers['content-type'] || 'application/octet-stream';
@@ -793,8 +816,8 @@ function proxyAnimeKaiStream(targetUrl, customUserAgent, res) {
         ? redirectUrl 
         : new URL(redirectUrl, targetUrl).toString();
       
-      // Follow the redirect (preserve custom User-Agent)
-      proxyAnimeKaiStream(absoluteUrl, customUserAgent, res);
+      // Follow the redirect (preserve custom User-Agent and Referer)
+      proxyAnimeKaiStream(absoluteUrl, customUserAgent, customReferer, res);
       return;
     }
     
@@ -1152,11 +1175,13 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // AnimeKai proxy endpoint - proxies MegaUp CDN streams from residential IP
+  // AnimeKai proxy endpoint - proxies MegaUp/Flixer CDN streams from residential IP
   // MegaUp blocks datacenter IPs and requests with Origin/Referer headers
+  // Flixer CDN blocks datacenter IPs but REQUIRES Referer header
   if (reqUrl.pathname === '/animekai') {
     const targetUrl = reqUrl.searchParams.get('url');
     const customUserAgent = reqUrl.searchParams.get('ua');
+    const customReferer = reqUrl.searchParams.get('referer');
     
     if (!targetUrl) {
       res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
@@ -1166,7 +1191,8 @@ const server = http.createServer(async (req, res) => {
     try {
       const decoded = decodeURIComponent(targetUrl);
       const decodedUa = customUserAgent ? decodeURIComponent(customUserAgent) : null;
-      proxyAnimeKaiStream(decoded, decodedUa, res);
+      const decodedReferer = customReferer ? decodeURIComponent(customReferer) : null;
+      proxyAnimeKaiStream(decoded, decodedUa, decodedReferer, res);
     } catch (err) {
       res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
       res.end(JSON.stringify({ error: 'Invalid URL' }));
@@ -1196,8 +1222,12 @@ server.listen(PORT, () => {
 ║    GET /proxy?url=<encoded_url>  - Proxy a request        ║
 ║    GET /heartbeat?channel=&server=&domain= - DLHD session ║
 ║    GET /iptv/stream?url=&mac=&token= - IPTV stream proxy  ║
-║    GET /animekai?url=<encoded_url> - AnimeKai/MegaUp CDN  ║
+║    GET /animekai?url=&referer= - AnimeKai/Flixer CDN      ║
 ║    GET /health                   - Health check           ║
+╠═══════════════════════════════════════════════════════════╣
+║  CDN Support:                                             ║
+║    - MegaUp (AnimeKai): No Referer header                 ║
+║    - Flixer (p.XXXXX.workers.dev): Requires Referer       ║
 ╠═══════════════════════════════════════════════════════════╣
 ║  Expose with:                                             ║
 ║    cloudflared tunnel --url localhost:${PORT.toString().padEnd(20)}║

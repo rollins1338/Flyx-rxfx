@@ -9,6 +9,7 @@ const sections = [
   { id: 'philosophy', title: 'Philosophy' },
   { id: 'dlhd', title: 'DLHD Live TV' },
   { id: '111movies', title: '111movies (1movies)' },
+  { id: 'flixer', title: 'Flixer (WASM Cracking)' },
   { id: 'vidsrc', title: 'VidSrc' },
   { id: 'videasy', title: 'Videasy' },
   { id: 'animekai', title: 'AnimeKai' },
@@ -127,6 +128,11 @@ export default function ReverseEngineeringPage() {
                 <div className="provider-status working">✓ Working</div>
                 <h3>111movies</h3>
                 <p>AES-256-CBC encryption with XOR obfuscation and alphabet substitution. Fully cracked December 2025.</p>
+              </div>
+              <div className="provider-card">
+                <div className="provider-status working">✓ Working</div>
+                <h3>Flixer / Hexa</h3>
+                <p>Rust WASM encryption with browser fingerprinting. 12-hour reverse engineering session with Ghidra. December 2025.</p>
               </div>
               <div className="provider-card">
                 <div className="provider-status working">✓ Working</div>
@@ -607,6 +613,327 @@ function is1moviesCdnUrl(url) {
               <li><strong>Header Discovery:</strong> Compared browser requests to our requests, found missing <code>X-Requested-With</code></li>
               <li><strong>CDN Bypass:</strong> Discovered datacenter IP blocking, implemented residential proxy routing</li>
             </ol>
+          </section>
+
+
+          {/* Flixer / Hexa */}
+          <section id="flixer">
+            <h2>Flixer / Hexa - WASM Reverse Engineering</h2>
+            <div className="status-badge success">Fully Reverse Engineered - December 21, 2025 (2 AM)</div>
+            
+            <h3>Overview</h3>
+            <p>
+              Flixer.sh (and its sister site Hexa.su) represents the most sophisticated encryption 
+              we&apos;ve encountered. They use a Rust-compiled WebAssembly module for key generation 
+              and AES-256-CTR encryption with HMAC authentication. After a 12-hour reverse engineering 
+              session involving Ghidra, memory forensics, and approximately 150 test scripts, we 
+              cracked it.
+            </p>
+            <p>
+              The breakthrough: instead of replicating their key derivation algorithm (which proved 
+              impossible), we bundle their actual WASM binary into our Cloudflare Worker and run it 
+              server-side with mocked browser APIs.
+            </p>
+
+            <h3>The Challenge</h3>
+            <p>
+              Flixer&apos;s protection is multi-layered:
+            </p>
+            <ul>
+              <li><strong>WASM Encryption:</strong> All API responses are encrypted with AES-256-CTR</li>
+              <li><strong>Browser Fingerprinting:</strong> Keys are derived from screen size, User-Agent, timezone, canvas fingerprint</li>
+              <li><strong>Session Binding:</strong> Each browser session generates a unique 64-char hex key</li>
+              <li><strong>HMAC Authentication:</strong> Requests require HMAC-SHA256 signatures</li>
+              <li><strong>Anti-Bot Detection:</strong> Checks for HeadlessChrome, PhantomJS, Selenium</li>
+              <li><strong>CDN IP Blocking:</strong> Their CDN (p.XXXXX.workers.dev) blocks datacenter IPs</li>
+            </ul>
+
+            <h3>The WASM Binary</h3>
+            <div className="code-block">
+              <div className="code-header"><span>WASM Analysis</span></div>
+              <pre><code>{`File: img_data_bg.wasm
+Size: 136,881 bytes
+Functions: 377 total (52 imported, 325 defined)
+Language: Compiled from Rust
+
+Key Exports:
+  get_img_key()                    → Returns 64-char hex session key
+  process_img_data(encrypted, key) → Decrypts API responses
+
+Rust Crates Identified (via Ghidra):
+  - aes-0.8.4 (fixslice32.rs)     → AES-256 encryption
+  - ctr-0.9.2 (ctr32.rs)          → CTR mode
+  - hmac-0.12.1                    → HMAC authentication
+  - cipher-0.4.4                   → Stream cipher traits
+  - base64-0.21.7                  → Base64 encoding
+  - serde_json-1.0.141            → JSON parsing`}</code></pre>
+            </div>
+
+            <h3>Fingerprint Discovery</h3>
+            <p>
+              Through memory analysis, we discovered the exact fingerprint string format stored in 
+              WASM memory at offset 1119360:
+            </p>
+            <div className="code-block">
+              <div className="code-header"><span>Fingerprint Format (131 chars)</span></div>
+              <pre><code>{`{colorDepth}:{userAgent.slice(0,50)}:{platform}:{language}:{timezone}:{timestamp}:{canvasBase64.slice(0,50)}
+
+Example:
+24:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb:Win32:en-US:360:1766278661:iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAYAAAAZUZThAAAObk`}</code></pre>
+            </div>
+
+            <h3>What We Tried (And Failed)</h3>
+            <p>
+              We spent hours trying to replicate the key derivation in pure JavaScript:
+            </p>
+            <ul>
+              <li>SHA256, SHA384, SHA512, SHA1, MD5 of fingerprint string</li>
+              <li>HMAC-SHA256 with various keys</li>
+              <li>HKDF with various salts/info</li>
+              <li>PBKDF2 with various iterations</li>
+              <li>xorshift128+, splitmix64, PCG32 PRNGs</li>
+              <li>Canvas pixel data hashing</li>
+              <li>XOR combinations with embedded constants</li>
+            </ul>
+            <p>
+              None matched. The key derivation uses a custom algorithm buried in the compiled Rust code.
+            </p>
+
+            <h3>The Breakthrough: WASM Bundling</h3>
+            <p>
+              Instead of cracking the algorithm, we bundle their WASM binary directly into our 
+              Cloudflare Worker. The key insight: WASM runs anywhere that provides the expected 
+              browser APIs. We mock those APIs server-side.
+            </p>
+            <div className="code-block">
+              <div className="code-header"><span>WASM Import Mocking</span></div>
+              <pre><code>{`// The WASM expects browser APIs. We provide mocks:
+
+const mockWindow = {
+  document: {
+    createElement: (tag) => tag === 'canvas' ? mockCanvas : {},
+    getElementsByTagName: (tag) => tag === 'body' ? [mockBody] : [],
+  },
+  localStorage: {
+    getItem: (key) => key === 'tmdb_session_id' ? sessionId : null,
+    setItem: () => {},
+  },
+  navigator: { platform: 'Win32', language: 'en-US', userAgent: '...' },
+  screen: { width: 1920, height: 1080, colorDepth: 24 },
+  performance: { now: () => Date.now() - timestamp },
+};
+
+// Canvas fingerprint mock (deterministic)
+const mockCanvas = {
+  width: 200, height: 50,
+  getContext: () => ({
+    fillText: () => {},
+    font: '14px Arial',
+    textBaseline: 'top',
+  }),
+  toDataURL: () => 'data:image/png;base64,iVBORw0KGgo...',
+};`}</code></pre>
+            </div>
+
+            <h3>Critical Discovery: Header Blocking</h3>
+            <p>
+              After getting WASM working, requests still failed. Hours of debugging revealed:
+            </p>
+            <div className="code-block">
+              <div className="code-header"><span>Headers That BLOCK Requests</span></div>
+              <pre><code>{`// These headers cause Flixer to reject requests:
+
+'bW90aGFmYWth': '1'     // Base64 for "mothafaka" - anti-scraping marker!
+'Origin': '...'         // Browser adds this automatically
+'sec-fetch-*': '...'    // Fetch metadata headers
+
+// Solution: Don't send these headers from the Worker`}</code></pre>
+            </div>
+
+            <h3>API Authentication</h3>
+            <p>
+              Flixer requires HMAC-SHA256 signed requests:
+            </p>
+            <div className="code-block">
+              <div className="code-header"><span>Request Signing</span></div>
+              <pre><code>{`// Generate authentication headers
+const timestamp = Math.floor(Date.now() / 1000);
+const nonce = crypto.randomUUID().replace(/-/g, '').slice(0, 22);
+const path = '/api/tmdb/movie/550/images';
+
+// HMAC signature
+const message = \`\${apiKey}:\${timestamp}:\${nonce}:\${path}\`;
+const signature = await hmacSha256(apiKey, message);
+
+const headers = {
+  'X-Api-Key': apiKey,           // 64-char hex from get_img_key()
+  'X-Request-Timestamp': timestamp,
+  'X-Request-Nonce': nonce,
+  'X-Request-Signature': btoa(signature),
+  'X-Client-Fingerprint': fingerprint,
+  'Accept': 'text/plain',
+  // NO Origin, NO bW90aGFmYWth!
+};`}</code></pre>
+            </div>
+
+            <h3>Encryption Scheme</h3>
+            <div className="code-block">
+              <div className="code-header"><span>Response Structure</span></div>
+              <pre><code>{`// Encrypted response format:
+// [195 bytes prefix] + [ciphertext]
+
+Prefix contains:
+  - IV/Nonce for AES-CTR
+  - HMAC-SHA256 authentication tag
+
+Algorithm: AES-256-CTR (fixslice32 implementation)
+Key: Derived from API key + session key (internal WASM logic)
+Authentication: HMAC-SHA256 (modifying any byte fails)
+
+// Decryption via WASM
+const decrypted = await wasmLoader.process_img_data(encrypted, apiKey);
+const data = JSON.parse(decrypted);
+// data.sources[0].url → HLS stream URL`}</code></pre>
+            </div>
+
+            <h3>Hexa.su (Sister Site)</h3>
+            <p>
+              Hexa.su uses a different encryption scheme but is owned by the same people:
+            </p>
+            <div className="code-block">
+              <div className="code-header"><span>Hexa Encryption</span></div>
+              <pre><code>{`// Hexa uses simpler encryption (no WASM)
+// But the algorithm is closed-source and changes frequently
+
+Structure:
+  - 12-byte nonce prefix
+  - XOR-based stream cipher (no auth tag)
+  - Key: Random 32-byte hex string (X-Api-Key header)
+
+// We use enc-dec.app API for Hexa decryption
+const decrypted = await fetch('https://enc-dec.app/api/dec-hexa', {
+  method: 'POST',
+  body: JSON.stringify({ text: encrypted, key: apiKey })
+});`}</code></pre>
+            </div>
+
+            <h3>CDN Proxy Requirement</h3>
+            <p>
+              Flixer&apos;s CDN (<code>p.XXXXX.workers.dev</code>) blocks datacenter IPs AND requires 
+              a Referer header. This is the opposite of MegaUp (which blocks Referer).
+            </p>
+            <div className="code-block">
+              <div className="code-header"><span>CDN Requirements</span></div>
+              <pre><code>{`// Flixer CDN (p.10014.workers.dev, etc.)
+// REQUIRES: Referer: https://flixer.sh/
+// BLOCKS: Datacenter IPs (Cloudflare, AWS, Vercel)
+
+// Solution: Route through RPI residential proxy WITH Referer
+const proxyUrl = \`/animekai?url=\${encodeURIComponent(cdnUrl)}&referer=\${encodeURIComponent('https://flixer.sh/')}\`;
+
+// RPI proxy detects Flixer CDN and adds Referer header
+if (url.hostname.match(/^p\\.\\d+\\.workers\\.dev$/)) {
+  headers['Referer'] = customReferer || 'https://flixer.sh/';
+}`}</code></pre>
+            </div>
+
+            <h3>Server Names</h3>
+            <p>
+              Flixer uses NATO phonetic alphabet for server names, mapped to mythology:
+            </p>
+            <div className="code-block">
+              <div className="code-header"><span>Server Mapping</span></div>
+              <pre><code>{`alpha   → Ares      (Primary)
+bravo   → Balder
+charlie → Circe
+delta   → Dionysus
+echo    → Eros
+foxtrot → Freya`}</code></pre>
+            </div>
+
+            <h3>Implementation Architecture</h3>
+            <div className="algorithm-flow">
+              <div className="flow-step">
+                <span className="step-num">1</span>
+                <div>
+                  <h4>Initialize WASM</h4>
+                  <p>Load bundled WASM binary, inject mocked browser APIs</p>
+                </div>
+              </div>
+              <div className="flow-step">
+                <span className="step-num">2</span>
+                <div>
+                  <h4>Sync Server Time</h4>
+                  <p>Call <code>/api/time</code> to calculate server time offset</p>
+                </div>
+              </div>
+              <div className="flow-step">
+                <span className="step-num">3</span>
+                <div>
+                  <h4>Generate API Key</h4>
+                  <p>Call <code>get_img_key()</code> → 64-char hex session key</p>
+                </div>
+              </div>
+              <div className="flow-step">
+                <span className="step-num">4</span>
+                <div>
+                  <h4>Warm-up Request</h4>
+                  <p>Make request WITHOUT X-Server header (required quirk)</p>
+                </div>
+              </div>
+              <div className="flow-step">
+                <span className="step-num">5</span>
+                <div>
+                  <h4>Fetch Encrypted Data</h4>
+                  <p>Request with HMAC signature + X-Server header</p>
+                </div>
+              </div>
+              <div className="flow-step">
+                <span className="step-num">6</span>
+                <div>
+                  <h4>Decrypt Response</h4>
+                  <p>Call <code>process_img_data(encrypted, apiKey)</code></p>
+                </div>
+              </div>
+              <div className="flow-step">
+                <span className="step-num">7</span>
+                <div>
+                  <h4>Proxy Stream</h4>
+                  <p>Route CDN URL through RPI proxy with Referer header</p>
+                </div>
+              </div>
+            </div>
+
+            <h3>Lessons Learned</h3>
+            <blockquote>
+              &quot;Sometimes the best way to crack encryption is to not crack it at all. Just run 
+              their code in your environment with mocked inputs. If you can&apos;t beat the algorithm, 
+              become the algorithm.&quot;
+              <cite>- Field Notes, December 21, 2025, 2:00 AM</cite>
+            </blockquote>
+            <p>
+              Key insights from this 12-hour session:
+            </p>
+            <ul>
+              <li><strong>WASM is portable:</strong> If you can mock the imports, you can run it anywhere</li>
+              <li><strong>Headers matter:</strong> One wrong header can block everything</li>
+              <li><strong>Ghidra works on WASM:</strong> The WASM plugin is invaluable for understanding compiled Rust</li>
+              <li><strong>Memory forensics:</strong> Watching WASM memory during execution reveals secrets</li>
+              <li><strong>CDNs have quirks:</strong> Flixer CDN needs Referer, MegaUp blocks it—test both</li>
+              <li><strong>Sleep is optional:</strong> But coffee is mandatory</li>
+            </ul>
+
+            <h3>Files Created During Research</h3>
+            <p>
+              The <code>source-testing/tests/</code> directory contains ~150 test scripts from this 
+              reverse engineering session, including:
+            </p>
+            <ul>
+              <li><code>crack-wasm-*.js</code> - Various WASM cracking attempts</li>
+              <li><code>hexa-crack-v*.js</code> - Hexa encryption analysis (46 versions)</li>
+              <li><code>flixer-*.js</code> - Flixer-specific tests</li>
+              <li><code>wasm-analysis/</code> - Ghidra exports and documentation</li>
+            </ul>
           </section>
 
 

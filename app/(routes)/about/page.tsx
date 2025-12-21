@@ -148,9 +148,18 @@ export default function AboutPage() {
                 technical breakdown</Link>.
               </p>
               <p>
+                <strong>Flixer WASM Cracking (December 21, 2025):</strong> After a 12-hour overnight 
+                reverse engineering session, we cracked Flixer&apos;s Rust-compiled WebAssembly encryption. 
+                Using Ghidra for binary analysis and memory forensics, we discovered their browser 
+                fingerprinting scheme and HMAC authentication. The solution: bundle their WASM binary 
+                into our Cloudflare Worker with mocked browser APIs. See the <Link href="/reverse-engineering#flixer">
+                complete technical breakdown</Link>.
+              </p>
+              <p>
                 <strong>Keywords:</strong> Streaming Architecture, Reverse Engineering, Privacy-First Design, 
-                Obfuscation Analysis, Web Security Research, AES-256-CBC, AES-128, Bearer Token Authentication,
-                Chromecast, AirPlay, TV Navigation, OpenSubtitles
+                Obfuscation Analysis, Web Security Research, AES-256-CBC, AES-128, AES-256-CTR, WASM, 
+                WebAssembly, Rust, Ghidra, Bearer Token Authentication, Chromecast, AirPlay, TV Navigation, 
+                OpenSubtitles, Browser Fingerprinting
               </p>
             </div>
           </section>

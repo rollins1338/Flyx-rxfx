@@ -100,6 +100,9 @@ function rewritePlaylistUrls(
   const base = new URL(baseUrl);
   const basePath = base.pathname.substring(0, base.pathname.lastIndexOf('/') + 1);
   
+  // Check if this is Flixer CDN - needs referer parameter
+  const isFlixerCdn = baseUrl.match(/p\.\d+\.workers\.dev/);
+  
   const proxyUrl = (url: string): string => {
     let absoluteUrl: string;
     
@@ -111,7 +114,9 @@ function rewritePlaylistUrls(
       absoluteUrl = `${base.origin}${basePath}${url}`;
     }
     
-    return `${proxyOrigin}/animekai?url=${encodeURIComponent(absoluteUrl)}`;
+    // Add referer parameter for Flixer CDN URLs
+    const refererParam = isFlixerCdn ? `&referer=${encodeURIComponent('https://flixer.sh/')}` : '';
+    return `${proxyOrigin}/animekai?url=${encodeURIComponent(absoluteUrl)}${refererParam}`;
   };
   
   for (const line of lines) {
@@ -181,7 +186,7 @@ export async function handleAnimeKaiRequest(request: Request, env: Env): Promise
     }, 403, origin);
   }
 
-  // Get target URL and optional User-Agent
+  // Get target URL, optional User-Agent, and optional Referer
   const targetUrl = url.searchParams.get('url');
   if (!targetUrl) {
     return jsonResponse({ error: 'Missing url parameter' }, 400, origin);
@@ -189,7 +194,8 @@ export async function handleAnimeKaiRequest(request: Request, env: Env): Promise
 
   const decodedUrl = decodeURIComponent(targetUrl);
   const customUserAgent = url.searchParams.get('ua');
-  logger.info('AnimeKai proxy request', { url: decodedUrl.substring(0, 100), ua: customUserAgent ? 'custom' : 'default' });
+  const customReferer = url.searchParams.get('referer');
+  logger.info('AnimeKai proxy request', { url: decodedUrl.substring(0, 100), ua: customUserAgent ? 'custom' : 'default', referer: customReferer ? 'custom' : 'auto' });
 
   // Check if RPI proxy is configured
   if (!env.RPI_PROXY_URL || !env.RPI_PROXY_KEY) {
@@ -215,6 +221,16 @@ export async function handleAnimeKaiRequest(request: Request, env: Env): Promise
     // Pass custom User-Agent if provided (important for enc-dec.app decryption)
     if (customUserAgent) {
       rpiParams.set('ua', customUserAgent);
+    }
+    
+    // Pass custom Referer if provided, or auto-detect for Flixer CDN
+    // Flixer CDN (p.XXXXX.workers.dev) REQUIRES Referer header
+    const isFlixerCdn = decodedUrl.match(/p\.\d+\.workers\.dev/);
+    if (customReferer) {
+      rpiParams.set('referer', customReferer);
+    } else if (isFlixerCdn) {
+      // Auto-add Flixer referer for Flixer CDN URLs
+      rpiParams.set('referer', 'https://flixer.sh/');
     }
     
     const rpiUrl = `${rpiBaseUrl}/animekai?${rpiParams.toString()}`;
