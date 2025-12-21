@@ -30,21 +30,21 @@ export async function GET(request: NextRequest) {
     const activityBreakdown = isNeon
       ? await adapter.query(`
           SELECT 
-            activity_type,
+            COALESCE(activity_type, 'unknown') as activity_type,
             COUNT(DISTINCT user_id) as user_count,
             COUNT(DISTINCT CASE WHEN last_heartbeat >= $2 THEN user_id END) as truly_active
           FROM live_activity
           WHERE is_active = TRUE AND last_heartbeat >= $1
-          GROUP BY activity_type
+          GROUP BY COALESCE(activity_type, 'unknown')
         `, [cutoffTime, strictCutoff])
       : await adapter.query(`
           SELECT 
-            activity_type,
+            COALESCE(activity_type, 'unknown') as activity_type,
             COUNT(DISTINCT user_id) as user_count,
             COUNT(DISTINCT CASE WHEN last_heartbeat >= ? THEN user_id END) as truly_active
           FROM live_activity
           WHERE is_active = 1 AND last_heartbeat >= ?
-          GROUP BY activity_type
+          GROUP BY COALESCE(activity_type, 'unknown')
         `, [cutoffTime, strictCutoff]);
 
     // Get validation score distribution from user_activity

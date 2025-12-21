@@ -71,26 +71,27 @@ export async function GET(request: NextRequest) {
     // ============================================
     const twoMinutesAgo = now - 2 * 60 * 1000;
     const oneMinuteAgo = now - 60 * 1000;
-    let realtime = { totalActive: 0, trulyActive: 0, watching: 0, browsing: 0, livetv: 0 };
+    let realtime = { totalActive: 0, trulyActive: 0, watching: 0, browsing: 0, livetv: 0, unknown: 0 };
     
     try {
       // Count unique users per activity type from live_activity table
       // This matches what /api/analytics/live-activity returns
+      // Use COALESCE to handle NULL activity_type
       const liveQuery = isNeon
         ? `SELECT 
-             activity_type, 
+             COALESCE(activity_type, 'unknown') as activity_type, 
              COUNT(DISTINCT user_id) as count,
              COUNT(DISTINCT CASE WHEN last_heartbeat >= $2 THEN user_id END) as strict_count
            FROM live_activity 
            WHERE is_active = TRUE AND last_heartbeat >= $1 
-           GROUP BY activity_type`
+           GROUP BY COALESCE(activity_type, 'unknown')`
         : `SELECT 
-             activity_type, 
+             COALESCE(activity_type, 'unknown') as activity_type, 
              COUNT(DISTINCT user_id) as count,
              COUNT(DISTINCT CASE WHEN last_heartbeat >= ? THEN user_id END) as strict_count
            FROM live_activity 
            WHERE is_active = 1 AND last_heartbeat >= ? 
-           GROUP BY activity_type`;
+           GROUP BY COALESCE(activity_type, 'unknown')`;
       
       const liveResult = await adapter.query(liveQuery, 
         isNeon ? [twoMinutesAgo, oneMinuteAgo] : [oneMinuteAgo, twoMinutesAgo]
@@ -103,9 +104,11 @@ export async function GET(request: NextRequest) {
         const strictCount = parseInt(row.strict_count) || 0;
         total += count;
         strictTotal += strictCount;
-        if (row.activity_type === 'watching') realtime.watching = count;
-        else if (row.activity_type === 'browsing') realtime.browsing = count;
-        else if (row.activity_type === 'livetv') realtime.livetv = count;
+        const activityType = row.activity_type || 'unknown';
+        if (activityType === 'watching') realtime.watching = count;
+        else if (activityType === 'browsing') realtime.browsing = count;
+        else if (activityType === 'livetv') realtime.livetv = count;
+        else realtime.unknown = (realtime.unknown || 0) + count;
       }
       realtime.totalActive = total;
       realtime.trulyActive = strictTotal;

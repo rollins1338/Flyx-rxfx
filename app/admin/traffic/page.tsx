@@ -17,6 +17,15 @@ interface ReferrerStats {
   last_hit: number;
 }
 
+interface DetailedReferrerStats {
+  referrer_url: string;
+  referrer_domain: string;
+  referrer_medium: string;
+  hit_count: number;
+  unique_visitors: number;
+  last_hit: number;
+}
+
 interface BotStats {
   source_name: string;
   hit_count: number;
@@ -45,6 +54,7 @@ interface TrafficData {
   sourceTypeStats: SourceStats[];
   mediumStats: Array<{ referrer_medium: string; hit_count: number; unique_visitors: number }>;
   topReferrers: ReferrerStats[];
+  detailedReferrers: DetailedReferrerStats[];
   botStats: BotStats[];
   hourlyPattern: HourlyPattern[];
   geoStats: GeoStats[];
@@ -254,34 +264,78 @@ export default function TrafficSourcesPage() {
 
       {/* Referrers Tab */}
       {activeTab === 'referrers' && trafficData && (
-        <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '16px', overflow: 'hidden' }}>
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '16px' }}>Top Referring Domains ({trafficData.topReferrers?.length || 0} domains)</h3>
-          </div>
-          <div style={{ overflowX: 'auto', maxHeight: '600px', overflowY: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead style={{ position: 'sticky', top: 0, background: '#1e1e2e', zIndex: 1 }}>
-                <tr style={{ background: 'rgba(255, 255, 255, 0.02)' }}>
-                  <th style={thStyle}>#</th>
-                  <th style={thStyle}>Domain</th>
-                  <th style={thStyle}>Medium</th>
-                  <th style={thStyle}>Hits</th>
-                  <th style={thStyle}>Last Hit</th>
-                </tr>
-              </thead>
-              <tbody>
-                {trafficData.topReferrers?.length > 0 ? trafficData.topReferrers.map((ref, idx) => (
-                  <tr key={ref.referrer_domain} style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                    <td style={{ ...tdStyle, color: '#64748b', width: '50px' }}>{idx + 1}</td>
-                    <td style={tdStyle}><strong>{ref.referrer_domain}</strong></td>
-                    <td style={tdStyle}><span style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '12px', background: 'rgba(120, 119, 198, 0.2)', color: '#a5b4fc', textTransform: 'capitalize' }}>{ref.referrer_medium}</span></td>
-                    <td style={tdStyle}>{formatNumber(ref.hit_count)}</td>
-                    <td style={tdStyle}>{new Date(ref.last_hit).toLocaleString()}</td>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {/* Top Referring Domains */}
+          <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '16px', overflow: 'hidden' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '16px' }}>Top Referring Domains ({trafficData.topReferrers?.length || 0} domains)</h3>
+            </div>
+            <div style={{ overflowX: 'auto', maxHeight: '400px', overflowY: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead style={{ position: 'sticky', top: 0, background: '#1e1e2e', zIndex: 1 }}>
+                  <tr style={{ background: 'rgba(255, 255, 255, 0.02)' }}>
+                    <th style={thStyle}>#</th>
+                    <th style={thStyle}>Domain</th>
+                    <th style={thStyle}>Medium</th>
+                    <th style={thStyle}>Hits</th>
+                    <th style={thStyle}>Last Hit</th>
                   </tr>
-                )) : <tr><td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>No referrer data yet</td></tr>}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {trafficData.topReferrers?.length > 0 ? trafficData.topReferrers.map((ref, idx) => (
+                    <tr key={ref.referrer_domain} style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                      <td style={{ ...tdStyle, color: '#64748b', width: '50px' }}>{idx + 1}</td>
+                      <td style={tdStyle}><strong>{ref.referrer_domain}</strong></td>
+                      <td style={tdStyle}><span style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '12px', background: 'rgba(120, 119, 198, 0.2)', color: '#a5b4fc', textTransform: 'capitalize' }}>{ref.referrer_medium}</span></td>
+                      <td style={tdStyle}>{formatNumber(ref.hit_count)}</td>
+                      <td style={tdStyle}>{new Date(ref.last_hit).toLocaleString()}</td>
+                    </tr>
+                  )) : <tr><td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>No referrer data yet</td></tr>}
+                </tbody>
+              </table>
+            </div>
           </div>
+
+          {/* Detailed Referrer URLs */}
+          {trafficData.detailedReferrers?.length > 0 && (
+            <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '16px', overflow: 'hidden' }}>
+              <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '16px' }}>All Referrer URLs ({trafficData.detailedReferrers?.length || 0} URLs)</h3>
+              </div>
+              <div style={{ overflowX: 'auto', maxHeight: '500px', overflowY: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead style={{ position: 'sticky', top: 0, background: '#1e1e2e', zIndex: 1 }}>
+                    <tr style={{ background: 'rgba(255, 255, 255, 0.02)' }}>
+                      <th style={thStyle}>#</th>
+                      <th style={thStyle}>Full URL</th>
+                      <th style={thStyle}>Domain</th>
+                      <th style={thStyle}>Medium</th>
+                      <th style={thStyle}>Hits</th>
+                      <th style={thStyle}>Unique</th>
+                      <th style={thStyle}>Last Hit</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trafficData.detailedReferrers.map((ref, idx) => (
+                      <tr key={`${ref.referrer_url}-${idx}`} style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                        <td style={{ ...tdStyle, color: '#64748b', width: '50px' }}>{idx + 1}</td>
+                        <td style={{ ...tdStyle, maxWidth: '400px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={ref.referrer_url}>
+                          <a href={ref.referrer_url} target="_blank" rel="noopener noreferrer" style={{ color: '#60a5fa', textDecoration: 'none' }}>
+                            {ref.referrer_url}
+                          </a>
+                        </td>
+                        <td style={tdStyle}>{ref.referrer_domain}</td>
+                        <td style={tdStyle}><span style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '12px', background: 'rgba(120, 119, 198, 0.2)', color: '#a5b4fc', textTransform: 'capitalize' }}>{ref.referrer_medium}</span></td>
+                        <td style={tdStyle}>{formatNumber(ref.hit_count)}</td>
+                        <td style={tdStyle}>{formatNumber(ref.unique_visitors)}</td>
+                        <td style={tdStyle}>{new Date(ref.last_hit).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
