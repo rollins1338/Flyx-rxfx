@@ -3,7 +3,7 @@
  * 
  * Provider Priority:
  * - For ANIME content: AnimeKai (PRIMARY) → Videasy (fallback)
- * - For other content: VidSrc (PRIMARY if enabled) → Flixer → 1movies → Videasy → SmashyStream → MultiMovies → MultiEmbed
+ * - For other content: Flixer (PRIMARY) → VidSrc → 1movies → Videasy → SmashyStream → MultiMovies → MultiEmbed
  * 
  * GET /api/stream/extract?tmdbId=550&type=movie
  * GET /api/stream/extract?tmdbId=1396&type=tv&season=1&episode=1
@@ -52,13 +52,16 @@ function maybeProxyUrl(source: any, provider: string): string {
   
   // 1movies CDN (p.XXXXX.workers.dev) also blocks datacenter IPs
   // Route through /animekai -> RPI residential proxy
+  // BUT NOT for Flixer - Flixer uses the same CDN pattern but works with standard proxy
   const is1moviesCdn = is1moviesCdnUrl(source.url);
   const is1movies = provider === '1movies';
+  const isFlixer = provider === 'flixer';
   
-  console.log(`[maybeProxyUrl] provider=${provider}, isAnimeKai=${isAnimeKai}, isAnimeKaiSrc=${isAnimeKaiSrc}, isMegaUpCdn=${isMegaUpCdn}, is1moviesCdn=${is1moviesCdn}, url=${source.url.substring(0, 60)}`);
+  console.log(`[maybeProxyUrl] provider=${provider}, isAnimeKai=${isAnimeKai}, isAnimeKaiSrc=${isAnimeKaiSrc}, isMegaUpCdn=${isMegaUpCdn}, is1moviesCdn=${is1moviesCdn}, isFlixer=${isFlixer}, url=${source.url.substring(0, 60)}`);
   
   // Route through residential proxy for CDNs that block datacenter IPs
-  if (isAnimeKai || isAnimeKaiSrc || isMegaUpCdn || is1moviesCdn || is1movies) {
+  // EXCEPT for Flixer - it uses the same CDN but works with standard proxy
+  if (!isFlixer && (isAnimeKai || isAnimeKaiSrc || isMegaUpCdn || is1moviesCdn || is1movies)) {
     const proxiedUrl = getAnimeKaiProxyUrl(source.url);
     console.log(`[maybeProxyUrl] → Using /animekai route (residential proxy): ${proxiedUrl.substring(0, 80)}...`);
     return proxiedUrl;
@@ -509,11 +512,30 @@ export async function GET(request: NextRequest) {
         throw new Error(multiEmbedResult.error || 'MultiEmbed returned no sources');
       }
       
-      // Default behavior: VidSrc FIRST (if enabled), then Flixer, then 1movies, then others
+      // Default behavior: Flixer FIRST, then VidSrc, then 1movies, then others
       
-      // Try VidSrc FIRST if enabled - it's the primary source
+      // Try Flixer FIRST - it's the primary source (pure fetch via Cloudflare Worker)
+      if (FLIXER_ENABLED) {
+        console.log('[EXTRACT] Trying PRIMARY source: Flixer...');
+        try {
+          const flixerResult = await extractFlixerStreams(tmdbId, type, season, episode);
+          const workingFlixer = flixerResult.sources.filter(s => s.status === 'working');
+          
+          if (workingFlixer.length > 0) {
+            console.log(`[EXTRACT] ✓ Flixer succeeded with ${workingFlixer.length} working source(s)`);
+            return { sources: flixerResult.sources, provider: 'flixer' };
+          }
+          console.log(`[EXTRACT] Flixer: ${flixerResult.error || 'No working sources'}`);
+        } catch (flixerError) {
+          console.warn('[EXTRACT] Flixer failed:', flixerError instanceof Error ? flixerError.message : flixerError);
+        }
+      } else {
+        console.log('[EXTRACT] Flixer is DISABLED, skipping...');
+      }
+      
+      // Try VidSrc as SECOND option
       if (VIDSRC_ENABLED) {
-        console.log('[EXTRACT] Trying PRIMARY source: VidSrc...');
+        console.log('[EXTRACT] Trying fallback source: VidSrc...');
         try {
           const vidsrcResult = await extractVidSrcStreams(tmdbId, type, season, episode);
           const workingVidsrc = vidsrcResult.sources.filter(s => s.status === 'working');
@@ -528,23 +550,6 @@ export async function GET(request: NextRequest) {
         }
       } else {
         console.log('[EXTRACT] VidSrc is DISABLED, skipping...');
-      }
-      
-      // Try Flixer as SECOND option (pure fetch via Cloudflare Worker)
-      if (FLIXER_ENABLED) {
-        console.log('[EXTRACT] Trying fallback source: Flixer...');
-        try {
-          const flixerResult = await extractFlixerStreams(tmdbId, type, season, episode);
-          const workingFlixer = flixerResult.sources.filter(s => s.status === 'working');
-          
-          if (workingFlixer.length > 0) {
-            console.log(`[EXTRACT] ✓ Flixer succeeded with ${workingFlixer.length} working source(s)`);
-            return { sources: flixerResult.sources, provider: 'flixer' };
-          }
-          console.log(`[EXTRACT] Flixer: ${flixerResult.error || 'No working sources'}`);
-        } catch (flixerError) {
-          console.warn('[EXTRACT] Flixer failed:', flixerError instanceof Error ? flixerError.message : flixerError);
-        }
       }
       
       // Try 1movies as third option

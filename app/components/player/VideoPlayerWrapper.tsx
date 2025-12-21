@@ -103,6 +103,7 @@ export default function VideoPlayerWrapper(props: VideoPlayerWrapperProps) {
       const providersData = await providersRes.json();
       
       const availability = {
+        flixer: providersData.providers?.flixer?.enabled ?? true,
         vidsrc: providersData.providers?.vidsrc?.enabled ?? false,
         '1movies': providersData.providers?.['1movies']?.enabled ?? true,
         videasy: providersData.providers?.videasy?.enabled ?? true,
@@ -121,9 +122,10 @@ export default function VideoPlayerWrapper(props: VideoPlayerWrapperProps) {
         console.warn('[VideoPlayerWrapper] Anime check failed:', e);
       }
 
-      // Build provider order
+      // Build provider order: Flixer > VidSrc > 1movies > Videasy
       const providerOrder: string[] = [];
       if (isAnime && availability.animekai) providerOrder.push('animekai');
+      if (availability.flixer) providerOrder.push('flixer');
       if (availability.vidsrc) providerOrder.push('vidsrc');
       if (availability['1movies']) providerOrder.push('1movies');
       providerOrder.push('videasy');
