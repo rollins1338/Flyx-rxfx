@@ -461,10 +461,27 @@ export function useCast(options: UseCastOptions = {}) {
         
         if (!videoSource) {
           console.log('[useCast] Video has no source, skipping Remote Playback API');
+          // On Android with no source, show error immediately
+          if (isAndroidRef.current) {
+            const errorMsg = 'Video not ready. Please wait for the video to load, then try again.';
+            setState(prev => ({ ...prev, lastError: errorMsg }));
+            onErrorRef.current?.(errorMsg);
+            return false;
+          }
         } else if (isBlobUrl) {
           // HLS.js uses MediaSource which creates blob URLs - Remote Playback can't use these
-          console.log('[useCast] Video uses blob URL (HLS.js/MediaSource), Remote Playback may not work');
-          // Still try - some browsers might handle it
+          console.log('[useCast] Video uses blob URL (HLS.js/MediaSource), Remote Playback will likely fail');
+          
+          // On Android, show the error immediately since we know it won't work
+          if (isAndroidRef.current) {
+            console.log('[useCast] Android + blob URL detected - showing screen mirror guidance');
+            const errorMsg = 'HLS streams cannot be cast directly on Android Chrome. Use screen mirroring: swipe down → tap "Smart View" or "Screen Cast" → select your TV.';
+            setState(prev => ({ ...prev, lastError: errorMsg }));
+            onErrorRef.current?.(errorMsg);
+            return false;
+          }
+          
+          // On desktop, still try - some browsers might handle it
           console.log('[useCast] Attempting remote.prompt() anyway...');
           await remote.prompt();
           console.log('[useCast] Remote Playback prompt succeeded');
@@ -487,7 +504,7 @@ export function useCast(options: UseCastOptions = {}) {
           console.log('[useCast] Remote Playback not supported for this media type');
           // Show helpful error for Android users
           if (isAndroidRef.current) {
-            const errorMsg = 'This stream uses HLS which may not support direct casting on Android. Try using screen mirroring from your phone\'s quick settings instead.';
+            const errorMsg = 'This stream cannot be cast directly. Use screen mirroring: swipe down for Quick Settings → tap "Smart View" / "Screen Cast" → select your TV.';
             setState(prev => ({ ...prev, lastError: errorMsg }));
             onErrorRef.current?.(errorMsg);
             return false;
@@ -496,11 +513,24 @@ export function useCast(options: UseCastOptions = {}) {
         if (error.name === 'InvalidStateError') {
           // Video source not compatible or not set
           console.log('[useCast] Remote Playback not available for this source');
+          if (isAndroidRef.current) {
+            const errorMsg = 'Cannot cast this video. Try screen mirroring from your phone\'s Quick Settings instead.';
+            setState(prev => ({ ...prev, lastError: errorMsg }));
+            onErrorRef.current?.(errorMsg);
+            return false;
+          }
         }
         // Continue to try Google Cast SDK (won't work on mobile but try anyway)
       }
     } else {
       console.log('[useCast] Remote Playback API not available:', { hasRemote: !!remote, isIOS: isIOSRef.current });
+      // On Android without Remote Playback API, show guidance
+      if (isAndroidRef.current && !remote) {
+        const errorMsg = 'Cast not available in this browser. Use screen mirroring: swipe down → tap "Smart View" or "Screen Cast" → select your TV.';
+        setState(prev => ({ ...prev, lastError: errorMsg }));
+        onErrorRef.current?.(errorMsg);
+        return false;
+      }
     }
 
     // Try Google Cast SDK (Chrome desktop and Android)

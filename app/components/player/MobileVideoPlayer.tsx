@@ -214,10 +214,29 @@ export default function MobileVideoPlayer({
     };
   }, [streamUrl, title, mediaType, season, episode, currentTime]);
 
-  // Handle cast button click
+  // Handle cast button click - use ref to prevent double-firing on mobile
+  const castClickHandledRef = useRef(false);
   const handleCastClick = useCallback(async (e: React.MouseEvent | React.TouchEvent) => {
     e.stopPropagation();
+    e.preventDefault();
+    
+    // Prevent double-firing from both onClick and onTouchEnd
+    if (castClickHandledRef.current) {
+      console.log('[MobilePlayer] Cast click already handled, skipping');
+      return;
+    }
+    castClickHandledRef.current = true;
+    setTimeout(() => { castClickHandledRef.current = false; }, 500);
+    
     triggerHaptic('light');
+    
+    console.log('[MobilePlayer] Cast button clicked!', {
+      isCasting: cast.isCasting,
+      isAirPlayActive: cast.isAirPlayActive,
+      isConnected: cast.isConnected,
+      isAvailable: cast.isAvailable,
+      isAirPlayAvailable: cast.isAirPlayAvailable,
+    });
     
     // If already casting, stop
     if (cast.isCasting || cast.isAirPlayActive) {
@@ -241,7 +260,10 @@ export default function MobileVideoPlayer({
     
     // Try to start a cast session
     // This will show the device picker (Chromecast or AirPlay depending on browser)
+    console.log('[MobilePlayer] Calling cast.requestSession()...');
     const connected = await cast.requestSession();
+    console.log('[MobilePlayer] requestSession returned:', connected);
+    
     if (connected) {
       const media = getCastMedia();
       if (media) {
@@ -252,7 +274,19 @@ export default function MobileVideoPlayer({
         }
       }
     }
-  }, [cast, getCastMedia]);
+    
+    // If cast.lastError was set, it will be shown via the castError state
+    // which is synced from the useCast hook
+    if (cast.lastError && !castError) {
+      setCastError(cast.lastError);
+      if (castErrorTimeoutRef.current) {
+        clearTimeout(castErrorTimeoutRef.current);
+      }
+      castErrorTimeoutRef.current = setTimeout(() => {
+        setCastError(null);
+      }, 8000);
+    }
+  }, [cast, getCastMedia, castError]);
 
   // Refs for gesture calculations
   const seekStartTimeRef = useRef(0);
@@ -1232,7 +1266,11 @@ export default function MobileVideoPlayer({
             <button 
               className={`${styles.iconButton} ${cast.isCasting || cast.isAirPlayActive ? styles.activeIcon : ''}`}
               onClick={handleCastClick}
-              onTouchEnd={(e) => e.stopPropagation()}
+              onTouchEnd={(e) => {
+                e.stopPropagation();
+                // On mobile, onClick may not fire reliably, so handle touch here too
+                handleCastClick(e);
+              }}
               title={cast.isAirPlayAvailable ? 'AirPlay' : 'Cast to TV'}
             >
               {cast.isAirPlayAvailable ? (
