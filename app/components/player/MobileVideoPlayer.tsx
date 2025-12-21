@@ -67,8 +67,8 @@ const triggerHaptic = (type: 'light' | 'medium' | 'heavy' = 'light') => {
 
 // Provider display names
 const PROVIDER_NAMES: Record<Provider, string> = {
-  flixer: 'Flixer',
   vidsrc: 'VidSrc',
+  flixer: 'Flixer',
   '1movies': '1movies',
   videasy: 'Videasy',
   animekai: 'AnimeKai',

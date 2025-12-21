@@ -159,8 +159,8 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
   useEffect(() => { showNextEpisodeButtonRef.current = showNextEpisodeButton; }, [showNextEpisodeButton]);
   useEffect(() => { autoPlayCountdownRef.current = autoPlayCountdown; }, [autoPlayCountdown]);
   
-  const [provider, setProvider] = useState('flixer'); // Default to Flixer (primary provider)
-  const [menuProvider, setMenuProvider] = useState('flixer');
+  const [provider, setProvider] = useState('vidsrc'); // Default to VidSrc (primary provider)
+  const [menuProvider, setMenuProvider] = useState('vidsrc');
   const [showServerMenu, setShowServerMenu] = useState(false);
   const [sourcesCache, setSourcesCache] = useState<Record<string, any[]>>({});
   const [loadingProviders, setLoadingProviders] = useState<Record<string, boolean>>({});
@@ -168,8 +168,8 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
   const [castError, setCastError] = useState<string | null>(null);
   const castErrorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [providerAvailability, setProviderAvailability] = useState<Record<string, boolean>>({
-    flixer: true, // Flixer is the primary provider for movies and TV shows
-    vidsrc: true, // VidSrc as secondary fallback
+    vidsrc: true, // VidSrc is the primary provider for movies and TV shows
+    flixer: true, // Flixer as secondary fallback (via RPI residential proxy)
     '1movies': true, // 1movies - fully reverse-engineered, no Puppeteer needed
     videasy: true, // Videasy as fallback provider with multi-language support
     animekai: true, // Anime-specific provider - auto-selected for anime content
@@ -580,10 +580,10 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
 
     const initializePlayer = async () => {
       // First fetch provider availability
-      // NOTE: Flixer is the primary provider, VidSrc is secondary
+      // NOTE: VidSrc is the primary provider
       let availability: Record<string, boolean> = {
-        flixer: true, // Flixer is PRIMARY (enabled by default)
-        vidsrc: false, // VidSrc is DISABLED by default (requires ENABLE_VIDSRC_PROVIDER=true)
+        vidsrc: false, // VidSrc is PRIMARY but DISABLED by default (requires ENABLE_VIDSRC_PROVIDER=true)
+        flixer: true, // Flixer as secondary fallback (enabled by default)
         '1movies': true, // 1movies as third fallback (enabled by default)
         videasy: true, // Videasy as final fallback provider with multi-language support
         animekai: true, // Anime-specific provider - auto-selected for anime content
@@ -623,17 +623,17 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
 
       // Build provider priority list based on content type
       // For ANIME: AnimeKai FIRST, then Videasy as fallback
-      // For non-anime: Flixer (primary), VidSrc, 1movies, Videasy
+      // For non-anime: VidSrc (primary), Flixer, 1movies, Videasy
       const providerOrder: string[] = [];
       if (isAnime && availability.animekai) {
         providerOrder.push('animekai'); // AnimeKai as PRIMARY for anime
         console.log(`[VideoPlayer] ✓ Adding AnimeKai as PRIMARY provider for anime content`);
       }
-      if (availability.flixer) {
-        providerOrder.push('flixer'); // Flixer as primary for non-anime
-      }
       if (availability.vidsrc) {
-        providerOrder.push('vidsrc'); // VidSrc as secondary fallback
+        providerOrder.push('vidsrc'); // VidSrc as primary for non-anime
+      }
+      if (availability.flixer) {
+        providerOrder.push('flixer'); // Flixer as secondary fallback
       }
       if (availability['1movies']) {
         providerOrder.push('1movies'); // 1movies as third fallback
@@ -1002,12 +1002,12 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                   }
                   
                   // No more sources in current provider, try other providers
-                  // Order: flixer → vidsrc → 1movies → videasy
+                  // Order: vidsrc → flixer → 1movies → videasy
                   console.log(`[VideoPlayer] All ${provider} sources exhausted, trying other providers...`);
                   
                   const fallbackProviders: string[] = [];
-                  if (provider !== 'flixer' && providerAvailability.flixer) fallbackProviders.push('flixer');
                   if (provider !== 'vidsrc' && providerAvailability.vidsrc) fallbackProviders.push('vidsrc');
+                  if (provider !== 'flixer' && providerAvailability.flixer) fallbackProviders.push('flixer');
                   if (provider !== '1movies' && providerAvailability['1movies']) fallbackProviders.push('1movies');
                   if (provider !== 'videasy' && providerAvailability.videasy) fallbackProviders.push('videasy');
                   
@@ -1597,10 +1597,10 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
               // No tab navigation for anime - just stay on AnimeKai
               return;
             }
-            // For non-anime content, navigate between Flixer, VidSrc, 1movies, and Videasy
+            // For non-anime content, navigate between VidSrc, Flixer, 1movies, and Videasy
             const availableProviders: string[] = [];
-            if (providerAvailability.flixer) availableProviders.push('flixer');
             if (providerAvailability.vidsrc) availableProviders.push('vidsrc');
+            if (providerAvailability.flixer) availableProviders.push('flixer');
             if (providerAvailability['1movies']) availableProviders.push('1movies');
             availableProviders.push('videasy');
             
@@ -1663,10 +1663,10 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
               // No tab navigation for anime - just stay on AnimeKai
               return;
             }
-            // For non-anime content, navigate between Flixer, VidSrc, 1movies, and Videasy
+            // For non-anime content, navigate between VidSrc, Flixer, 1movies, and Videasy
             const availableProviders: string[] = [];
-            if (providerAvailability.flixer) availableProviders.push('flixer');
             if (providerAvailability.vidsrc) availableProviders.push('vidsrc');
+            if (providerAvailability.flixer) availableProviders.push('flixer');
             if (providerAvailability['1movies']) availableProviders.push('1movies');
             availableProviders.push('videasy');
             
