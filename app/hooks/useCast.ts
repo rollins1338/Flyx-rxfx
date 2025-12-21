@@ -180,8 +180,9 @@ export function useCast(options: UseCastOptions = {}) {
   useEffect(() => { onDisconnectRef.current = options.onDisconnect; }, [options.onDisconnect]);
   useEffect(() => { onErrorRef.current = options.onError; }, [options.onError]);
 
-  // Detect platform on mount
+  // Detect platform and initialize Cast SDK on mount
   useEffect(() => {
+    // Detect platform first
     isIOSRef.current = isIOS();
     isSafariRef.current = isSafari();
     isAndroidRef.current = isAndroid();
@@ -192,84 +193,74 @@ export function useCast(options: UseCastOptions = {}) {
       isAndroid: isAndroidRef.current,
       isChrome: isChromeRef.current
     });
-  }, []);
 
-  // Initialize Google Cast SDK for Chrome/Android
-  useEffect(() => {
-    // Only load Cast SDK on Chrome (desktop or Android)
-    if (!isChromeRef.current && !isAndroidRef.current) {
-      return;
-    }
-
-    // Don't load on iOS
-    if (isIOSRef.current) {
-      return;
-    }
-
-    const initCastSDK = async () => {
-      const available = await loadCastSDK();
-      hasCastSDKRef.current = available;
-      
-      if (available && window.chrome?.cast) {
-        console.log('[useCast] Initializing Cast SDK...');
+    // Only load Cast SDK on Chrome (desktop or Android), not on iOS
+    if ((isChromeRef.current || isAndroidRef.current) && !isIOSRef.current) {
+      const initCastSDK = async () => {
+        const available = await loadCastSDK();
+        hasCastSDKRef.current = available;
         
-        try {
-          const sessionRequest = new window.chrome.cast.SessionRequest(CAST_APP_ID);
-          const apiConfig = new window.chrome.cast.ApiConfig(
-            sessionRequest,
-            // Session listener - called when a session is created
-            (session: any) => {
-              console.log('[useCast] Cast session created:', session.displayName);
-              castSessionRef.current = session;
-              setState(prev => ({
-                ...prev,
-                isConnected: true,
-                isCasting: true,
-                deviceName: session.displayName || 'Chromecast',
-                lastError: null,
-              }));
-              onConnectRef.current?.();
-              
-              // Listen for session updates
-              session.addUpdateListener((isAlive: boolean) => {
-                if (!isAlive) {
-                  console.log('[useCast] Cast session ended');
-                  castSessionRef.current = null;
-                  castMediaRef.current = null;
-                  setState(prev => ({
-                    ...prev,
-                    isConnected: false,
-                    isCasting: false,
-                    deviceName: null,
-                  }));
-                  onDisconnectRef.current?.();
-                }
-              });
-            },
-            // Receiver listener - called when receiver availability changes
-            (availability: string) => {
-              console.log('[useCast] Cast receiver availability:', availability);
-              const isAvailable = availability === 'available';
-              setState(prev => ({ ...prev, isAvailable: isAvailable || prev.isAirPlayAvailable }));
-            }
-          );
+        if (available && window.chrome?.cast) {
+          console.log('[useCast] Initializing Cast SDK...');
+          
+          try {
+            const sessionRequest = new window.chrome.cast.SessionRequest(CAST_APP_ID);
+            const apiConfig = new window.chrome.cast.ApiConfig(
+              sessionRequest,
+              // Session listener - called when a session is created
+              (session: any) => {
+                console.log('[useCast] Cast session created:', session.displayName);
+                castSessionRef.current = session;
+                setState(prev => ({
+                  ...prev,
+                  isConnected: true,
+                  isCasting: true,
+                  deviceName: session.displayName || 'Chromecast',
+                  lastError: null,
+                }));
+                onConnectRef.current?.();
+                
+                // Listen for session updates
+                session.addUpdateListener((isAlive: boolean) => {
+                  if (!isAlive) {
+                    console.log('[useCast] Cast session ended');
+                    castSessionRef.current = null;
+                    castMediaRef.current = null;
+                    setState(prev => ({
+                      ...prev,
+                      isConnected: false,
+                      isCasting: false,
+                      deviceName: null,
+                    }));
+                    onDisconnectRef.current?.();
+                  }
+                });
+              },
+              // Receiver listener - called when receiver availability changes
+              (availability: string) => {
+                console.log('[useCast] Cast receiver availability:', availability);
+                const isAvailable = availability === 'available';
+                setState(prev => ({ ...prev, isAvailable: isAvailable || prev.isAirPlayAvailable }));
+              }
+            );
 
-          window.chrome!.cast!.initialize!(
-            apiConfig,
-            () => {
-              console.log('[useCast] Cast SDK initialized successfully');
-            },
-            (error: any) => {
-              console.error('[useCast] Cast SDK initialization error:', error);
-            }
-          );
-        } catch (e) {
-          console.error('[useCast] Cast SDK setup error:', e);
+            window.chrome!.cast!.initialize!(
+              apiConfig,
+              () => {
+                console.log('[useCast] Cast SDK initialized successfully');
+              },
+              (error: any) => {
+                console.error('[useCast] Cast SDK initialization error:', error);
+              }
+            );
+          } catch (e) {
+            console.error('[useCast] Cast SDK setup error:', e);
+          }
         }
-      }
-    };
+      };
 
-    initCastSDK();
+      initCastSDK();
+    }
   }, []); // Empty deps - only run once on mount
 
   // Check for Remote Playback API and AirPlay availability
@@ -391,6 +382,7 @@ export function useCast(options: UseCastOptions = {}) {
     const video = options.videoRef?.current as HTMLVideoElement | null;
     if (!video) {
       const error = 'No video element available';
+      console.error('[useCast] requestSession failed:', error);
       setState(prev => ({ ...prev, lastError: error }));
       onErrorRef.current?.(error);
       return false;
@@ -399,6 +391,12 @@ export function useCast(options: UseCastOptions = {}) {
     // Clear previous error
     setState(prev => ({ ...prev, lastError: null }));
 
+    // Log detailed state for debugging
+    const castSDKAvailable = window.chrome?.cast?.isAvailable || false;
+    const castRequestSession = !!window.chrome?.cast?.requestSession;
+    // @ts-ignore
+    const hasRemote = !!video.remote;
+    
     console.log('[useCast] Requesting session...', { 
       isIOS: isIOSRef.current, 
       isSafari: isSafariRef.current,
@@ -406,7 +404,12 @@ export function useCast(options: UseCastOptions = {}) {
       isChrome: isChromeRef.current,
       hasAirPlay: hasAirPlayRef.current,
       hasRemotePlayback: hasRemotePlaybackRef.current,
-      hasCastSDK: hasCastSDKRef.current
+      hasCastSDK: hasCastSDKRef.current,
+      castSDKAvailable,
+      castRequestSession,
+      hasRemote,
+      videoSrc: video.src ? 'set' : 'empty',
+      videoReadyState: video.readyState,
     });
 
     // For iOS/Safari, ALWAYS try AirPlay first
@@ -443,22 +446,33 @@ export function useCast(options: UseCastOptions = {}) {
     const remote = video.remote;
     if (remote && !isIOSRef.current) {
       try {
-        console.log('[useCast] Trying Remote Playback API first...');
-        await remote.prompt();
-        return true;
+        console.log('[useCast] Trying Remote Playback API...');
+        // Check if video has a source - Remote Playback requires a valid source
+        if (!video.src && !video.currentSrc) {
+          console.log('[useCast] Video has no source, skipping Remote Playback API');
+        } else {
+          await remote.prompt();
+          return true;
+        }
       } catch (error: any) {
+        console.log('[useCast] Remote Playback error:', error.name, error.message);
         if (error.name === 'NotAllowedError') {
           // User cancelled - not an error
           console.log('[useCast] User cancelled cast prompt');
           return false;
         }
+        if (error.name === 'InvalidStateError') {
+          // Video source not compatible or not set
+          console.log('[useCast] Remote Playback not available for this source');
+        }
         // Continue to try Google Cast SDK
-        console.log('[useCast] Remote Playback failed, trying Cast SDK...', error.name);
       }
     }
 
     // Try Google Cast SDK (Chrome desktop and Android)
-    if (hasCastSDKRef.current && window.chrome?.cast?.requestSession) {
+    // Check both the ref AND the window object directly in case SDK loaded after init
+    const castAvailable = hasCastSDKRef.current || window.chrome?.cast?.isAvailable;
+    if (castAvailable && window.chrome?.cast?.requestSession) {
       console.log('[useCast] Requesting Google Cast session...');
       return new Promise<boolean>((resolve) => {
         window.chrome!.cast!.requestSession!(
@@ -518,6 +532,42 @@ export function useCast(options: UseCastOptions = {}) {
           }
         );
       });
+    }
+
+    // If we're on Chrome but Cast SDK isn't available yet, try to load it now
+    if (isChromeRef.current && !castAvailable) {
+      console.log('[useCast] Cast SDK not ready, attempting to load...');
+      const loaded = await loadCastSDK();
+      if (loaded && window.chrome?.cast?.requestSession) {
+        console.log('[useCast] Cast SDK loaded, requesting session...');
+        return new Promise<boolean>((resolve) => {
+          window.chrome!.cast!.requestSession!(
+            (session: any) => {
+              console.log('[useCast] Cast session established:', session.displayName);
+              castSessionRef.current = session;
+              setState(prev => ({
+                ...prev,
+                isConnected: true,
+                isCasting: false,
+                deviceName: session.displayName || 'Chromecast',
+                lastError: null,
+              }));
+              onConnectRef.current?.();
+              resolve(true);
+            },
+            (error: any) => {
+              if (error.code === 'cancel') {
+                resolve(false);
+                return;
+              }
+              const errorMessage = error.description || 'Failed to connect to cast device';
+              setState(prev => ({ ...prev, lastError: errorMessage }));
+              onErrorRef.current?.(errorMessage);
+              resolve(false);
+            }
+          );
+        });
+      }
     }
 
     // No casting method available

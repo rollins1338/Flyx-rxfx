@@ -163,6 +163,7 @@ export default function MobileVideoPlayer({
   // Cast state
   const [isCastOverlayVisible, setIsCastOverlayVisible] = useState(false);
   const [castError, setCastError] = useState<string | null>(null);
+  const [showCastTips, setShowCastTips] = useState(false); // Cast Tips modal
   const castErrorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Cast callbacks - memoized to prevent useCast from re-initializing
@@ -1250,6 +1251,20 @@ export default function MobileVideoPlayer({
                 </svg>
               )}
             </button>
+            {/* Cast Tips Button */}
+            <button 
+              className={styles.iconButton}
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                setShowCastTips(true);
+                triggerHaptic('light');
+              }}
+              onTouchEnd={(e) => e.stopPropagation()}
+              title="Cast Tips & Help"
+              style={{ fontSize: '12px', fontWeight: 600 }}
+            >
+              ?
+            </button>
             <button className={styles.iconButton} onClick={(e) => { e.stopPropagation(); toggleLock(); }} onTouchEnd={(e) => e.stopPropagation()}>
               🔒
             </button>
@@ -1444,6 +1459,114 @@ export default function MobileVideoPlayer({
               ) : (
                 <div className={styles.menuEmpty}>No subtitles available</div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cast Tips Modal */}
+      {showCastTips && (
+        <div className={styles.menuOverlay} onClick={() => setShowCastTips(false)}>
+          <div className={styles.menuContent} onClick={e => e.stopPropagation()} style={{ maxHeight: '85vh' }}>
+            <div className={styles.menuHeader}>
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#e50914">
+                  <path d="M1 18v3h3c0-1.66-1.34-3-3-3z" />
+                  <path d="M1 14v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7z" />
+                  <path d="M1 10v2c4.97 0 9 4.03 9 9h2c0-6.08-4.93-11-11-11z" />
+                  <path d="M21 3H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z" />
+                </svg>
+                Cast Tips
+              </h3>
+              <button className={styles.menuClose} onClick={() => setShowCastTips(false)}>✕</button>
+            </div>
+            <div className={styles.menuList} style={{ padding: '12px' }}>
+              {/* iOS/iPhone Section */}
+              <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '10px' }}>
+                <h4 style={{ margin: '0 0 8px 0', fontSize: '0.95rem', color: 'white', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  📱 iPhone / iPad
+                </h4>
+                <ol style={{ margin: 0, paddingLeft: '18px', fontSize: '0.85rem', color: 'rgba(255,255,255,0.8)', lineHeight: 1.5 }}>
+                  <li>Tap the AirPlay button above</li>
+                  <li>Select your Apple TV or AirPlay TV</li>
+                  <li>Video plays directly on your TV</li>
+                </ol>
+                <p style={{ margin: '8px 0 0 0', fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)' }}>
+                  ✅ AirPlay sends the stream directly for smooth playback
+                </p>
+              </div>
+
+              {/* Android Section */}
+              <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '10px' }}>
+                <h4 style={{ margin: '0 0 8px 0', fontSize: '0.95rem', color: 'white', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  🤖 Android
+                </h4>
+                <ol style={{ margin: 0, paddingLeft: '18px', fontSize: '0.85rem', color: 'rgba(255,255,255,0.8)', lineHeight: 1.5 }}>
+                  <li>Tap the Cast button above</li>
+                  <li>Select your Chromecast or Android TV</li>
+                  <li>Stream plays natively on your TV</li>
+                </ol>
+                <p style={{ margin: '8px 0 0 0', fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)' }}>
+                  ✅ Native casting for smooth playback
+                </p>
+              </div>
+
+              {/* Windows Section */}
+              <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderRadius: '10px', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
+                <h4 style={{ margin: '0 0 8px 0', fontSize: '0.95rem', color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  🖥️ Windows PC
+                </h4>
+                <p style={{ margin: '0 0 6px 0', fontSize: '0.85rem', color: 'rgba(255,255,255,0.9)' }}>
+                  Press <strong style={{ background: '#333', padding: '2px 6px', borderRadius: '4px' }}>Win + K</strong> for best results:
+                </p>
+                <ol style={{ margin: 0, paddingLeft: '18px', fontSize: '0.85rem', color: 'rgba(255,255,255,0.8)', lineHeight: 1.5 }}>
+                  <li>Select your TV from wireless displays</li>
+                  <li>Choose "Duplicate" or "Second screen only"</li>
+                </ol>
+                <p style={{ margin: '8px 0 0 0', fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)' }}>
+                  💡 Smoother than Chrome tab casting
+                </p>
+              </div>
+
+              {/* Smart TV Section */}
+              <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '10px' }}>
+                <h4 style={{ margin: '0 0 8px 0', fontSize: '0.95rem', color: 'white', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  📺 LG / Samsung TVs
+                </h4>
+                <p style={{ margin: 0, fontSize: '0.85rem', color: 'rgba(255,255,255,0.8)' }}>
+                  These don't support native Chromecast. Use screen mirroring (Windows + K) or a Chromecast device.
+                </p>
+              </div>
+
+              {/* Troubleshooting */}
+              <div style={{ padding: '12px', backgroundColor: 'rgba(229, 9, 20, 0.1)', borderRadius: '10px', border: '1px solid rgba(229, 9, 20, 0.3)' }}>
+                <h4 style={{ margin: '0 0 8px 0', fontSize: '0.95rem', color: '#f87171', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  🔧 Tips
+                </h4>
+                <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '0.85rem', color: 'rgba(255,255,255,0.8)', lineHeight: 1.5 }}>
+                  <li>Same WiFi network required</li>
+                  <li>Right-click casting is always laggy</li>
+                  <li>Use the cast button for best quality</li>
+                </ul>
+              </div>
+            </div>
+            <div style={{ padding: '12px' }}>
+              <button 
+                onClick={() => setShowCastTips(false)}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  backgroundColor: '#e50914',
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: 'white',
+                  fontSize: '0.95rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Got it!
+              </button>
             </div>
           </div>
         </div>
