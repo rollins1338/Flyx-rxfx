@@ -283,6 +283,50 @@
   border-color: rgba(239, 68, 68, 0.4);
 }
 
+/* GitHub Button */
+.githubButton {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.875rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.githubButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.githubStats {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding-left: 0.5rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.15);
+  margin-left: 0.25rem;
+}
+
+.statItem {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.statItem svg {
+  opacity: 0.8;
+}
+
 /* Hamburger Button */
 .hamburgerButton {
   display: flex;
@@ -516,6 +560,22 @@
 
 .mobileActionButton.discord:hover {
   background: rgba(88, 101, 242, 0.18);
+}
+
+.mobileActionButton.github {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.mobileActionButton.github:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.mobileGithubStats {
+  margin-left: auto;
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.6);
 }
 
 /* Responsive */

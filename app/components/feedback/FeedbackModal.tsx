@@ -18,15 +18,20 @@ const feedbackTypes: { value: FeedbackType; label: string; icon: string }[] = [
   { value: 'general', label: 'General Feedback', icon: '💬' },
 ];
 
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+
 export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
   const [feedbackType, setFeedbackType] = useState<FeedbackType>('general');
   const [message, setMessage] = useState('');
   const [email, setEmail] = useState('');
+  const [screenshot, setScreenshot] = useState<string | null>(null);
+  const [screenshotName, setScreenshotName] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const modalRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Focus textarea when modal opens
   useEffect(() => {
@@ -58,6 +63,72 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
     };
   }, [isOpen]);
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('Please select an image file (PNG, JPG, GIF, WebP)');
+      return;
+    }
+
+    // Validate file size
+    if (file.size > MAX_FILE_SIZE) {
+      setError('Screenshot must be less than 5MB');
+      return;
+    }
+
+    setError(null);
+
+    // Convert to base64
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      setScreenshot(base64);
+      setScreenshotName(file.name);
+    };
+    reader.onerror = () => {
+      setError('Failed to read the image file');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveScreenshot = () => {
+    setScreenshot(null);
+    setScreenshotName(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (!file) continue;
+
+        if (file.size > MAX_FILE_SIZE) {
+          setError('Pasted image must be less than 5MB');
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const base64 = event.target?.result as string;
+          setScreenshot(base64);
+          setScreenshotName('Pasted image');
+          setError(null);
+        };
+        reader.readAsDataURL(file);
+        break;
+      }
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,6 +151,7 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
           email: email.trim() || undefined,
           url: window.location.href,
           userAgent: navigator.userAgent,
+          screenshot: screenshot || undefined,
         }),
       });
 
@@ -95,6 +167,8 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
           setSubmitted(false);
           setMessage('');
           setEmail('');
+          setScreenshot(null);
+          setScreenshotName(null);
           setFeedbackType('general');
         }, 300);
       }, 2000);
@@ -131,6 +205,7 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
             role="dialog"
             aria-modal="true"
             aria-labelledby="feedback-title"
+            onPaste={handlePaste}
           >
             {/* Close Button */}
             <button
@@ -197,6 +272,48 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
                       maxLength={2000}
                     />
                     <span className={styles.charCount}>{message.length}/2000</span>
+                  </div>
+
+                  {/* Screenshot Upload */}
+                  <div className={styles.field}>
+                    <label>Screenshot (optional)</label>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileSelect}
+                      className={styles.fileInput}
+                      id="screenshot-input"
+                    />
+                    
+                    {screenshot ? (
+                      <div className={styles.screenshotPreview}>
+                        <img src={screenshot} alt="Screenshot preview" />
+                        <div className={styles.screenshotInfo}>
+                          <span className={styles.screenshotName}>{screenshotName}</span>
+                          <button
+                            type="button"
+                            className={styles.removeScreenshot}
+                            onClick={handleRemoveScreenshot}
+                            aria-label="Remove screenshot"
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <label htmlFor="screenshot-input" className={styles.uploadArea}>
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <rect x="3" y="3" width="18" height="18" rx="2" />
+                          <circle cx="8.5" cy="8.5" r="1.5" />
+                          <path d="M21 15l-5-5L5 21" />
+                        </svg>
+                        <span>Click to upload or paste a screenshot</span>
+                        <span className={styles.uploadHint}>PNG, JPG, GIF, WebP up to 5MB</span>
+                      </label>
+                    )}
                   </div>
 
                   {/* Email (Optional) */}
