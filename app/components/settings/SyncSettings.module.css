@@ -156,23 +156,21 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.08);
-  border: none;
+  background: rgba(139, 92, 246, 0.3);
+  border: 1px solid rgba(139, 92, 246, 0.4);
   border-radius: 8px;
-  color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .visibilityToggle:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: white;
+  background: rgba(139, 92, 246, 0.5);
+  border-color: rgba(139, 92, 246, 0.6);
 }
 
 .visibilityToggle svg {
   width: 16px;
   height: 16px;
-  stroke: currentColor;
 }
 
 .credentialRow {
@@ -219,19 +217,17 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(139, 92, 246, 0.3);
+  border: 1px solid rgba(139, 92, 246, 0.4);
   border-radius: 10px;
-  color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
   transition: all 0.2s ease;
   flex-shrink: 0;
 }
 
 .copyButton:hover:not(:disabled) {
-  background: rgba(139, 92, 246, 0.2);
-  border-color: rgba(139, 92, 246, 0.4);
-  color: #c4b5fd;
+  background: rgba(139, 92, 246, 0.5);
+  border-color: rgba(139, 92, 246, 0.6);
 }
 
 .copyButton:disabled {
@@ -242,7 +238,6 @@
 .copyButton svg {
   width: 16px;
   height: 16px;
-  stroke: currentColor;
 }
 
 .credentialHint {

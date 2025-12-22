@@ -186,21 +186,6 @@ function PlaybackSettings() {
             </div>
           </>
         )}
-
-        <div className={styles.settingItem}>
-          <div className={styles.settingInfo}>
-            <span className={styles.settingLabel}>Anime audio preference</span>
-            <span className={styles.settingDesc}>Default audio track for anime content</span>
-          </div>
-          <select
-            className={styles.select}
-            value={preferences.animeAudioPreference}
-            onChange={(e) => updatePreference('animeAudioPreference', e.target.value as 'sub' | 'dub')}
-          >
-            <option value="sub">Subbed (Japanese)</option>
-            <option value="dub">Dubbed (English)</option>
-          </select>
-        </div>
       </div>
     </div>
   );
@@ -235,6 +220,51 @@ function SubtitleSettingsPanel() {
     saveSubtitlePreferences(updated);
   };
 
+  const handleLanguageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    const languageMap: Record<string, string> = {
+      eng: 'English',
+      spa: 'Spanish',
+      fra: 'French',
+      deu: 'German',
+      ita: 'Italian',
+      por: 'Portuguese',
+      'por-br': 'Portuguese (Brazil)',
+      jpn: 'Japanese',
+      kor: 'Korean',
+      zho: 'Chinese (Simplified)',
+      'zho-tw': 'Chinese (Traditional)',
+      ara: 'Arabic',
+      rus: 'Russian',
+      hin: 'Hindi',
+      tha: 'Thai',
+      vie: 'Vietnamese',
+      ind: 'Indonesian',
+      msa: 'Malay',
+      tur: 'Turkish',
+      pol: 'Polish',
+      nld: 'Dutch',
+      swe: 'Swedish',
+      nor: 'Norwegian',
+      dan: 'Danish',
+      fin: 'Finnish',
+      ces: 'Czech',
+      hun: 'Hungarian',
+      ron: 'Romanian',
+      ell: 'Greek',
+      heb: 'Hebrew',
+      ukr: 'Ukrainian',
+      ben: 'Bengali',
+      tam: 'Tamil',
+      tel: 'Telugu',
+      fil: 'Filipino',
+    };
+    if (!preferences) return;
+    const updated = { ...preferences, languageCode: value, languageName: languageMap[value] || value };
+    setPreferences(updated);
+    saveSubtitlePreferences(updated);
+  };
+
   if (!preferences) {
     return <div className={styles.loading}>Loading...</div>;
   }
@@ -251,7 +281,7 @@ function SubtitleSettingsPanel() {
         </div>
         <div>
           <h2 className={styles.cardTitle}>Subtitle Settings</h2>
-          <p className={styles.cardSubtitle}>Customize subtitle appearance</p>
+          <p className={styles.cardSubtitle}>Customize subtitle appearance and language</p>
         </div>
       </div>
 
@@ -267,6 +297,62 @@ function SubtitleSettingsPanel() {
           >
             <span className={styles.toggleKnob} />
           </button>
+        </div>
+
+        <div className={styles.settingItem}>
+          <div className={styles.settingInfo}>
+            <span className={styles.settingLabel}>Default language</span>
+            <span className={styles.settingDesc}>Preferred subtitle language</span>
+          </div>
+          <select
+            className={styles.select}
+            value={preferences.languageCode}
+            onChange={handleLanguageChange}
+          >
+            <optgroup label="Popular">
+              <option value="eng">English</option>
+              <option value="spa">Spanish</option>
+              <option value="fra">French</option>
+              <option value="deu">German</option>
+              <option value="por">Portuguese</option>
+              <option value="por-br">Portuguese (Brazil)</option>
+              <option value="jpn">Japanese</option>
+              <option value="kor">Korean</option>
+              <option value="zho">Chinese (Simplified)</option>
+              <option value="zho-tw">Chinese (Traditional)</option>
+            </optgroup>
+            <optgroup label="Asian">
+              <option value="hin">Hindi</option>
+              <option value="tha">Thai</option>
+              <option value="vie">Vietnamese</option>
+              <option value="ind">Indonesian</option>
+              <option value="msa">Malay</option>
+              <option value="ben">Bengali</option>
+              <option value="tam">Tamil</option>
+              <option value="tel">Telugu</option>
+              <option value="fil">Filipino</option>
+            </optgroup>
+            <optgroup label="European">
+              <option value="ita">Italian</option>
+              <option value="rus">Russian</option>
+              <option value="tur">Turkish</option>
+              <option value="pol">Polish</option>
+              <option value="nld">Dutch</option>
+              <option value="swe">Swedish</option>
+              <option value="nor">Norwegian</option>
+              <option value="dan">Danish</option>
+              <option value="fin">Finnish</option>
+              <option value="ces">Czech</option>
+              <option value="hun">Hungarian</option>
+              <option value="ron">Romanian</option>
+              <option value="ell">Greek</option>
+              <option value="ukr">Ukrainian</option>
+            </optgroup>
+            <optgroup label="Middle Eastern">
+              <option value="ara">Arabic</option>
+              <option value="heb">Hebrew</option>
+            </optgroup>
+          </select>
         </div>
 
         <div className={styles.settingItem}>
@@ -299,17 +385,41 @@ function SubtitleSettingsPanel() {
           />
         </div>
 
-        {/* Preview */}
-        <div className={styles.subtitlePreview}>
-          <div
-            className={styles.previewText}
-            style={{
-              fontSize: `${preferences.style.fontSize}%`,
-              backgroundColor: `rgba(0, 0, 0, ${preferences.style.backgroundOpacity / 100})`,
-              color: preferences.style.textColor,
-            }}
-          >
-            Sample subtitle text
+        <div className={styles.settingItem}>
+          <div className={styles.settingInfo}>
+            <span className={styles.settingLabel}>Vertical position</span>
+            <span className={styles.settingDesc}>{preferences.style.verticalPosition}% from top</span>
+          </div>
+          <input
+            type="range"
+            className={styles.slider}
+            min={10}
+            max={95}
+            value={preferences.style.verticalPosition}
+            onChange={(e) => updateStyle('verticalPosition', Number(e.target.value))}
+          />
+        </div>
+
+        {/* Visual Preview Box */}
+        <div className={styles.subtitlePreviewBox}>
+          <div className={styles.previewLabel}>Preview</div>
+          <div className={styles.previewScreen}>
+            {/* Fake video content */}
+            <div className={styles.previewContent}>
+              <div className={styles.previewPlayIcon}>▶</div>
+            </div>
+            {/* Subtitle positioned based on verticalPosition */}
+            <div
+              className={styles.previewSubtitle}
+              style={{
+                top: `${preferences.style.verticalPosition}%`,
+                fontSize: `${Math.max(10, preferences.style.fontSize * 0.12)}px`,
+                backgroundColor: `rgba(0, 0, 0, ${preferences.style.backgroundOpacity / 100})`,
+                color: preferences.style.textColor,
+              }}
+            >
+              Sample subtitle text
+            </div>
           </div>
         </div>
       </div>
