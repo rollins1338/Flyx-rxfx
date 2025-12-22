@@ -1,0 +1,331 @@
+/* Provider Settings - Premium Design */
+.container {
+  background: linear-gradient(145deg, rgba(20, 20, 28, 0.95), rgba(12, 12, 18, 0.98));
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(217, 119, 6, 0.04));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.iconWrapper {
+  width: 52px;
+  height: 52px;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 8px 24px rgba(245, 158, 11, 0.25);
+}
+
+.icon {
+  width: 26px;
+  height: 26px;
+  color: white;
+}
+
+.title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: white;
+  margin: 0 0 0.25rem 0;
+  letter-spacing: -0.01em;
+}
+
+.subtitle {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0;
+}
+
+.section {
+  padding: 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.section:last-of-type {
+  border-bottom: none;
+}
+
+.sectionTitle {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.4);
+  margin: 0 0 0.25rem 0;
+}
+
+.sectionDesc {
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0 0 1rem 0;
+}
+
+.providerList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.providerItem {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.875rem 1rem;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+  cursor: grab;
+}
+
+.providerItem:hover {
+  background: rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.providerItem.disabled {
+  opacity: 0.45;
+}
+
+.providerItem.dragging {
+  opacity: 0.6;
+  transform: scale(1.02);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  z-index: 10;
+}
+
+.providerItem.dragOver {
+  border-color: rgba(139, 92, 246, 0.4);
+  background: rgba(139, 92, 246, 0.08);
+}
+
+.dragHandle {
+  width: 18px;
+  height: 18px;
+  color: rgba(255, 255, 255, 0.25);
+  cursor: grab;
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+}
+
+.providerItem:hover .dragHandle {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.dragHandle:active {
+  cursor: grabbing;
+}
+
+.providerIcon {
+  font-size: 1.375rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.providerInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.providerName {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: white;
+}
+
+.badge {
+  font-size: 0.5625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.1875rem 0.4375rem;
+  background: linear-gradient(135deg, #ec4899, #8b5cf6);
+  border-radius: 4px;
+  color: white;
+}
+
+.providerDesc {
+  display: block;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 0.125rem;
+}
+
+.providerActions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.moveButton {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.moveButton:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.moveButton:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
+.moveButton svg {
+  width: 16px;
+  height: 16px;
+}
+
+.toggleButton {
+  width: 38px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.toggleButton:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.toggleButton.enabled {
+  color: #22c55e;
+}
+
+.toggleButton svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* Anime audio toggle */
+.audioToggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.audioOption {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 1.25rem 1rem;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.audioOption:hover {
+  background: rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.audioOption.active {
+  background: rgba(139, 92, 246, 0.12);
+  border-color: rgba(139, 92, 246, 0.35);
+  box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.15);
+}
+
+.audioIcon {
+  font-size: 1.75rem;
+  line-height: 1;
+}
+
+.audioLabel {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: white;
+}
+
+.audioDesc {
+  font-size: 0.6875rem;
+  color: rgba(255, 255, 255, 0.45);
+  text-align: center;
+}
+
+/* Info box */
+.infoBox {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin: 0 1.5rem 1.5rem;
+  padding: 1rem;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  border-radius: 12px;
+}
+
+.infoBox svg {
+  width: 16px;
+  height: 16px;
+  color: #60a5fa;
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
+.infoBox p {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Mobile */
+@media (max-width: 640px) {
+  .header {
+    padding: 1.25rem;
+  }
+
+  .section {
+    padding: 1.25rem;
+  }
+
+  .providerItem {
+    padding: 0.75rem;
+  }
+
+  .providerDesc {
+    display: none;
+  }
+
+  .audioToggle {
+    grid-template-columns: 1fr;
+  }
+
+  .infoBox {
+    margin: 0 1.25rem 1.25rem;
+  }
+}

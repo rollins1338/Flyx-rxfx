@@ -1,0 +1,51 @@
+/* Transcript Button */
+.button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.button:hover:not(.disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.button.active {
+  color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.15);
+}
+
+.button.active:hover {
+  background: rgba(139, 92, 246, 0.25);
+}
+
+.button.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.button svg {
+  flex-shrink: 0;
+}
+
+/* Hide on mobile - transcript is desktop only */
+@media (max-width: 768px) {
+  .button {
+    display: none;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .button {
+    transition: none;
+  }
+}

@@ -1,0 +1,68 @@
+# Cloudflare Worker for Analytics
+# Handles: presence tracking, page views, watch sessions, live activity
+name = "flyx-analytics"
+main = "src/index.ts"
+compatibility_date = "2025-12-07"
+
+# Free tier: 100,000 requests/day
+# With 30s heartbeats and ~100 concurrent users: ~288,000 req/day
+# Consider Workers Paid ($5/mo) for high traffic
+
+[observability]
+enabled = true
+
+[vars]
+LOG_LEVEL = "info"
+# ALLOWED_ORIGINS = "https://tv.vynx.cc,http://localhost:3000"
+# Heartbeat interval in seconds (client should match this)
+HEARTBEAT_INTERVAL = "30"
+
+# =============================================================================
+# SECRETS - Set via wrangler secret put <NAME>
+# =============================================================================
+# DATABASE_URL - Neon PostgreSQL connection string
+#   wrangler secret put DATABASE_URL
+#   Format: postgresql://user:pass@host/db?sslmode=require
+
+# =============================================================================
+# ANALYTICS QUEUE (Optional - for high-volume batching)
+# =============================================================================
+# Uncomment to use Queues for batching writes:
+# [[queues.producers]]
+# queue = "analytics-events"
+# binding = "ANALYTICS_QUEUE"
+#
+# [[queues.consumers]]
+# queue = "analytics-events"
+# max_batch_size = 100
+# max_batch_timeout = 30
+
+# =============================================================================
+# KV NAMESPACE - For rate limiting and deduplication
+# =============================================================================
+# Create with: wrangler kv:namespace create "ANALYTICS_KV"
+# [[kv_namespaces]]
+# binding = "ANALYTICS_KV"
+# id = "your-kv-namespace-id"
+
+# Production environment
+[env.production]
+name = "flyx-analytics"
+
+[env.production.vars]
+LOG_LEVEL = "warn"
+HEARTBEAT_INTERVAL = "30"
+
+[env.production.observability]
+enabled = true
+
+# Development environment
+[env.development]
+name = "flyx-analytics-dev"
+
+[env.development.vars]
+LOG_LEVEL = "debug"
+HEARTBEAT_INTERVAL = "10"
+
+[env.development.observability]
+enabled = true

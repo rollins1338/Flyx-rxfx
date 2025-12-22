@@ -6,6 +6,7 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import { useMobileGestures } from '@/hooks/useMobileGestures';
 import { useWatchProgress } from '@/lib/hooks/useWatchProgress';
 import { useCast, CastMedia } from '@/hooks/useCast';
+import { usePresenceContext } from '@/components/analytics/PresenceProvider';
 import styles from './MobileVideoPlayer.module.css';
 
 type AudioPreference = 'sub' | 'dub';
@@ -100,6 +101,7 @@ export default function MobileVideoPlayer({
   loadingProvider = false,
 }: MobileVideoPlayerProps) {
   const mobileInfo = useIsMobile();
+  const presenceContext = usePresenceContext();
   
   // Lock in iOS and HLS support detection to prevent re-initialization on rotation
   const isIOSRef = useRef<boolean | null>(null);
@@ -644,6 +646,15 @@ export default function MobileVideoPlayer({
       setIsPlaying(true);
       handleWatchResume(video.currentTime, video.duration);
       
+      // Update presence to "watching" for mobile users
+      presenceContext?.setActivityType('watching', {
+        contentId: tmdbId,
+        contentTitle: title,
+        contentType: mediaType,
+        seasonNumber: season,
+        episodeNumber: episode,
+      });
+      
       // Note: Auto-fullscreen removed - it requires user gesture and causes console errors
       // Users can tap the fullscreen button or rotate their device
     };
@@ -651,6 +662,9 @@ export default function MobileVideoPlayer({
       setIsPlaying(false); 
       setShowControls(true);
       handleWatchPause(video.currentTime, video.duration);
+      
+      // Update presence back to "browsing" when paused
+      presenceContext?.setActivityType('browsing');
     };
     const onWaiting = () => setIsBuffering(true);
     const onCanPlay = () => { setIsBuffering(false); setIsLoading(false); };
@@ -690,7 +704,7 @@ export default function MobileVideoPlayer({
       video.removeEventListener('durationchange', onDurationChange);
       video.removeEventListener('ended', onEnded);
     };
-  }, [isGestureActive, resetControlsTimeout, handleProgress, handleWatchPause, handleWatchResume, showResumePrompt]);
+  }, [isGestureActive, resetControlsTimeout, handleProgress, handleWatchPause, handleWatchResume, showResumePrompt, presenceContext, tmdbId, title, mediaType, season, episode]);
 
   // Orientation detection
   useEffect(() => {

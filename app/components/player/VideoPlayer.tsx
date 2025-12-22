@@ -23,9 +23,11 @@ import {
   type PlayerPreferences,
   type AnimeAudioPreference 
 } from '@/lib/utils/player-preferences';
+import { getProviderSettings, recordSuccessfulProvider, getLastSuccessfulProvider } from '@/lib/sync';
 import { usePinchZoom } from '@/hooks/usePinchZoom';
 import { useCast, CastMedia } from '@/hooks/useCast';
 import { CastOverlay } from './CastButton';
+import TranscriptButton from './TranscriptButton';
 import { getStreamProxyUrl } from '@/app/lib/proxy-config';
 import styles from './VideoPlayer.module.css';
 
@@ -667,24 +669,48 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
       setIsAnimeContent(isAnime);
       console.log(`[VideoPlayer] Content type: ${isAnime ? 'ANIME' : 'regular'}, AnimeKai available: ${availability.animekai}`);
 
-      // Build provider priority list based on content type
+      // Build provider priority list based on content type and user preferences
       // For ANIME: AnimeKai FIRST, then Videasy as fallback
       // For non-anime: VidSrc (primary), Flixer, 1movies, Videasy
+      // User can customize order via Settings > Providers
+      const userProviderSettings = getProviderSettings();
+      const userOrder = userProviderSettings.providerOrder || [];
+      const disabledProviders = new Set(userProviderSettings.disabledProviders || []);
+      
+      // Check if user has a last successful provider for this content
+      const contentKey = `${tmdbId}-${mediaType}${season ? `-s${season}` : ''}${episode ? `-e${episode}` : ''}`;
+      const lastSuccessful = getLastSuccessfulProvider(contentKey);
+      
       const providerOrder: string[] = [];
-      if (isAnime && availability.animekai) {
+      
+      // If we have a last successful provider for this content, try it first
+      if (lastSuccessful && availability[lastSuccessful as keyof typeof availability] && !disabledProviders.has(lastSuccessful)) {
+        providerOrder.push(lastSuccessful);
+        console.log(`[VideoPlayer] Prioritizing last successful provider: ${lastSuccessful}`);
+      }
+      
+      // For anime, always prioritize AnimeKai if available
+      if (isAnime && availability.animekai && !disabledProviders.has('animekai') && !providerOrder.includes('animekai')) {
         providerOrder.push('animekai'); // AnimeKai as PRIMARY for anime
         console.log(`[VideoPlayer] ✓ Adding AnimeKai as PRIMARY provider for anime content`);
       }
-      if (availability.vidsrc) {
-        providerOrder.push('vidsrc'); // VidSrc as primary for non-anime
+      
+      // Add providers in user's preferred order
+      for (const providerName of userOrder) {
+        if (providerOrder.includes(providerName)) continue; // Already added
+        if (disabledProviders.has(providerName)) continue; // User disabled this provider
+        if (!availability[providerName as keyof typeof availability]) continue; // Not available
+        providerOrder.push(providerName);
       }
-      if (availability.flixer) {
-        providerOrder.push('flixer'); // Flixer as secondary fallback
+      
+      // Add any remaining available providers not in user's order
+      const allProviders = ['vidsrc', 'flixer', '1movies', 'videasy', 'animekai'];
+      for (const providerName of allProviders) {
+        if (providerOrder.includes(providerName)) continue;
+        if (disabledProviders.has(providerName)) continue;
+        if (!availability[providerName as keyof typeof availability]) continue;
+        providerOrder.push(providerName);
       }
-      if (availability['1movies']) {
-        providerOrder.push('1movies'); // 1movies as third fallback
-      }
-      providerOrder.push('videasy'); // Videasy as final fallback (multi-language support)
 
       console.log(`[VideoPlayer] Provider order: ${providerOrder.join(' → ')} (isAnime=${isAnime}, animekai=${availability.animekai})`);
 
@@ -709,6 +735,9 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
 
       const { sources, provider: successfulProvider } = result;
       console.log(`[VideoPlayer] Success! Got ${sources.length} sources from ${successfulProvider}`);
+
+      // Record successful provider for this content (helps with future playback)
+      recordSuccessfulProvider(contentKey, successfulProvider);
 
       // Update state with successful provider
       setProvider(successfulProvider);
@@ -3777,6 +3806,18 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
             >
               ?
             </button>
+
+            {/* Transcript button - desktop only */}
+            <TranscriptButton
+              currentTime={currentTime}
+              onSeek={seek}
+              subtitleData={currentSubtitleDataRef.current ? {
+                url: currentSubtitleDataRef.current.url,
+                language: currentSubtitleDataRef.current.language,
+                isCustom: currentSubtitleDataRef.current.isCustom,
+              } : null}
+              disabled={!currentSubtitle}
+            />
 
             <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className={styles.btn} data-player-control="fullscreen" title="Fullscreen">
               {isFullscreen ? (

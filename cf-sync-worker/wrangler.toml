@@ -1,0 +1,64 @@
+# Cloudflare Worker for Anonymous Cross-Device Sync
+# Handles: watch progress, watchlist, provider settings, subtitle/player preferences
+name = "flyx-sync"
+main = "src/index.ts"
+compatibility_date = "2025-12-07"
+
+# Free tier: 100,000 requests/day - plenty for sync operations
+# Sync is low-frequency (on app load + manual sync button)
+
+[observability]
+enabled = true
+
+[vars]
+LOG_LEVEL = "info"
+# ALLOWED_ORIGINS = "https://tv.vynx.cc,http://localhost:3000"
+
+# =============================================================================
+# SECRETS - Set via wrangler secret put <NAME>
+# =============================================================================
+# DATABASE_URL - Neon PostgreSQL connection string
+#   wrangler secret put DATABASE_URL
+#   Format: postgresql://user:pass@host/db?sslmode=require
+#
+# SYNC_ENCRYPTION_KEY - Optional: encrypt sync data at rest
+#   wrangler secret put SYNC_ENCRYPTION_KEY
+
+# =============================================================================
+# D1 DATABASE (Alternative to Neon - Cloudflare's native SQLite)
+# =============================================================================
+# Uncomment to use D1 instead of Neon:
+# [[d1_databases]]
+# binding = "SYNC_DB"
+# database_name = "flyx-sync"
+# database_id = "your-d1-database-id"
+#
+# Create with: wrangler d1 create flyx-sync
+
+# =============================================================================
+# KV NAMESPACE - For caching sync data (optional, improves performance)
+# =============================================================================
+# Create with: wrangler kv:namespace create "SYNC_CACHE"
+# [[kv_namespaces]]
+# binding = "SYNC_CACHE"
+# id = "your-kv-namespace-id"
+
+# Production environment
+[env.production]
+name = "flyx-sync"
+
+[env.production.vars]
+LOG_LEVEL = "warn"
+
+[env.production.observability]
+enabled = true
+
+# Development environment
+[env.development]
+name = "flyx-sync-dev"
+
+[env.development.vars]
+LOG_LEVEL = "debug"
+
+[env.development.observability]
+enabled = true

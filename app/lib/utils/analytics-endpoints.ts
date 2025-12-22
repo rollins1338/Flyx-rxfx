@@ -1,7 +1,11 @@
 /**
  * Analytics Endpoints Configuration
  * 
- * Routes analytics through Cloudflare Worker when NEXT_PUBLIC_CF_ANALYTICS_URL is set.
+ * Routes analytics through Cloudflare Worker when configured.
+ * Supports two modes:
+ *   1. Dedicated Analytics Worker (NEXT_PUBLIC_CF_ANALYTICS_WORKER_URL) - Preferred
+ *   2. Main CF Proxy with analytics route (NEXT_PUBLIC_CF_ANALYTICS_URL) - Legacy
+ * 
  * This reduces Vercel Edge function costs by leveraging CF's free tier (100k req/day).
  * 
  * Usage:
@@ -9,8 +13,22 @@
  *   const url = getAnalyticsEndpoint('presence'); // Returns CF or Vercel URL
  */
 
-// Cache the CF URL to avoid repeated env lookups
+// Cache the CF URLs to avoid repeated env lookups
+let cachedDedicatedWorkerUrl: string | null | undefined = undefined;
 let cachedCfUrl: string | null | undefined = undefined;
+
+function getCfAnalyticsDedicatedWorkerUrl(): string | null {
+  if (cachedDedicatedWorkerUrl !== undefined) return cachedDedicatedWorkerUrl;
+  
+  if (typeof window === 'undefined') {
+    cachedDedicatedWorkerUrl = null;
+    return null;
+  }
+  
+  // Check for dedicated analytics worker URL (preferred)
+  cachedDedicatedWorkerUrl = process.env.NEXT_PUBLIC_CF_ANALYTICS_WORKER_URL || null;
+  return cachedDedicatedWorkerUrl;
+}
 
 function getCfAnalyticsUrl(): string | null {
   if (cachedCfUrl !== undefined) return cachedCfUrl;
@@ -20,7 +38,7 @@ function getCfAnalyticsUrl(): string | null {
     return null;
   }
   
-  // Check for CF analytics URL
+  // Check for CF analytics URL (legacy - routes through main proxy)
   cachedCfUrl = process.env.NEXT_PUBLIC_CF_ANALYTICS_URL || null;
   return cachedCfUrl;
 }
@@ -29,21 +47,45 @@ function getCfAnalyticsUrl(): string | null {
  * Get the appropriate analytics endpoint URL
  * Routes through Cloudflare Worker if configured, otherwise falls back to Vercel
  * 
- * @param endpoint - The endpoint name (presence, pageview, event, watch-session)
+ * Priority:
+ *   1. Dedicated Analytics Worker (NEXT_PUBLIC_CF_ANALYTICS_WORKER_URL)
+ *   2. Main CF Proxy (NEXT_PUBLIC_CF_ANALYTICS_URL)
+ *   3. Vercel Edge (fallback)
+ * 
+ * @param endpoint - The endpoint name (presence, pageview, event, watch-session, live-activity, page-view, stats)
  * @returns The full URL to use for the analytics request
  */
-export function getAnalyticsEndpoint(endpoint: 'presence' | 'pageview' | 'event' | 'watch-session' | 'live-activity'): string {
+export function getAnalyticsEndpoint(endpoint: 'presence' | 'pageview' | 'page-view' | 'event' | 'watch-session' | 'live-activity' | 'stats'): string {
+  const dedicatedWorkerUrl = getCfAnalyticsDedicatedWorkerUrl();
   const cfUrl = getCfAnalyticsUrl();
   
+  // Priority 1: Dedicated Analytics Worker
+  if (dedicatedWorkerUrl) {
+    // Map endpoint names to dedicated worker routes
+    const workerEndpoints: Record<string, string> = {
+      'presence': '/presence',
+      'pageview': '/page-view',
+      'page-view': '/page-view',
+      'event': '/page-view', // Events tracked as page views
+      'watch-session': '/watch-session',
+      'live-activity': '/live-activity',
+      'stats': '/stats',
+    };
+    return `${dedicatedWorkerUrl}${workerEndpoints[endpoint] || `/${endpoint}`}`;
+  }
+  
+  // Priority 2: Main CF Proxy with analytics route
   if (cfUrl) {
     // Route through Cloudflare Worker
     // Map endpoint names to CF routes
     const cfEndpoints: Record<string, string> = {
       'presence': '/presence',
       'pageview': '/pageview',
+      'page-view': '/pageview',
       'event': '/event',
       'watch-session': '/watch-session',
       'live-activity': '/live-activity',
+      'stats': '/stats',
     };
     return `${cfUrl}${cfEndpoints[endpoint] || `/${endpoint}`}`;
   }
@@ -52,9 +94,11 @@ export function getAnalyticsEndpoint(endpoint: 'presence' | 'pageview' | 'event'
   const vercelEndpoints: Record<string, string> = {
     'presence': '/api/analytics/presence',
     'pageview': '/api/analytics/page-view',
+    'page-view': '/api/analytics/page-view',
     'event': '/api/analytics/track',
     'watch-session': '/api/analytics/watch-session',
     'live-activity': '/api/analytics/live-activity',
+    'stats': '/api/admin/analytics',
   };
   return vercelEndpoints[endpoint] || `/api/analytics/${endpoint}`;
 }
@@ -63,19 +107,35 @@ export function getAnalyticsEndpoint(endpoint: 'presence' | 'pageview' | 'event'
  * Check if analytics is routed through Cloudflare
  */
 export function isUsingCloudflareAnalytics(): boolean {
-  return getCfAnalyticsUrl() !== null;
+  return getCfAnalyticsDedicatedWorkerUrl() !== null || getCfAnalyticsUrl() !== null;
 }
 
 /**
  * Get analytics configuration info (for debugging)
  */
 export function getAnalyticsConfig(): {
-  provider: 'cloudflare' | 'vercel';
+  provider: 'cloudflare-dedicated' | 'cloudflare-proxy' | 'vercel';
   baseUrl: string | null;
 } {
+  const dedicatedUrl = getCfAnalyticsDedicatedWorkerUrl();
   const cfUrl = getCfAnalyticsUrl();
+  
+  if (dedicatedUrl) {
+    return {
+      provider: 'cloudflare-dedicated',
+      baseUrl: dedicatedUrl,
+    };
+  }
+  
+  if (cfUrl) {
+    return {
+      provider: 'cloudflare-proxy',
+      baseUrl: cfUrl,
+    };
+  }
+  
   return {
-    provider: cfUrl ? 'cloudflare' : 'vercel',
-    baseUrl: cfUrl,
+    provider: 'vercel',
+    baseUrl: null,
   };
 }
