@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import SubtitleTranscript from './SubtitleTranscript';
 import styles from './TranscriptButton.module.css';
 
@@ -24,6 +25,12 @@ export default function TranscriptButton({
   className = '',
 }: TranscriptButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  // Ensure we're mounted before using portal
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Get the proxied subtitle URL
   const getSubtitleUrl = useCallback(() => {
@@ -73,7 +80,7 @@ export default function TranscriptButton({
         </svg>
       </button>
 
-      {isOpen && subtitleUrl && (
+      {mounted && isOpen && subtitleUrl && createPortal(
         <SubtitleTranscript
           isOpen={isOpen}
           onClose={handleClose}
@@ -81,7 +88,8 @@ export default function TranscriptButton({
           onSeek={onSeek}
           subtitleUrl={subtitleUrl}
           subtitleLabel={subtitleData?.language}
-        />
+        />,
+        document.body
       )}
     </>
   );
