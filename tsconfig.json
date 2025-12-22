@@ -70,6 +70,8 @@
     "scripts/**/*",
     "cloudflare-proxy/**/*",
     "rpi-proxy/**/*",
+    "cf-analytics-worker/**/*",
+    "cf-sync-worker/**/*",
     "**/__tests__/**/*",
     "**/*.test.ts",
     "**/*.test.tsx"
