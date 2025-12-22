@@ -199,12 +199,20 @@ export default function SubtitleTranscript({
     setAutoScroll(true);
   }, [onSeek]);
 
-  // Handle keyboard navigation
+  // Handle keyboard navigation - stop propagation to prevent video player hotkeys
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    // Stop all keyboard events from bubbling to video player
+    e.stopPropagation();
+    
     if (e.key === 'Escape') {
       onClose();
     }
   }, [onClose]);
+
+  // Stop keyboard events in search input from triggering video hotkeys
+  const handleInputKeyDown = useCallback((e: React.KeyboardEvent) => {
+    e.stopPropagation();
+  }, []);
 
   if (!isOpen) return null;
 
@@ -213,7 +221,7 @@ export default function SubtitleTranscript({
       {/* Header */}
       <div className={styles.header}>
         <div className={styles.headerLeft}>
-          <svg className={styles.headerIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg className={styles.headerIcon} width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="2" y="4" width="20" height="16" rx="2" />
             <path d="M7 12h10M7 16h6" />
           </svg>
@@ -225,7 +233,7 @@ export default function SubtitleTranscript({
           </div>
         </div>
         <button className={styles.closeButton} onClick={onClose} aria-label="Close transcript">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M18 6L6 18M6 6l12 12" />
           </svg>
         </button>
@@ -233,7 +241,7 @@ export default function SubtitleTranscript({
 
       {/* Search */}
       <div className={styles.searchContainer}>
-        <svg className={styles.searchIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <svg className={styles.searchIcon} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="11" cy="11" r="8" />
           <path d="M21 21l-4.35-4.35" />
         </svg>
@@ -243,6 +251,7 @@ export default function SubtitleTranscript({
           placeholder="Search transcript..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={handleInputKeyDown}
         />
         {searchQuery && (
           <button 
@@ -250,7 +259,7 @@ export default function SubtitleTranscript({
             onClick={() => setSearchQuery('')}
             aria-label="Clear search"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 6L6 18M6 6l12 12" />
             </svg>
           </button>
@@ -263,7 +272,7 @@ export default function SubtitleTranscript({
           className={`${styles.autoScrollToggle} ${autoScroll ? styles.active : ''}`}
           onClick={() => setAutoScroll(!autoScroll)}
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 5v14M5 12l7 7 7-7" />
           </svg>
           Auto-scroll
@@ -288,7 +297,7 @@ export default function SubtitleTranscript({
           </div>
         ) : error ? (
           <div className={styles.error}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" />
               <path d="M12 8v4m0 4h.01" />
             </svg>
