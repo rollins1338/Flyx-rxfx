@@ -13,34 +13,23 @@
  *   const url = getAnalyticsEndpoint('presence'); // Returns CF or Vercel URL
  */
 
-// Cache the CF URLs to avoid repeated env lookups
-let cachedDedicatedWorkerUrl: string | null | undefined = undefined;
-let cachedCfUrl: string | null | undefined = undefined;
-
 function getCfAnalyticsDedicatedWorkerUrl(): string | null {
-  if (cachedDedicatedWorkerUrl !== undefined) return cachedDedicatedWorkerUrl;
-  
   if (typeof window === 'undefined') {
-    cachedDedicatedWorkerUrl = null;
     return null;
   }
   
   // Check for dedicated analytics worker URL (preferred)
-  cachedDedicatedWorkerUrl = process.env.NEXT_PUBLIC_CF_ANALYTICS_WORKER_URL || null;
-  return cachedDedicatedWorkerUrl;
+  // No caching - env vars are inlined at build time anyway
+  return process.env.NEXT_PUBLIC_CF_ANALYTICS_WORKER_URL || null;
 }
 
 function getCfAnalyticsUrl(): string | null {
-  if (cachedCfUrl !== undefined) return cachedCfUrl;
-  
   if (typeof window === 'undefined') {
-    cachedCfUrl = null;
     return null;
   }
   
   // Check for CF analytics URL (legacy - routes through main proxy)
-  cachedCfUrl = process.env.NEXT_PUBLIC_CF_ANALYTICS_URL || null;
-  return cachedCfUrl;
+  return process.env.NEXT_PUBLIC_CF_ANALYTICS_URL || null;
 }
 
 /**

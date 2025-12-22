@@ -407,9 +407,13 @@ export function PresenceProvider({ children }: PresenceProviderProps) {
     if (typeof window === 'undefined' || isInitializedRef.current) return;
     isInitializedRef.current = true;
     
-    // Log routing configuration
+    // Log routing configuration with full details
     const usingCF = isUsingCloudflareAnalytics();
+    const cfWorkerUrl = process.env.NEXT_PUBLIC_CF_ANALYTICS_WORKER_URL;
+    const cfUrl = process.env.NEXT_PUBLIC_CF_ANALYTICS_URL;
     console.log(`[Presence] Analytics routing: ${usingCF ? 'Cloudflare Worker' : 'Vercel Edge'}`);
+    console.log(`[Presence] CF Worker URL: ${cfWorkerUrl || 'NOT SET'}`);
+    console.log(`[Presence] CF Analytics URL: ${cfUrl || 'NOT SET'}`);
     console.log(`[Presence] Heartbeat interval: ${HEARTBEAT_INTERVAL / 1000}s, Min gap: ${MIN_HEARTBEAT_GAP / 1000}s`);
     
     // Run bot detection asynchronously to not block render
