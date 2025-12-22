@@ -461,20 +461,19 @@ function EngagementTab({ metrics }: { metrics: any }) {
               {Array.from({ length: 24 }, (_, hour) => {
                 const count = metrics.hourCounts[hour] || 0;
                 const maxCount = Math.max(...Object.values(metrics.hourCounts) as number[], 1);
-                const height = (count / maxCount) * 100;
+                const heightPx = maxCount > 0 ? Math.max((count / maxCount) * 100, count > 0 ? 4 : 0) : 0;
                 return (
-                  <div key={hour} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                  <div key={hour} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
                     <div 
                       style={{ 
                         width: '100%', 
-                        height: `${height}%`, 
-                        minHeight: count > 0 ? '2px' : '0',
+                        height: `${heightPx}px`,
                         background: hour === metrics.peakHour ? colors.pink : gradients.mixed, 
                         borderRadius: '2px 2px 0 0',
                       }} 
                       title={`${hour}:00 - ${count} sessions`}
                     />
-                    {hour % 4 === 0 && <span style={{ fontSize: '9px', color: colors.text.muted }}>{hour}</span>}
+                    {hour % 4 === 0 && <span style={{ fontSize: '9px', color: colors.text.muted, marginTop: '4px' }}>{hour}</span>}
                   </div>
                 );
               })}

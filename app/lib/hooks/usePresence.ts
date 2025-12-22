@@ -12,6 +12,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback, useState } from 'react';
+import { getAnalyticsEndpoint } from '@/app/lib/utils/analytics-endpoints';
 
 interface PresenceConfig {
   heartbeatInterval?: number; // ms between heartbeats (default: 30s)
@@ -239,13 +240,16 @@ export function usePresence(config: PresenceConfig = {}) {
       };
       
       // Use sendBeacon for leaving events (more reliable)
+      // Get the CF worker URL for presence
+      const presenceUrl = getAnalyticsEndpoint('presence');
+      
       if (isLeaving && navigator.sendBeacon) {
         navigator.sendBeacon(
-          '/api/analytics/presence',
+          presenceUrl,
           JSON.stringify(payload)
         );
       } else {
-        await fetch('/api/analytics/presence', {
+        await fetch(presenceUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),

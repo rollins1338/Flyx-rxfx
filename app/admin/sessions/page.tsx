@@ -389,11 +389,11 @@ export default function AdminSessionsPage() {
                 const hourData = getHourlyDistribution();
                 const count = hourData[hour] || 0;
                 const maxCount = Math.max(...Object.values(hourData), 1);
-                const height = (count / maxCount) * 100;
+                const heightPx = maxCount > 0 ? Math.max((count / maxCount) * 100, count > 0 ? 4 : 0) : 0;
                 return (
-                  <div key={hour} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                    <div style={{ width: '100%', height: `${height}%`, minHeight: count > 0 ? '4px' : '0', background: 'linear-gradient(180deg, #7877c6, #ff77c6)', borderRadius: '4px 4px 0 0', transition: 'height 0.3s' }} title={`${hour}:00 - ${count} sessions`} />
-                    <span style={{ fontSize: '10px', color: '#64748b' }}>{hour}</span>
+                  <div key={hour} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+                    <div style={{ width: '100%', height: `${heightPx}px`, background: 'linear-gradient(180deg, #7877c6, #ff77c6)', borderRadius: '4px 4px 0 0', transition: 'height 0.3s' }} title={`${hour}:00 - ${count} sessions`} />
+                    <span style={{ fontSize: '10px', color: '#64748b', marginTop: '4px' }}>{hour}</span>
                   </div>
                 );
               })}

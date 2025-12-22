@@ -324,12 +324,89 @@ function OverviewTab({ stats, engagementStats, engagementDistribution, visitFreq
 }
 
 function UserListTab({ users, searchQuery, setSearchQuery, sortBy, setSortBy, onUserClick }: any) {
+  const [engagementFilter, setEngagementFilter] = useState('all');
+  const [userTypeFilter, setUserTypeFilter] = useState('all');
+  const [countryFilter, setCountryFilter] = useState('all');
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
+  const [page, setPage] = useState(0);
+  const pageSize = 25;
+
   const sortOptions = [
     { value: 'last_visit', label: 'Last Active' },
     { value: 'engagement', label: 'Engagement Score' },
     { value: 'visits', label: 'Total Visits' },
     { value: 'watch_time', label: 'Watch Time' },
+    { value: 'page_views', label: 'Page Views' },
+    { value: 'first_visit', label: 'First Visit' },
   ];
+
+  const engagementOptions = [
+    { value: 'all', label: 'All Engagement' },
+    { value: 'highly_engaged', label: '🔥 Highly Engaged (80+)' },
+    { value: 'engaged', label: '⭐ Engaged (50-79)' },
+    { value: 'casual', label: '👋 Casual (20-49)' },
+    { value: 'new', label: '🆕 New (<20)' },
+  ];
+
+  const userTypeOptions = [
+    { value: 'all', label: 'All Users' },
+    { value: 'power', label: '💪 Power Users (20+ visits)' },
+    { value: 'regular', label: '✅ Regular (10-19 visits)' },
+    { value: 'returning', label: '🔄 Returning (3-9 visits)' },
+    { value: 'new', label: '🆕 New (1-2 visits)' },
+  ];
+
+  // Get unique countries from users
+  const countries = useMemo(() => {
+    const countrySet = new Set<string>();
+    users.forEach((u: UserEngagement) => {
+      if (u.countries) countrySet.add(u.countries);
+    });
+    return Array.from(countrySet).sort();
+  }, [users]);
+
+  const countryOptions = [
+    { value: 'all', label: 'All Countries' },
+    ...countries.map(c => ({ value: c, label: c })),
+  ];
+
+  // Apply all filters
+  const filteredUsers = useMemo(() => {
+    return users.filter((u: UserEngagement) => {
+      // Search filter
+      if (searchQuery && !u.user_id.toLowerCase().includes(searchQuery.toLowerCase())) {
+        return false;
+      }
+      // Engagement filter
+      if (engagementFilter !== 'all') {
+        if (engagementFilter === 'highly_engaged' && u.engagement_score < 80) return false;
+        if (engagementFilter === 'engaged' && (u.engagement_score < 50 || u.engagement_score >= 80)) return false;
+        if (engagementFilter === 'casual' && (u.engagement_score < 20 || u.engagement_score >= 50)) return false;
+        if (engagementFilter === 'new' && u.engagement_score >= 20) return false;
+      }
+      // User type filter
+      if (userTypeFilter !== 'all') {
+        if (userTypeFilter === 'power' && u.total_visits < 20) return false;
+        if (userTypeFilter === 'regular' && (u.total_visits < 10 || u.total_visits >= 20)) return false;
+        if (userTypeFilter === 'returning' && (u.total_visits < 3 || u.total_visits >= 10)) return false;
+        if (userTypeFilter === 'new' && u.total_visits >= 3) return false;
+      }
+      // Country filter
+      if (countryFilter !== 'all' && u.countries !== countryFilter) return false;
+      return true;
+    });
+  }, [users, searchQuery, engagementFilter, userTypeFilter, countryFilter]);
+
+  // Paginate
+  const paginatedUsers = useMemo(() => {
+    const start = page * pageSize;
+    return filteredUsers.slice(start, start + pageSize);
+  }, [filteredUsers, page]);
+
+  const totalPages = Math.ceil(filteredUsers.length / pageSize);
+
+  // Reset page when filters change
+  useEffect(() => { setPage(0); }, [searchQuery, engagementFilter, userTypeFilter, countryFilter, sortBy]);
 
   const getEngagementLabel = (score: number) => {
     if (score >= 80) return 'Highly Engaged';
@@ -401,18 +478,181 @@ function UserListTab({ users, searchQuery, setSearchQuery, sortBy, setSortBy, on
 
   return (
     <>
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
-        <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search users..." />
+      {/* Filter Bar */}
+      <div style={{ 
+        display: 'flex', 
+        gap: '12px', 
+        marginBottom: '16px', 
+        flexWrap: 'wrap',
+        padding: '16px',
+        background: 'rgba(255, 255, 255, 0.02)',
+        borderRadius: '12px',
+        border: '1px solid rgba(255, 255, 255, 0.05)'
+      }}>
+        <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search by user ID..." />
         <Select value={sortBy} onChange={setSortBy} options={sortOptions} />
+        <Select value={engagementFilter} onChange={setEngagementFilter} options={engagementOptions} />
+        <Select value={userTypeFilter} onChange={setUserTypeFilter} options={userTypeOptions} />
+        {countries.length > 1 && <Select value={countryFilter} onChange={setCountryFilter} options={countryOptions} />}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: '4px' }}>
+          <button
+            onClick={() => setViewMode('table')}
+            style={{
+              padding: '8px 12px',
+              background: viewMode === 'table' ? colors.primary : 'rgba(255,255,255,0.05)',
+              border: 'none',
+              borderRadius: '6px',
+              color: viewMode === 'table' ? '#fff' : colors.text.muted,
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >📋 Table</button>
+          <button
+            onClick={() => setViewMode('cards')}
+            style={{
+              padding: '8px 12px',
+              background: viewMode === 'cards' ? colors.primary : 'rgba(255,255,255,0.05)',
+              border: 'none',
+              borderRadius: '6px',
+              color: viewMode === 'cards' ? '#fff' : colors.text.muted,
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >🃏 Cards</button>
+        </div>
       </div>
 
-      <DataTable 
-        data={users} 
-        columns={columns} 
-        maxRows={50} 
-        emptyMessage="No users found"
-        onRowClick={onUserClick}
-      />
+      {/* Results Summary */}
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        marginBottom: '16px',
+        color: colors.text.muted,
+        fontSize: '14px'
+      }}>
+        <span>Showing {paginatedUsers.length} of {filteredUsers.length} users {filteredUsers.length !== users.length && `(filtered from ${users.length})`}</span>
+        {totalPages > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              onClick={() => setPage(p => Math.max(0, p - 1))}
+              disabled={page === 0}
+              style={{
+                padding: '6px 12px',
+                background: page === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)',
+                border: 'none',
+                borderRadius: '6px',
+                color: page === 0 ? colors.text.muted : colors.text.primary,
+                cursor: page === 0 ? 'not-allowed' : 'pointer'
+              }}
+            >← Prev</button>
+            <span>Page {page + 1} of {totalPages}</span>
+            <button
+              onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1}
+              style={{
+                padding: '6px 12px',
+                background: page >= totalPages - 1 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)',
+                border: 'none',
+                borderRadius: '6px',
+                color: page >= totalPages - 1 ? colors.text.muted : colors.text.primary,
+                cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer'
+              }}
+            >Next →</button>
+          </div>
+        )}
+      </div>
+
+      {viewMode === 'table' ? (
+        <DataTable 
+          data={paginatedUsers} 
+          columns={columns} 
+          maxRows={pageSize} 
+          emptyMessage="No users match your filters"
+          onRowClick={onUserClick}
+        />
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
+          {paginatedUsers.map((u: UserEngagement) => (
+            <div 
+              key={u.user_id}
+              onClick={() => onUserClick(u)}
+              style={{
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '12px',
+                padding: '20px',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)'; e.currentTarget.style.borderColor = colors.primary; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)'; e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)'; }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                <div>
+                  <code style={{ fontSize: '11px', color: colors.text.muted, display: 'block', marginBottom: '6px' }}>{u.user_id.substring(0, 20)}...</code>
+                  <Badge color={getUserTypeBadge(u.total_visits).color}>{getUserTypeBadge(u.total_visits).label}</Badge>
+                  {u.countries && <span style={{ marginLeft: '8px', fontSize: '12px' }}>{u.countries}</span>}
+                </div>
+                <div style={{ 
+                  width: '48px', 
+                  height: '48px', 
+                  borderRadius: '50%', 
+                  background: `conic-gradient(${getEngagementColor(u.engagement_score)} ${u.engagement_score}%, rgba(255,255,255,0.1) 0)`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <div style={{ 
+                    width: '38px', 
+                    height: '38px', 
+                    borderRadius: '50%', 
+                    background: '#1e293b',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '12px',
+                    fontWeight: '700',
+                    color: getEngagementColor(u.engagement_score)
+                  }}>
+                    {u.engagement_score}
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <div style={{ color: colors.text.muted, fontSize: '11px', marginBottom: '2px' }}>Visits</div>
+                  <div style={{ color: colors.text.primary, fontWeight: '600' }}>{u.total_visits}</div>
+                </div>
+                <div>
+                  <div style={{ color: colors.text.muted, fontSize: '11px', marginBottom: '2px' }}>Page Views</div>
+                  <div style={{ color: colors.text.primary, fontWeight: '600' }}>{u.total_page_views}</div>
+                </div>
+                <div>
+                  <div style={{ color: colors.text.muted, fontSize: '11px', marginBottom: '2px' }}>Time on Site</div>
+                  <div style={{ color: colors.text.primary, fontWeight: '600' }}>{formatDuration(u.total_time_on_site)}</div>
+                </div>
+                <div>
+                  <div style={{ color: colors.text.muted, fontSize: '11px', marginBottom: '2px' }}>Watch Time</div>
+                  <div style={{ color: colors.text.primary, fontWeight: '600' }}>{formatDuration(u.total_watch_time)}</div>
+                </div>
+              </div>
+              <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: colors.text.muted }}>
+                <span>First: {formatDate(u.first_visit).split(',')[0]}</span>
+                <span>Last: {formatTimeAgo(u.last_visit)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {filteredUsers.length === 0 && (
+        <EmptyState 
+          icon="🔍" 
+          title="No Users Found" 
+          message="Try adjusting your filters or search query"
+        />
+      )}
     </>
   );
 }
@@ -502,20 +742,19 @@ function ActivityTab({ stats, users }: { stats: any; users: UserEngagement[] }) 
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '120px' }}>
             {Array.from({ length: 24 }, (_, hour) => {
               const count = activityByHour[hour] || 0;
-              const height = (count / maxHourCount) * 100;
+              const heightPx = maxHourCount > 0 ? Math.max((count / maxHourCount) * 100, count > 0 ? 4 : 0) : 0;
               return (
-                <div key={hour} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                <div key={hour} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
                   <div 
                     style={{ 
                       width: '100%', 
-                      height: `${height}%`, 
-                      minHeight: count > 0 ? '2px' : '0',
+                      height: `${heightPx}px`,
                       background: gradients.mixed, 
                       borderRadius: '2px 2px 0 0',
                     }} 
                     title={`${hour}:00 - ${count} users`}
                   />
-                  {hour % 4 === 0 && <span style={{ fontSize: '9px', color: colors.text.muted }}>{hour}</span>}
+                  {hour % 4 === 0 && <span style={{ fontSize: '9px', color: colors.text.muted, marginTop: '4px' }}>{hour}</span>}
                 </div>
               );
             })}
