@@ -391,6 +391,8 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     // Try to start a cast session
     // This will show the device picker (Chromecast or AirPlay depending on browser)
     const connected = await cast.requestSession();
+    console.log('[VideoPlayer] requestSession returned:', connected, 'lastError:', cast.lastError);
+    
     if (connected) {
       const media = getCastMedia();
       if (media) {
@@ -401,7 +403,19 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
         }
       }
     }
-  }, [cast, getCastMedia]);
+    
+    // If there's an error from the cast hook that wasn't shown yet, show it
+    // Note: The onError callback should have already set castError, but check just in case
+    if (!connected && cast.lastError && !castError) {
+      setCastError(cast.lastError);
+      if (castErrorTimeoutRef.current) {
+        clearTimeout(castErrorTimeoutRef.current);
+      }
+      castErrorTimeoutRef.current = setTimeout(() => {
+        setCastError(null);
+      }, 8000);
+    }
+  }, [cast, getCastMedia, castError, streamUrl]);
 
   // Fetch sources for a specific provider
   const fetchSources = async (providerName: string, force: boolean = false): Promise<any[] | null> => {
