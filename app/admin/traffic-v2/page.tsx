@@ -62,6 +62,7 @@ export default function TrafficV2Page() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TrafficTab>('overview');
   const [timeRange, setTimeRange] = useState('7d');
+  const [referrerLimit, setReferrerLimit] = useState(100);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -69,7 +70,7 @@ export default function TrafficV2Page() {
       const days = timeRange === '24h' ? 1 : timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : 365;
       
       const [trafficRes, presenceRes] = await Promise.all([
-        fetch(`/api/admin/analytics/traffic-sources?days=${days}`),
+        fetch(`/api/admin/analytics/traffic-sources?days=${days}&limit=${referrerLimit}`),
         fetch('/api/admin/analytics/presence-stats?minutes=30'),
       ]);
       
@@ -87,7 +88,7 @@ export default function TrafficV2Page() {
     } finally {
       setLoading(false);
     }
-  }, [timeRange]);
+  }, [timeRange, referrerLimit]);
 
   useEffect(() => {
     fetchData();
@@ -149,7 +150,7 @@ export default function TrafficV2Page() {
 
       {activeTab === 'overview' && <OverviewTab trafficData={trafficData} presenceStats={presenceStats} />}
       {activeTab === 'sources' && <SourcesTab trafficData={trafficData} />}
-      {activeTab === 'referrers' && <ReferrersTab trafficData={trafficData} />}
+      {activeTab === 'referrers' && <ReferrersTab trafficData={trafficData} referrerLimit={referrerLimit} setReferrerLimit={setReferrerLimit} />}
       {activeTab === 'bots' && <BotsTab trafficData={trafficData} />}
       {activeTab === 'presence' && <PresenceTab presenceStats={presenceStats} unifiedStats={unifiedStats} />}
       {activeTab === 'geographic' && <GeographicTab unifiedStats={unifiedStats} trafficData={trafficData} />}
@@ -316,7 +317,7 @@ function SourcesTab({ trafficData }: { trafficData: TrafficData | null }) {
   );
 }
 
-function ReferrersTab({ trafficData }: { trafficData: TrafficData | null }) {
+function ReferrersTab({ trafficData, referrerLimit, setReferrerLimit }: { trafficData: TrafficData | null; referrerLimit: number; setReferrerLimit: (limit: number) => void }) {
   const [showFullUrls, setShowFullUrls] = useState(false);
   
   const domainColumns = [
@@ -344,9 +345,37 @@ function ReferrersTab({ trafficData }: { trafficData: TrafficData | null }) {
     { key: 'last_hit', header: 'Last Hit', render: (r: any) => formatDate(r.last_hit) },
   ];
 
+  const limitOptions = [50, 100, 250, 500, 1000, 10000];
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+      {/* Controls Row */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+        {/* Limit Selector */}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ color: colors.text.muted, fontSize: '14px' }}>Show:</span>
+          {limitOptions.map((limit) => (
+            <button
+              key={limit}
+              onClick={() => setReferrerLimit(limit)}
+              style={{
+                padding: '6px 12px',
+                background: referrerLimit === limit ? colors.primary : 'rgba(255,255,255,0.05)',
+                border: '1px solid',
+                borderColor: referrerLimit === limit ? colors.primary : 'rgba(255,255,255,0.1)',
+                borderRadius: '6px',
+                color: referrerLimit === limit ? 'white' : colors.text.muted,
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: limit === 10000 ? '600' : '400',
+              }}
+            >
+              {limit === 10000 ? 'All' : limit}
+            </button>
+          ))}
+        </div>
+
+        {/* View Toggle */}
         <button
           onClick={() => setShowFullUrls(!showFullUrls)}
           style={{
@@ -367,21 +396,21 @@ function ReferrersTab({ trafficData }: { trafficData: TrafficData | null }) {
       </div>
       
       {showFullUrls ? (
-        <Card title="Detailed Referrer URLs" icon="📋">
+        <Card title={`Detailed Referrer URLs (${trafficData?.detailedReferrers?.length || 0} URLs)`} icon="📋">
           <DataTable 
             data={trafficData?.detailedReferrers || []} 
             columns={urlColumns} 
             emptyMessage="No referrer data yet"
-            maxRows={40}
+            maxRows={referrerLimit}
           />
         </Card>
       ) : (
-        <Card title="Top Referring Domains" icon="🔗">
+        <Card title={`Top Referring Domains (${trafficData?.topReferrers?.length || 0} domains)`} icon="🔗">
           <DataTable 
             data={trafficData?.topReferrers || []} 
             columns={domainColumns} 
             emptyMessage="No referrer data yet"
-            maxRows={20}
+            maxRows={referrerLimit}
           />
         </Card>
       )}
