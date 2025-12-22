@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
 import type { MediaItem } from '@/types/media';
+import { queueSync } from '@/lib/sync/auto-sync';
 
 export interface WatchlistItem {
   id: number | string;
@@ -47,11 +48,13 @@ export function WatchlistProvider({ children }: { children: ReactNode }) {
     setIsLoaded(true);
   }, []);
 
-  // Save to localStorage when items change
+  // Save to localStorage when items change and trigger sync
   useEffect(() => {
     if (isLoaded) {
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+        // Queue sync to server when watchlist changes
+        queueSync();
       } catch (err) {
         console.error('[Watchlist] Error saving to localStorage:', err);
       }

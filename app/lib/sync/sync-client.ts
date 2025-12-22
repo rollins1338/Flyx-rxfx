@@ -236,9 +236,29 @@ export function collectLocalSyncData(): SyncData {
   // Collect profile
   const profile = getAccountProfile();
   
-  // Collect watch progress
+  // Collect watch progress - transform to sync format
   const watchProgressRaw = localStorage.getItem('flyx_watch_progress');
-  const watchProgress = watchProgressRaw ? JSON.parse(watchProgressRaw) : {};
+  let watchProgress: Record<string, any> = {};
+  
+  if (watchProgressRaw) {
+    const rawProgress = JSON.parse(watchProgressRaw);
+    // Transform each item to ensure it has the required sync fields
+    for (const [key, item] of Object.entries(rawProgress)) {
+      const progressItem = item as any;
+      watchProgress[key] = {
+        contentId: progressItem.contentId || key,
+        contentType: progressItem.contentType || 'movie',
+        title: progressItem.title,
+        poster: progressItem.poster,
+        progress: progressItem.completionPercentage || progressItem.progress || 0,
+        currentTime: progressItem.currentTime || 0,
+        duration: progressItem.duration || 0,
+        seasonNumber: progressItem.seasonNumber,
+        episodeNumber: progressItem.episodeNumber,
+        lastWatched: progressItem.lastWatched || Date.now(),
+      };
+    }
+  }
   
   // Collect watchlist
   const watchlistRaw = localStorage.getItem('flyx_watchlist');

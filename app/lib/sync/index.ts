@@ -46,5 +46,13 @@ export {
   getLastSuccessfulProvider,
 } from './sync-client';
 
+// Auto-sync utilities
+export {
+  queueSync,
+  performSync,
+  cancelPendingSync,
+  isSyncInProgress,
+} from './auto-sync';
+
 // React hook
 export { useSync } from './useSync';

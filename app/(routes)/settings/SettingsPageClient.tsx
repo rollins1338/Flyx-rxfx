@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import SyncSettings from '@/components/settings/SyncSettings';
 import ProviderSettings from '@/components/settings/ProviderSettings';
 import {
@@ -65,6 +66,14 @@ export default function SettingsPageClient() {
 
   return (
     <div className={styles.container}>
+      {/* Back Button */}
+      <Link href="/" className={styles.backButton}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M19 12H5M12 19l-7-7 7-7" />
+        </svg>
+        <span>Back to Home</span>
+      </Link>
+
       <div className={styles.header}>
         <h1 className={styles.title}>Settings</h1>
         <p className={styles.subtitle}>
