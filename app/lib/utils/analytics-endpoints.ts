@@ -13,22 +13,17 @@
  *   const url = getAnalyticsEndpoint('presence'); // Returns CF or Vercel URL
  */
 
+// Hardcoded fallback for CF analytics worker URL
+const CF_ANALYTICS_WORKER_FALLBACK = 'https://flyx-analytics.vynx.workers.dev';
+
 function getCfAnalyticsDedicatedWorkerUrl(): string | null {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-  
-  // Check for dedicated analytics worker URL (preferred)
-  // No caching - env vars are inlined at build time anyway
-  return process.env.NEXT_PUBLIC_CF_ANALYTICS_WORKER_URL || null;
+  // NEXT_PUBLIC_ env vars are inlined at build time
+  // Use hardcoded fallback if env var not set (ensures D1 is always used)
+  return process.env.NEXT_PUBLIC_CF_ANALYTICS_WORKER_URL || CF_ANALYTICS_WORKER_FALLBACK;
 }
 
 function getCfAnalyticsUrl(): string | null {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-  
-  // Check for CF analytics URL (legacy - routes through main proxy)
+  // NEXT_PUBLIC_ env vars are inlined at build time
   return process.env.NEXT_PUBLIC_CF_ANALYTICS_URL || null;
 }
 
