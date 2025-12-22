@@ -102,7 +102,7 @@ export default function TrafficV2Page() {
     { id: 'sources', label: 'Sources', icon: '🌐', count: trafficData?.sourceTypeStats?.length },
     { id: 'referrers', label: 'Referrers', icon: '🔗', count: trafficData?.topReferrers?.length },
     { id: 'bots', label: 'Bots', icon: '🤖', count: trafficData?.botStats?.length },
-    { id: 'presence', label: 'Live', icon: '🟢', count: presenceStats?.totals?.total_active },
+    { id: 'presence', label: 'Live', icon: '🟢', count: unifiedStats.liveUsers },
     { id: 'geographic', label: 'Geographic', icon: '🌍', count: unifiedStats.topCountries?.length },
   ];
 
@@ -140,7 +140,7 @@ export default function TrafficV2Page() {
           icon="📈" 
           color={colors.pink} 
         />
-        <StatCard title="Active Now" value={presenceStats?.totals?.total_active || unifiedStats.liveUsers} icon="🟢" color={colors.success} pulse />
+        <StatCard title="Active Now" value={unifiedStats.liveUsers} icon="🟢" color={colors.success} pulse />
         <StatCard title="Countries" value={unifiedStats.topCountries?.length || 0} icon="🌍" color={colors.purple} />
         <StatCard title="Page Views (24h)" value={unifiedStats.pageViews} icon="👁️" color={colors.cyan} />
       </Grid>
@@ -149,7 +149,7 @@ export default function TrafficV2Page() {
         <TabSelector tabs={tabs} activeTab={activeTab} onChange={(id) => setActiveTab(id as TrafficTab)} />
       </div>
 
-      {activeTab === 'overview' && <OverviewTab trafficData={trafficData} presenceStats={presenceStats} />}
+      {activeTab === 'overview' && <OverviewTab trafficData={trafficData} presenceStats={presenceStats} unifiedStats={unifiedStats} />}
       {activeTab === 'sources' && <SourcesTab trafficData={trafficData} />}
       {activeTab === 'referrers' && <ReferrersTab trafficData={trafficData} referrerLimit={referrerLimit} setReferrerLimit={setReferrerLimit} />}
       {activeTab === 'bots' && <BotsTab trafficData={trafficData} />}
@@ -159,7 +159,14 @@ export default function TrafficV2Page() {
   );
 }
 
-function OverviewTab({ trafficData, presenceStats }: { trafficData: TrafficData | null; presenceStats: PresenceStats | null }) {
+function OverviewTab({ trafficData, presenceStats, unifiedStats }: { trafficData: TrafficData | null; presenceStats: PresenceStats | null; unifiedStats: any }) {
+  // Build activity breakdown from unified stats (5 min window) for consistency
+  const activityBreakdown = [
+    { activity_type: 'browsing', user_count: unifiedStats.liveBrowsing, truly_active: unifiedStats.liveBrowsing },
+    { activity_type: 'livetv', user_count: unifiedStats.liveTVViewers, truly_active: unifiedStats.liveTVViewers },
+    { activity_type: 'watching', user_count: unifiedStats.liveWatching, truly_active: unifiedStats.liveWatching },
+  ].filter(a => a.user_count > 0);
+  
   return (
     <Grid cols={2} gap="24px">
       {/* Traffic by Medium */}
@@ -230,11 +237,11 @@ function OverviewTab({ trafficData, presenceStats }: { trafficData: TrafficData 
         )}
       </Card>
 
-      {/* Current Activity */}
-      {presenceStats?.activityBreakdown?.length ? (
+      {/* Current Activity - Using unified stats (5 min window) for consistency */}
+      {activityBreakdown.length > 0 ? (
         <Card title="Current Activity" icon="🎬">
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {presenceStats.activityBreakdown.map((activity) => {
+            {activityBreakdown.map((activity) => {
               const icons: Record<string, string> = { watching: '▶️', browsing: '🔍', livetv: '📺' };
               const actColors: Record<string, string> = { watching: colors.purple, browsing: colors.info, livetv: colors.warning };
               return (
@@ -245,7 +252,7 @@ function OverviewTab({ trafficData, presenceStats }: { trafficData: TrafficData 
                     </span>
                     <span style={{ color: colors.text.muted }}>{activity.user_count} users ({activity.truly_active} active)</span>
                   </div>
-                  <ProgressBar value={activity.user_count} max={presenceStats.totals.total_active || 1} color={actColors[activity.activity_type] || colors.primary} height={8} />
+                  <ProgressBar value={activity.user_count} max={unifiedStats.liveUsers || 1} color={actColors[activity.activity_type] || colors.primary} height={8} />
                 </div>
               );
             })}
@@ -471,8 +478,8 @@ function PresenceTab({ presenceStats, unifiedStats }: { presenceStats: PresenceS
   return (
     <>
       <Grid cols="auto-fit" minWidth="180px" gap="16px">
-        <StatCard title="Total Active" value={presenceStats?.totals?.total_active || unifiedStats.liveUsers} icon="👥" color={colors.success} pulse size="lg" />
-        <StatCard title="Truly Active" value={presenceStats?.totals?.truly_active || unifiedStats.trulyActiveUsers} icon="🎯" color={colors.primary} subtitle="Last 60 seconds" />
+        <StatCard title="Total Active" value={unifiedStats.liveUsers} icon="👥" color={colors.success} pulse size="lg" />
+        <StatCard title="Truly Active" value={unifiedStats.trulyActiveUsers} icon="🎯" color={colors.primary} subtitle="Last 60 seconds" />
         <StatCard title="Watching VOD" value={unifiedStats.liveWatching} icon="▶️" color={colors.purple} />
         <StatCard title="Live TV" value={unifiedStats.liveTVViewers} icon="📺" color={colors.warning} />
         <StatCard title="Browsing" value={unifiedStats.liveBrowsing} icon="🔍" color={colors.info} />

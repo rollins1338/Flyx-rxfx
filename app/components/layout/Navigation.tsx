@@ -129,10 +129,10 @@ export const Navigation: React.FC<NavigationProps> = ({
     { path: '/series', label: 'Series' },
     { path: '/anime', label: 'Anime' },
     { path: '/livetv', label: 'Live TV' },
+    { path: '/watchlist', label: 'Watchlist' },
   ];
 
   const secondaryNavItems = [
-    { path: '/watchlist', label: 'Watchlist' },
     { path: '/settings', label: 'Settings' },
     { path: '/about', label: 'About' },
     { path: '/reverse-engineering', label: 'How It Works' },

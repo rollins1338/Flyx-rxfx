@@ -1721,17 +1721,15 @@ async function handleGetUnifiedStats(
         WHERE is_active = 1 AND last_heartbeat >= ?
       `).bind(oneMinAgo, fiveMinAgo).first(),
 
-      // User stats (DAU, WAU, MAU, total)
+      // User stats (DAU, WAU, MAU from page_views for consistency with unique visitors)
       env.DB.prepare(`
         SELECT 
           COUNT(DISTINCT user_id) as total,
-          COUNT(DISTINCT CASE WHEN last_seen >= ? THEN user_id END) as dau,
-          COUNT(DISTINCT CASE WHEN last_seen >= ? THEN user_id END) as wau,
-          COUNT(DISTINCT CASE WHEN last_seen >= ? THEN user_id END) as mau,
-          COUNT(DISTINCT CASE WHEN first_seen >= ? THEN user_id END) as new_today,
-          COUNT(DISTINCT CASE WHEN first_seen < ? AND last_seen >= ? THEN user_id END) as returning_users
-        FROM user_activity
-      `).bind(oneDayAgo, sevenDaysAgo, thirtyDaysAgo, oneDayAgo, oneDayAgo, oneDayAgo).first(),
+          COUNT(DISTINCT CASE WHEN entry_time >= ? THEN user_id END) as dau,
+          COUNT(DISTINCT CASE WHEN entry_time >= ? THEN user_id END) as wau,
+          COUNT(DISTINCT CASE WHEN entry_time >= ? THEN user_id END) as mau
+        FROM page_views
+      `).bind(oneDayAgo, sevenDaysAgo, thirtyDaysAgo).first(),
 
       // Content/watch stats (last 24h)
       env.DB.prepare(`
@@ -1802,8 +1800,8 @@ async function handleGetUnifiedStats(
         dau: userStats?.dau || 0,
         wau: userStats?.wau || 0,
         mau: userStats?.mau || 0,
-        newToday: userStats?.new_today || 0,
-        returning: userStats?.returning_users || 0,
+        newToday: 0, // Not tracked in page_views
+        returning: 0, // Not tracked in page_views
       },
       content: {
         totalSessions: Number(contentStats?.total_sessions) || 0,
