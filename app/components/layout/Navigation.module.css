@@ -4,7 +4,7 @@
   top: 0;
   left: 0;
   right: 0;
-  z-index: 1000;
+  z-index: 1002;
   background: transparent;
   transition: background 0.3s ease, padding 0.3s ease;
   padding: 1rem 0;
@@ -15,6 +15,10 @@
   backdrop-filter: blur(16px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   padding: 0.75rem 0;
+}
+
+.navigation.menuOpen {
+  background: rgb(8, 8, 12);
 }
 
 .navContainer {
@@ -446,9 +450,9 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(8, 8, 12, 0.98);
+  background: rgb(8, 8, 12);
   backdrop-filter: blur(20px);
-  z-index: 999;
+  z-index: 1001;
   padding-top: 72px;
   opacity: 0;
   visibility: hidden;
@@ -462,6 +466,7 @@
 
 .mobileMenuContent {
   padding: 1.5rem;
+  padding-bottom: 100px;
   max-height: calc(100vh - 72px);
   overflow-y: auto;
 }
