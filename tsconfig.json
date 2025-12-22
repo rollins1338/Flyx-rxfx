@@ -70,6 +70,7 @@
     "scripts/**/*",
     "cloudflare-proxy/**/*",
     "rpi-proxy/**/*",
+    "hetzner-proxy/**/*",
     "cf-analytics-worker/**/*",
     "cf-sync-worker/**/*",
     "**/__tests__/**/*",

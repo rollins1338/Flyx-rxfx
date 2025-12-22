@@ -28,10 +28,8 @@
   box-shadow: 0 8px 24px rgba(139, 92, 246, 0.25);
 }
 
-.iconWrapper svg {
-  width: 26px;
-  height: 26px;
-  color: white;
+.headerEmoji {
+  font-size: 1.5rem;
 }
 
 .headerText {
@@ -69,17 +67,8 @@
   gap: 0.5rem;
 }
 
-.statusDot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.3);
-  transition: all 0.3s ease;
-}
-
-.statusBar.connected .statusDot {
-  background: #22c55e;
-  box-shadow: 0 0 12px rgba(34, 197, 94, 0.5);
+.statusEmoji {
+  font-size: 0.75rem;
 }
 
 .statusLabel {
@@ -336,6 +325,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 1.5rem;
 }
 
 .setupIcon[data-variant="new"] {
@@ -343,22 +333,9 @@
   border: 1px solid rgba(34, 197, 94, 0.2);
 }
 
-.setupIcon[data-variant="new"] svg {
-  color: #22c55e;
-}
-
 .setupIcon[data-variant="import"] {
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(99, 102, 241, 0.1));
   border: 1px solid rgba(59, 130, 246, 0.2);
-}
-
-.setupIcon[data-variant="import"] svg {
-  color: #3b82f6;
-}
-
-.setupIcon svg {
-  width: 26px;
-  height: 26px;
 }
 
 .setupTitle {

@@ -51,6 +51,11 @@
   height: 36px;
 }
 
+.logoEmoji {
+  font-size: 1.75rem;
+  line-height: 1;
+}
+
 .logoText {
   font-size: 1.375rem;
   font-weight: 700;
@@ -192,15 +197,34 @@
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
-  color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
   transition: all 0.2s ease;
+  font-size: 1.125rem;
 }
 
 .searchButton:hover {
   background: rgba(255, 255, 255, 0.1);
-  color: #00f5ff;
   border-color: rgba(0, 245, 255, 0.3);
+}
+
+.profileButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(99, 102, 241, 0.1));
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 1.125rem;
+}
+
+.profileButton:hover {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.25), rgba(99, 102, 241, 0.15));
+  border-color: rgba(139, 92, 246, 0.4);
+  transform: translateY(-1px);
 }
 
 .discordButton {
@@ -342,9 +366,9 @@
   background: linear-gradient(135deg, #00f5ff, #8b5cf6);
   border: none;
   border-radius: 12px;
-  color: white;
   cursor: pointer;
   transition: opacity 0.2s ease;
+  font-size: 1.25rem;
 }
 
 .searchSubmit:hover {
