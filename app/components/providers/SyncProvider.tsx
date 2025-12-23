@@ -12,10 +12,10 @@ import { getSyncStatus, collectLocalSyncData, applyRemoteSyncData, mergeSyncData
 import { getSyncEndpoint, isUsingCloudflareSyncWorker } from '@/lib/utils/sync-endpoints';
 
 // Minimum time between syncs (prevent spam on rapid navigation)
-const MIN_SYNC_INTERVAL_MS = 3000; // 3 seconds (reduced from 5)
+const MIN_SYNC_INTERVAL_MS = 2000; // 2 seconds
 
-// Periodic sync interval
-const PERIODIC_SYNC_INTERVAL_MS = 15000; // 15 seconds (reduced from 20)
+// Periodic sync interval - heartbeat every 10 seconds
+const PERIODIC_SYNC_INTERVAL_MS = 10000; // 10 seconds
 
 // Context to expose sync state and manual refresh
 interface SyncContextType {
@@ -170,9 +170,10 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    // Periodic sync to catch changes from other devices
+    // Periodic sync heartbeat - runs every 10 seconds to keep data in sync
     const periodicSyncInterval = setInterval(() => {
-      performAutoSync(false, false);
+      console.log('[SyncProvider] Heartbeat sync...');
+      performAutoSync(true, false); // Force pull to get latest from server
     }, PERIODIC_SYNC_INTERVAL_MS);
 
     document.addEventListener('visibilitychange', handleVisibilityChange);

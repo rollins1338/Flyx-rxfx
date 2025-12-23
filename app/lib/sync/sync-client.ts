@@ -398,8 +398,8 @@ export function applyRemoteSyncData(data: SyncData): void {
 
 /**
  * Merge local and remote data
- * For watchlist: remote wins (server is source of truth for deletions)
- * For watch progress: newest timestamp wins
+ * For both watchlist AND watch progress: remote wins for deletions
+ * Server is the source of truth - if something is deleted on one device, it stays deleted
  */
 export function mergeSyncData(local: SyncData, remote: SyncData, strategy: 'local' | 'remote' | 'newest' = 'newest'): SyncData {
   const merged: SyncData = {
@@ -413,37 +413,67 @@ export function mergeSyncData(local: SyncData, remote: SyncData, strategy: 'loca
     schemaVersion: SYNC_SCHEMA_VERSION,
   };
   
-  // Merge watch progress (keep newest per item)
-  const allProgressKeys = new Set([
-    ...Object.keys(local.watchProgress || {}),
-    ...Object.keys(remote.watchProgress || {}),
-  ]);
+  const remoteLastSync = remote.lastSyncedAt || 0;
+  const localLastSync = local.lastSyncedAt || 0;
   
-  for (const key of allProgressKeys) {
-    const localItem = local.watchProgress?.[key];
-    const remoteItem = remote.watchProgress?.[key];
+  // Merge watch progress - REMOTE WINS for deletions (same as watchlist)
+  // If an item exists locally but not remotely, it was deleted on another device
+  // Only keep local-only items if they were modified AFTER the remote sync timestamp
+  if (strategy === 'remote' || remoteLastSync > localLastSync) {
+    // Remote is newer - start with remote watch progress
+    // Only add local items that were updated AFTER the remote sync
+    const remoteKeys = new Set(Object.keys(remote.watchProgress || {}));
     
-    if (!localItem) {
-      merged.watchProgress[key] = remoteItem!;
-    } else if (!remoteItem) {
-      merged.watchProgress[key] = localItem;
-    } else {
-      if (strategy === 'local') {
-        merged.watchProgress[key] = localItem;
-      } else if (strategy === 'remote') {
-        merged.watchProgress[key] = remoteItem;
+    // Start with remote watch progress
+    for (const [key, item] of Object.entries(remote.watchProgress || {})) {
+      merged.watchProgress[key] = item;
+    }
+    
+    // Add local items that are NEW or UPDATED after remote sync
+    for (const [key, item] of Object.entries(local.watchProgress || {})) {
+      if (!remoteKeys.has(key)) {
+        // Item exists locally but not remotely
+        // Only keep if it was watched AFTER the remote sync (new local watch)
+        if (item.lastWatched > remoteLastSync) {
+          console.log(`[Sync] Keeping new local watch progress: ${key} (watched at ${item.lastWatched}, remote sync at ${remoteLastSync})`);
+          merged.watchProgress[key] = item;
+        } else {
+          console.log(`[Sync] Removing deleted watch progress: ${key} (was deleted on another device)`);
+        }
       } else {
-        merged.watchProgress[key] = localItem.lastWatched > remoteItem.lastWatched ? localItem : remoteItem;
+        // Item exists in both - keep the one with newer lastWatched
+        const remoteItem = remote.watchProgress![key];
+        if (item.lastWatched > remoteItem.lastWatched) {
+          merged.watchProgress[key] = item;
+        }
+      }
+    }
+  } else {
+    // Local is newer - start with local watch progress
+    const localKeys = new Set(Object.keys(local.watchProgress || {}));
+    
+    // Start with local watch progress
+    for (const [key, item] of Object.entries(local.watchProgress || {})) {
+      merged.watchProgress[key] = item;
+    }
+    
+    // Add remote items that are NEW or UPDATED after local sync
+    for (const [key, item] of Object.entries(remote.watchProgress || {})) {
+      if (!localKeys.has(key)) {
+        if (item.lastWatched > localLastSync) {
+          merged.watchProgress[key] = item;
+        }
+      } else {
+        // Item exists in both - keep the one with newer lastWatched
+        const localItem = local.watchProgress![key];
+        if (item.lastWatched > localItem.lastWatched) {
+          merged.watchProgress[key] = item;
+        }
       }
     }
   }
   
   // Merge watchlist - REMOTE WINS for deletions
-  // If remote has a newer lastSyncedAt, use remote as base (handles deletions)
-  // Otherwise merge with local additions
-  const remoteLastSync = remote.lastSyncedAt || 0;
-  const localLastSync = local.lastSyncedAt || 0;
-  
   if (strategy === 'remote' || remoteLastSync > localLastSync) {
     // Remote is newer - use remote watchlist as base
     // Only add local items that were added AFTER the remote sync
