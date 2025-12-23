@@ -34,40 +34,42 @@ Required environment variables:
 
 ### Option B: Cloudflare Pages (100% Cloudflare Stack)
 
-Deploy the entire app to Cloudflare using `@opennextjs/cloudflare`:
+Deploy the entire app to Cloudflare Pages using `@opennextjs/cloudflare`:
 
-[![Deploy to Cloudflare Pages](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Vynx-Velvet/flyx-main)
-
-<details>
-<summary>Manual Cloudflare Pages deployment</summary>
-
-```bash
-# Install dependencies
-npm install
-
-# Install OpenNext Cloudflare adapter
-npm install @opennextjs/cloudflare
-
-# Build for Cloudflare
-npx opennextjs-cloudflare build
-
-# Deploy to Cloudflare Pages
-npx wrangler pages deploy .open-next/assets --project-name=flyx
-```
-
-**Or connect via Cloudflare Dashboard:**
+**Via Cloudflare Dashboard (Recommended):**
 
 1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com) → Pages
 2. Click "Create a project" → "Connect to Git"
-3. Select the `flyx-main` repository
+3. Select the `Vynx-Velvet/flyx-main` repository
 4. Configure build settings:
-   - **Build command:** `npx opennextjs-cloudflare build`
+   - **Build command:** `npm run build:cloudflare`
    - **Build output directory:** `.open-next/assets`
    - **Root directory:** `/`
 5. Add environment variables:
    - `TMDB_API_KEY` - Your TMDB Bearer token
    - `NEXT_PUBLIC_TMDB_API_KEY` - Your TMDB API key
 6. Deploy!
+
+<details>
+<summary>Manual CLI deployment</summary>
+
+```bash
+# Clone the repo
+git clone https://github.com/Vynx-Velvet/flyx-main.git
+cd flyx-main
+
+# Install dependencies
+npm install
+
+# Build for Cloudflare
+npm run build:cloudflare
+
+# Deploy to Cloudflare Pages
+npm run deploy:cloudflare
+
+# Or preview locally first
+npm run preview:cloudflare
+```
 
 </details>
 
@@ -298,11 +300,19 @@ flyx-main/
 ## Scripts
 
 ```bash
-npm run dev          # Development server
-npm run build        # Production build
-npm run db:init      # Initialize database
-npm run db:migrate   # Run migrations
-npm run admin:create # Create admin user
+# Development
+npm run dev              # Start dev server
+npm run build            # Build for Vercel
+npm run build:cloudflare # Build for Cloudflare Pages
+npm run deploy:cloudflare # Deploy to Cloudflare Pages
+npm run preview:cloudflare # Preview Cloudflare build locally
+
+# Database
+npm run db:init          # Initialize database
+npm run db:migrate       # Run migrations
+
+# Admin
+npm run admin:create     # Create admin user
 ```
 
 ---

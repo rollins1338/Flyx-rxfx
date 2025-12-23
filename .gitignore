@@ -15,6 +15,11 @@
 /docs
 .vscode
 /data
+
+# OpenNext / Cloudflare build output
+.open-next
+.wrangler
+
 # Chromium executable (downloaded locally)
 /bin
 /Vixen-Extractor
