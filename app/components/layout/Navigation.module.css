@@ -18,16 +18,9 @@
 }
 
 .navigation.menuOpen {
-  background: rgba(8, 8, 12, 0.98);
-  backdrop-filter: blur(20px);
+  background: #08080c !important;
+  backdrop-filter: none;
   z-index: 1002;
-}
-
-/* Mobile: Always show solid background when menu is open */
-@media (max-width: 768px) {
-  .navigation.menuOpen {
-    background: #08080c;
-  }
 }
 
 .navContainer {
@@ -38,6 +31,11 @@
   align-items: center;
   justify-content: space-between;
   gap: 2rem;
+}
+
+/* Ensure nav container has solid background when menu open */
+.menuOpen .navContainer {
+  background: #08080c;
 }
 
 /* Logo */

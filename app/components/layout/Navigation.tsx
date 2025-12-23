@@ -34,11 +34,13 @@ export const Navigation: React.FC<NavigationProps> = ({
   const [githubStats, setGithubStats] = useState<GitHubStats | null>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
 
-  // Fetch GitHub stats
+  // Fetch GitHub stats - fail silently on CORS errors
   useEffect(() => {
     const fetchGitHubStats = async () => {
       try {
-        const response = await fetch('https://api.github.com/repos/Vynx-Velvet/Flyx-Main');
+        const response = await fetch('https://api.github.com/repos/Vynx-Velvet/Flyx-Main', {
+          headers: { 'Accept': 'application/vnd.github.v3+json' },
+        });
         if (response.ok) {
           const data = await response.json();
           setGithubStats({
@@ -46,8 +48,8 @@ export const Navigation: React.FC<NavigationProps> = ({
             forks: data.forks_count || 0,
           });
         }
-      } catch (error) {
-        console.error('Failed to fetch GitHub stats:', error);
+      } catch {
+        // Silently fail - GitHub API can have CORS issues from browser
       }
     };
     
