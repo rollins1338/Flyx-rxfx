@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAnalytics } from '@/components/analytics/AnalyticsProvider';
+import { SYNC_DATA_CHANGED_EVENT } from '@/lib/sync';
 import type { WatchProgress } from '@/lib/services/user-tracking';
 
 interface ContentMetadata {
@@ -20,10 +21,12 @@ interface ContinueWatchingItem extends WatchProgress {
 
 export default function ContinueWatching() {
   const router = useRouter();
-  const { getAllWatchProgress, removeWatchProgress, trackEvent } = useAnalytics();
+  const analytics = useAnalytics();
+  const { getAllWatchProgress, removeWatchProgress, trackEvent } = analytics;
   const [items, setItems] = useState<ContinueWatchingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [metadataCache, setMetadataCache] = useState<Record<string, ContentMetadata>>({});
+  const [reloadTrigger, setReloadTrigger] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Scroll handlers
@@ -72,12 +75,29 @@ export default function ContinueWatching() {
     }
   }, [metadataCache]);
 
+  // Listen for sync data changes and reload
+  useEffect(() => {
+    const handleSyncDataChanged = () => {
+      console.log('[ContinueWatching] Sync data changed, reloading...');
+      // Reload watch progress from localStorage
+      if (analytics.reloadWatchProgress) {
+        analytics.reloadWatchProgress();
+      }
+      // Trigger a reload of items
+      setReloadTrigger(prev => prev + 1);
+    };
+
+    window.addEventListener(SYNC_DATA_CHANGED_EVENT, handleSyncDataChanged);
+    return () => window.removeEventListener(SYNC_DATA_CHANGED_EVENT, handleSyncDataChanged);
+  }, [analytics]);
+
   // Load continue watching items
   useEffect(() => {
     const loadItems = async () => {
       setLoading(true);
       try {
         const progressItems = getAllWatchProgress();
+        console.log('[ContinueWatching] Loading items, found:', progressItems.length);
         const itemsWithMetadata: ContinueWatchingItem[] = [];
         
         for (const item of progressItems.slice(0, 10)) {
@@ -97,7 +117,7 @@ export default function ContinueWatching() {
     };
 
     loadItems();
-  }, [getAllWatchProgress, fetchMetadata]);
+  }, [getAllWatchProgress, fetchMetadata, reloadTrigger]);
 
   const handleItemClick = useCallback((item: ContinueWatchingItem) => {
     trackEvent('continue_watching_clicked', {

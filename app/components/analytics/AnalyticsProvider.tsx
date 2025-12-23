@@ -39,6 +39,7 @@ interface AnalyticsContextType {
   getAllWatchProgress: () => any[];
   getViewingHistory: () => any[];
   removeWatchProgress: (contentId: string, season?: number, episode?: number) => boolean;
+  reloadWatchProgress: () => void;
 
   // Live activity
   updateActivity: (activity: {
@@ -220,6 +221,10 @@ export default function AnalyticsProvider({ children }: AnalyticsProviderProps) 
     return userTrackingService.removeWatchProgress(contentId, season, episode);
   }, []);
 
+  const reloadWatchProgress = useCallback(() => {
+    userTrackingService.reloadWatchProgress();
+  }, []);
+
   const updateActivity = useCallback((activity: {
     type: 'browsing' | 'watching' | 'livetv';
     contentId?: string;
@@ -337,6 +342,7 @@ export default function AnalyticsProvider({ children }: AnalyticsProviderProps) 
     getAllWatchProgress,
     getViewingHistory,
     removeWatchProgress,
+    reloadWatchProgress,
     updateActivity,
     trackLiveTVEvent,
     updateWatchTime,
