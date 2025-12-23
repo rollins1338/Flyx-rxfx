@@ -50,6 +50,9 @@ interface LiveStats {
 interface HistoricalPoint {
   time: number;
   count: number;
+  watching?: number;
+  browsing?: number;
+  livetv?: number;
 }
 
 export default function AdminLivePage() {
@@ -58,18 +61,34 @@ export default function AdminLivePage() {
   
   const [activities, setActivities] = useState<LiveActivity[]>([]);
   const [stats, setStats] = useState<LiveStats | null>(null);
-  const [peakToday, setPeakToday] = useState(0);
   const [history, setHistory] = useState<HistoricalPoint[]>([]);
   const [viewMode, setViewMode] = useState<'dashboard' | 'realtime' | 'summary' | 'map'>('dashboard');
   const [refreshRate, setRefreshRate] = useState(5);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
-  // Sync with unified stats
-  useEffect(() => {
-    if (unifiedStats.liveUsers > 0) {
-      setPeakToday(prev => Math.max(prev, unifiedStats.liveUsers));
+  // Get peak from server-side stats (persisted in DB)
+  const peakStats = unifiedStats.peakStats;
+  const peakToday = peakStats?.peakTotal || 0;
+  const peakTime = peakStats?.peakTotalTime || 0;
+
+  // Fetch 12-hour activity history from server
+  const fetchActivityHistory = useCallback(async () => {
+    try {
+      const response = await fetch(getAdminAnalyticsUrl('activity-history', { hours: 12 }));
+      const data = await response.json();
+      if (data.success && data.history) {
+        setHistory(data.history.map((h: any) => ({
+          time: h.time,
+          count: h.total,
+          watching: h.watching,
+          browsing: h.browsing,
+          livetv: h.livetv,
+        })));
+      }
+    } catch (error) {
+      console.error('Failed to fetch activity history:', error);
     }
-  }, [unifiedStats.liveUsers]);
+  }, []);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -79,22 +98,18 @@ export default function AdminLivePage() {
         setActivities(data.activities || []);
         setStats(data.stats);
         setLastUpdate(new Date());
-        
-        // Use unified stats for the count to ensure consistency
-        const currentActive = unifiedStats.liveUsers || data.stats?.totalActive || 0;
-        setPeakToday(prev => Math.max(prev, currentActive));
-        
-        // Add to history for mini chart
-        setHistory(prev => {
-          const newHistory = [...prev, { time: Date.now(), count: currentActive }];
-          // Keep last 30 data points (5 minutes at 10s intervals)
-          return newHistory.slice(-30);
-        });
       }
     } catch (error) {
       console.error('Failed to fetch live stats:', error);
     }
   }, [refreshRate]);
+
+  // Fetch activity history on mount and every 5 minutes
+  useEffect(() => {
+    fetchActivityHistory();
+    const historyInterval = setInterval(fetchActivityHistory, 5 * 60 * 1000);
+    return () => clearInterval(historyInterval);
+  }, [fetchActivityHistory]);
 
   useEffect(() => {
     fetchStats();
@@ -170,25 +185,43 @@ export default function AdminLivePage() {
             <StatCard title="Watching VOD" value={unifiedStats.liveWatching} icon="▶️" color="#7877c6" />
             <StatCard title="Live TV" value={unifiedStats.liveTVViewers} icon="📺" color="#f59e0b" />
             <StatCard title="Browsing" value={unifiedStats.liveBrowsing} icon="🔍" color="#3b82f6" />
-            <StatCard title="Peak Today" value={peakToday} icon="📈" color="#ec4899" />
+            <PeakStatCard title="Peak Today" value={peakToday} time={peakTime} icon="📈" color="#ec4899" />
             <StatCard title="Countries" value={unifiedStats.topCountries.length} icon="🌍" color="#8b5cf6" />
           </div>
 
-          {/* Mini Activity Chart */}
+          {/* 12-Hour Activity Trend Chart */}
           {history.length > 1 && (
             <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '12px', padding: '16px', marginBottom: '24px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <span style={{ color: '#94a3b8', fontSize: '14px' }}>Activity Trend (Last 5 min)</span>
-                <span style={{ color: '#f8fafc', fontWeight: '600' }}>{unifiedStats.liveUsers || 0} active</span>
+                <span style={{ color: '#94a3b8', fontSize: '14px' }}>Activity Trend (Last 12 hours)</span>
+                <span style={{ color: '#f8fafc', fontWeight: '600' }}>{unifiedStats.liveUsers || 0} active now</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '60px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '80px' }}>
                 {history.map((point, i) => {
                   const maxCount = Math.max(...history.map(h => h.count), 1);
                   const height = (point.count / maxCount) * 100;
+                  const isLast = i === history.length - 1;
                   return (
-                    <div key={i} style={{ flex: 1, height: `${Math.max(height, 4)}%`, background: i === history.length - 1 ? '#10b981' : 'rgba(120, 119, 198, 0.6)', borderRadius: '2px', transition: 'height 0.3s' }} title={`${point.count} users`} />
+                    <div 
+                      key={i} 
+                      style={{ 
+                        flex: 1, 
+                        height: `${Math.max(height, 4)}%`, 
+                        background: isLast ? '#10b981' : 'rgba(120, 119, 198, 0.6)', 
+                        borderRadius: '2px', 
+                        transition: 'height 0.3s',
+                        minWidth: '2px',
+                      }} 
+                      title={`${point.count} users at ${new Date(point.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`} 
+                    />
                   );
                 })}
+              </div>
+              {/* Time labels */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '11px', color: '#64748b' }}>
+                <span>{history.length > 0 ? new Date(history[0].time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                <span>{history.length > 0 ? new Date(history[Math.floor(history.length / 2)]?.time || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                <span>Now</span>
               </div>
             </div>
           )}
@@ -336,6 +369,29 @@ function StatCard({ title, value, icon, color, pulse = false }: { title: string;
         <span style={{ color: '#94a3b8', fontSize: '13px' }}>{title}</span>
       </div>
       <div style={{ fontSize: '24px', fontWeight: '700', color: '#f8fafc' }}>{typeof value === 'number' ? value.toLocaleString() : value}</div>
+    </div>
+  );
+}
+
+function PeakStatCard({ title, value, time, icon, color }: { title: string; value: number; time: number; icon: string; color: string }) {
+  const formatPeakTime = (timestamp: number) => {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  return (
+    <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '12px', padding: '16px', borderTop: `3px solid ${color}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+        <span style={{ fontSize: '20px' }}>{icon}</span>
+        <span style={{ color: '#94a3b8', fontSize: '13px' }}>{title}</span>
+      </div>
+      <div style={{ fontSize: '24px', fontWeight: '700', color: '#f8fafc' }}>{value.toLocaleString()}</div>
+      {time > 0 && (
+        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+          at {formatPeakTime(time)}
+        </div>
+      )}
     </div>
   );
 }

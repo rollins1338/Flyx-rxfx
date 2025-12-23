@@ -16,6 +16,7 @@ type AdminEndpoint =
   | 'user-engagement'
   | 'unified-stats'
   | 'admin-analytics'
+  | 'activity-history'
   | 'stats';
 
 /**

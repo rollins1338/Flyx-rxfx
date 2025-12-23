@@ -392,6 +392,12 @@ export default {
           }
           return await handleGetUnifiedStats(url, env, corsHeaders);
 
+        case '/activity-history':
+          if (request.method !== 'GET') {
+            return Response.json({ error: 'Method not allowed' }, { status: 405, headers: corsHeaders });
+          }
+          return await handleGetActivityHistory(url, env, corsHeaders);
+
         case '/events':
         case '/event':
           if (request.method !== 'POST') {
@@ -536,6 +542,35 @@ async function initDatabase(db: D1Database): Promise<void> {
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_bot_hits_name ON bot_hits(bot_name)`),
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_bot_hits_category ON bot_hits(bot_category)`),
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_bot_hits_type ON bot_hits(hit_type)`),
+    // Peak stats tracking table (one row per day)
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS peak_stats (
+        date TEXT PRIMARY KEY,
+        peak_total INTEGER DEFAULT 0,
+        peak_total_time INTEGER,
+        peak_watching INTEGER DEFAULT 0,
+        peak_watching_time INTEGER,
+        peak_livetv INTEGER DEFAULT 0,
+        peak_livetv_time INTEGER,
+        peak_browsing INTEGER DEFAULT 0,
+        peak_browsing_time INTEGER,
+        created_at INTEGER,
+        updated_at INTEGER
+      )
+    `),
+    // Activity history snapshots (for trend charts)
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS activity_snapshots (
+        id TEXT PRIMARY KEY,
+        timestamp INTEGER NOT NULL,
+        total_active INTEGER DEFAULT 0,
+        watching INTEGER DEFAULT 0,
+        browsing INTEGER DEFAULT 0,
+        livetv INTEGER DEFAULT 0,
+        created_at INTEGER
+      )
+    `),
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_activity_snapshots_time ON activity_snapshots(timestamp)`),
   ]);
 }
 
@@ -678,9 +713,145 @@ async function handlePresence(
       now
     ).run();
 
+    // Update peak stats (fire and forget - don't block response)
+    updatePeakStats(env.DB).catch(e => console.error('[Presence] Peak stats error:', e));
+
     return Response.json({ success: true }, { headers: corsHeaders });
   } catch (error) {
     console.error('[Presence] DB error:', error);
+    return Response.json({ error: 'Database error', details: String(error) }, { status: 500, headers: corsHeaders });
+  }
+}
+
+// Update peak stats for today and save activity snapshot
+async function updatePeakStats(db: D1Database): Promise<void> {
+  const now = Date.now();
+  const fiveMinAgo = now - 5 * 60 * 1000;
+  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+
+  try {
+    // Get current live counts
+    const current = await db.prepare(`
+      SELECT 
+        COUNT(*) as total,
+        SUM(CASE WHEN activity_type = 'watching' THEN 1 ELSE 0 END) as watching,
+        SUM(CASE WHEN activity_type = 'browsing' THEN 1 ELSE 0 END) as browsing,
+        SUM(CASE WHEN activity_type = 'livetv' THEN 1 ELSE 0 END) as livetv
+      FROM live_activity 
+      WHERE is_active = 1 AND last_heartbeat >= ?
+    `).bind(fiveMinAgo).first() as { total: number; watching: number; browsing: number; livetv: number } | null;
+
+    if (!current) return;
+
+    const total = current.total || 0;
+    const watching = current.watching || 0;
+    const browsing = current.browsing || 0;
+    const livetv = current.livetv || 0;
+
+    // Save activity snapshot (every 5 minutes - check last snapshot time)
+    const fiveMinutesAgo = now - 5 * 60 * 1000;
+    const lastSnapshot = await db.prepare(`
+      SELECT timestamp FROM activity_snapshots ORDER BY timestamp DESC LIMIT 1
+    `).first() as { timestamp: number } | null;
+
+    if (!lastSnapshot || lastSnapshot.timestamp < fiveMinutesAgo) {
+      // Save new snapshot
+      await db.prepare(`
+        INSERT INTO activity_snapshots (id, timestamp, total_active, watching, browsing, livetv, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).bind(`snap_${now}`, now, total, watching, browsing, livetv, now).run();
+
+      // Clean up old snapshots (keep last 24 hours)
+      const oneDayAgo = now - 24 * 60 * 60 * 1000;
+      await db.prepare(`DELETE FROM activity_snapshots WHERE timestamp < ?`).bind(oneDayAgo).run();
+    }
+
+    // Get existing peak stats for today
+    const existing = await db.prepare(`
+      SELECT * FROM peak_stats WHERE date = ?
+    `).bind(today).first() as {
+      peak_total: number;
+      peak_watching: number;
+      peak_livetv: number;
+      peak_browsing: number;
+    } | null;
+
+    if (!existing) {
+      // Create new record for today
+      await db.prepare(`
+        INSERT INTO peak_stats (date, peak_total, peak_total_time, peak_watching, peak_watching_time, peak_livetv, peak_livetv_time, peak_browsing, peak_browsing_time, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(today, total, now, watching, now, livetv, now, browsing, now, now, now).run();
+    } else {
+      // Update only if current values exceed peaks
+      const updates: string[] = [];
+      const values: (number | string)[] = [];
+
+      if (total > (existing.peak_total || 0)) {
+        updates.push('peak_total = ?, peak_total_time = ?');
+        values.push(total, now);
+      }
+      if (watching > (existing.peak_watching || 0)) {
+        updates.push('peak_watching = ?, peak_watching_time = ?');
+        values.push(watching, now);
+      }
+      if (livetv > (existing.peak_livetv || 0)) {
+        updates.push('peak_livetv = ?, peak_livetv_time = ?');
+        values.push(livetv, now);
+      }
+      if (browsing > (existing.peak_browsing || 0)) {
+        updates.push('peak_browsing = ?, peak_browsing_time = ?');
+        values.push(browsing, now);
+      }
+
+      if (updates.length > 0) {
+        updates.push('updated_at = ?');
+        values.push(now);
+        values.push(today);
+
+        await db.prepare(`
+          UPDATE peak_stats SET ${updates.join(', ')} WHERE date = ?
+        `).bind(...values).run();
+      }
+    }
+  } catch (e) {
+    console.error('[PeakStats] Error updating:', e);
+  }
+}
+
+// GET /activity-history - Get activity history for trend charts
+async function handleGetActivityHistory(
+  url: URL,
+  env: Env,
+  corsHeaders: HeadersInit
+): Promise<Response> {
+  const hours = parseInt(url.searchParams.get('hours') || '12');
+  const now = Date.now();
+  const startTime = now - hours * 60 * 60 * 1000;
+
+  try {
+    const snapshots = await env.DB.prepare(`
+      SELECT timestamp, total_active, watching, browsing, livetv
+      FROM activity_snapshots
+      WHERE timestamp >= ?
+      ORDER BY timestamp ASC
+    `).bind(startTime).all();
+
+    return Response.json({
+      success: true,
+      history: (snapshots.results || []).map((s: any) => ({
+        time: s.timestamp,
+        total: s.total_active,
+        watching: s.watching,
+        browsing: s.browsing,
+        livetv: s.livetv,
+      })),
+      hours,
+      startTime,
+      endTime: now,
+    }, { headers: corsHeaders });
+  } catch (error) {
+    console.error('[ActivityHistory] Error:', error);
     return Response.json({ error: 'Database error', details: String(error) }, { status: 500, headers: corsHeaders });
   }
 }
@@ -1705,6 +1876,7 @@ async function handleGetUnifiedStats(
   const oneDayAgo = now - 24 * 60 * 60 * 1000;
   const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
   const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+  const today = new Date().toISOString().split('T')[0];
 
   try {
     const [
@@ -1713,7 +1885,8 @@ async function handleGetUnifiedStats(
       contentStats,
       pageViewStats,
       geoStats,
-      topContent
+      topContent,
+      peakStats
     ] = await Promise.all([
       // Real-time activity (5 min window, truly active = 1 min)
       env.DB.prepare(`
@@ -1785,12 +1958,30 @@ async function handleGetUnifiedStats(
         ORDER BY watchCount DESC
         LIMIT 10
       `).bind(sevenDaysAgo).all(),
+
+      // Peak stats for today
+      env.DB.prepare(`
+        SELECT * FROM peak_stats WHERE date = ?
+      `).bind(today).first(),
     ]);
 
     // All-time watch time
     const allTimeWatch = await env.DB.prepare(`
       SELECT COALESCE(SUM(duration), 0) / 60 as total FROM watch_sessions
     `).first() as { total: number } | null;
+
+    // Format peak stats
+    const formattedPeakStats = peakStats ? {
+      date: (peakStats as any).date,
+      peakTotal: (peakStats as any).peak_total || 0,
+      peakTotalTime: (peakStats as any).peak_total_time || 0,
+      peakWatching: (peakStats as any).peak_watching || 0,
+      peakWatchingTime: (peakStats as any).peak_watching_time || 0,
+      peakLiveTV: (peakStats as any).peak_livetv || 0,
+      peakLiveTVTime: (peakStats as any).peak_livetv_time || 0,
+      peakBrowsing: (peakStats as any).peak_browsing || 0,
+      peakBrowsingTime: (peakStats as any).peak_browsing_time || 0,
+    } : null;
 
     return Response.json({
       success: true,
@@ -1801,6 +1992,7 @@ async function handleGetUnifiedStats(
         browsing: liveActivity?.browsing || 0,
         livetv: liveActivity?.livetv || 0,
       },
+      peakStats: formattedPeakStats,
       users: {
         total: userStats?.total || 0,
         dau: userStats?.dau || 0,

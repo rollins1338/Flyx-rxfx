@@ -39,7 +39,7 @@ function getCfAnalyticsUrl(): string | null {
  * @param endpoint - The endpoint name (presence, pageview, event, watch-session, live-activity, page-view, stats)
  * @returns The full URL to use for the analytics request
  */
-export function getAnalyticsEndpoint(endpoint: 'presence' | 'pageview' | 'page-view' | 'event' | 'watch-session' | 'live-activity' | 'livetv-session' | 'stats' | 'traffic-sources' | 'presence-stats' | 'users' | 'user-engagement' | 'unified-stats' | 'admin-analytics'): string {
+export function getAnalyticsEndpoint(endpoint: 'presence' | 'pageview' | 'page-view' | 'event' | 'watch-session' | 'live-activity' | 'livetv-session' | 'stats' | 'traffic-sources' | 'presence-stats' | 'users' | 'user-engagement' | 'unified-stats' | 'admin-analytics' | 'activity-history'): string {
   const dedicatedWorkerUrl = getCfAnalyticsDedicatedWorkerUrl();
   const cfUrl = getCfAnalyticsUrl();
   
@@ -61,6 +61,7 @@ export function getAnalyticsEndpoint(endpoint: 'presence' | 'pageview' | 'page-v
       'user-engagement': '/user-engagement',
       'unified-stats': '/unified-stats',
       'admin-analytics': '/stats',
+      'activity-history': '/activity-history',
     };
     return `${dedicatedWorkerUrl}${workerEndpoints[endpoint] || `/${endpoint}`}`;
   }
@@ -84,6 +85,7 @@ export function getAnalyticsEndpoint(endpoint: 'presence' | 'pageview' | 'page-v
       'user-engagement': '/user-engagement',
       'unified-stats': '/unified-stats',
       'admin-analytics': '/stats',
+      'activity-history': '/activity-history',
     };
     return `${cfUrl}${cfEndpoints[endpoint] || `/${endpoint}`}`;
   }
@@ -104,6 +106,7 @@ export function getAnalyticsEndpoint(endpoint: 'presence' | 'pageview' | 'page-v
     'user-engagement': '/api/analytics/user-engagement',
     'unified-stats': '/api/admin/unified-stats',
     'admin-analytics': '/api/admin/analytics',
+    'activity-history': '/api/admin/analytics/activity-history',
   };
   return vercelEndpoints[endpoint] || `/api/analytics/${endpoint}`;
 }
