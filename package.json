@@ -9,6 +9,8 @@
     "build:analyze": "ANALYZE=true next build",
     "build:cloudflare": "npx opennextjs-cloudflare build",
     "deploy:cloudflare": "npm run build:cloudflare && npx wrangler pages deploy .open-next/assets --project-name=flyx",
+    "deploy:lambda": "cd aws-lambda-proxy && ./deploy.sh",
+    "deploy:cf-proxy": "cd cloudflare-proxy && npx wrangler deploy",
     "preview:cloudflare": "npm run build:cloudflare && npx wrangler pages dev .open-next/assets",
     "start": "next start",
     "lint": "next lint",

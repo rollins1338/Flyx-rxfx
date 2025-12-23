@@ -6,13 +6,11 @@
  * to proxy through a residential IP.
  * 
  * Flow:
- *   Client -> Cloudflare Worker -> RPI Proxy -> MegaUp CDN
+ *   Client -> Cloudflare Worker -> RPI Proxy -> CDN
  * 
  * Routes:
  *   GET /animekai?url=<encoded_url> - Proxy HLS stream/segment
  *   GET /animekai/health - Health check
- * 
- * The RPI proxy fetches without Origin/Referer headers which MegaUp blocks.
  */
 
 import { createLogger, type LogLevel } from './logger';
@@ -21,10 +19,13 @@ export interface Env {
   LOG_LEVEL?: string;
   RPI_PROXY_URL?: string;
   RPI_PROXY_KEY?: string;
+  // Hetzner VPS proxy - alternative (but blocked by datacenter IP detection)
+  HETZNER_PROXY_URL?: string;
+  HETZNER_PROXY_KEY?: string;
 }
 
 // CORS headers
-function corsHeaders(origin?: string | null): Record<string, string> {
+function corsHeaders(): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
@@ -33,12 +34,12 @@ function corsHeaders(origin?: string | null): Record<string, string> {
   };
 }
 
-function jsonResponse(data: object, status: number, origin?: string | null): Response {
+function jsonResponse(data: object, status: number): Response {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       'Content-Type': 'application/json',
-      ...corsHeaders(origin),
+      ...corsHeaders(),
     },
   });
 }
@@ -54,11 +55,7 @@ const ALLOWED_ORIGINS = [
 ];
 
 function isAllowedOrigin(origin: string | null, referer: string | null): boolean {
-  // Allow server-side requests (no origin/referer) - these come from Vercel API routes
-  // The RPI proxy key provides authentication for these requests
-  if (!origin && !referer) {
-    return true;
-  }
+  if (!origin && !referer) return true;
 
   const checkOrigin = (o: string): boolean => {
     return ALLOWED_ORIGINS.some(allowed => {
@@ -89,19 +86,12 @@ function isAllowedOrigin(origin: string | null, referer: string | null): boolean
 /**
  * Rewrite playlist URLs to route through this proxy
  */
-function rewritePlaylistUrls(
-  playlist: string,
-  baseUrl: string,
-  proxyOrigin: string
-): string {
+function rewritePlaylistUrls(playlist: string, baseUrl: string, proxyOrigin: string): string {
   const lines = playlist.split('\n');
   const rewritten: string[] = [];
   
   const base = new URL(baseUrl);
   const basePath = base.pathname.substring(0, base.pathname.lastIndexOf('/') + 1);
-  
-  // Check if this is Flixer CDN - needs referer parameter
-  const isFlixerCdn = baseUrl.match(/p\.\d+\.workers\.dev/);
   
   const proxyUrl = (url: string): string => {
     let absoluteUrl: string;
@@ -114,9 +104,7 @@ function rewritePlaylistUrls(
       absoluteUrl = `${base.origin}${basePath}${url}`;
     }
     
-    // Add referer parameter for Flixer CDN URLs
-    const refererParam = isFlixerCdn ? `&referer=${encodeURIComponent('https://flixer.sh/')}` : '';
-    return `${proxyOrigin}/animekai?url=${encodeURIComponent(absoluteUrl)}${refererParam}`;
+    return `${proxyOrigin}/animekai?url=${encodeURIComponent(absoluteUrl)}`;
   };
   
   for (const line of lines) {
@@ -161,7 +149,7 @@ export async function handleAnimeKaiRequest(request: Request, env: Env): Promise
 
   // CORS preflight
   if (request.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: corsHeaders(origin) });
+    return new Response(null, { status: 204, headers: corsHeaders() });
   }
 
   // Health check
@@ -174,7 +162,7 @@ export async function handleAnimeKaiRequest(request: Request, env: Env): Promise
         url: env.RPI_PROXY_URL ? env.RPI_PROXY_URL.substring(0, 30) + '...' : 'not set',
       },
       timestamp: new Date().toISOString(),
-    }, 200, origin);
+    }, 200);
   }
 
   // Anti-leech check
@@ -183,54 +171,179 @@ export async function handleAnimeKaiRequest(request: Request, env: Env): Promise
     return jsonResponse({
       error: 'Access denied',
       message: 'This proxy only serves authorized domains',
-    }, 403, origin);
+    }, 403);
   }
 
-  // Get target URL, optional User-Agent, and optional Referer
+  // Get target URL
   const targetUrl = url.searchParams.get('url');
   if (!targetUrl) {
-    return jsonResponse({ error: 'Missing url parameter' }, 400, origin);
+    return jsonResponse({ error: 'Missing url parameter' }, 400);
   }
 
   const decodedUrl = decodeURIComponent(targetUrl);
   const customUserAgent = url.searchParams.get('ua');
   const customReferer = url.searchParams.get('referer');
-  logger.info('AnimeKai proxy request', { url: decodedUrl.substring(0, 100), ua: customUserAgent ? 'custom' : 'default', referer: customReferer ? 'custom' : 'auto' });
+  
+  const hasRpi = !!(env.RPI_PROXY_URL && env.RPI_PROXY_KEY);
+  
+  logger.info('AnimeKai proxy request', { 
+    url: decodedUrl.substring(0, 100), 
+    ua: customUserAgent ? 'custom' : 'default', 
+    referer: customReferer ? 'custom' : 'auto',
+  });
 
-  // Check if RPI proxy is configured
-  if (!env.RPI_PROXY_URL || !env.RPI_PROXY_KEY) {
-    logger.error('RPI proxy not configured');
-    return jsonResponse({
-      error: 'RPI proxy not configured',
-      message: 'Set RPI_PROXY_URL and RPI_PROXY_KEY environment variables',
-    }, 503, origin);
+  // STRATEGY 1: Try CF direct fetch first (fastest)
+  logger.debug('Trying CF direct fetch...');
+  const directResult = await fetchDirectFromCF(decodedUrl, customUserAgent, customReferer);
+  
+  if (directResult.success) {
+    logger.info('CF direct fetch succeeded!');
+    return handleSuccessResponse(directResult, decodedUrl, url.origin, 'cf-direct');
+  }
+  
+  logger.debug('CF direct failed', { status: directResult.status });
+
+  // STRATEGY 2: Try RPI residential proxy
+  if (hasRpi) {
+    logger.debug('Trying RPI residential proxy...');
+    return await fetchViaRpiProxy(decodedUrl, customUserAgent, customReferer, env, logger, url.origin);
   }
 
+  // No proxies available
+  logger.error('All proxy strategies failed');
+  return jsonResponse({
+    error: 'Proxy failed',
+    message: 'CF direct failed and RPI not configured',
+    cfDirectStatus: directResult.status,
+  }, 502);
+}
+
+
+/**
+ * Try direct fetch from CF Worker (fastest path)
+ */
+async function fetchDirectFromCF(
+  url: string,
+  customUserAgent: string | null,
+  customReferer: string | null
+): Promise<{ success: boolean; status?: number; body?: ArrayBuffer; contentType?: string; error?: string }> {
   try {
-    // Route through RPI proxy
-    let rpiBaseUrl = env.RPI_PROXY_URL;
+    const headers: Record<string, string> = {
+      'User-Agent': customUserAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': '*/*',
+      'Accept-Encoding': 'identity',
+    };
+    
+    // Add referer if provided or auto-detect
+    if (customReferer) {
+      headers['Referer'] = customReferer;
+    } else if (url.includes('workers.dev')) {
+      headers['Referer'] = 'https://111movies.com/';
+    } else if (url.match(/\.[a-z0-9]+\.site/)) {
+      headers['Referer'] = 'https://animekai.to/';
+    }
+    
+    const response = await fetch(url, {
+      headers,
+      signal: AbortSignal.timeout(10000),
+    });
+    
+    if (!response.ok) {
+      return { success: false, status: response.status, error: `HTTP ${response.status}` };
+    }
+    
+    const body = await response.arrayBuffer();
+    const contentType = response.headers.get('content-type') || '';
+    
+    return { success: true, status: response.status, body, contentType };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/**
+ * Handle successful response - rewrite playlists and return
+ */
+function handleSuccessResponse(
+  result: { body?: ArrayBuffer; contentType?: string },
+  originalUrl: string,
+  proxyOrigin: string,
+  via: string
+): Response {
+  const body = result.body!;
+  const contentType = result.contentType || '';
+  
+  // Check if it's a playlist that needs URL rewriting
+  if (contentType.includes('mpegurl') || originalUrl.includes('.m3u8')) {
+    const text = new TextDecoder().decode(body);
+    const rewritten = rewritePlaylistUrls(text, originalUrl, proxyOrigin);
+    
+    return new Response(rewritten, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/vnd.apple.mpegurl',
+        'Cache-Control': 'public, max-age=5',
+        'X-Proxied-Via': via,
+        ...corsHeaders(),
+      },
+    });
+  }
+  
+  // For segments, detect content type
+  const firstBytes = new Uint8Array(body.slice(0, 4));
+  const isMpegTs = firstBytes[0] === 0x47;
+  const isFmp4 = firstBytes[0] === 0x00 && firstBytes[1] === 0x00 && firstBytes[2] === 0x00;
+  
+  let actualContentType = contentType;
+  if (isMpegTs) actualContentType = 'video/mp2t';
+  else if (isFmp4) actualContentType = 'video/mp4';
+  else if (!actualContentType) actualContentType = 'application/octet-stream';
+  
+  return new Response(body, {
+    status: 200,
+    headers: {
+      'Content-Type': actualContentType,
+      'Content-Length': body.byteLength.toString(),
+      'Cache-Control': 'public, max-age=3600',
+      'X-Proxied-Via': via,
+      ...corsHeaders(),
+    },
+  });
+}
+
+/**
+ * Fetch via RPI residential proxy
+ */
+async function fetchViaRpiProxy(
+  decodedUrl: string,
+  customUserAgent: string | null,
+  customReferer: string | null,
+  env: Env,
+  logger: ReturnType<typeof createLogger>,
+  proxyOrigin: string
+): Promise<Response> {
+  try {
+    let rpiBaseUrl = env.RPI_PROXY_URL!;
     if (!rpiBaseUrl.startsWith('http://') && !rpiBaseUrl.startsWith('https://')) {
       rpiBaseUrl = `https://${rpiBaseUrl}`;
     }
 
     const rpiParams = new URLSearchParams({
       url: decodedUrl,
-      key: env.RPI_PROXY_KEY,
+      key: env.RPI_PROXY_KEY!,
     });
     
-    // Pass custom User-Agent if provided (important for enc-dec.app decryption)
     if (customUserAgent) {
       rpiParams.set('ua', customUserAgent);
     }
     
-    // Pass custom Referer if provided, or auto-detect for Flixer CDN
-    // Flixer CDN (p.XXXXX.workers.dev) REQUIRES Referer header
-    const isFlixerCdn = decodedUrl.match(/p\.\d+\.workers\.dev/);
+    // Auto-detect referer
     if (customReferer) {
       rpiParams.set('referer', customReferer);
-    } else if (isFlixerCdn) {
-      // Auto-add Flixer referer for Flixer CDN URLs
+    } else if (decodedUrl.match(/p\.\d+\.workers\.dev/)) {
       rpiParams.set('referer', 'https://flixer.sh/');
+    } else if (decodedUrl.match(/\.[a-z0-9]+\.site/)) {
+      rpiParams.set('referer', 'https://animekai.to/');
     }
     
     const rpiUrl = `${rpiBaseUrl}/animekai?${rpiParams.toString()}`;
@@ -243,7 +356,6 @@ export async function handleAnimeKaiRequest(request: Request, env: Env): Promise
     if (!rpiResponse.ok) {
       logger.error('RPI proxy error', { status: rpiResponse.status });
       
-      // Try to get error details
       let errorDetails = '';
       try {
         const errorBody = await rpiResponse.text();
@@ -253,15 +365,15 @@ export async function handleAnimeKaiRequest(request: Request, env: Env): Promise
       return jsonResponse({
         error: `RPI proxy returned ${rpiResponse.status}`,
         details: errorDetails,
-      }, rpiResponse.status, origin);
+      }, rpiResponse.status);
     }
 
     const contentType = rpiResponse.headers.get('content-type') || '';
     
-    // If it's a playlist, rewrite URLs to route through this proxy
+    // If it's a playlist, rewrite URLs
     if (contentType.includes('mpegurl') || decodedUrl.includes('.m3u8')) {
       const playlistText = await rpiResponse.text();
-      const rewrittenPlaylist = rewritePlaylistUrls(playlistText, decodedUrl, url.origin);
+      const rewrittenPlaylist = rewritePlaylistUrls(playlistText, decodedUrl, proxyOrigin);
       
       return new Response(rewrittenPlaylist, {
         status: 200,
@@ -269,15 +381,14 @@ export async function handleAnimeKaiRequest(request: Request, env: Env): Promise
           'Content-Type': 'application/vnd.apple.mpegurl',
           'Cache-Control': 'public, max-age=5',
           'X-Proxied-Via': 'rpi',
-          ...corsHeaders(origin),
+          ...corsHeaders(),
         },
       });
     }
 
-    // For segments, stream directly
+    // For segments
     const body = await rpiResponse.arrayBuffer();
     
-    // Detect content type from first bytes
     const firstBytes = new Uint8Array(body.slice(0, 4));
     const isMpegTs = firstBytes[0] === 0x47;
     const isFmp4 = firstBytes[0] === 0x00 && firstBytes[1] === 0x00 && firstBytes[2] === 0x00;
@@ -294,16 +405,16 @@ export async function handleAnimeKaiRequest(request: Request, env: Env): Promise
         'Content-Length': body.byteLength.toString(),
         'Cache-Control': 'public, max-age=3600',
         'X-Proxied-Via': 'rpi',
-        ...corsHeaders(origin),
+        ...corsHeaders(),
       },
     });
 
   } catch (error) {
-    logger.error('AnimeKai proxy error', error as Error);
+    logger.error('RPI proxy error', error as Error);
     return jsonResponse({
       error: 'Proxy error',
       details: error instanceof Error ? error.message : String(error),
-    }, 502, origin);
+    }, 502);
   }
 }
 
