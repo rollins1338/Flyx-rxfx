@@ -2,7 +2,9 @@
 
 A modern streaming platform built with Next.js 15, featuring movies, TV shows, live TV, and cross-device sync.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fyourusername%2Fflyx&env=TMDB_API_KEY,NEXT_PUBLIC_TMDB_API_KEY&envDescription=TMDB%20API%20keys%20required%20for%20movie%20and%20TV%20data&envLink=https%3A%2F%2Fwww.themoviedb.org%2Fsettings%2Fapi&project-name=flyx&repository-name=flyx)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%vynx-velvet%2Fflyx-main&env=TMDB_API_KEY,NEXT_PUBLIC_TMDB_API_KEY&envDescription=TMDB%20API%20keys%20required%20for%20movie%20and%20TV%20data&envLink=https%3A%2F%2Fwww.themoviedb.org%2Fsettings%2Fapi&project-name=flyx&repository-name=flyx-main)
+
+[![Deploy to Cloudflare Pages](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/vynx-velvet/flyx-main)
 
 ![Next.js](https://img.shields.io/badge/Next.js-15-black?style=flat-square)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue?style=flat-square)
@@ -33,15 +35,13 @@ Click the button above or:
 
 ### Option 2: Cloudflare Pages
 
-[![Deploy to Cloudflare Pages](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/yourusername/flyx)
-
 > Note: Requires additional configuration for API routes. See [Cloudflare Setup](#cloudflare-workers) below.
 
 ## Local Development
 
 ```bash
 # Clone and install
-git clone https://github.com/yourusername/flyx.git
+git clone https://github.com/vynx-velvet/flyx-main.git
 cd flyx
 npm install  # or: bun install
 
