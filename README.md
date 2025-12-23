@@ -36,19 +36,23 @@ Required environment variables:
 
 Deploy the entire app to Cloudflare Pages using `@opennextjs/cloudflare`:
 
-**Via Cloudflare Dashboard (Recommended):**
+[![Deploy to Cloudflare Pages](https://img.shields.io/badge/Deploy%20to-Cloudflare%20Pages-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)](https://dash.cloudflare.com/?to=/:account/pages/new/provider/github)
 
-1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com) → Pages
-2. Click "Create a project" → "Connect to Git"
-3. Select the `Vynx-Velvet/flyx-main` repository
+**Quick Setup:**
+
+1. Click the button above → Sign in to Cloudflare
+2. Connect your GitHub account if not already connected
+3. Select the `Vynx-Velvet/flyx-main` repository (or fork it first)
 4. Configure build settings:
-   - **Build command:** `npm run build:cloudflare`
-   - **Build output directory:** `.open-next/assets`
-   - **Root directory:** `/`
+   | Setting | Value |
+   |---------|-------|
+   | Build command | `npm run build:cloudflare` |
+   | Build output directory | `.open-next/assets` |
+   | Root directory | `/` |
 5. Add environment variables:
    - `TMDB_API_KEY` - Your TMDB Bearer token
    - `NEXT_PUBLIC_TMDB_API_KEY` - Your TMDB API key
-6. Deploy!
+6. Click **Save and Deploy**!
 
 <details>
 <summary>Manual CLI deployment</summary>
@@ -74,11 +78,12 @@ npm run preview:cloudflare
 </details>
 
 **Cloudflare Pages Benefits:**
-- Unlimited bandwidth (free tier)
-- Global CDN with 300+ edge locations
-- Automatic SSL
-- Preview deployments for PRs
-- Native D1/KV/R2 integration
+- ✅ Unlimited bandwidth (free tier)
+- ✅ Global CDN with 300+ edge locations
+- ✅ Automatic SSL
+- ✅ Preview deployments for PRs
+- ✅ Native D1/KV/R2 integration
+- ✅ No vendor lock-in
 
 ---
 
