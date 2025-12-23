@@ -15,6 +15,15 @@ import { NextRequest, NextResponse } from 'next/server';
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 
+// TMDB fetch options with Bearer token authentication
+const tmdbOptions = {
+  method: 'GET',
+  headers: {
+    accept: 'application/json',
+    Authorization: `Bearer ${TMDB_API_KEY}`,
+  },
+};
+
 interface WatchlistItem {
   id: number | string;
   mediaType: 'movie' | 'tv';
@@ -158,7 +167,8 @@ async function fetchItemDetails(items: WatchlistItem[]): Promise<any[]> {
       batch.map(async (item) => {
         try {
           const res = await fetch(
-            `${TMDB_BASE}/${item.mediaType}/${item.id}?api_key=${TMDB_API_KEY}&language=en-US`
+            `${TMDB_BASE}/${item.mediaType}/${item.id}?language=en-US`,
+            tmdbOptions
           );
           if (res.ok) {
             const data = await res.json();
@@ -209,7 +219,8 @@ async function collectKeywords(items: any[]): Promise<Array<{ id: number; name: 
   for (const item of topItems) {
     try {
       const res = await fetch(
-        `${TMDB_BASE}/${item.mediaType}/${item.id}/keywords?api_key=${TMDB_API_KEY}`
+        `${TMDB_BASE}/${item.mediaType}/${item.id}/keywords`,
+        tmdbOptions
       );
       if (res.ok) {
         const data = await res.json();
@@ -235,7 +246,8 @@ async function collectKeywords(items: any[]): Promise<Array<{ id: number; name: 
 async function fetchTMDBRecommendations(id: number, mediaType: 'movie' | 'tv'): Promise<RecommendedItem[]> {
   try {
     const res = await fetch(
-      `${TMDB_BASE}/${mediaType}/${id}/recommendations?api_key=${TMDB_API_KEY}&language=en-US&page=1`
+      `${TMDB_BASE}/${mediaType}/${id}/recommendations?language=en-US&page=1`,
+      tmdbOptions
     );
     if (res.ok) {
       const data = await res.json();
@@ -256,7 +268,8 @@ async function fetchTMDBRecommendations(id: number, mediaType: 'movie' | 'tv'): 
 async function discoverByGenre(genreId: number, mediaType: 'movie' | 'tv'): Promise<RecommendedItem[]> {
   try {
     const res = await fetch(
-      `${TMDB_BASE}/discover/${mediaType}?api_key=${TMDB_API_KEY}&language=en-US&sort_by=popularity.desc&with_genres=${genreId}&vote_count.gte=100&page=1`
+      `${TMDB_BASE}/discover/${mediaType}?language=en-US&sort_by=popularity.desc&with_genres=${genreId}&vote_count.gte=100&page=1`,
+      tmdbOptions
     );
     if (res.ok) {
       const data = await res.json();
@@ -278,7 +291,8 @@ async function discoverByKeyword(keywordId: number): Promise<RecommendedItem[]> 
   try {
     // Keywords work better with movies
     const res = await fetch(
-      `${TMDB_BASE}/discover/movie?api_key=${TMDB_API_KEY}&language=en-US&sort_by=popularity.desc&with_keywords=${keywordId}&vote_count.gte=50&page=1`
+      `${TMDB_BASE}/discover/movie?language=en-US&sort_by=popularity.desc&with_keywords=${keywordId}&vote_count.gte=50&page=1`,
+      tmdbOptions
     );
     if (res.ok) {
       const data = await res.json();
