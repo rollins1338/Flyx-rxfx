@@ -1584,56 +1584,62 @@ async function handleGetUserEngagement(
 ): Promise<Response> {
   const days = parseInt(url.searchParams.get('days') || '7');
   const sortBy = url.searchParams.get('sortBy') || 'last_visit';
-  const limit = Math.min(parseInt(url.searchParams.get('limit') || '200'), 500);
+  const limit = Math.min(parseInt(url.searchParams.get('limit') || '500'), 1000);
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
 
   try {
-    // Build sort clause
-    let orderBy = 'ua.last_seen DESC';
+    // Build sort clause - using page_views as primary source for consistency with DAU
+    let orderBy = 'last_visit DESC';
     switch (sortBy) {
       case 'engagement': orderBy = 'engagement_score DESC'; break;
-      case 'visits': orderBy = 'ua.total_sessions DESC'; break;
+      case 'visits': orderBy = 'total_visits DESC'; break;
       case 'watch_time': orderBy = 'total_watch_time DESC'; break;
-      default: orderBy = 'ua.last_seen DESC';
+      case 'page_views': orderBy = 'total_page_views DESC'; break;
+      case 'first_visit': orderBy = 'first_visit ASC'; break;
+      default: orderBy = 'last_visit DESC';
     }
 
-    // Get full user engagement data with all required fields
+    // Get user engagement data from page_views as primary source (consistent with DAU)
     const usersResult = await env.DB.prepare(`
       SELECT 
-        ua.user_id,
-        ua.first_seen as first_visit,
-        ua.last_seen as last_visit,
-        ua.total_sessions as total_visits,
-        COALESCE(pv.page_views, 0) as total_page_views,
-        COALESCE(pv.time_on_site, 0) as total_time_on_site,
+        pv.user_id,
+        MIN(pv.entry_time) as first_visit,
+        MAX(pv.entry_time) as last_visit,
+        COUNT(DISTINCT pv.session_id) as total_visits,
+        COUNT(*) as total_page_views,
+        COALESCE(SUM(pv.time_on_page), 0) as total_time_on_site,
         COALESCE(ws.watch_time, 0) as total_watch_time,
-        CASE WHEN ua.total_sessions > 0 THEN COALESCE(pv.time_on_site, 0) / ua.total_sessions ELSE 0 END as avg_session_duration,
-        CASE WHEN ua.total_sessions > 0 THEN COALESCE(pv.page_views, 0) * 1.0 / ua.total_sessions ELSE 0 END as avg_pages_per_session,
         CASE 
-          WHEN ua.total_sessions >= 10 AND COALESCE(ws.watch_time, 0) > 3600000 THEN 90
-          WHEN ua.total_sessions >= 5 AND COALESCE(ws.watch_time, 0) > 1800000 THEN 70
-          WHEN ua.total_sessions >= 3 AND COALESCE(pv.page_views, 0) > 10 THEN 50
-          WHEN ua.total_sessions >= 2 THEN 30
+          WHEN COUNT(DISTINCT pv.session_id) > 0 
+          THEN COALESCE(SUM(pv.time_on_page), 0) / COUNT(DISTINCT pv.session_id) 
+          ELSE 0 
+        END as avg_session_duration,
+        CASE 
+          WHEN COUNT(DISTINCT pv.session_id) > 0 
+          THEN COUNT(*) * 1.0 / COUNT(DISTINCT pv.session_id) 
+          ELSE 0 
+        END as avg_pages_per_session,
+        CASE 
+          WHEN COUNT(DISTINCT pv.session_id) >= 10 AND COALESCE(ws.watch_time, 0) > 3600000 THEN 90
+          WHEN COUNT(DISTINCT pv.session_id) >= 5 AND COALESCE(ws.watch_time, 0) > 1800000 THEN 70
+          WHEN COUNT(DISTINCT pv.session_id) >= 3 AND COUNT(*) > 10 THEN 50
+          WHEN COUNT(DISTINCT pv.session_id) >= 2 THEN 30
           ELSE 10
         END as engagement_score,
-        ua.country as countries,
+        pv.country as countries,
         '' as device_types,
-        CASE WHEN COALESCE(pv.page_views, 0) <= 1 AND ua.total_sessions = 1 THEN 1 ELSE 0 END as bounce_count
-      FROM user_activity ua
-      LEFT JOIN (
-        SELECT user_id, COUNT(*) as page_views, SUM(time_on_page) as time_on_site
-        FROM page_views WHERE entry_time >= ?
-        GROUP BY user_id
-      ) pv ON ua.user_id = pv.user_id
+        CASE WHEN COUNT(*) <= 1 AND COUNT(DISTINCT pv.session_id) = 1 THEN 1 ELSE 0 END as bounce_count
+      FROM page_views pv
       LEFT JOIN (
         SELECT user_id, SUM(duration) as watch_time
         FROM watch_sessions WHERE started_at >= ?
         GROUP BY user_id
-      ) ws ON ua.user_id = ws.user_id
-      WHERE ua.last_seen >= ?
+      ) ws ON pv.user_id = ws.user_id
+      WHERE pv.entry_time >= ?
+      GROUP BY pv.user_id
       ORDER BY ${orderBy}
       LIMIT ?
-    `).bind(cutoff, cutoff, cutoff, limit).all();
+    `).bind(cutoff, cutoff, limit).all();
 
     const users = usersResult.results || [];
 

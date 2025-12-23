@@ -131,6 +131,47 @@ export default function SyncSettings() {
     setTimeout(() => setCopied(null), 2000);
   }, []);
 
+  // Auto-format sync code: FLYX-XXXXXX-XXXXXX
+  const handleCodeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value.toUpperCase();
+    
+    // Replace spaces with dashes
+    value = value.replace(/\s+/g, '-');
+    
+    // Remove any characters that aren't alphanumeric or dashes
+    value = value.replace(/[^A-Z0-9-]/g, '');
+    
+    // Auto-insert dashes at correct positions (after FLYX, after 6 chars, after 6 more)
+    // Format: FLYX-XXXXXX-XXXXXX
+    const parts = value.replace(/-/g, '').split('');
+    let formatted = '';
+    
+    for (let i = 0; i < parts.length && i < 16; i++) {
+      if (i === 4 || i === 10) {
+        formatted += '-';
+      }
+      formatted += parts[i];
+    }
+    
+    setImportCode(formatted);
+  }, []);
+
+  // Auto-format passphrase: word-word-word-word
+  const handlePassphraseChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value.toLowerCase();
+    
+    // Replace spaces with dashes
+    value = value.replace(/\s+/g, '-');
+    
+    // Remove any characters that aren't letters or dashes
+    value = value.replace(/[^a-z-]/g, '');
+    
+    // Clean up multiple consecutive dashes
+    value = value.replace(/-+/g, '-');
+    
+    setImportPassphrase(value);
+  }, []);
+
   const handleDisconnect = useCallback(() => {
     if (confirm('Disconnect sync? Your local data will be kept but won\'t sync to other devices.')) {
       disconnect();
@@ -291,16 +332,16 @@ export default function SyncSettings() {
               <input
                 type="text"
                 className={styles.input}
-                placeholder="Sync Code (FLYX-XXXX-XXXX)"
+                placeholder="Sync Code (FLYX-XXXXXX-XXXXXX)"
                 value={importCode}
-                onChange={(e) => setImportCode(e.target.value.toUpperCase())}
+                onChange={handleCodeChange}
               />
               <input
                 type="text"
                 className={styles.input}
-                placeholder="Passphrase"
+                placeholder="Passphrase (word-word-word-word)"
                 value={importPassphrase}
-                onChange={(e) => setImportPassphrase(e.target.value.toLowerCase())}
+                onChange={handlePassphraseChange}
               />
               <button
                 className={styles.secondaryButton}

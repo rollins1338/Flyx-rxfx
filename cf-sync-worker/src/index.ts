@@ -203,18 +203,23 @@ async function handleGetD1(
   db: D1Database, 
   corsHeaders: HeadersInit
 ): Promise<Response> {
-  // Ensure table exists
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS sync_accounts (
-      id TEXT PRIMARY KEY,
-      code_hash TEXT UNIQUE NOT NULL,
-      sync_data TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
-      last_sync_at INTEGER NOT NULL,
-      device_count INTEGER DEFAULT 1
-    )
-  `);
+  // Ensure table exists using prepare().run() instead of exec()
+  try {
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS sync_accounts (
+        id TEXT PRIMARY KEY,
+        code_hash TEXT UNIQUE NOT NULL,
+        sync_data TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        last_sync_at INTEGER NOT NULL,
+        device_count INTEGER DEFAULT 1
+      )
+    `).run();
+  } catch (e) {
+    // Table might already exist, ignore error
+    console.log('[Sync] Table creation:', e);
+  }
 
   const result = await db.prepare(
     'SELECT sync_data, last_sync_at FROM sync_accounts WHERE code_hash = ?'
@@ -329,18 +334,23 @@ async function handlePostD1(
   const now = Date.now();
   const syncDataStr = JSON.stringify(body);
 
-  // Ensure table exists
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS sync_accounts (
-      id TEXT PRIMARY KEY,
-      code_hash TEXT UNIQUE NOT NULL,
-      sync_data TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
-      last_sync_at INTEGER NOT NULL,
-      device_count INTEGER DEFAULT 1
-    )
-  `);
+  // Ensure table exists using prepare().run() instead of exec()
+  try {
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS sync_accounts (
+        id TEXT PRIMARY KEY,
+        code_hash TEXT UNIQUE NOT NULL,
+        sync_data TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        last_sync_at INTEGER NOT NULL,
+        device_count INTEGER DEFAULT 1
+      )
+    `).run();
+  } catch (e) {
+    // Table might already exist, ignore error
+    console.log('[Sync] Table creation:', e);
+  }
 
   // Check if exists
   const existing = await db.prepare(
