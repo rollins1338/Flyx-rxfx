@@ -1058,6 +1058,13 @@ async function handleWatchSession(
   const now = Date.now();
   const id = payload.id || `ws_${payload.userId}_${payload.contentId}`;
 
+  // IMPORTANT: Use totalWatchTime (actual time watched) not duration (video length)
+  // The client sends:
+  //   - totalWatchTime: actual seconds watched
+  //   - duration: total video length in seconds
+  // We want to store the actual watch time, not the video duration!
+  const actualWatchTime = payload.totalWatchTime || 0;
+
   try {
     await env.DB.prepare(`
       INSERT INTO watch_sessions (
@@ -1067,9 +1074,18 @@ async function handleWatchSession(
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         last_position = excluded.last_position,
-        duration = excluded.duration,
-        completion_percentage = excluded.completion_percentage,
-        is_completed = excluded.is_completed,
+        duration = CASE 
+          WHEN excluded.duration > watch_sessions.duration THEN excluded.duration 
+          ELSE watch_sessions.duration 
+        END,
+        completion_percentage = CASE 
+          WHEN excluded.completion_percentage > watch_sessions.completion_percentage THEN excluded.completion_percentage 
+          ELSE watch_sessions.completion_percentage 
+        END,
+        is_completed = CASE 
+          WHEN excluded.is_completed = 1 THEN 1 
+          ELSE watch_sessions.is_completed 
+        END,
         ended_at = excluded.ended_at,
         updated_at = excluded.updated_at
     `).bind(
@@ -1084,7 +1100,7 @@ async function handleWatchSession(
       payload.startedAt || now,
       payload.endedAt || null,
       payload.lastPosition || 0,
-      payload.duration || 0,
+      actualWatchTime, // Use actual watch time, not video duration!
       payload.completionPercentage || 0,
       payload.quality || null,
       payload.isCompleted ? 1 : 0,
@@ -1972,6 +1988,8 @@ async function handleGetUnifiedStats(
       `).bind(oneDayAgo, sevenDaysAgo, thirtyDaysAgo).first(),
 
       // Content/watch stats (last 24h)
+      // NOTE: duration column stores actual watch time in seconds (not video length)
+      // We divide by 60 to return minutes to the client
       env.DB.prepare(`
         SELECT 
           COUNT(*) as total_sessions,
