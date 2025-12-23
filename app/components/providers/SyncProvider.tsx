@@ -102,16 +102,14 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     };
 
     // Sync on page unload to save watch progress before leaving
-    const handleBeforeUnload = () => {
+    // Use both beforeunload and pagehide for better mobile support
+    const handlePageHide = () => {
       const status = getSyncStatus();
       if (!status.isLinked || !status.syncCode) return;
 
-      // Use sendBeacon for reliable sync on page close
       const endpoint = getSyncEndpoint();
       const localData = collectLocalSyncData();
       
-      // sendBeacon doesn't support custom headers, so we need to use a different approach
-      // Instead, we'll do a quick sync using fetch with keepalive
       try {
         const headers: Record<string, string> = {
           'Content-Type': 'application/json',
@@ -121,16 +119,20 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
           headers['X-Sync-Passphrase'] = status.passphrase;
         }
 
+        // Use fetch with keepalive for reliable sync on page close
         fetch(endpoint, {
           method: 'POST',
           headers,
           body: JSON.stringify(localData),
-          keepalive: true, // Allows request to outlive the page
+          keepalive: true,
         });
+        console.log('[SyncProvider] Sync on page hide');
       } catch {
         // Ignore errors on unload
       }
     };
+
+    const handleBeforeUnload = handlePageHide;
 
     // Run sync on mount
     performAutoSync(true);
@@ -149,10 +151,12 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handlePageHide); // Better mobile support
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handlePageHide);
       clearInterval(periodicSyncInterval);
     };
   }, []);

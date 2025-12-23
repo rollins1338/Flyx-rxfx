@@ -3,7 +3,7 @@
  * Manages anonymized user identification and tracking across sessions
  */
 
-import { queueSync } from '@/lib/sync/auto-sync';
+import { queueImmediateSync } from '@/lib/sync/auto-sync';
 
 // Simple UUID v4 generator to avoid dependency issues
 function generateUUID(): string {
@@ -274,8 +274,8 @@ class UserTrackingService {
       // Also update in preferences
       this.updatePreferences({ watchProgress: this.preferences.watchProgress });
       
-      // Queue sync to server when watch progress changes
-      queueSync();
+      // Queue immediate sync to server when watch progress changes
+      queueImmediateSync();
     } catch (error) {
       console.error('Failed to save watch progress:', error);
     }

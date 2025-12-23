@@ -53,6 +53,7 @@ export {
   queueSync,
   queueImmediateSync,
   performSync,
+  performFullSync,
   cancelPendingSync,
   isSyncInProgress,
 } from './auto-sync';

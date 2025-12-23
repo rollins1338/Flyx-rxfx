@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
 import type { MediaItem } from '@/types/media';
-import { queueSync, SYNC_DATA_CHANGED_EVENT } from '@/lib/sync';
+import { queueImmediateSync, SYNC_DATA_CHANGED_EVENT } from '@/lib/sync';
 
 export interface WatchlistItem {
   id: number | string;
@@ -72,8 +72,8 @@ export function WatchlistProvider({ children }: { children: ReactNode }) {
     if (isLoaded) {
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-        // Queue sync to server when watchlist changes
-        queueSync();
+        // Queue immediate sync to server when watchlist changes
+        queueImmediateSync();
       } catch (err) {
         console.error('[Watchlist] Error saving to localStorage:', err);
       }
