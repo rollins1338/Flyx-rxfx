@@ -828,6 +828,9 @@ function _unpackPACKED(packed: string): string {
 /**
  * Manually extract sources from MegaUp embed page
  * Uses /media/ endpoint + native decryption (no enc-dec.app dependency)
+ * 
+ * IMPORTANT: MegaUp blocks datacenter IPs (Vercel, Cloudflare, AWS, etc.)
+ * We route the /media/ API call through the Cloudflare Worker -> RPI residential proxy
  */
 async function extractMegaUpSourcesManually(embedUrl: string): Promise<string | null> {
   try {
@@ -848,18 +851,46 @@ async function extractMegaUpSourcesManually(embedUrl: string): Promise<string | 
     
     console.log(`[AnimeKai] Fetching MegaUp /media/ endpoint: ${mediaUrl}`);
     
-    // Fetch the /media/ endpoint with the fixed UA (required for native decryption)
-    const mediaResponse = await fetch(mediaUrl, {
-      headers: {
-        'User-Agent': MEGAUP_USER_AGENT,
-        'Referer': embedUrl,
-        'Accept': 'application/json',
-      },
-      signal: AbortSignal.timeout(10000),
-    });
+    // MegaUp blocks datacenter IPs - we need to route through residential proxy
+    // Use the Cloudflare Worker's /animekai route which forwards to RPI proxy
+    const cfProxyUrl = process.env.NEXT_PUBLIC_CF_STREAM_PROXY_URL;
+    
+    let mediaResponse: Response;
+    
+    if (cfProxyUrl) {
+      // Route through Cloudflare Worker -> RPI residential proxy
+      const proxyBaseUrl = cfProxyUrl.replace(/\/stream\/?$/, '');
+      const proxiedMediaUrl = `${proxyBaseUrl}/animekai?url=${encodeURIComponent(mediaUrl)}&ua=${encodeURIComponent(MEGAUP_USER_AGENT)}&referer=${encodeURIComponent(embedUrl)}`;
+      
+      console.log(`[AnimeKai] Routing MegaUp /media/ through residential proxy...`);
+      
+      mediaResponse = await fetch(proxiedMediaUrl, {
+        headers: {
+          'Accept': 'application/json',
+        },
+        signal: AbortSignal.timeout(15000),
+      });
+    } else {
+      // Fallback: Direct fetch (will likely fail due to datacenter IP blocking)
+      console.log(`[AnimeKai] WARNING: No CF proxy configured, trying direct fetch (may fail)...`);
+      
+      mediaResponse = await fetch(mediaUrl, {
+        headers: {
+          'User-Agent': MEGAUP_USER_AGENT,
+          'Referer': embedUrl,
+          'Accept': 'application/json',
+        },
+        signal: AbortSignal.timeout(10000),
+      });
+    }
     
     if (!mediaResponse.ok) {
       console.log(`[AnimeKai] MegaUp /media/ failed: HTTP ${mediaResponse.status}`);
+      // Log response body for debugging
+      try {
+        const errorText = await mediaResponse.text();
+        console.log(`[AnimeKai] MegaUp error response:`, errorText.substring(0, 200));
+      } catch {}
       return null;
     }
     
@@ -999,9 +1030,9 @@ async function getStreamFromServer(lid: string, serverName: string): Promise<Str
         streamUrl = hlsUrl;
         console.log(`[AnimeKai] ✓ Got HLS stream from MegaUp:`, streamUrl.substring(0, 100));
       } else {
-        // Fallback: return the embed URL directly - player might handle it
-        console.log(`[AnimeKai] MegaUp extraction failed, returning embed URL as fallback`);
-        // Keep streamUrl as the embed URL
+        // MegaUp extraction failed - do NOT return embed URL as it's not playable
+        console.log(`[AnimeKai] MegaUp extraction failed - cannot play embed URL directly`);
+        return null;
       }
     }
     // RapidShare embeds also need decryption
@@ -1012,9 +1043,9 @@ async function getStreamFromServer(lid: string, serverName: string): Promise<Str
         streamUrl = hlsUrl;
         console.log(`[AnimeKai] ✓ Got HLS stream from RapidShare:`, streamUrl.substring(0, 100));
       } else {
-        // Fallback: return the embed URL directly
-        console.log(`[AnimeKai] RapidShare extraction failed, returning embed URL as fallback`);
-        // Keep streamUrl as the embed URL
+        // RapidShare extraction failed - do NOT return embed URL
+        console.log(`[AnimeKai] RapidShare extraction failed - cannot play embed URL directly`);
+        return null;
       }
     }
     // Check if URL is already a direct stream (m3u8 or mp4)
