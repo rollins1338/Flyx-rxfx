@@ -165,6 +165,123 @@ export async function handleAnimeKaiRequest(request: Request, env: Env): Promise
     }, 200);
   }
 
+  // FULL EXTRACTION endpoint - routes to RPI which does ALL the work
+  // Input: encrypted embed response from AnimeKai /ajax/links/view
+  // Output: { success: true, streamUrl: "https://...", skip: {...} }
+  if (path === '/animekai/extract') {
+    const encryptedEmbed = url.searchParams.get('embed');
+    
+    if (!encryptedEmbed) {
+      return jsonResponse({ 
+        error: 'Missing embed parameter',
+        usage: '/animekai/extract?embed=<encrypted_embed_response>'
+      }, 400);
+    }
+    
+    const hasRpi = !!(env.RPI_PROXY_URL && env.RPI_PROXY_KEY);
+    
+    if (!hasRpi) {
+      logger.error('RPI proxy not configured for /animekai/extract');
+      return jsonResponse({
+        error: 'RPI proxy not configured',
+        message: 'Set RPI_PROXY_URL and RPI_PROXY_KEY environment variables',
+      }, 503);
+    }
+    
+    logger.info('AnimeKai full extraction request', { embedLength: encryptedEmbed.length });
+    
+    // Forward to RPI proxy which does ALL the work
+    try {
+      let rpiBaseUrl = env.RPI_PROXY_URL!;
+      if (!rpiBaseUrl.startsWith('http://') && !rpiBaseUrl.startsWith('https://')) {
+        rpiBaseUrl = `https://${rpiBaseUrl}`;
+      }
+      
+      const rpiUrl = `${rpiBaseUrl}/animekai/extract?key=${env.RPI_PROXY_KEY}&embed=${encodeURIComponent(encryptedEmbed)}`;
+      logger.debug('Forwarding to RPI extract endpoint', { rpiUrl: rpiUrl.substring(0, 80) });
+      
+      const rpiResponse = await fetch(rpiUrl, {
+        signal: AbortSignal.timeout(30000),
+      });
+      
+      const responseData = await rpiResponse.json() as { success?: boolean; streamUrl?: string; error?: string };
+      
+      logger.info('RPI extraction response', { 
+        status: rpiResponse.status, 
+        success: responseData.success,
+        hasStreamUrl: !!responseData.streamUrl,
+      });
+      
+      return jsonResponse(responseData as object, rpiResponse.status);
+      
+    } catch (error) {
+      logger.error('RPI extraction error', error as Error);
+      return jsonResponse({
+        error: 'Extraction failed',
+        details: error instanceof Error ? error.message : String(error),
+      }, 502);
+    }
+  }
+
+  // FULL EXTRACTION V2 - RPI does EVERYTHING from kai_id + episode
+  // Input: kai_id (anime ID) and episode number
+  // Output: { success: true, streamUrl: "https://...", skip: {...} }
+  if (path === '/animekai/full-extract') {
+    const kaiId = url.searchParams.get('kai_id');
+    const episode = url.searchParams.get('episode');
+    
+    if (!kaiId || !episode) {
+      return jsonResponse({ 
+        error: 'Missing parameters',
+        usage: '/animekai/full-extract?kai_id=<anime_id>&episode=<episode_number>'
+      }, 400);
+    }
+    
+    const hasRpi = !!(env.RPI_PROXY_URL && env.RPI_PROXY_KEY);
+    
+    if (!hasRpi) {
+      logger.error('RPI proxy not configured for /animekai/full-extract');
+      return jsonResponse({
+        error: 'RPI proxy not configured',
+        message: 'Set RPI_PROXY_URL and RPI_PROXY_KEY environment variables',
+      }, 503);
+    }
+    
+    logger.info('AnimeKai full extraction V2 request', { kaiId, episode });
+    
+    // Forward to RPI proxy which does ALL the work
+    try {
+      let rpiBaseUrl = env.RPI_PROXY_URL!;
+      if (!rpiBaseUrl.startsWith('http://') && !rpiBaseUrl.startsWith('https://')) {
+        rpiBaseUrl = `https://${rpiBaseUrl}`;
+      }
+      
+      const rpiUrl = `${rpiBaseUrl}/animekai/full-extract?key=${env.RPI_PROXY_KEY}&kai_id=${encodeURIComponent(kaiId)}&episode=${encodeURIComponent(episode)}`;
+      logger.debug('Forwarding to RPI full-extract endpoint', { rpiUrl: rpiUrl.substring(0, 80) });
+      
+      const rpiResponse = await fetch(rpiUrl, {
+        signal: AbortSignal.timeout(45000), // Longer timeout for full extraction
+      });
+      
+      const responseData = await rpiResponse.json() as { success?: boolean; streamUrl?: string; error?: string };
+      
+      logger.info('RPI full extraction response', { 
+        status: rpiResponse.status, 
+        success: responseData.success,
+        hasStreamUrl: !!responseData.streamUrl,
+      });
+      
+      return jsonResponse(responseData as object, rpiResponse.status);
+      
+    } catch (error) {
+      logger.error('RPI full extraction error', error as Error);
+      return jsonResponse({
+        error: 'Full extraction failed',
+        details: error instanceof Error ? error.message : String(error),
+      }, 502);
+    }
+  }
+
   // Anti-leech check
   if (!isAllowedOrigin(origin, referer)) {
     logger.warn('Blocked unauthorized request', { origin, referer });

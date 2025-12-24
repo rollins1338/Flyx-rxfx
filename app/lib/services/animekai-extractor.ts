@@ -987,6 +987,12 @@ async function decryptRapidShareEmbed(embedUrl: string): Promise<string | null> 
 
 /**
  * Get stream URL from a server
+ * 
+ * NEW FLOW (RPI does ALL the work):
+ * 1. Encrypt lid → fetch encrypted embed from AnimeKai
+ * 2. Send encrypted embed to CF Worker → RPI /animekai/extract
+ * 3. RPI decrypts AnimeKai, fetches MegaUp /media/, decrypts MegaUp
+ * 4. Returns final HLS stream URL
  */
 async function getStreamFromServer(lid: string, serverName: string): Promise<StreamSource | null> {
   try {
@@ -999,7 +1005,7 @@ async function getStreamFromServer(lid: string, serverName: string): Promise<Str
       return null;
     }
 
-    // Fetch embed data
+    // Fetch encrypted embed data from AnimeKai
     const url = `${KAI_AJAX}/links/view?id=${lid}&_=${encLid}`;
     const response = await getJson(url);
     
@@ -1008,15 +1014,91 @@ async function getStreamFromServer(lid: string, serverName: string): Promise<Str
       return null;
     }
 
-    // Decrypt the response
-    let decrypted = decrypt(response.result);
+    const encryptedEmbed = response.result;
+    console.log(`[AnimeKai] Got encrypted embed (${encryptedEmbed.length} chars)`);
+
+    // Route to CF Worker → RPI for full extraction
+    // RPI does ALL the work: decrypt AnimeKai, fetch MegaUp /media/, decrypt MegaUp
+    const cfProxyUrl = process.env.NEXT_PUBLIC_CF_STREAM_PROXY_URL || process.env.CF_STREAM_PROXY_URL;
+    
+    if (!cfProxyUrl) {
+      console.log(`[AnimeKai] CF proxy not configured, falling back to local extraction`);
+      return await getStreamFromServerLocal(lid, serverName, encryptedEmbed);
+    }
+    
+    const proxyBaseUrl = cfProxyUrl.replace(/\/stream\/?$/, '');
+    const extractUrl = `${proxyBaseUrl}/animekai/extract?embed=${encodeURIComponent(encryptedEmbed)}`;
+    
+    console.log(`[AnimeKai] Routing to RPI for full extraction: ${extractUrl.substring(0, 80)}...`);
+    
+    try {
+      const extractResponse = await fetch(extractUrl, {
+        signal: AbortSignal.timeout(30000),
+      });
+      
+      const extractData = await extractResponse.json();
+      
+      if (!extractData.success || !extractData.streamUrl) {
+        console.log(`[AnimeKai] RPI extraction failed:`, extractData);
+        // Fall back to local extraction
+        return await getStreamFromServerLocal(lid, serverName, encryptedEmbed);
+      }
+      
+      const streamUrl = extractData.streamUrl;
+      console.log(`[AnimeKai] ✓ Got stream URL from RPI:`, streamUrl.substring(0, 80));
+      
+      // Extract the proper referer from the stream URL's origin
+      let referer = 'https://animekai.to/';
+      try {
+        const streamOrigin = new URL(streamUrl).origin;
+        referer = streamOrigin + '/';
+      } catch {}
+      
+      // MegaUp CDN URLs MUST be proxied
+      const isMegaUpCdn = streamUrl.includes('megaup') || 
+                          streamUrl.includes('hub26link') || 
+                          streamUrl.includes('app28base');
+      
+      return {
+        quality: 'auto',
+        title: `AnimeKai - ${serverName}`,
+        url: streamUrl,
+        type: 'hls',
+        referer,
+        requiresSegmentProxy: true,
+        skipOrigin: isMegaUpCdn,
+        status: 'working',
+        language: 'ja',
+      };
+      
+    } catch (fetchError) {
+      console.log(`[AnimeKai] RPI extraction fetch error:`, fetchError);
+      // Fall back to local extraction
+      return await getStreamFromServerLocal(lid, serverName, encryptedEmbed);
+    }
+    
+  } catch (error) {
+    console.log(`[AnimeKai] Get stream error:`, error);
+    return null;
+  }
+}
+
+/**
+ * Local extraction fallback (when RPI is not available)
+ * This may fail due to datacenter IP blocking
+ */
+async function getStreamFromServerLocal(lid: string, serverName: string, encryptedEmbed: string): Promise<StreamSource | null> {
+  try {
+    console.log(`[AnimeKai] Falling back to local extraction...`);
+    
+    // Decrypt the response locally
+    let decrypted = decrypt(encryptedEmbed);
     if (!decrypted) {
       console.log(`[AnimeKai] Failed to decrypt embed`);
       return null;
     }
 
     // Decode }XX format (AnimeKai's custom URL encoding)
-    // }7B = {, }22 = ", }3A = :, etc.
     decrypted = decrypted.replace(/}([0-9A-Fa-f]{2})/g, (_, hex) => 
       String.fromCharCode(parseInt(hex, 16))
     );
@@ -1026,7 +1108,6 @@ async function getStreamFromServer(lid: string, serverName: string): Promise<Str
     try {
       streamData = typeof decrypted === 'string' ? JSON.parse(decrypted) : decrypted;
     } catch {
-      // If it's not JSON, it might be a direct URL
       if (typeof decrypted === 'string' && decrypted.startsWith('http')) {
         streamData = { url: decrypted };
       } else {
@@ -1053,7 +1134,6 @@ async function getStreamFromServer(lid: string, serverName: string): Promise<Str
     console.log(`[AnimeKai] ✓ Got URL from ${serverName}:`, streamUrl);
 
     // Check if this is an embed URL that needs further decryption
-    // MegaUp embeds have /e/ in the path and are NOT direct HLS streams
     if (streamUrl.includes('megaup') && streamUrl.includes('/e/')) {
       console.log(`[AnimeKai] Detected MegaUp embed URL, decrypting to get HLS stream...`);
       const hlsUrl = await decryptMegaUpEmbed(streamUrl);
@@ -1061,59 +1141,40 @@ async function getStreamFromServer(lid: string, serverName: string): Promise<Str
         streamUrl = hlsUrl;
         console.log(`[AnimeKai] ✓ Got HLS stream from MegaUp:`, streamUrl.substring(0, 100));
       } else {
-        // MegaUp extraction failed - do NOT return embed URL as it's not playable
         console.log(`[AnimeKai] MegaUp extraction failed - cannot play embed URL directly`);
         return null;
       }
     }
-    // RapidShare embeds also need decryption
     else if (streamUrl.includes('rapid') && streamUrl.includes('/e/')) {
       console.log(`[AnimeKai] Detected RapidShare embed URL, decrypting...`);
       const hlsUrl = await decryptRapidShareEmbed(streamUrl);
       if (hlsUrl) {
         streamUrl = hlsUrl;
-        console.log(`[AnimeKai] ✓ Got HLS stream from RapidShare:`, streamUrl.substring(0, 100));
       } else {
-        // RapidShare extraction failed - do NOT return embed URL
-        console.log(`[AnimeKai] RapidShare extraction failed - cannot play embed URL directly`);
+        console.log(`[AnimeKai] RapidShare extraction failed`);
         return null;
       }
     }
-    // Check if URL is already a direct stream (m3u8 or mp4)
     else if (!streamUrl.includes('.m3u8') && !streamUrl.includes('.mp4') && streamUrl.includes('/e/')) {
       console.log(`[AnimeKai] Unknown embed type, trying generic extraction...`);
       const hlsUrl = await extractMegaUpSourcesManually(streamUrl);
       if (hlsUrl) {
         streamUrl = hlsUrl;
-        console.log(`[AnimeKai] ✓ Got stream from generic extraction:`, streamUrl.substring(0, 100));
       } else {
         console.log(`[AnimeKai] Failed to extract from unknown embed type`);
         return null;
       }
     }
 
-    // Extract the proper referer from the stream URL's origin
-    // MegaUp and similar servers require their own domain as referer, not animekai.to
     let referer = 'https://animekai.to/';
     try {
       const streamOrigin = new URL(streamUrl).origin;
-      // Use the stream's origin as referer - this is what the server expects
       referer = streamOrigin + '/';
-      console.log(`[AnimeKai] Using referer from stream origin: ${referer}`);
-    } catch {
-      console.log(`[AnimeKai] Could not parse stream URL, using default referer`);
-    }
+    } catch {}
 
-    // MegaUp CDN URLs (app28base.site, hub26link.site, megaup.cc) MUST be proxied
-    // because browser XHR adds Origin header which MegaUp blocks with 403.
-    // The Cloudflare Worker will fetch WITHOUT Origin header (noreferer mode).
     const isMegaUpCdn = streamUrl.includes('megaup') || 
                         streamUrl.includes('hub26link') || 
                         streamUrl.includes('app28base');
-    
-    if (isMegaUpCdn) {
-      console.log(`[AnimeKai] MegaUp CDN detected - will proxy with noreferer mode`);
-    }
 
     return {
       quality: 'auto',
@@ -1121,16 +1182,13 @@ async function getStreamFromServer(lid: string, serverName: string): Promise<Str
       url: streamUrl,
       type: 'hls',
       referer,
-      // MegaUp CDN MUST be proxied - browser adds Origin header which causes 403
-      // Cloudflare Worker fetches without Origin header
       requiresSegmentProxy: true,
-      // Flag to tell proxy to skip Origin/Referer headers (MegaUp blocks them)
       skipOrigin: isMegaUpCdn,
       status: 'working',
       language: 'ja',
     };
   } catch (error) {
-    console.log(`[AnimeKai] Get stream error:`, error);
+    console.log(`[AnimeKai] Local extraction error:`, error);
     return null;
   }
 }
@@ -1159,9 +1217,25 @@ export async function extractAnimeKaiStreams(
     console.log(`[AnimeKai] MAL override: ID=${malId}, Title="${malTitle}"`);
   }
   
+  // Local extraction with MegaUp /media/ calls routed through CF → RPI residential proxy
+  // The extractMegaUpSourcesManually function handles the proxy routing
+  return extractAnimeKaiStreamsLocal(tmdbId, type, season, episode, malId, malTitle);
+}
+
+/**
+ * Local extraction (fallback) - may fail due to datacenter IP blocking
+ */
+async function extractAnimeKaiStreamsLocal(
+  tmdbId: string,
+  type: 'movie' | 'tv',
+  season?: number,
+  episode?: number,
+  malId?: number,
+  malTitle?: string
+): Promise<ExtractionResult> {
   // Debug: Log proxy configuration
   const cfProxyUrl = process.env.NEXT_PUBLIC_CF_STREAM_PROXY_URL || process.env.CF_STREAM_PROXY_URL;
-  console.log(`[AnimeKai] Proxy config: CF_STREAM_PROXY_URL=${cfProxyUrl ? cfProxyUrl.substring(0, 50) + '...' : 'NOT SET'}`);
+  console.log(`[AnimeKai] Local extraction - Proxy config: CF_STREAM_PROXY_URL=${cfProxyUrl ? cfProxyUrl.substring(0, 50) + '...' : 'NOT SET'}`);
 
   try {
     // Step 1: Get anime IDs (MAL/AniList) from TMDB ID

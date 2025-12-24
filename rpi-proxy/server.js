@@ -764,8 +764,9 @@ function proxyAnimeKaiStream(targetUrl, customUserAgent, customReferer, res) {
   // Check if this is Flixer CDN (p.XXXXX.workers.dev)
   const isFlixerCdn = url.hostname.match(/^p\.\d+\.workers\.dev$/);
   
-  // IMPORTANT: User-Agent MUST match what's sent to enc-dec.app for decryption
-  const defaultUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
+  // IMPORTANT: User-Agent MUST match the keystream used for decryption
+  // Use the SHORT UA that matches MEGAUP_USER_AGENT constant
+  const defaultUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
   const userAgent = customUserAgent || defaultUserAgent;
   
   // Build headers based on CDN type
@@ -1201,9 +1202,690 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // AnimeKai FULL extraction endpoint V2 - RPI does EVERYTHING
+  // Input: kai_id (anime ID) and episode number
+  // Output: { success: true, streamUrl: "https://...", skip: {...} }
+  // 
+  // Flow: Client → CF Worker → RPI (this endpoint)
+  //   1. Fetch episodes list from AnimeKai
+  //   2. Get episode token
+  //   3. Fetch servers list
+  //   4. Get server lid
+  //   5. Fetch encrypted embed
+  //   6. Decrypt AnimeKai embed
+  //   7. Fetch MegaUp /media/
+  //   8. Decrypt MegaUp response
+  //   9. Return HLS stream URL
+  if (reqUrl.pathname === '/animekai/full-extract') {
+    const kaiId = reqUrl.searchParams.get('kai_id');
+    const episode = reqUrl.searchParams.get('episode');
+    
+    if (!kaiId || !episode) {
+      res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ 
+        error: 'Missing parameters',
+        usage: '/animekai/full-extract?kai_id=<anime_id>&episode=<episode_number>'
+      }));
+    }
+
+    try {
+      await fullAnimeKaiExtraction(kaiId, parseInt(episode, 10), res);
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ error: 'Extraction failed', details: err.message }));
+    }
+    return;
+  }
+
+  // AnimeKai FULL extraction endpoint - does ALL the work from residential IP
+  // Input: encrypted embed response from AnimeKai /ajax/links/view
+  // Output: { success: true, streamUrl: "https://...", skip: {...} }
+  // 
+  // Flow: Client → CF Worker → RPI (this endpoint)
+  //   1. Decrypt AnimeKai embed response
+  //   2. Decode }XX hex format  
+  //   3. Parse JSON to get MegaUp embed URL
+  //   4. Fetch MegaUp /media/{videoId} from residential IP
+  //   5. Decrypt MegaUp response
+  //   6. Return HLS stream URL
+  if (reqUrl.pathname === '/animekai/extract') {
+    const encryptedEmbed = reqUrl.searchParams.get('embed');
+    
+    if (!encryptedEmbed) {
+      res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ 
+        error: 'Missing embed parameter',
+        usage: '/animekai/extract?embed=<encrypted_embed_response>'
+      }));
+    }
+
+    try {
+      const decoded = decodeURIComponent(encryptedEmbed);
+      await extractAnimeKaiStream(decoded, res);
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ error: 'Invalid embed data', details: err.message }));
+    }
+    return;
+  }
+
   res.writeHead(404, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ error: 'Not found' }));
 });
+
+// ============================================================================
+// AnimeKai Crypto Implementation (Native)
+// Decrypts AnimeKai embed responses without external API
+// ============================================================================
+
+// URL-safe Base64 decode
+function urlSafeBase64Decode(str) {
+  const base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = base64 + '='.repeat((4 - base64.length % 4) % 4);
+  return Buffer.from(padded, 'base64');
+}
+
+// AnimeKai cipher position mapping
+function getCipherPosition(plainPos) {
+  if (plainPos === 0) return 0;
+  if (plainPos === 1) return 7;
+  if (plainPos === 2) return 11;
+  if (plainPos === 3) return 13;
+  if (plainPos === 4) return 15;
+  if (plainPos === 5) return 17;
+  if (plainPos === 6) return 19;
+  return 20 + (plainPos - 7);
+}
+
+// Load AnimeKai decrypt tables from file (lazy loaded)
+let ANIMEKAI_DECRYPT_TABLES = null;
+
+function loadAnimeKaiTables() {
+  if (ANIMEKAI_DECRYPT_TABLES) return ANIMEKAI_DECRYPT_TABLES;
+  
+  try {
+    // Try to load from the tables file
+    const fs = require('fs');
+    const path = require('path');
+    const tablesPath = path.join(__dirname, 'animekai-tables.json');
+    
+    if (fs.existsSync(tablesPath)) {
+      ANIMEKAI_DECRYPT_TABLES = JSON.parse(fs.readFileSync(tablesPath, 'utf8'));
+      console.log(`[AnimeKai] Loaded ${Object.keys(ANIMEKAI_DECRYPT_TABLES).length} decrypt tables`);
+      return ANIMEKAI_DECRYPT_TABLES;
+    }
+  } catch (e) {
+    console.log(`[AnimeKai] Could not load tables file: ${e.message}`);
+  }
+  
+  return null;
+}
+
+// AnimeKai decryption
+function decryptAnimeKai(ciphertext) {
+  const tables = loadAnimeKaiTables();
+  if (!tables) {
+    throw new Error('AnimeKai decrypt tables not loaded');
+  }
+  
+  const HEADER_LEN = 21;
+  const cipher = urlSafeBase64Decode(ciphertext);
+  
+  const hasHeader = cipher.length > HEADER_LEN;
+  const dataOffset = hasHeader ? HEADER_LEN : 0;
+  const dataLen = cipher.length - dataOffset;
+  
+  // Calculate plaintext length
+  let plaintextLen = 0;
+  if (dataLen > 20) {
+    plaintextLen = 7 + (dataLen - 20);
+  } else if (dataLen > 19) {
+    plaintextLen = 7;
+  } else if (dataLen > 17) {
+    plaintextLen = 6;
+  } else if (dataLen > 15) {
+    plaintextLen = 5;
+  } else if (dataLen > 13) {
+    plaintextLen = 4;
+  } else if (dataLen > 11) {
+    plaintextLen = 3;
+  } else if (dataLen > 7) {
+    plaintextLen = 2;
+  } else if (dataLen > 0) {
+    plaintextLen = 1;
+  }
+  
+  let plaintext = '';
+  
+  for (let i = 0; i < plaintextLen; i++) {
+    const cipherPos = getCipherPosition(i);
+    const actualPos = dataOffset + cipherPos;
+    if (actualPos >= cipher.length) break;
+    
+    const byte = cipher[actualPos];
+    const table = tables[i];
+    
+    if (table && byte in table) {
+      plaintext += table[byte];
+    } else {
+      plaintext += String.fromCharCode(byte);
+    }
+  }
+  
+  return plaintext;
+}
+
+// Decode AnimeKai }XX hex format
+function decodeAnimeKaiHex(str) {
+  return str.replace(/}([0-9A-Fa-f]{2})/g, (_, hex) => 
+    String.fromCharCode(parseInt(hex, 16))
+  );
+}
+
+// URL-safe Base64 encode
+function urlSafeBase64Encode(buffer) {
+  return buffer.toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
+}
+
+// Build encrypt tables from decrypt tables (reverse mapping)
+let ANIMEKAI_ENCRYPT_TABLES = null;
+
+function loadAnimeKaiEncryptTables() {
+  if (ANIMEKAI_ENCRYPT_TABLES) return ANIMEKAI_ENCRYPT_TABLES;
+  
+  const decryptTables = loadAnimeKaiTables();
+  if (!decryptTables) return null;
+  
+  // Reverse the decrypt tables: byte -> char becomes char -> byte
+  ANIMEKAI_ENCRYPT_TABLES = {};
+  for (const [pos, table] of Object.entries(decryptTables)) {
+    ANIMEKAI_ENCRYPT_TABLES[pos] = {};
+    for (const [byte, char] of Object.entries(table)) {
+      ANIMEKAI_ENCRYPT_TABLES[pos][char] = parseInt(byte);
+    }
+  }
+  
+  console.log(`[AnimeKai] Built ${Object.keys(ANIMEKAI_ENCRYPT_TABLES).length} encrypt tables`);
+  return ANIMEKAI_ENCRYPT_TABLES;
+}
+
+// Constant padding bytes in the cipher structure
+const CONSTANT_BYTES = {
+  1: 0xf2, 2: 0xdf, 3: 0x9b, 4: 0x9d, 5: 0x16, 6: 0xe5,
+  8: 0x67, 9: 0xc9, 10: 0xdd,
+  12: 0x9c,
+  14: 0x29,
+  16: 0x35,
+  18: 0xc8,
+};
+
+// Header for encrypted output
+const ANIMEKAI_HEADER = Buffer.from('c509bdb497cbc06873ff412af12fd8007624c29faa', 'hex');
+const ANIMEKAI_HEADER_LEN = 21;
+
+// AnimeKai encryption
+function encryptAnimeKai(plaintext) {
+  const tables = loadAnimeKaiEncryptTables();
+  if (!tables) {
+    throw new Error('AnimeKai encrypt tables not loaded');
+  }
+  
+  // Calculate cipher length
+  const plaintextLen = plaintext.length;
+  let cipherDataLen;
+  if (plaintextLen <= 1) cipherDataLen = 1;
+  else if (plaintextLen <= 2) cipherDataLen = 8;
+  else if (plaintextLen <= 3) cipherDataLen = 12;
+  else if (plaintextLen <= 4) cipherDataLen = 14;
+  else if (plaintextLen <= 5) cipherDataLen = 16;
+  else if (plaintextLen <= 6) cipherDataLen = 18;
+  else if (plaintextLen <= 7) cipherDataLen = 20;
+  else cipherDataLen = 20 + (plaintextLen - 7);
+  
+  // Create cipher buffer with header
+  const cipher = Buffer.alloc(ANIMEKAI_HEADER_LEN + cipherDataLen);
+  ANIMEKAI_HEADER.copy(cipher, 0);
+  
+  // Fill constant bytes
+  for (const [pos, byte] of Object.entries(CONSTANT_BYTES)) {
+    const idx = ANIMEKAI_HEADER_LEN + parseInt(pos);
+    if (idx < cipher.length) {
+      cipher[idx] = byte;
+    }
+  }
+  
+  // Encrypt each character
+  for (let i = 0; i < plaintextLen; i++) {
+    const char = plaintext[i];
+    const cipherPos = getCipherPosition(i);
+    const table = tables[i];
+    
+    if (table && char in table) {
+      cipher[ANIMEKAI_HEADER_LEN + cipherPos] = table[char];
+    } else {
+      // Fallback: use char code
+      cipher[ANIMEKAI_HEADER_LEN + cipherPos] = char.charCodeAt(0);
+    }
+  }
+  
+  return urlSafeBase64Encode(cipher);
+}
+
+// ============================================================================
+// MegaUp Crypto Implementation
+// Uses enc-dec.app API for decryption (video-specific keystream)
+// ============================================================================
+
+const MEGAUP_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+
+/**
+ * Decrypt MegaUp encrypted data using enc-dec.app API
+ * 
+ * The MegaUp encryption uses a video-specific keystream that depends on
+ * the plaintext content (plaintext feedback cipher). We cannot reverse
+ * engineer this without the obfuscated JavaScript, so we use the
+ * enc-dec.app API which provides the decryption service.
+ * 
+ * @param {string} encryptedBase64 - URL-safe base64 encoded encrypted data
+ * @returns {Promise<string>} - Decrypted JSON string
+ */
+async function decryptMegaUpViaAPI(encryptedBase64) {
+  console.log(`[MegaUp Decrypt] Using enc-dec.app API...`);
+  console.log(`[MegaUp Decrypt] Encrypted length: ${encryptedBase64.length} chars`);
+  
+  return new Promise((resolve, reject) => {
+    const postData = JSON.stringify({
+      text: encryptedBase64,
+      agent: MEGAUP_USER_AGENT,
+    });
+    
+    const req = https.request({
+      hostname: 'enc-dec.app',
+      path: '/api/dec-mega',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData),
+        'User-Agent': MEGAUP_USER_AGENT,
+      },
+      timeout: 15000,
+    }, (res) => {
+      const chunks = [];
+      res.on('data', chunk => chunks.push(chunk));
+      res.on('end', () => {
+        const data = Buffer.concat(chunks).toString('utf8');
+        console.log(`[MegaUp Decrypt] API response: ${res.statusCode}`);
+        
+        try {
+          const result = JSON.parse(data);
+          
+          if (result.status !== 200) {
+            console.log(`[MegaUp Decrypt] API error: ${JSON.stringify(result)}`);
+            reject(new Error(`enc-dec.app API error: ${result.message || JSON.stringify(result)}`));
+            return;
+          }
+          
+          // Result can be string or object
+          const decrypted = typeof result.result === 'string' 
+            ? result.result 
+            : JSON.stringify(result.result);
+          
+          console.log(`[MegaUp Decrypt] Decrypted (first 100): ${decrypted.substring(0, 100)}...`);
+          resolve(decrypted);
+        } catch (e) {
+          console.log(`[MegaUp Decrypt] API response parse error: ${e.message}`);
+          console.log(`[MegaUp Decrypt] Raw response: ${data.substring(0, 200)}`);
+          reject(new Error(`Failed to parse enc-dec.app response: ${e.message}`));
+        }
+      });
+    });
+    
+    req.on('error', (err) => {
+      console.log(`[MegaUp Decrypt] API request error: ${err.message}`);
+      reject(new Error(`enc-dec.app request failed: ${err.message}`));
+    });
+    
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('enc-dec.app request timeout'));
+    });
+    
+    req.write(postData);
+    req.end();
+  });
+}
+
+// ============================================================================
+// AnimeKai Full Extraction - RPI does EVERYTHING
+// Fetches from AnimeKai, decrypts, fetches MegaUp, decrypts, returns stream
+// ============================================================================
+
+const KAI_AJAX = 'https://animekai.to/ajax';
+const KAI_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+  'Accept': '*/*',
+};
+
+/**
+ * Fetch JSON from AnimeKai
+ */
+async function fetchAnimeKaiJson(url) {
+  return new Promise((resolve) => {
+    const urlObj = new URL(url);
+    https.get({
+      hostname: urlObj.hostname,
+      path: urlObj.pathname + urlObj.search,
+      headers: KAI_HEADERS,
+      timeout: 15000,
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          resolve({ status: res.statusCode, data: JSON.parse(data) });
+        } catch (e) {
+          resolve({ status: res.statusCode, error: 'Invalid JSON', raw: data.substring(0, 200) });
+        }
+      });
+    }).on('error', (e) => {
+      resolve({ status: 0, error: e.message });
+    });
+  });
+}
+
+/**
+ * Full AnimeKai extraction - RPI does EVERYTHING
+ * 
+ * Input: kai_id (anime ID) and episode number
+ * Output: { success: true, streamUrl: "https://...", skip: {...} }
+ */
+async function fullAnimeKaiExtraction(kaiId, episodeNum, res) {
+  console.log(`[AnimeKai Full] Starting extraction for kai_id=${kaiId}, episode=${episodeNum}`);
+  
+  try {
+    // Step 1: Encrypt kai_id and fetch episodes
+    const encKaiId = encryptAnimeKai(kaiId);
+    const episodesUrl = `${KAI_AJAX}/episodes/list?ani_id=${kaiId}&_=${encKaiId}`;
+    console.log(`[AnimeKai Full] Fetching episodes...`);
+    
+    const episodesResult = await fetchAnimeKaiJson(episodesUrl);
+    if (!episodesResult.data?.result) {
+      console.log(`[AnimeKai Full] Failed to get episodes:`, episodesResult);
+      res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ success: false, error: 'Failed to fetch episodes', details: episodesResult }));
+    }
+    
+    // Step 2: Parse episode token
+    const episodeRegex = new RegExp(`<a[^>]*\\bnum="${episodeNum}"[^>]*\\btoken="([^"]+)"[^>]*>`, 'i');
+    const episodeMatch = episodesResult.data.result.match(episodeRegex);
+    
+    if (!episodeMatch) {
+      // Try alternate order
+      const altRegex = new RegExp(`<a[^>]*\\btoken="([^"]+)"[^>]*\\bnum="${episodeNum}"[^>]*>`, 'i');
+      const altMatch = episodesResult.data.result.match(altRegex);
+      if (!altMatch) {
+        console.log(`[AnimeKai Full] Episode ${episodeNum} not found`);
+        res.writeHead(404, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        return res.end(JSON.stringify({ success: false, error: `Episode ${episodeNum} not found` }));
+      }
+      var episodeToken = altMatch[1];
+    } else {
+      var episodeToken = episodeMatch[1];
+    }
+    
+    console.log(`[AnimeKai Full] Episode token: ${episodeToken}`);
+    
+    // Step 3: Encrypt token and fetch servers
+    const encToken = encryptAnimeKai(episodeToken);
+    const serversUrl = `${KAI_AJAX}/links/list?token=${episodeToken}&_=${encToken}`;
+    console.log(`[AnimeKai Full] Fetching servers...`);
+    
+    const serversResult = await fetchAnimeKaiJson(serversUrl);
+    if (!serversResult.data?.result) {
+      console.log(`[AnimeKai Full] Failed to get servers:`, serversResult);
+      res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ success: false, error: 'Failed to fetch servers', details: serversResult }));
+    }
+    
+    // Step 4: Parse first server lid
+    const serverRegex = /<span[^>]*class="server"[^>]*data-lid="([^"]+)"[^>]*>/i;
+    const serverMatch = serversResult.data.result.match(serverRegex);
+    
+    if (!serverMatch) {
+      console.log(`[AnimeKai Full] No servers found`);
+      res.writeHead(404, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ success: false, error: 'No servers found' }));
+    }
+    
+    const lid = serverMatch[1];
+    console.log(`[AnimeKai Full] Server lid: ${lid}`);
+    
+    // Step 5: Encrypt lid and fetch embed
+    const encLid = encryptAnimeKai(lid);
+    const embedUrl = `${KAI_AJAX}/links/view?id=${lid}&_=${encLid}`;
+    console.log(`[AnimeKai Full] Fetching embed...`);
+    
+    const embedResult = await fetchAnimeKaiJson(embedUrl);
+    if (!embedResult.data?.result) {
+      console.log(`[AnimeKai Full] Failed to get embed:`, embedResult);
+      res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ success: false, error: 'Failed to fetch embed', details: embedResult }));
+    }
+    
+    const encryptedEmbed = embedResult.data.result;
+    console.log(`[AnimeKai Full] Got encrypted embed (${encryptedEmbed.length} chars)`);
+    
+    // Step 6-9: Use existing extractAnimeKaiStream function
+    await extractAnimeKaiStream(encryptedEmbed, res);
+    
+  } catch (error) {
+    console.error(`[AnimeKai Full] Unexpected error:`, error);
+    res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+    res.end(JSON.stringify({ success: false, error: 'Extraction failed', details: error.message }));
+  }
+}
+
+// ============================================================================
+// AnimeKai Full Extraction Endpoint
+// Does ALL the work: decrypt embed → fetch MegaUp /media/ → decrypt → return HLS
+// ============================================================================
+
+/**
+ * Full AnimeKai extraction from encrypted embed response
+ * 
+ * Input: encrypted embed response from AnimeKai /ajax/links/view
+ * Output: { success: true, streamUrl: "https://...", skip: {...} }
+ * 
+ * Flow:
+ * 1. Decrypt AnimeKai embed response
+ * 2. Decode }XX hex format
+ * 3. Parse JSON to get MegaUp embed URL
+ * 4. Extract video ID from embed URL
+ * 5. Fetch MegaUp /media/{videoId} from residential IP
+ * 6. Decrypt MegaUp response
+ * 7. Return HLS stream URL
+ */
+async function extractAnimeKaiStream(encryptedEmbed, res) {
+  console.log(`[AnimeKai Extract] Starting extraction...`);
+  console.log(`[AnimeKai Extract] Encrypted embed length: ${encryptedEmbed.length}`);
+  
+  try {
+    // Step 1: Decrypt AnimeKai embed
+    let decrypted;
+    try {
+      decrypted = decryptAnimeKai(encryptedEmbed);
+      console.log(`[AnimeKai Extract] Decrypted: ${decrypted.substring(0, 100)}...`);
+    } catch (e) {
+      console.log(`[AnimeKai Extract] Decrypt error: ${e.message}`);
+      res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ success: false, error: 'AnimeKai decryption failed', details: e.message }));
+    }
+    
+    // Step 2: Decode }XX hex format
+    const decoded = decodeAnimeKaiHex(decrypted);
+    console.log(`[AnimeKai Extract] Decoded: ${decoded.substring(0, 100)}...`);
+    
+    // Step 3: Parse JSON
+    let embedData;
+    try {
+      embedData = JSON.parse(decoded);
+    } catch (e) {
+      console.log(`[AnimeKai Extract] JSON parse error: ${e.message}`);
+      res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ success: false, error: 'Invalid embed JSON', details: decoded.substring(0, 200) }));
+    }
+    
+    const embedUrl = embedData.url;
+    const skip = embedData.skip || {};
+    
+    if (!embedUrl) {
+      console.log(`[AnimeKai Extract] No URL in embed data`);
+      res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ success: false, error: 'No URL in embed data', data: embedData }));
+    }
+    
+    console.log(`[AnimeKai Extract] Embed URL: ${embedUrl}`);
+    
+    // Step 4: Extract video ID from embed URL
+    const urlMatch = embedUrl.match(/https?:\/\/([^\/]+)\/e\/([^\/\?]+)/);
+    if (!urlMatch) {
+      console.log(`[AnimeKai Extract] Invalid embed URL format`);
+      res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ success: false, error: 'Invalid MegaUp embed URL format', url: embedUrl }));
+    }
+    
+    const [, host, videoId] = urlMatch;
+    const mediaUrl = `https://${host}/media/${videoId}`;
+    console.log(`[AnimeKai Extract] MegaUp /media/ URL: ${mediaUrl}`);
+    
+    // Step 5: Fetch MegaUp /media/ from residential IP
+    const mediaResponse = await new Promise((resolve) => {
+      const url = new URL(mediaUrl);
+      
+      const req = https.request({
+        hostname: url.hostname,
+        path: url.pathname,
+        method: 'GET',
+        headers: {
+          'User-Agent': MEGAUP_USER_AGENT,
+          'Accept': '*/*',
+          'Accept-Encoding': 'identity',
+          // NO Referer or Origin headers - MegaUp blocks them
+        },
+        timeout: 15000,
+      }, (proxyRes) => {
+        const chunks = [];
+        proxyRes.on('data', chunk => chunks.push(chunk));
+        proxyRes.on('end', () => {
+          const data = Buffer.concat(chunks).toString('utf8');
+          resolve({ status: proxyRes.statusCode, data });
+        });
+      });
+      
+      req.on('error', (err) => {
+        resolve({ status: 0, error: err.message });
+      });
+      
+      req.on('timeout', () => {
+        req.destroy();
+        resolve({ status: 0, error: 'Timeout' });
+      });
+      
+      req.end();
+    });
+    
+    console.log(`[AnimeKai Extract] MegaUp response: ${mediaResponse.status}`);
+    
+    if (mediaResponse.error) {
+      console.log(`[AnimeKai Extract] MegaUp fetch error: ${mediaResponse.error}`);
+      res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ success: false, error: 'MegaUp fetch failed', details: mediaResponse.error }));
+    }
+    
+    if (mediaResponse.status !== 200) {
+      console.log(`[AnimeKai Extract] MegaUp HTTP error: ${mediaResponse.status}`);
+      console.log(`[AnimeKai Extract] Response: ${mediaResponse.data.substring(0, 200)}`);
+      res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ success: false, error: `MegaUp returned ${mediaResponse.status}`, response: mediaResponse.data.substring(0, 500) }));
+    }
+    
+    // Parse MegaUp response
+    let megaupData;
+    try {
+      megaupData = JSON.parse(mediaResponse.data);
+    } catch (e) {
+      console.log(`[AnimeKai Extract] MegaUp JSON parse error`);
+      res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ success: false, error: 'Invalid MegaUp response', response: mediaResponse.data.substring(0, 500) }));
+    }
+    
+    if (megaupData.status !== 200 || !megaupData.result) {
+      console.log(`[AnimeKai Extract] MegaUp API error: ${JSON.stringify(megaupData)}`);
+      res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ success: false, error: 'MegaUp API error', data: megaupData }));
+    }
+    
+    console.log(`[AnimeKai Extract] Got encrypted MegaUp data (${megaupData.result.length} chars)`);
+    console.log(`[AnimeKai Extract] Encrypted result (first 50): ${megaupData.result.substring(0, 50)}`);
+    
+    // Step 6: Decrypt MegaUp response using enc-dec.app API
+    let streamData;
+    try {
+      const decryptedMegaUp = await decryptMegaUpViaAPI(megaupData.result);
+      console.log(`[AnimeKai Extract] Decrypted MegaUp: ${decryptedMegaUp.substring(0, 100)}...`);
+      streamData = JSON.parse(decryptedMegaUp);
+    } catch (e) {
+      console.log(`[AnimeKai Extract] MegaUp decrypt error: ${e.message}`);
+      
+      res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ 
+        success: false, 
+        error: 'MegaUp decryption failed', 
+        details: e.message,
+        debug: {
+          mediaUrl: mediaUrl,
+          encryptedLength: megaupData.result.length,
+          encryptedFirst50: megaupData.result.substring(0, 50),
+        }
+      }));
+    }
+    
+    // Step 7: Extract stream URL
+    let streamUrl = '';
+    if (streamData.sources && streamData.sources[0]) {
+      streamUrl = streamData.sources[0].file || streamData.sources[0].url || '';
+    } else if (streamData.file) {
+      streamUrl = streamData.file;
+    } else if (streamData.url) {
+      streamUrl = streamData.url;
+    }
+    
+    if (!streamUrl) {
+      console.log(`[AnimeKai Extract] No stream URL in decrypted data`);
+      res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ success: false, error: 'No stream URL in MegaUp response', data: streamData }));
+    }
+    
+    console.log(`[AnimeKai Extract] ✅ SUCCESS! Stream URL: ${streamUrl.substring(0, 80)}...`);
+    
+    // Return success
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+    res.end(JSON.stringify({
+      success: true,
+      streamUrl,
+      skip,
+      tracks: streamData.tracks || [],
+    }));
+    
+  } catch (error) {
+    console.error(`[AnimeKai Extract] Unexpected error:`, error);
+    res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+    res.end(JSON.stringify({ success: false, error: 'Extraction failed', details: error.message }));
+  }
+}
 
 server.listen(PORT, () => {
   console.log(`
@@ -1224,6 +1906,7 @@ server.listen(PORT, () => {
 ║    GET /heartbeat?channel=&server=&domain= - DLHD session ║
 ║    GET /iptv/stream?url=&mac=&token= - IPTV stream proxy  ║
 ║    GET /animekai?url=&referer= - AnimeKai/Flixer CDN      ║
+║    GET /animekai/extract?embed=<encrypted> - Full extract ║
 ║    GET /health                   - Health check           ║
 ╠═══════════════════════════════════════════════════════════╣
 ║  CDN Support:                                             ║
