@@ -70,7 +70,8 @@ const ARM_API = 'https://arm.haglund.dev/api/v2/ids';
  * 
  * Flow: Vercel → Cloudflare Worker (/animekai) → RPI Proxy → MegaUp CDN
  */
-async function fetchViaCfAnimeKaiProxy(
+// @ts-ignore - Reserved for future use
+async function _fetchViaCfAnimeKaiProxy(
   targetUrl: string,
   options?: { timeout?: number }
 ): Promise<Response> {
@@ -747,7 +748,8 @@ async function decryptMegaUpEmbed(embedUrl: string): Promise<string | null> {
  * Unpack p,a,c,k,e,d JavaScript
  * Many embed pages use this obfuscation
  */
-function unpackPACKED(packed: string): string {
+// @ts-ignore - Reserved for future use
+function _unpackPACKED(packed: string): string {
   // Match the packed function pattern - use [\s\S] instead of . with /s flag for compatibility
   const packedMatch = packed.match(/eval\(function\(p,a,c,k,e,[dr]\)\{[\s\S]*?\}?\('([^']+)',\s*(\d+),\s*(\d+),\s*'([^']+)'\.split\('\|'\)/);
   
