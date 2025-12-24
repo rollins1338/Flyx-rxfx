@@ -161,8 +161,6 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
   }, [onNextEpisode]);
   useEffect(() => { showNextEpisodeButtonRef.current = showNextEpisodeButton; }, [showNextEpisodeButton]);
   useEffect(() => { autoPlayCountdownRef.current = autoPlayCountdown; }, [autoPlayCountdown]);
-  useEffect(() => { skipIntroRef.current = skipIntro; }, [skipIntro]);
-  useEffect(() => { skipOutroRef.current = skipOutro; }, [skipOutro]);
   
   // Listen for sync data changes and refresh preferences
   useEffect(() => {
@@ -206,6 +204,10 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
   const [skipOutro, setSkipOutro] = useState<[number, number] | null>(null);
   const [showSkipIntroButton, setShowSkipIntroButton] = useState(false);
   const [showSkipOutroButton, setShowSkipOutroButton] = useState(false);
+  
+  // Sync skip intro/outro refs with state (for use in timeupdate handler)
+  useEffect(() => { skipIntroRef.current = skipIntro; }, [skipIntro]);
+  useEffect(() => { skipOutroRef.current = skipOutro; }, [skipOutro]);
 
   // Videasy language filter for dub selection
   const [videasyLanguageFilter, setVideasyLanguageFilter] = useState<string>('all');
@@ -620,6 +622,13 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
         // Use the actual provider from response (may differ due to fallback)
         const actualProvider = data.provider || providerName;
         console.log(`[VideoPlayer] ✓ ${providerName} returned ${data.sources.length} sources (actual provider: ${actualProvider})`);
+        // Debug: Log skip data from first source
+        if (data.sources[0]?.skipIntro || data.sources[0]?.skipOutro) {
+          console.log(`[VideoPlayer] Skip data in response:`, {
+            skipIntro: data.sources[0].skipIntro,
+            skipOutro: data.sources[0].skipOutro,
+          });
+        }
         return { sources: data.sources, provider: actualProvider };
       }
       
@@ -812,16 +821,24 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
       
       // Extract skip intro/outro data from the first source (all sources from same anime have same skip times)
       const firstSource = sources[0];
+      console.log('[VideoPlayer] First source skip data check:', {
+        hasSkipIntro: !!firstSource?.skipIntro,
+        hasSkipOutro: !!firstSource?.skipOutro,
+        skipIntro: firstSource?.skipIntro,
+        skipOutro: firstSource?.skipOutro,
+      });
       if (firstSource?.skipIntro) {
         console.log('[VideoPlayer] Skip intro available:', firstSource.skipIntro);
         setSkipIntro(firstSource.skipIntro);
       } else {
+        console.log('[VideoPlayer] No skip intro data in first source');
         setSkipIntro(null);
       }
       if (firstSource?.skipOutro) {
         console.log('[VideoPlayer] Skip outro available:', firstSource.skipOutro);
         setSkipOutro(firstSource.skipOutro);
       } else {
+        console.log('[VideoPlayer] No skip outro data in first source');
         setSkipOutro(null);
       }
       
