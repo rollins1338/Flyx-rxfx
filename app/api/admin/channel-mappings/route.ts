@@ -6,7 +6,7 @@
  * Implements standardized response format per Requirements 16.2, 16.3, 16.4, 16.5
  */
 
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdminAuth } from '@/lib/utils/admin-auth';
 import { getDB, initializeDB } from '@/app/lib/db/neon-connection';
 import { v4 as uuidv4 } from 'uuid';
