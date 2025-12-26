@@ -8,20 +8,24 @@ import jwt from 'jsonwebtoken';
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 interface AdminUser {
-  id: string;
+  userId: string;
   username: string;
 }
 
 interface AuthResult {
   success: boolean;
-  user?: AdminUser;
+  user?: {
+    id: string;
+    username: string;
+  };
   error?: string;
 }
 
 export async function verifyAdminAuth(request: NextRequest): Promise<AuthResult> {
   try {
-    // Get token from cookie
-    const token = request.cookies.get('admin_token')?.value;
+    // Get token from cookie or Authorization header
+    const token = request.cookies.get('admin_token')?.value || 
+                 request.headers.get('Authorization')?.replace('Bearer ', '');
     
     if (!token) {
       return { success: false, error: 'No authentication token' };
@@ -33,7 +37,7 @@ export async function verifyAdminAuth(request: NextRequest): Promise<AuthResult>
     return {
       success: true,
       user: {
-        id: decoded.id,
+        id: decoded.userId,
         username: decoded.username,
       },
     };

@@ -15,7 +15,7 @@ async function verifyAdmin() {
   if (!token) return null;
   
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { id: number; username: string };
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; username: string };
     return decoded;
   } catch {
     return null;

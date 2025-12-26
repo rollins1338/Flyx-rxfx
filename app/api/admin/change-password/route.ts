@@ -6,15 +6,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { initializeDB, getDB } from '@/lib/db/neon-connection';
+import { initializeDB, getDB } from '@/lib/db/server-connection';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 const ADMIN_COOKIE = 'admin_token';
 
 export async function POST(request: NextRequest) {
   try {
-    // Get token from cookie
-    const token = request.cookies.get(ADMIN_COOKIE)?.value;
+    // Get token from cookie or Authorization header
+    const token = request.cookies.get(ADMIN_COOKIE)?.value || 
+                 request.headers.get('Authorization')?.replace('Bearer ', '');
     
     if (!token) {
       return NextResponse.json(
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
     // Verify JWT token
     let decoded;
     try {
-      decoded = jwt.verify(token, JWT_SECRET) as { id: string; username: string };
+      decoded = jwt.verify(token, JWT_SECRET) as { userId: string; username: string };
     } catch {
       return NextResponse.json(
         { error: 'Invalid or expired token' },
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest) {
       updateQuery = 'UPDATE admin_users SET password_hash = ? WHERE id = ?';
     }
     
-    const adminResult = await adapter.query(adminQuery, [decoded.id]);
+    const adminResult = await adapter.query(adminQuery, [decoded.userId]);
     const admin = adminResult[0];
 
     if (!admin) {
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
 
     // Hash new password and update
     const newPasswordHash = bcrypt.hashSync(newPassword, 10);
-    await adapter.execute(updateQuery, [newPasswordHash, decoded.id]);
+    await adapter.execute(updateQuery, [newPasswordHash, decoded.userId]);
 
     return NextResponse.json({
       success: true,
