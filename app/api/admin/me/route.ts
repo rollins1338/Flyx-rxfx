@@ -4,11 +4,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import jwt from 'jsonwebtoken';
 import { initializeDB, getDB } from '@/lib/db/server-connection';
 import { AdminAuthService } from '@/app/admin/middleware/auth-server';
-
-const ADMIN_COOKIE = 'admin_token';
 
 export async function GET(request: NextRequest) {
   const requestId = `admin_me_${Date.now()}`;

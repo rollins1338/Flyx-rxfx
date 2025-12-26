@@ -44,16 +44,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Log the action
-    await AuditLogService.logAction(
-      authResult.user,
-      actionType,
-      request,
-      details,
+    const enrichedDetails = {
+      ...details,
       success,
-      undefined, // errorMessage
       targetResource,
       targetId,
       duration
+    };
+
+    const clientIP = request.headers.get('x-forwarded-for') || 
+                    request.headers.get('x-real-ip') || 
+                    'unknown';
+
+    await AuditLogService.logAction(
+      authResult.user.id,
+      actionType,
+      enrichedDetails,
+      clientIP
     );
 
     return NextResponse.json({ success: true });

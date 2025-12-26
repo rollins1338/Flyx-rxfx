@@ -87,7 +87,7 @@ class DataExportService {
           data = await this.getTrafficData(request, adapter, isNeon);
           break;
         case 'system-health':
-          data = await this.getSystemHealthData(request, adapter, isNeon);
+          data = await this.getSystemHealthData();
           break;
         default:
           throw new Error(`Unsupported export type: ${request.exportType}`);
@@ -289,11 +289,7 @@ class DataExportService {
     }));
   }
 
-  private static async getSystemHealthData(
-    request: ExportRequest,
-    adapter: any,
-    isNeon: boolean
-  ): Promise<any[]> {
+  private static async getSystemHealthData(): Promise<any[]> {
     // Mock system health data - in real implementation this would come from monitoring systems
     return [
       {
@@ -486,7 +482,7 @@ export async function POST(request: NextRequest) {
     // Generate export
     const exportResult = await DataExportService.exportAnalyticsData(
       exportRequest,
-      authResult.user.username,
+      authResult.user?.username || 'unknown',
       adapter,
       isNeon
     );

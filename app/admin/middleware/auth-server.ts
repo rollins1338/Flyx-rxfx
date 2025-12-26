@@ -175,7 +175,7 @@ export class AuditLogService {
       const adapter = db.getAdapter();
 
       const logEntry = {
-        id: `audit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        id: `audit_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
         user_id: userId,
         action,
         details: JSON.stringify(details),
