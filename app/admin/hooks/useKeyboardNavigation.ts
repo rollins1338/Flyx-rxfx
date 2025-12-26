@@ -248,7 +248,7 @@ export function useKeyboardNavigation(options: KeyboardNavigationOptions = {}) {
 
 // Hook for managing focus trap (useful for modals, dropdowns)
 export function useFocusTrap(isActive: boolean = true) {
-  const { containerRef, focusFirst, focusLast } = useKeyboardNavigation({
+  const { containerRef, focusFirst } = useKeyboardNavigation({
     enableTabNavigation: true,
     enableEscapeHandling: false, // Let parent handle escape
   });
