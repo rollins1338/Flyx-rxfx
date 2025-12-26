@@ -6,8 +6,6 @@
  * geographic distribution, and external proxy analytics.
  */
 
-import React from 'react';
-
 export default function UnifiedTrafficPage() {
   return (
     <div className="p-6">

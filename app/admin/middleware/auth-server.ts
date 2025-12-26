@@ -14,9 +14,6 @@ import {
   PermissionLevel, 
   FunctionalityCategory,
   ADMIN_COOKIE,
-  ROLE_HIERARCHY,
-  PERMISSION_HIERARCHY,
-  ROLE_PERMISSIONS,
   ClientAuthUtils
 } from '../types/auth';
 
@@ -67,9 +64,10 @@ export class AdminAuthService {
       // Initialize database
       await initializeDB();
       const db = getDB();
+      const adapter = db.getAdapter();
 
       // Get user from database
-      const users = await db.query(
+      const users = await adapter.query(
         'SELECT * FROM admin_users WHERE id = ?',
         [decoded.userId]
       );
@@ -146,8 +144,9 @@ export class AdminAuthService {
     try {
       await initializeDB();
       const db = getDB();
+      const adapter = db.getAdapter();
       
-      await db.execute(
+      await adapter.execute(
         'UPDATE admin_users SET last_login = ? WHERE id = ?',
         [Date.now(), userId]
       );
@@ -173,6 +172,7 @@ export class AuditLogService {
     try {
       await initializeDB();
       const db = getDB();
+      const adapter = db.getAdapter();
 
       const logEntry = {
         id: `audit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -184,7 +184,7 @@ export class AuditLogService {
         created_at: Date.now()
       };
 
-      await db.execute(
+      await adapter.execute(
         `INSERT INTO audit_logs (id, user_id, action, details, ip_address, timestamp, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -222,6 +222,7 @@ export class AuditLogService {
     try {
       await initializeDB();
       const db = getDB();
+      const adapter = db.getAdapter();
 
       let whereClause = 'WHERE 1=1';
       const params: any[] = [];
@@ -247,7 +248,7 @@ export class AuditLogService {
       }
 
       // Get total count
-      const countResult = await db.query(
+      const countResult = await adapter.query(
         `SELECT COUNT(*) as total FROM audit_logs ${whereClause}`,
         params
       );
@@ -255,7 +256,7 @@ export class AuditLogService {
 
       // Get paginated logs
       const offset = (page - 1) * limit;
-      const logs = await db.query(
+      const logs = await adapter.query(
         `SELECT al.*, au.username 
          FROM audit_logs al 
          LEFT JOIN admin_users au ON al.user_id = au.id 
