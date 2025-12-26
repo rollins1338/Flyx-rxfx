@@ -18,18 +18,44 @@ import {
   RotateCcw,
   Square,
   Zap,
-  Server
+  Server,
+  Globe,
+  Search,
+  Calendar
 } from 'lucide-react';
 import type Hls from 'hls.js';
 import type mpegts from 'mpegts.js';
 
 // Proxy URLs for IPTV streams
-// RPi proxy (residential IP) is preferred - bypasses datacenter IP blocking
-// CF proxy is fallback but often gets 403'd by IPTV providers
 const RPI_PROXY_URL = process.env.NEXT_PUBLIC_RPI_PROXY_URL;
 const CF_PROXY_URL = process.env.NEXT_PUBLIC_CF_TV_PROXY_URL || process.env.NEXT_PUBLIC_CF_PROXY_URL || 'https://media-proxy.vynx.workers.dev';
 const RPI_PROXY_KEY = process.env.NEXT_PUBLIC_RPI_PROXY_KEY;
 
+// Tab types
+type DebugTab = 'cdn-live' | 'ppv' | 'stalker';
+
+// CDN-Live types
+interface CDNLiveChannel {
+  name: string;
+  code: string;
+  url: string;
+  image: string;
+  status: string;
+  viewers: number;
+}
+
+// PPV types
+interface PPVStream {
+  id: string;
+  title: string;
+  uri: string;
+  category: string;
+  status: string;
+  startTime?: string;
+  thumbnail?: string;
+}
+
+// Stalker types
 interface SavedAccount {
   portal: string;
   mac: string;
@@ -54,7 +80,7 @@ interface Channel {
   cmd: string;
   logo?: string;
   tv_genre_id?: string;
-  genre_title?: string; // Added by our API for grouping
+  genre_title?: string;
   genre_id?: string;
 }
 
@@ -75,6 +101,34 @@ interface AutoCycleResult {
 }
 
 export default function IPTVDebugPage() {
+  // Tab state
+  const [activeTab, setActiveTab] = useState<DebugTab>('cdn-live');
+  
+  // CDN-Live state
+  const [cdnChannels, setCdnChannels] = useState<CDNLiveChannel[]>([]);
+  const [cdnCountries, setCdnCountries] = useState<string[]>([]);
+  const [cdnByCountry, setCdnByCountry] = useState<Record<string, CDNLiveChannel[]>>({});
+  const [cdnSelectedCountry, setCdnSelectedCountry] = useState<string>('us');
+  const [cdnSearch, setCdnSearch] = useState('');
+  const [cdnLoading, setCdnLoading] = useState(false);
+  const [cdnStreamLoading, setCdnStreamLoading] = useState(false);
+  const [cdnSelectedChannel, setCdnSelectedChannel] = useState<CDNLiveChannel | null>(null);
+  const [cdnStreamUrl, setCdnStreamUrl] = useState<string | null>(null);
+  const [cdnStreamDebug, setCdnStreamDebug] = useState<any>(null);
+  
+  // PPV state
+  const [ppvStreams, setPpvStreams] = useState<PPVStream[]>([]);
+  const [ppvCategories, setPpvCategories] = useState<string[]>([]);
+  const [ppvSelectedCategory, setPpvSelectedCategory] = useState<string>('all');
+  const [ppvSearch, setPpvSearch] = useState('');
+  const [ppvLoading, setPpvLoading] = useState(false);
+  const [ppvStreamLoading, setPpvStreamLoading] = useState(false);
+  const [ppvSelectedStream, setPpvSelectedStream] = useState<PPVStream | null>(null);
+  const [ppvStreamUrl, setPpvStreamUrl] = useState<string | null>(null);
+  const [ppvStreamDebug, setPpvStreamDebug] = useState<any>(null);
+  const [ppvLiveOnly, setPpvLiveOnly] = useState(false);
+  
+  // Stalker state (existing)
   const [portalUrl, setPortalUrl] = useState('');
   const [macAddress, setMacAddress] = useState('');
   const [loading, setLoading] = useState(false);
@@ -97,7 +151,7 @@ export default function IPTVDebugPage() {
   const [debugSourcesResult, setDebugSourcesResult] = useState<any>(null);
   const [debugSourcesLoading, setDebugSourcesLoading] = useState(false);
   const [channelSearch, setChannelSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all'); // Category filter
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [availableCategories, setAvailableCategories] = useState<{id: string, title: string}[]>([]);
   const autoCycleAbortRef = useRef(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -122,7 +176,229 @@ export default function IPTVDebugPage() {
     }
   }, [savedAccounts]);
 
-  // Import accounts from JSON file
+  // ============================================
+  // CDN-LIVE.TV FUNCTIONS
+  // ============================================
+  
+  const loadCdnChannels = useCallback(async () => {
+    setCdnLoading(true);
+    try {
+      const response = await fetch('/api/livetv/cdn-live-channels');
+      const data = await response.json();
+      
+      if (data.channels) {
+        setCdnChannels(data.channels);
+        setCdnCountries(data.countries || []);
+        setCdnByCountry(data.byCountry || {});
+      }
+    } catch (error) {
+      console.error('Failed to load CDN-Live channels:', error);
+    } finally {
+      setCdnLoading(false);
+    }
+  }, []);
+
+  const loadCdnStream = useCallback(async (channel: CDNLiveChannel) => {
+    setCdnStreamLoading(true);
+    setCdnSelectedChannel(channel);
+    setCdnStreamUrl(null);
+    setCdnStreamDebug(null);
+    setPlayerError(null);
+    
+    try {
+      const response = await fetch(`/api/livetv/cdn-live-stream?name=${encodeURIComponent(channel.name)}&code=${channel.code}`);
+      const data = await response.json();
+      
+      setCdnStreamDebug(data);
+      
+      if (data.success && data.streamUrl) {
+        setCdnStreamUrl(data.streamUrl);
+      }
+    } catch (error) {
+      console.error('Failed to get CDN-Live stream:', error);
+      setCdnStreamDebug({ error: String(error) });
+    } finally {
+      setCdnStreamLoading(false);
+    }
+  }, []);
+
+  // Load CDN channels on tab switch
+  useEffect(() => {
+    if (activeTab === 'cdn-live' && cdnChannels.length === 0) {
+      loadCdnChannels();
+    }
+  }, [activeTab, cdnChannels.length, loadCdnChannels]);
+
+  // ============================================
+  // PPV.TO FUNCTIONS
+  // ============================================
+  
+  const loadPpvStreams = useCallback(async () => {
+    setPpvLoading(true);
+    try {
+      const response = await fetch('/api/livetv/ppv-streams');
+      const data = await response.json();
+      
+      if (data.streams) {
+        setPpvStreams(data.streams);
+        // Extract unique categories
+        const cats = [...new Set(data.streams.map((s: PPVStream) => s.category))].filter(Boolean) as string[];
+        setPpvCategories(cats.sort());
+      }
+    } catch (error) {
+      console.error('Failed to load PPV streams:', error);
+    } finally {
+      setPpvLoading(false);
+    }
+  }, []);
+
+  const loadPpvStream = useCallback(async (stream: PPVStream) => {
+    setPpvStreamLoading(true);
+    setPpvSelectedStream(stream);
+    setPpvStreamUrl(null);
+    setPpvStreamDebug(null);
+    setPlayerError(null);
+    
+    try {
+      const response = await fetch(`/api/livetv/ppv-stream?uri=${encodeURIComponent(stream.uri)}`);
+      const data = await response.json();
+      
+      setPpvStreamDebug(data);
+      
+      if (data.success && data.streamUrl) {
+        setPpvStreamUrl(data.streamUrl);
+      }
+    } catch (error) {
+      console.error('Failed to get PPV stream:', error);
+      setPpvStreamDebug({ error: String(error) });
+    } finally {
+      setPpvStreamLoading(false);
+    }
+  }, []);
+
+  // Load PPV streams on tab switch
+  useEffect(() => {
+    if (activeTab === 'ppv' && ppvStreams.length === 0) {
+      loadPpvStreams();
+    }
+  }, [activeTab, ppvStreams.length, loadPpvStreams]);
+
+  // ============================================
+  // PLAYER SETUP (shared across all tabs)
+  // ============================================
+  
+  const currentStreamUrl = activeTab === 'cdn-live' ? cdnStreamUrl : activeTab === 'ppv' ? ppvStreamUrl : streamUrl;
+  
+  useEffect(() => {
+    if (!currentStreamUrl || !videoRef.current) return;
+
+    // Cleanup previous instances
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+    if (mpegtsRef.current) {
+      mpegtsRef.current.destroy();
+      mpegtsRef.current = null;
+    }
+    setPlayerError(null);
+
+    const video = videoRef.current;
+    const isHLS = currentStreamUrl.includes('.m3u8') || currentStreamUrl.includes('m3u8');
+
+    const setupPlayer = async () => {
+      if (isHLS) {
+        const HlsModule = await import('hls.js');
+        const Hls = HlsModule.default;
+        
+        if (Hls.isSupported()) {
+          const hls = new Hls({
+            enableWorker: true,
+            lowLatencyMode: true,
+          });
+          
+          hls.loadSource(currentStreamUrl);
+          hls.attachMedia(video);
+          
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            video.play().catch((e) => console.error('Play failed:', e));
+          });
+          
+          hls.on(Hls.Events.ERROR, (_event, data) => {
+            setPlayerError(`HLS Error: ${data.type} - ${data.details}`);
+            if (data.fatal) {
+              switch (data.type) {
+                case Hls.ErrorTypes.NETWORK_ERROR:
+                  hls.startLoad();
+                  break;
+                case Hls.ErrorTypes.MEDIA_ERROR:
+                  hls.recoverMediaError();
+                  break;
+                default:
+                  hls.destroy();
+                  break;
+              }
+            }
+          });
+          
+          hlsRef.current = hls;
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          video.src = currentStreamUrl;
+          video.play().catch(console.error);
+        }
+      } else {
+        // Try mpegts.js for TS streams
+        const mpegtsModule = await import('mpegts.js');
+        const mpegtsLib = mpegtsModule.default;
+        
+        if (mpegtsLib.isSupported()) {
+          const player = mpegtsLib.createPlayer({
+            type: 'mpegts',
+            isLive: true,
+            url: currentStreamUrl,
+          }, {
+            enableWorker: true,
+            enableStashBuffer: true,
+            stashInitialSize: 384 * 1024,
+          });
+          
+          player.attachMediaElement(video);
+          player.load();
+          
+          player.on(mpegtsLib.Events.ERROR, (errorType: string, errorDetail: string) => {
+            setPlayerError(`MPEG-TS Error: ${errorType} - ${errorDetail}`);
+          });
+          
+          video.play().catch((err) => {
+            setPlayerError(`Play failed: ${err.message}`);
+          });
+          
+          mpegtsRef.current = player;
+        }
+      }
+    };
+
+    setupPlayer().catch((err) => {
+      setPlayerError(`Failed to load player: ${err?.message || String(err)}`);
+    });
+
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+      if (mpegtsRef.current) {
+        mpegtsRef.current.destroy();
+        mpegtsRef.current = null;
+      }
+    };
+  }, [currentStreamUrl]);
+
+
+  // ============================================
+  // STALKER PORTAL FUNCTIONS (existing)
+  // ============================================
+
   const handleFileImport = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -133,13 +409,10 @@ export default function IPTVDebugPage() {
         const data = JSON.parse(e.target?.result as string);
         const accounts = data.accounts || data;
         
-        // Filter for usable accounts - prioritize having channels over status
-        // Many open portals return status=0 but still work
         const usable = accounts
           .filter((acc: any) => {
             const notBlocked = acc.profile?.blocked !== '1' && acc.profile?.blocked !== 1;
             const hasChannels = (acc.content?.itv || 0) > 0;
-            // Account is usable if it has channels and isn't blocked
             return acc.success && notBlocked && hasChannels;
           })
           .map((acc: any) => ({
@@ -150,53 +423,45 @@ export default function IPTVDebugPage() {
             blocked: acc.profile?.blocked,
             addedAt: new Date().toISOString(),
           }))
-          // Sort by channel count descending
           .sort((a: SavedAccount, b: SavedAccount) => b.channels - a.channels);
 
         if (usable.length > 0) {
           setSavedAccounts(prev => {
-            // Merge, avoiding duplicates
             const existing = new Set(prev.map(a => `${a.portal}|${a.mac}`));
             const newAccounts = usable.filter((a: SavedAccount) => !existing.has(`${a.portal}|${a.mac}`));
             return [...prev, ...newAccounts];
           });
-          alert(`Imported ${usable.length} usable accounts (not blocked, with channels). Sorted by channel count.`);
+          alert(`Imported ${usable.length} usable accounts.`);
         } else {
-          alert('No usable accounts found in file. Accounts must not be blocked and have channels (itv > 0).');
+          alert('No usable accounts found in file.');
         }
       } catch (err) {
         alert('Failed to parse JSON file');
       }
     };
     reader.readAsText(file);
-    // Reset input
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, []);
 
-  // Load a saved account into the form
   const loadAccount = useCallback((account: SavedAccount) => {
     setPortalUrl(account.portal);
     setMacAddress(account.mac);
-    // Reset state
     setTestResult(null);
     setGenres([]);
     setChannels([]);
     setStreamUrl(null);
   }, []);
 
-  // Remove a saved account
   const removeAccount = useCallback((portal: string, mac: string) => {
     setSavedAccounts(prev => prev.filter(a => !(a.portal === portal && a.mac === mac)));
   }, []);
 
-  // Save current account if it's usable
   const saveCurrentAccount = useCallback(() => {
     if (!testResult?.success || !portalUrl || !macAddress) return;
     
     const notBlocked = testResult.profile?.blocked !== '1' && testResult.profile?.blocked !== 1;
     const hasChannels = (testResult.content?.itv || 0) > 0;
     
-    // Only require not blocked and has channels - status doesn't matter for open portals
     if (!notBlocked || !hasChannels) {
       alert('Cannot save: Account must not be blocked and have channels');
       return;
@@ -218,7 +483,6 @@ export default function IPTVDebugPage() {
     });
   }, [testResult, portalUrl, macAddress]);
 
-  // Auto-cycle through accounts to test which ones can access streams
   const startAutoCycle = useCallback(async () => {
     if (savedAccounts.length === 0) {
       alert('No saved accounts to test');
@@ -252,7 +516,6 @@ export default function IPTVDebugPage() {
       };
 
       try {
-        // Test connection
         const response = await fetch('/api/admin/iptv-debug', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -265,10 +528,8 @@ export default function IPTVDebugPage() {
           result.success = true;
           result.channels = data.content?.itv || 0;
           
-          // Optionally test stream access
           if (testStreamDuringCycle && result.channels > 0) {
             try {
-              // Get first channel
               const channelsRes = await fetch('/api/admin/iptv-debug', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -286,7 +547,6 @@ export default function IPTVDebugPage() {
               if (channelsData.success && channelsData.channels?.data?.length > 0) {
                 const firstChannel = channelsData.channels.data[0];
                 
-                // Try to get stream URL
                 const streamRes = await fetch('/api/admin/iptv-debug', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -305,10 +565,9 @@ export default function IPTVDebugPage() {
                 }
               }
             } catch (streamErr) {
-              // Stream test failed, but connection worked
+              // Stream test failed
             }
           } else if (!testStreamDuringCycle) {
-            // If not testing streams, assume it can stream if connected
             result.canStream = result.channels > 0;
           }
         } else {
@@ -321,7 +580,6 @@ export default function IPTVDebugPage() {
       results.push(result);
       setAutoCycleResults([...results]);
 
-      // Small delay between tests to avoid rate limiting
       if (i < savedAccounts.length - 1 && !autoCycleAbortRef.current) {
         await new Promise(resolve => setTimeout(resolve, 500));
       }
@@ -334,254 +592,6 @@ export default function IPTVDebugPage() {
     autoCycleAbortRef.current = true;
   }, []);
 
-  // Setup player when stream URL changes
-  useEffect(() => {
-    if (!streamUrl || !videoRef.current) return;
-
-    // Cleanup previous instances
-    if (hlsRef.current) {
-      hlsRef.current.destroy();
-      hlsRef.current = null;
-    }
-    if (mpegtsRef.current) {
-      mpegtsRef.current.destroy();
-      mpegtsRef.current = null;
-    }
-    setPlayerError(null);
-
-    const video = videoRef.current;
-    
-    // Check if this is an HLS stream (m3u8) or raw TS stream
-    // Use rawStreamUrl for detection since streamUrl is the proxied URL
-    const urlToCheck = rawStreamUrl || streamUrl;
-    const isHLS = urlToCheck.includes('.m3u8') || urlToCheck.includes('m3u8');
-    // Most IPTV Stalker streams are raw MPEG-TS, detect common patterns
-    const isTS = urlToCheck.includes('extension=ts') || 
-                 urlToCheck.endsWith('.ts') || 
-                 urlToCheck.includes('live.php') || 
-                 urlToCheck.includes('/play/') ||
-                 urlToCheck.includes('/live/') ||
-                 urlToCheck.includes('stream=') ||
-                 // If not HLS and has typical IPTV URL patterns, assume TS
-                 (!isHLS && (urlToCheck.includes('/c/') || urlToCheck.includes('token=')));
-    
-    console.log('[IPTV Debug] Stream type detection:', { isHLS, isTS, urlToCheck: urlToCheck.substring(0, 100) });
-
-    // Dynamic import and setup
-    const setupPlayer = async () => {
-      if (isHLS) {
-        // Dynamically import HLS.js
-        const HlsModule = await import('hls.js');
-        const Hls = HlsModule.default;
-        
-        if (Hls.isSupported()) {
-          console.log('[IPTV Debug] Setting up HLS.js player with URL:', streamUrl.substring(0, 100));
-          const hls = new Hls({
-            enableWorker: true,
-            lowLatencyMode: true,
-            xhrSetup: (xhr) => {
-              xhr.withCredentials = false; // Don't send credentials to avoid CORS issues
-            },
-          });
-          
-          hls.loadSource(streamUrl);
-          hls.attachMedia(video);
-          
-          hls.on(Hls.Events.MANIFEST_PARSED, () => {
-            console.log('[IPTV Debug] HLS manifest parsed, starting playback');
-            video.play().catch((e) => console.error('[IPTV Debug] Play failed:', e));
-          });
-          
-          hls.on(Hls.Events.ERROR, (_event, data) => {
-            console.error('[IPTV Debug] HLS error:', data.type, data.details, data);
-            setPlayerError(`HLS Error: ${data.type} - ${data.details}`);
-            if (data.fatal) {
-              switch (data.type) {
-                case Hls.ErrorTypes.NETWORK_ERROR:
-                  console.log('Network error, trying to recover...');
-                  hls.startLoad();
-                  break;
-                case Hls.ErrorTypes.MEDIA_ERROR:
-                  console.log('Media error, trying to recover...');
-                  hls.recoverMediaError();
-                  break;
-                default:
-                  console.log('Fatal error, destroying HLS instance');
-                  hls.destroy();
-                  break;
-              }
-            }
-          });
-          
-          hlsRef.current = hls;
-        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-          // Native HLS support (Safari)
-          video.src = streamUrl;
-          video.play().catch(console.error);
-        }
-      } else if (isTS) {
-        // Dynamically import mpegts.js
-        const mpegtsModule = await import('mpegts.js');
-        const mpegtsLib = mpegtsModule.default;
-        
-        if (mpegtsLib.isSupported()) {
-          console.log('Using mpegts.js for TS stream');
-          
-          // Use RPi proxy (residential IP) if available, otherwise fall back to CF proxy
-          // RPi proxy bypasses datacenter IP blocking that IPTV providers use
-          const rawUrl = rawStreamUrl || streamUrl;
-          let proxyUrl: string;
-          
-          // Build proxy URL with MAC for proper STB headers
-          const proxyParams = new URLSearchParams({ url: rawUrl });
-          if (macAddress) proxyParams.set('mac', macAddress);
-          
-          if (RPI_PROXY_URL) {
-            if (RPI_PROXY_KEY) proxyParams.set('key', RPI_PROXY_KEY);
-            proxyUrl = `${RPI_PROXY_URL}/iptv/stream?${proxyParams.toString()}`;
-            console.log('mpegts using RPi proxy (residential IP):', proxyUrl.substring(0, 100));
-          } else {
-            // CF_PROXY_URL might have /tv suffix, strip it for /iptv routes
-            const cfBase = CF_PROXY_URL.replace(/\/tv\/?$/, '').replace(/\/+$/, '');
-            proxyUrl = `${cfBase}/iptv/stream?${proxyParams.toString()}`;
-            console.log('mpegts using CF proxy (may get 403):', proxyUrl.substring(0, 100));
-          }
-          
-          const player = mpegtsLib.createPlayer({
-            type: 'mpegts',
-            isLive: true,
-            url: proxyUrl,
-          }, {
-            enableWorker: true,
-            enableStashBuffer: true,
-            stashInitialSize: 384 * 1024, // 384KB initial buffer
-            liveBufferLatencyChasing: false, // Disable aggressive latency chasing
-            liveBufferLatencyMaxLatency: 5.0, // Allow up to 5 seconds latency
-            liveBufferLatencyMinRemain: 1.0, // Keep at least 1 second buffer
-            lazyLoad: false,
-            lazyLoadMaxDuration: 3 * 60, // 3 minutes
-            lazyLoadRecoverDuration: 30,
-            autoCleanupSourceBuffer: true,
-            autoCleanupMaxBackwardDuration: 3 * 60,
-            autoCleanupMinBackwardDuration: 2 * 60,
-          });
-          
-          player.attachMediaElement(video);
-          player.load();
-          
-          player.on(mpegtsLib.Events.ERROR, (errorType: string, errorDetail: string, info: any) => {
-            console.error('mpegts error:', { errorType, errorDetail, info });
-            if (errorDetail.includes('403') || errorDetail.includes('HttpStatusCodeInvalid')) {
-              const hint = RPI_PROXY_URL 
-                ? 'Portal may have blocked this IP. Try VLC with the URL below.'
-                : 'Portal blocked datacenter IP (403). Configure RPI proxy or use VLC.';
-              setPlayerError(hint);
-            } else if (errorDetail.includes('SSL') || errorDetail.includes('fetch') || errorDetail.includes('Network')) {
-              setPlayerError(`Network Error: ${errorDetail}. Try VLC.`);
-            } else {
-              setPlayerError(`MPEG-TS Error: ${errorType} - ${errorDetail}`);
-            }
-          });
-          
-          player.on(mpegtsLib.Events.LOADING_COMPLETE, () => {
-            console.log('mpegts loading complete');
-          });
-
-          player.on(mpegtsLib.Events.MEDIA_INFO, (info: any) => {
-            console.log('mpegts media info:', info);
-          });
-
-          player.on(mpegtsLib.Events.STATISTICS_INFO, (stats: any) => {
-            console.log('mpegts stats:', stats);
-          });
-          
-          video.play().catch((err) => {
-            console.error('Play failed:', err);
-            setPlayerError(`Play failed: ${err.message}`);
-          });
-          
-          mpegtsRef.current = player;
-        } else {
-          setPlayerError('Browser does not support MPEG-TS playback. Use VLC instead.');
-        }
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        // Native HLS support (Safari)
-        video.src = streamUrl;
-        video.play().catch(console.error);
-      } else {
-        // Fallback - try mpegts.js for unknown stream types (most IPTV streams are TS)
-        console.log('Unknown stream type, trying mpegts.js as fallback');
-        
-        const mpegtsModule = await import('mpegts.js');
-        const mpegtsLib = mpegtsModule.default;
-        
-        if (mpegtsLib.isSupported()) {
-          // Use RPi proxy for residential IP
-          const rawUrl = rawStreamUrl || streamUrl;
-          let proxyUrl: string;
-          
-          const proxyParams = new URLSearchParams({ url: rawUrl });
-          if (macAddress) proxyParams.set('mac', macAddress);
-          
-          if (RPI_PROXY_URL) {
-            if (RPI_PROXY_KEY) proxyParams.set('key', RPI_PROXY_KEY);
-            proxyUrl = `${RPI_PROXY_URL}/iptv/stream?${proxyParams.toString()}`;
-            console.log('Fallback mpegts using RPi proxy:', proxyUrl.substring(0, 100));
-          } else {
-            // CF_PROXY_URL might have /tv suffix, strip it for /iptv routes
-            const cfBase = CF_PROXY_URL.replace(/\/tv\/?$/, '').replace(/\/+$/, '');
-            proxyUrl = `${cfBase}/iptv/stream?${proxyParams.toString()}`;
-            console.log('Fallback mpegts using CF proxy:', proxyUrl.substring(0, 100));
-          }
-          
-          const player = mpegtsLib.createPlayer({
-            type: 'mpegts',
-            isLive: true,
-            url: proxyUrl,
-          }, {
-            enableWorker: true,
-            enableStashBuffer: true,
-            stashInitialSize: 384 * 1024,
-          });
-          
-          player.attachMediaElement(video);
-          player.load();
-          
-          player.on(mpegtsLib.Events.ERROR, (errorType: string, errorDetail: string) => {
-            console.error('Fallback mpegts error:', { errorType, errorDetail });
-            setPlayerError(`Stream Error: ${errorType} - ${errorDetail}. Try VLC.`);
-          });
-          
-          video.play().catch((err) => {
-            console.error('Fallback play failed:', err);
-            setPlayerError(`Play failed: ${err.message}. Use VLC.`);
-          });
-          
-          mpegtsRef.current = player;
-        } else {
-          setPlayerError('Browser does not support this stream format. Use VLC instead.');
-        }
-      }
-    };
-
-    setupPlayer().catch((err) => {
-      console.error('[IPTV Debug] Failed to setup player:', err);
-      setPlayerError(`Failed to load player: ${err?.message || String(err)}`);
-    });
-
-    return () => {
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
-        hlsRef.current = null;
-      }
-      if (mpegtsRef.current) {
-        mpegtsRef.current.destroy();
-        mpegtsRef.current = null;
-      }
-    };
-  }, [streamUrl, rawStreamUrl, macAddress]);
-
-  // Load channels - if usOnly is true, only fetches from US/NA/CA genres
   const loadAllChannels = useCallback(async (tokenOverride?: string, usOnly: boolean = true, category?: string) => {
     const token = tokenOverride || testResult?.token;
     if (!token) return;
@@ -599,21 +609,17 @@ export default function IPTVDebugPage() {
           macAddress, 
           token,
           usOnly,
-          selectedGenre: category // Filter to specific category
+          selectedGenre: category
         })
       });
       
       const data = await response.json();
-      console.log('All channels response:', data);
       if (data.success) {
         setChannels(data.channels || []);
         setTotalChannels(data.total || 0);
-        // Store available categories for dropdown
         if (data.genres && data.genres.length > 0) {
           setAvailableCategories(data.genres);
         }
-      } else {
-        console.error('Failed to load all channels:', data);
       }
     } catch (error) {
       console.error('Failed to load all channels:', error);
@@ -642,7 +648,6 @@ export default function IPTVDebugPage() {
       setTestResult(data);
       
       if (data.success && data.token) {
-        // Load genres
         const genresRes = await fetch('/api/admin/iptv-debug', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -653,7 +658,6 @@ export default function IPTVDebugPage() {
           setGenres(genresData.genres || []);
         }
         
-        // Auto-load channels (US only, all categories)
         await loadAllChannels(data.token, true, selectedCategory);
       }
     } catch (error: any) {
@@ -686,37 +690,21 @@ export default function IPTVDebugPage() {
       });
       
       const data = await response.json();
-      // Include the channel cmd in debug info
       setStreamDebug({ ...data, channelCmd: channel.cmd, channelName: channel.name });
       
       if (data.success && data.streamUrl) {
         const url = data.streamUrl;
-        
-        // Save raw URL for display/copy
         setRawStreamUrl(url);
-        
-        // Create proxied URL through our API
         const proxiedUrl = `/api/admin/iptv-debug/stream?url=${encodeURIComponent(url)}&mac=${encodeURIComponent(macAddress)}&token=${encodeURIComponent(testResult.token)}`;
-        console.log('[IPTV Debug] Setting stream URL:', proxiedUrl.substring(0, 100));
         setStreamUrl(proxiedUrl);
-      } else {
-        console.error('[IPTV Debug] No stream URL returned:', data);
-        setStreamDebug({ ...data, error: data.error || 'No stream URL returned' });
       }
     } catch (error) {
-      console.error('[IPTV Debug] Failed to get stream:', error);
       setStreamDebug({ error: String(error) });
     } finally {
       setLoadingStream(false);
     }
   }, [testResult?.token, portalUrl, macAddress]);
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-  };
-
-  // Get stream URL via Cloudflare proxy (direct, no RPi)
-  // This tests if CF can access the portal directly now that free tier limits are resolved
   const getStreamViaCF = useCallback(async (channel: Channel) => {
     if (!portalUrl || !macAddress) return;
     
@@ -727,7 +715,6 @@ export default function IPTVDebugPage() {
     setStreamDebug(null);
     
     try {
-      // Normalize portal URL
       let baseUrl = portalUrl.trim();
       if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
         baseUrl = 'http://' + baseUrl;
@@ -735,7 +722,6 @@ export default function IPTVDebugPage() {
       baseUrl = baseUrl.replace(/\/+$/, '');
       if (baseUrl.endsWith('/c')) baseUrl = baseUrl.slice(0, -2);
       
-      // Step 1: Get token via CF proxy (handshake)
       const handshakeUrl = new URL('/portal.php', baseUrl);
       handshakeUrl.searchParams.set('type', 'stb');
       handshakeUrl.searchParams.set('action', 'handshake');
@@ -744,7 +730,6 @@ export default function IPTVDebugPage() {
       
       const cfBaseUrl = CF_PROXY_URL.replace(/\/tv\/?$/, '').replace(/\/+$/, '');
       
-      console.log('[CF Stream] Step 1: Getting token via CF proxy');
       const tokenParams = new URLSearchParams({ url: handshakeUrl.toString(), mac: macAddress });
       const tokenRes = await fetch(`${cfBaseUrl}/iptv/api?${tokenParams.toString()}`);
       const tokenText = await tokenRes.text();
@@ -756,9 +741,7 @@ export default function IPTVDebugPage() {
       }
       
       const cfToken = tokenData.js.token;
-      console.log('[CF Stream] Got token:', cfToken.substring(0, 20) + '...');
       
-      // Step 2: Get stream URL via CF proxy (create_link)
       const createLinkUrl = new URL('/portal.php', baseUrl);
       createLinkUrl.searchParams.set('type', 'itv');
       createLinkUrl.searchParams.set('action', 'create_link');
@@ -769,7 +752,6 @@ export default function IPTVDebugPage() {
       createLinkUrl.searchParams.set('download', '0');
       createLinkUrl.searchParams.set('JsHttpRequest', '1-xml');
       
-      console.log('[CF Stream] Step 2: Getting stream URL via CF proxy');
       const streamParams = new URLSearchParams({ 
         url: createLinkUrl.toString(), 
         mac: macAddress,
@@ -780,54 +762,39 @@ export default function IPTVDebugPage() {
       const streamClean = streamText.replace(/^\/\*-secure-\s*/, '').replace(/\s*\*\/$/, '');
       const streamData = JSON.parse(streamClean);
       
-      // Extract URL from ffmpeg command format
-      let streamUrl = streamData?.js?.cmd || null;
-      if (streamUrl) {
+      let streamUrlResult = streamData?.js?.cmd || null;
+      if (streamUrlResult) {
         const prefixes = ['ffmpeg ', 'ffrt ', 'ffrt2 ', 'ffrt3 ', 'ffrt4 '];
         for (const prefix of prefixes) {
-          if (streamUrl.startsWith(prefix)) {
-            streamUrl = streamUrl.substring(prefix.length);
+          if (streamUrlResult.startsWith(prefix)) {
+            streamUrlResult = streamUrlResult.substring(prefix.length);
             break;
           }
         }
-        streamUrl = streamUrl.trim();
+        streamUrlResult = streamUrlResult.trim();
       }
-      
-      const usedMethod = streamRes.headers.get('X-Used-Method') || 'unknown';
       
       setStreamDebug({ 
-        success: !!streamUrl,
-        streamUrl,
+        success: !!streamUrlResult,
+        streamUrl: streamUrlResult,
         channelCmd: channel.cmd, 
         channelName: channel.name,
-        cfToken: cfToken.substring(0, 20) + '...',
-        usedMethod,
-        rawResponse: streamData,
-        note: 'Stream obtained via Cloudflare proxy (direct)'
+        note: 'Stream obtained via Cloudflare proxy'
       });
       
-      if (streamUrl) {
-        // Save raw URL for display/copy
-        setRawStreamUrl(streamUrl);
-        
-        // Create proxied URL through CF worker for playback
-        const playbackParams = new URLSearchParams({ url: streamUrl, mac: macAddress });
+      if (streamUrlResult) {
+        setRawStreamUrl(streamUrlResult);
+        const playbackParams = new URLSearchParams({ url: streamUrlResult, mac: macAddress });
         const proxiedUrl = `${cfBaseUrl}/iptv/stream?${playbackParams.toString()}`;
-        console.log('[CF Stream] Setting proxied stream URL:', proxiedUrl.substring(0, 100));
         setStreamUrl(proxiedUrl);
-      } else {
-        console.error('[CF Stream] No stream URL returned:', streamData);
-        setStreamDebug((prev: any) => ({ ...prev, error: 'No stream URL in response' }));
       }
     } catch (error) {
-      console.error('[CF Stream] Failed:', error);
       setStreamDebug({ error: String(error), note: 'CF stream test failed' });
     } finally {
       setLoadingStream(false);
     }
   }, [portalUrl, macAddress]);
 
-  // Debug which IP sources work for this portal
   const debugSources = useCallback(async () => {
     if (!portalUrl || !macAddress) return;
     
@@ -854,111 +821,18 @@ export default function IPTVDebugPage() {
     }
   }, [portalUrl, macAddress]);
 
-  // Test client IP forwarding mode - makes CF worker forward YOUR IP to the portal
-  // If this works, the token is bound to YOUR IP and you can stream directly!
-  const testClientIpMode = useCallback(async () => {
-    if (!portalUrl || !macAddress) return;
-    
-    setDebugSourcesLoading(true);
-    
-    // Normalize portal URL
-    let baseUrl = portalUrl.trim();
-    if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
-      baseUrl = 'http://' + baseUrl;
-    }
-    baseUrl = baseUrl.replace(/\/+$/, '');
-    if (baseUrl.endsWith('/c')) baseUrl = baseUrl.slice(0, -2);
-    
-    // Build handshake URL
-    const handshakeUrl = new URL('/portal.php', baseUrl);
-    handshakeUrl.searchParams.set('type', 'stb');
-    handshakeUrl.searchParams.set('action', 'handshake');
-    handshakeUrl.searchParams.set('token', '');
-    handshakeUrl.searchParams.set('JsHttpRequest', '1-xml');
-    
-    const testUrl = handshakeUrl.toString();
-    
-    try {
-      // Test through CF worker with forward_ip=true
-      // CF_PROXY_URL might have /tv suffix, we need base URL for /iptv/api
-      let cfBaseUrl = CF_PROXY_URL.replace(/\/tv\/?$/, '').replace(/\/+$/, '');
-      
-      const cfParams = new URLSearchParams({ 
-        url: testUrl, 
-        mac: macAddress, 
-        forward_ip: 'true'  // This tells CF worker to forward our IP!
-      });
-      const cfFullUrl = `${cfBaseUrl}/iptv/api?${cfParams.toString()}`;
-      
-      console.log('[Client IP Test] Testing:', cfFullUrl.substring(0, 100));
-      
-      const startTime = Date.now();
-      const cfRes = await fetch(cfFullUrl);
-      const cfText = await cfRes.text();
-      const latency = Date.now() - startTime;
-      
-      console.log('[Client IP Test] Response:', cfRes.status, cfText.substring(0, 200));
-      
-      // Parse response
-      const cfClean = cfText.replace(/^\/\*-secure-\s*/, '').replace(/\s*\*\/$/, '');
-      let cfData;
-      try { cfData = JSON.parse(cfClean); } catch { cfData = null; }
-      
-      const usedMethod = cfRes.headers.get('X-Used-Method');
-      
-      if (cfRes.ok && cfData?.js?.token) {
-        setDebugSourcesResult({
-          success: true,
-          results: {
-            clientIpMode: {
-              source: 'CF Worker (Client IP Forwarding)',
-              status: cfRes.status,
-              success: true,
-              token: cfData.js.token.substring(0, 20) + '...',
-              latency,
-              usedMethod,
-              hint: '🎉 Token is bound to YOUR IP! You can stream directly without proxy!',
-            }
-          },
-          summary: {
-            recommendation: 'Client IP forwarding works! The token is bound to your IP. Try streaming directly.',
-            note: 'If streaming works, this is the best mode - no proxy bandwidth costs!',
-          },
-          testUrl,
-        });
-      } else {
-        setDebugSourcesResult({
-          success: false,
-          results: {
-            clientIpMode: {
-              source: 'CF Worker (Client IP Forwarding)',
-              status: cfRes.status,
-              success: false,
-              latency,
-              usedMethod,
-              error: !cfRes.ok ? `HTTP ${cfRes.status}` : 'No token in response',
-              rawResponse: cfText.substring(0, 300),
-              hint: 'Portal may not respect X-Forwarded-For headers. Try RPi proxy instead.',
-            }
-          },
-          summary: {
-            recommendation: 'Client IP forwarding failed. Portal ignores forwarded IP headers.',
-          },
-          testUrl,
-        });
-      }
-    } catch (error) {
-      setDebugSourcesResult({ 
-        error: String(error),
-        summary: { recommendation: 'Test failed - check CF worker URL' }
-      });
-    } finally {
-      setDebugSourcesLoading(false);
-    }
-  }, [portalUrl, macAddress]);
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+  };
+
+
+  // ============================================
+  // RENDER
+  // ============================================
 
   return (
     <div>
+      {/* Header */}
       <div style={{
         marginBottom: '32px',
         paddingBottom: '20px',
@@ -974,1327 +848,1736 @@ export default function IPTVDebugPage() {
           gap: '12px'
         }}>
           <Tv size={28} />
-          IPTV Stalker Debug
+          IPTV Stream Debugger
         </h2>
         <p style={{ margin: '8px 0 0 0', color: '#94a3b8', fontSize: '16px' }}>
-          Test and debug STB portal connections
+          Test and debug streams from CDN-Live.tv, PPV.to, and Stalker portals
         </p>
       </div>
 
-      {/* Connection Form */}
+      {/* Tab Navigation */}
       <div style={{
-        background: 'rgba(30, 41, 59, 0.5)',
-        borderRadius: '16px',
-        padding: '24px',
+        display: 'flex',
+        gap: '8px',
         marginBottom: '24px',
-        border: '1px solid rgba(255, 255, 255, 0.1)'
+        borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+        paddingBottom: '16px'
       }}>
-        <h3 style={{ color: '#f8fafc', margin: '0 0 20px 0', fontSize: '16px' }}>
-          Portal Connection
-        </h3>
-        
-        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-          <div style={{ flex: '1', minWidth: '250px' }}>
-            <label style={{ display: 'block', color: '#94a3b8', fontSize: '14px', marginBottom: '8px' }}>
-              Portal URL
-            </label>
-            <input
-              type="text"
-              value={portalUrl}
-              onChange={(e) => setPortalUrl(e.target.value)}
-              placeholder="http://example.com/c"
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                background: 'rgba(15, 23, 42, 0.6)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: '8px',
-                color: '#f8fafc',
-                fontSize: '14px',
-                outline: 'none'
-              }}
-            />
-          </div>
-          
-          <div style={{ flex: '1', minWidth: '200px' }}>
-            <label style={{ display: 'block', color: '#94a3b8', fontSize: '14px', marginBottom: '8px' }}>
-              MAC Address
-            </label>
-            <input
-              type="text"
-              value={macAddress}
-              onChange={(e) => setMacAddress(e.target.value)}
-              placeholder="00:1A:79:XX:XX:XX"
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                background: 'rgba(15, 23, 42, 0.6)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: '8px',
-                color: '#f8fafc',
-                fontSize: '14px',
-                outline: 'none'
-              }}
-            />
-          </div>
-          
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
-            <button
-              onClick={testConnection}
-              disabled={loading || !portalUrl || !macAddress}
-              style={{
-                padding: '12px 24px',
-                background: loading ? 'rgba(120, 119, 198, 0.3)' : 'linear-gradient(135deg, #7877c6 0%, #9333ea 100%)',
-                border: 'none',
-                borderRadius: '8px',
-                color: '#fff',
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}
-            >
-              {loading ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> : <Wifi size={18} />}
-              {loading ? 'Testing...' : 'Test Connection'}
-            </button>
-            <button
-              onClick={debugSources}
-              disabled={debugSourcesLoading || !portalUrl || !macAddress}
-              style={{
-                padding: '12px 16px',
-                background: debugSourcesLoading ? 'rgba(251, 191, 36, 0.3)' : 'rgba(251, 191, 36, 0.2)',
-                border: '1px solid rgba(251, 191, 36, 0.3)',
-                borderRadius: '8px',
-                color: '#fbbf24',
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: debugSourcesLoading ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}
-              title="Test which IP sources (Vercel, Cloudflare, RPi) can connect to this portal"
-            >
-              {debugSourcesLoading ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> : <Server size={18} />}
-              Debug Sources
-            </button>
-            <button
-              onClick={testClientIpMode}
-              disabled={debugSourcesLoading || !portalUrl || !macAddress}
-              style={{
-                padding: '12px 16px',
-                background: debugSourcesLoading ? 'rgba(34, 197, 94, 0.3)' : 'rgba(34, 197, 94, 0.2)',
-                border: '1px solid rgba(34, 197, 94, 0.3)',
-                borderRadius: '8px',
-                color: '#22c55e',
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: debugSourcesLoading ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}
-              title="Test if portal respects X-Forwarded-For - if yes, token binds to YOUR IP!"
-            >
-              {debugSourcesLoading ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> : <Zap size={18} />}
-              Test Client IP
-            </button>
-          </div>
-        </div>
+        <button
+          onClick={() => setActiveTab('cdn-live')}
+          style={{
+            padding: '12px 24px',
+            background: activeTab === 'cdn-live' ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' : 'rgba(30, 41, 59, 0.5)',
+            border: activeTab === 'cdn-live' ? 'none' : '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '8px',
+            color: '#fff',
+            fontSize: '14px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <Globe size={18} />
+          CDN-Live.tv ({cdnChannels.length || '...'})
+        </button>
+        <button
+          onClick={() => setActiveTab('ppv')}
+          style={{
+            padding: '12px 24px',
+            background: activeTab === 'ppv' ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' : 'rgba(30, 41, 59, 0.5)',
+            border: activeTab === 'ppv' ? 'none' : '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '8px',
+            color: '#fff',
+            fontSize: '14px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <Calendar size={18} />
+          PPV.to ({ppvStreams.length || '...'})
+        </button>
+        <button
+          onClick={() => setActiveTab('stalker')}
+          style={{
+            padding: '12px 24px',
+            background: activeTab === 'stalker' ? 'linear-gradient(135deg, #7877c6 0%, #9333ea 100%)' : 'rgba(30, 41, 59, 0.5)',
+            border: activeTab === 'stalker' ? 'none' : '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '8px',
+            color: '#fff',
+            fontSize: '14px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <Server size={18} />
+          Stalker Portal
+        </button>
       </div>
 
-      {/* Debug Sources Results */}
-      {debugSourcesResult && (
-        <div style={{
-          background: 'rgba(30, 41, 59, 0.5)',
-          borderRadius: '16px',
-          padding: '24px',
-          marginBottom: '24px',
-          border: '1px solid rgba(251, 191, 36, 0.3)'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ color: '#fbbf24', margin: 0, fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Server size={18} />
-              IP Source Debug Results
-            </h3>
-            <button
-              onClick={() => setDebugSourcesResult(null)}
-              style={{
-                padding: '4px 8px',
-                background: 'transparent',
-                border: 'none',
-                color: '#64748b',
-                cursor: 'pointer',
-                fontSize: '18px'
-              }}
-            >
-              ×
-            </button>
-          </div>
-          
-          {debugSourcesResult.summary && (
-            <div style={{
-              background: 'rgba(0, 0, 0, 0.2)',
-              padding: '12px 16px',
-              borderRadius: '8px',
-              marginBottom: '16px',
-              color: '#f8fafc',
-              fontSize: '14px'
-            }}>
-              <div style={{ marginBottom: '8px' }}>
-                <strong>Recommendation:</strong> {debugSourcesResult.summary.recommendation}
-              </div>
-              {debugSourcesResult.summary.note && (
-                <div style={{ color: '#94a3b8', fontSize: '12px', fontStyle: 'italic' }}>
-                  ⚠️ {debugSourcesResult.summary.note}
-                </div>
-              )}
-            </div>
-          )}
-          
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '12px' }}>
-            {debugSourcesResult.results && Object.entries(debugSourcesResult.results).map(([key, result]: [string, any]) => (
-              <div 
-                key={key}
-                style={{
-                  background: result.success ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                  border: `1px solid ${result.success ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
-                  borderRadius: '8px',
-                  padding: '12px 16px'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <span style={{ color: '#f8fafc', fontWeight: '600', fontSize: '13px' }}>{result.source}</span>
-                  <span style={{ 
-                    color: result.success ? '#22c55e' : '#ef4444',
-                    fontSize: '12px',
-                    fontWeight: '600'
-                  }}>
-                    {result.success ? '✓ Works' : '✗ Blocked'}
-                  </span>
-                </div>
-                {result.status && (
-                  <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>
-                    HTTP Status: {result.status}
-                  </div>
-                )}
-                {result.latency && (
-                  <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>
-                    Latency: {result.latency}ms
-                  </div>
-                )}
-                {result.error && (
-                  <div style={{ color: '#ef4444', fontSize: '12px', marginBottom: '4px' }}>
-                    Error: {result.error}
-                  </div>
-                )}
-                {result.token && (
-                  <div style={{ color: '#22c55e', fontSize: '11px', fontFamily: 'monospace', marginBottom: '4px' }}>
-                    Token: {result.token}
-                  </div>
-                )}
-                {result.usedRpi !== undefined && (
-                  <div style={{ color: '#94a3b8', fontSize: '11px', marginBottom: '4px' }}>
-                    Used RPi: {result.usedRpi ? 'Yes' : 'No (direct)'}
-                  </div>
-                )}
-                {result.rpiHealthy !== undefined && (
-                  <div style={{ color: result.rpiHealthy ? '#22c55e' : '#ef4444', fontSize: '11px', marginBottom: '4px' }}>
-                    RPi Health: {result.rpiHealthy ? '✓ Reachable' : '✗ Unreachable'}
-                  </div>
-                )}
-                {result.hint && (
-                  <div style={{ color: '#fbbf24', fontSize: '11px', marginBottom: '4px' }}>
-                    💡 {result.hint}
-                  </div>
-                )}
-                {result.rawResponse && (
-                  <details style={{ marginTop: '8px' }}>
-                    <summary style={{ color: '#64748b', fontSize: '11px', cursor: 'pointer' }}>
-                      Raw Response
-                    </summary>
-                    <pre style={{ 
-                      color: '#94a3b8', 
-                      fontSize: '10px', 
-                      fontFamily: 'monospace',
-                      background: 'rgba(0,0,0,0.3)',
-                      padding: '8px',
-                      borderRadius: '4px',
-                      marginTop: '4px',
-                      overflow: 'auto',
-                      maxHeight: '100px',
-                      whiteSpace: 'pre-wrap',
-                      wordBreak: 'break-all'
-                    }}>
-                      {result.rawResponse}
-                    </pre>
-                  </details>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Saved Accounts */}
-      <div style={{
-        background: 'rgba(30, 41, 59, 0.5)',
-        borderRadius: '16px',
-        padding: '24px',
-        marginBottom: '24px',
-        border: '1px solid rgba(255, 255, 255, 0.1)'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h3 style={{ color: '#f8fafc', margin: 0, fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Star size={18} />
-            Saved Accounts ({savedAccounts.length})
-          </h3>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".json"
-              onChange={handleFileImport}
-              style={{ display: 'none' }}
-            />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              style={{
-                padding: '8px 16px',
-                background: 'rgba(120, 119, 198, 0.2)',
-                border: '1px solid rgba(120, 119, 198, 0.3)',
-                borderRadius: '8px',
-                color: '#7877c6',
-                fontSize: '13px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}
-            >
-              <Upload size={14} /> Import JSON
-            </button>
-            {testResult?.success && (testResult.content?.itv || 0) > 0 && (
+      {/* ============================================ */}
+      {/* CDN-LIVE.TV TAB */}
+      {/* ============================================ */}
+      {activeTab === 'cdn-live' && (
+        <div>
+          {/* Controls */}
+          <div style={{
+            background: 'rgba(30, 41, 59, 0.5)',
+            borderRadius: '16px',
+            padding: '24px',
+            marginBottom: '24px',
+            border: '1px solid rgba(255, 255, 255, 0.1)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <h3 style={{ color: '#f8fafc', margin: 0, fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Globe size={18} color="#22c55e" />
+                CDN-Live.tv Channels
+              </h3>
               <button
-                onClick={saveCurrentAccount}
+                onClick={loadCdnChannels}
+                disabled={cdnLoading}
                 style={{
                   padding: '8px 16px',
-                  background: 'rgba(34, 197, 94, 0.2)',
+                  background: cdnLoading ? 'rgba(34, 197, 94, 0.3)' : 'rgba(34, 197, 94, 0.2)',
                   border: '1px solid rgba(34, 197, 94, 0.3)',
                   borderRadius: '8px',
                   color: '#22c55e',
                   fontSize: '13px',
-                  cursor: 'pointer',
+                  cursor: cdnLoading ? 'not-allowed' : 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px'
                 }}
               >
-                <Star size={14} /> Save Current
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Auto-Cycle Controls */}
-        {savedAccounts.length > 0 && (
-          <div style={{
-            background: 'rgba(15, 23, 42, 0.4)',
-            borderRadius: '12px',
-            padding: '16px',
-            marginBottom: '16px',
-            border: '1px solid rgba(255, 255, 255, 0.05)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <Zap size={18} color="#fbbf24" />
-                <span style={{ color: '#f8fafc', fontSize: '14px', fontWeight: '500' }}>Auto-Cycle Test</span>
-              </div>
-              
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={testStreamDuringCycle}
-                    onChange={(e) => setTestStreamDuringCycle(e.target.checked)}
-                    disabled={autoCycleRunning}
-                    style={{ cursor: 'pointer' }}
-                  />
-                  <span style={{ color: '#94a3b8', fontSize: '13px' }}>Test stream access</span>
-                </label>
-                
-                {!autoCycleRunning ? (
-                  <button
-                    onClick={startAutoCycle}
-                    style={{
-                      padding: '8px 16px',
-                      background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
-                      border: 'none',
-                      borderRadius: '8px',
-                      color: '#000',
-                      fontSize: '13px',
-                      fontWeight: '600',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px'
-                    }}
-                  >
-                    <RotateCcw size={14} /> Start Cycle Test
-                  </button>
-                ) : (
-                  <button
-                    onClick={stopAutoCycle}
-                    style={{
-                      padding: '8px 16px',
-                      background: 'rgba(239, 68, 68, 0.8)',
-                      border: 'none',
-                      borderRadius: '8px',
-                      color: '#fff',
-                      fontSize: '13px',
-                      fontWeight: '600',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px'
-                    }}
-                  >
-                    <Square size={14} /> Stop
-                  </button>
-                )}
-              </div>
-            </div>
-            
-            {/* Progress */}
-            {autoCycleRunning && (
-              <div style={{ marginTop: '12px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                  <Loader2 size={14} color="#fbbf24" style={{ animation: 'spin 1s linear infinite' }} />
-                  <span style={{ color: '#fbbf24', fontSize: '13px' }}>
-                    Testing {autoCycleProgress.current}/{autoCycleProgress.total}: {autoCycleProgress.currentAccount}
-                  </span>
-                </div>
-                <div style={{
-                  height: '4px',
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  borderRadius: '2px',
-                  overflow: 'hidden'
-                }}>
-                  <div style={{
-                    height: '100%',
-                    width: `${(autoCycleProgress.current / autoCycleProgress.total) * 100}%`,
-                    background: 'linear-gradient(90deg, #fbbf24, #f59e0b)',
-                    transition: 'width 0.3s ease'
-                  }} />
-                </div>
-              </div>
-            )}
-            
-            {/* Results Summary */}
-            {autoCycleResults.length > 0 && !autoCycleRunning && (
-              <div style={{ marginTop: '12px', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <CheckCircle size={14} color="#22c55e" />
-                  <span style={{ color: '#22c55e', fontSize: '13px' }}>
-                    {autoCycleResults.filter(r => r.canStream).length} working
-                  </span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <AlertCircle size={14} color="#f59e0b" />
-                  <span style={{ color: '#f59e0b', fontSize: '13px' }}>
-                    {autoCycleResults.filter(r => r.success && !r.canStream).length} connected (no stream)
-                  </span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <AlertCircle size={14} color="#ef4444" />
-                  <span style={{ color: '#ef4444', fontSize: '13px' }}>
-                    {autoCycleResults.filter(r => !r.success).length} failed
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Auto-Cycle Results */}
-        {autoCycleResults.length > 0 && (
-          <div style={{
-            background: 'rgba(15, 23, 42, 0.4)',
-            borderRadius: '12px',
-            padding: '16px',
-            marginBottom: '16px',
-            border: '1px solid rgba(255, 255, 255, 0.05)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <span style={{ color: '#f8fafc', fontSize: '14px', fontWeight: '500' }}>Test Results</span>
-              <button
-                onClick={() => setAutoCycleResults([])}
-                style={{
-                  padding: '4px 8px',
-                  background: 'transparent',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  borderRadius: '4px',
-                  color: '#64748b',
-                  fontSize: '11px',
-                  cursor: 'pointer'
-                }}
-              >
-                Clear
+                {cdnLoading ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <RotateCcw size={14} />}
+                Refresh
               </button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '200px', overflowY: 'auto' }}>
-              {autoCycleResults.map((result, idx) => (
-                <div
-                  key={`${result.portal}-${result.mac}-${idx}`}
-                  onClick={() => {
-                    setPortalUrl(result.portal);
-                    setMacAddress(result.mac);
-                    setTestResult(null);
-                    setGenres([]);
-                    setChannels([]);
-                    setStreamUrl(null);
-                  }}
-                  style={{
-                    background: result.canStream 
-                      ? 'rgba(34, 197, 94, 0.1)' 
-                      : result.success 
-                        ? 'rgba(251, 191, 36, 0.1)' 
-                        : 'rgba(239, 68, 68, 0.1)',
-                    border: `1px solid ${result.canStream ? 'rgba(34, 197, 94, 0.3)' : result.success ? 'rgba(251, 191, 36, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
-                    borderRadius: '8px',
-                    padding: '10px 14px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '12px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                    {result.canStream ? (
-                      <CheckCircle size={16} color="#22c55e" />
-                    ) : result.success ? (
-                      <AlertCircle size={16} color="#fbbf24" />
-                    ) : (
-                      <AlertCircle size={16} color="#ef4444" />
-                    )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ color: '#f8fafc', fontSize: '12px', fontWeight: '500' }}>
-                        {result.mac}
-                      </div>
-                      <div style={{ 
-                        color: '#64748b', 
-                        fontSize: '11px', 
-                        overflow: 'hidden', 
-                        textOverflow: 'ellipsis', 
-                        whiteSpace: 'nowrap' 
-                      }}>
-                        {new URL(result.portal).hostname}
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ 
-                      color: result.canStream ? '#22c55e' : result.success ? '#fbbf24' : '#ef4444', 
-                      fontSize: '11px', 
-                      fontWeight: '500' 
-                    }}>
-                      {result.canStream ? 'Working' : result.success ? 'Connected' : 'Failed'}
-                    </div>
-                    {result.channels > 0 && (
-                      <div style={{ color: '#64748b', fontSize: '10px' }}>
-                        {result.channels} ch
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
-        {savedAccounts.length === 0 ? (
-          <p style={{ color: '#64748b', fontSize: '14px', margin: 0 }}>
-            No saved accounts. Import a results JSON file or save a working account.
-          </p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
-            {savedAccounts.map((account, idx) => (
-              <div
-                key={`${account.portal}-${account.mac}-${idx}`}
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              {/* Country Filter */}
+              <select
+                value={cdnSelectedCountry}
+                onChange={(e) => setCdnSelectedCountry(e.target.value)}
                 style={{
+                  padding: '10px 14px',
                   background: 'rgba(15, 23, 42, 0.6)',
                   border: '1px solid rgba(255, 255, 255, 0.1)',
                   borderRadius: '8px',
-                  padding: '12px 16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '12px'
+                  color: '#f8fafc',
+                  fontSize: '14px',
+                  minWidth: '180px',
+                  outline: 'none',
+                  cursor: 'pointer'
                 }}
               >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ color: '#f8fafc', fontSize: '13px', fontWeight: '500' }}>
-                    {account.mac}
-                  </div>
-                  <div style={{ color: '#64748b', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {account.portal} • {account.channels.toLocaleString()} channels
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button
-                    onClick={() => loadAccount(account)}
-                    style={{
-                      padding: '6px 12px',
-                      background: 'rgba(120, 119, 198, 0.2)',
-                      border: 'none',
-                      borderRadius: '6px',
-                      color: '#7877c6',
-                      fontSize: '12px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Load
-                  </button>
-                  <button
-                    onClick={() => removeAccount(account.portal, account.mac)}
-                    style={{
-                      padding: '6px',
-                      background: 'rgba(239, 68, 68, 0.2)',
-                      border: 'none',
-                      borderRadius: '6px',
-                      color: '#ef4444',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center'
-                    }}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+                <option value="all">All Countries ({cdnChannels.length})</option>
+                {cdnCountries.map(country => (
+                  <option key={country} value={country}>
+                    {country.toUpperCase()} ({cdnByCountry[country]?.length || 0})
+                  </option>
+                ))}
+              </select>
 
-      {/* Test Result */}
-      {testResult && (
-        <div style={{
-          background: testResult.success 
-            ? 'rgba(34, 197, 94, 0.1)' 
-            : 'rgba(239, 68, 68, 0.1)',
-          borderRadius: '16px',
-          padding: '24px',
-          marginBottom: '24px',
-          border: `1px solid ${testResult.success ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-            {testResult.success ? (
-              <CheckCircle size={24} color="#22c55e" />
-            ) : (
-              <AlertCircle size={24} color="#ef4444" />
-            )}
-            <h3 style={{ 
-              color: testResult.success ? '#22c55e' : '#ef4444', 
-              margin: 0, 
-              fontSize: '18px' 
-            }}>
-              {testResult.success ? 'Connection Successful' : 'Connection Failed'}
-            </h3>
-          </div>
-
-          {testResult.error && (
-            <p style={{ color: '#ef4444', margin: '0 0 16px 0' }}>{testResult.error}</p>
-          )}
-
-          {testResult.success && testResult.profile && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-              <div style={{ 
-                background: 'rgba(15, 23, 42, 0.4)', 
-                padding: '16px', 
-                borderRadius: '12px' 
-              }}>
-                <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>Status</div>
-                <div style={{ 
-                  color: (testResult.profile.status === 1 || testResult.profile.status === '1') ? '#22c55e' : '#ef4444',
-                  fontSize: '16px',
-                  fontWeight: '600'
-                }}>
-                  {(testResult.profile.status === 1 || testResult.profile.status === '1') ? 'Active' : `Inactive (${testResult.profile.status})`}
-                </div>
-              </div>
-              
-              <div style={{ 
-                background: 'rgba(15, 23, 42, 0.4)', 
-                padding: '16px', 
-                borderRadius: '12px' 
-              }}>
-                <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>Blocked</div>
-                <div style={{ 
-                  color: (testResult.profile.blocked === '1' || testResult.profile.blocked === 1) ? '#ef4444' : '#22c55e',
-                  fontSize: '16px',
-                  fontWeight: '600'
-                }}>
-                  {(testResult.profile.blocked === '1' || testResult.profile.blocked === 1) ? 'Yes' : 'No'}
-                </div>
-              </div>
-
-              <div style={{ 
-                background: 'rgba(15, 23, 42, 0.4)', 
-                padding: '16px', 
-                borderRadius: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px'
-              }}>
-                <Tv size={20} color="#7877c6" />
-                <div>
-                  <div style={{ color: '#94a3b8', fontSize: '12px' }}>Live TV</div>
-                  <div style={{ color: '#f8fafc', fontSize: '16px', fontWeight: '600' }}>
-                    {testResult.content?.itv?.toLocaleString() || 0}
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ 
-                background: 'rgba(15, 23, 42, 0.4)', 
-                padding: '16px', 
-                borderRadius: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px'
-              }}>
-                <Radio size={20} color="#7877c6" />
-                <div>
-                  <div style={{ color: '#94a3b8', fontSize: '12px' }}>Radio</div>
-                  <div style={{ color: '#f8fafc', fontSize: '16px', fontWeight: '600' }}>
-                    {testResult.content?.radio?.toLocaleString() || 0}
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ 
-                background: 'rgba(15, 23, 42, 0.4)', 
-                padding: '16px', 
-                borderRadius: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px'
-              }}>
-                <Film size={20} color="#7877c6" />
-                <div>
-                  <div style={{ color: '#94a3b8', fontSize: '12px' }}>VOD</div>
-                  <div style={{ color: '#f8fafc', fontSize: '16px', fontWeight: '600' }}>
-                    {testResult.content?.vod?.toLocaleString() || 0}
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ 
-                background: 'rgba(15, 23, 42, 0.4)', 
-                padding: '16px', 
-                borderRadius: '12px' 
-              }}>
-                <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>Stream Limit</div>
-                <div style={{ color: '#f8fafc', fontSize: '16px', fontWeight: '600' }}>
-                  {testResult.profile.playback_limit || 'N/A'}
-                </div>
+              {/* Search */}
+              <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
+                <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
+                <input
+                  type="text"
+                  placeholder="Search channels..."
+                  value={cdnSearch}
+                  onChange={(e) => setCdnSearch(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px 10px 38px',
+                    background: 'rgba(15, 23, 42, 0.6)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: '8px',
+                    color: '#f8fafc',
+                    fontSize: '14px',
+                    outline: 'none'
+                  }}
+                />
               </div>
             </div>
-          )}
+          </div>
 
-          {testResult.success && testResult.token && (
-            <div style={{ marginTop: '16px' }}>
-              <div style={{ 
-                background: 'rgba(15, 23, 42, 0.4)', 
-                padding: '12px 16px', 
-                borderRadius: '8px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between'
-              }}>
-                <div>
-                  <span style={{ color: '#94a3b8', fontSize: '12px' }}>Token: </span>
-                  <code style={{ color: '#7877c6', fontSize: '12px' }}>{testResult.token}</code>
+          {/* Channel Grid */}
+          <div style={{
+            background: 'rgba(30, 41, 59, 0.5)',
+            borderRadius: '16px',
+            padding: '24px',
+            marginBottom: '24px',
+            border: '1px solid rgba(255, 255, 255, 0.1)'
+          }}>
+            {cdnLoading ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
+                <Loader2 size={32} style={{ margin: '0 auto 12px', animation: 'spin 1s linear infinite' }} />
+                Loading channels...
+              </div>
+            ) : (
+              (() => {
+                let filtered = cdnSelectedCountry === 'all' 
+                  ? cdnChannels 
+                  : (cdnByCountry[cdnSelectedCountry] || []);
+                
+                if (cdnSearch) {
+                  const searchLower = cdnSearch.toLowerCase();
+                  filtered = filtered.filter(ch => ch.name.toLowerCase().includes(searchLower));
+                }
+
+                return (
+                  <>
+                    <div style={{ marginBottom: '12px', color: '#64748b', fontSize: '13px' }}>
+                      {filtered.length} channels {cdnSearch ? `matching "${cdnSearch}"` : ''}
+                    </div>
+                    <div style={{ 
+                      display: 'grid', 
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', 
+                      gap: '10px',
+                      maxHeight: '500px',
+                      overflowY: 'auto'
+                    }}>
+                      {filtered.map((channel) => (
+                        <div
+                          key={`${channel.code}-${channel.name}`}
+                          style={{
+                            background: cdnSelectedChannel?.name === channel.name 
+                              ? 'rgba(34, 197, 94, 0.2)' 
+                              : 'rgba(15, 23, 42, 0.6)',
+                            border: cdnSelectedChannel?.name === channel.name 
+                              ? '1px solid #22c55e' 
+                              : '1px solid rgba(255, 255, 255, 0.1)',
+                            borderRadius: '12px',
+                            padding: '12px 16px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px'
+                          }}
+                        >
+                          {channel.image ? (
+                            <img 
+                              src={channel.image} 
+                              alt={channel.name}
+                              style={{ width: '40px', height: '40px', borderRadius: '8px', objectFit: 'cover' }}
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            />
+                          ) : (
+                            <div style={{
+                              width: '40px',
+                              height: '40px',
+                              borderRadius: '8px',
+                              background: 'rgba(34, 197, 94, 0.2)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}>
+                              <Tv size={20} color="#22c55e" />
+                            </div>
+                          )}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ 
+                              color: '#f8fafc', 
+                              fontSize: '14px', 
+                              fontWeight: '500',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis'
+                            }}>
+                              {channel.name}
+                            </div>
+                            <div style={{ color: '#64748b', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span>{channel.code.toUpperCase()}</span>
+                              {channel.viewers > 0 && <span>• {channel.viewers} viewers</span>}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => loadCdnStream(channel)}
+                            disabled={cdnStreamLoading}
+                            style={{
+                              padding: '8px 14px',
+                              background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                              border: 'none',
+                              borderRadius: '6px',
+                              color: '#fff',
+                              fontSize: '12px',
+                              fontWeight: '500',
+                              cursor: cdnStreamLoading ? 'not-allowed' : 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              opacity: cdnStreamLoading ? 0.5 : 1
+                            }}
+                          >
+                            <Play size={14} /> Test
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                );
+              })()
+            )}
+          </div>
+
+          {/* CDN-Live Player */}
+          {(cdnStreamLoading || cdnStreamUrl) && (
+            <div style={{
+              background: 'rgba(30, 41, 59, 0.5)',
+              borderRadius: '16px',
+              padding: '24px',
+              border: '1px solid rgba(34, 197, 94, 0.3)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+                <h3 style={{ color: '#f8fafc', margin: 0, fontSize: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <Play size={20} color="#22c55e" />
+                  {cdnSelectedChannel?.name || 'Stream'}
+                </h3>
+                <span style={{ color: '#22c55e', fontSize: '12px', background: 'rgba(34, 197, 94, 0.2)', padding: '4px 10px', borderRadius: '6px' }}>
+                  CDN-Live.tv
+                </span>
+              </div>
+
+              {cdnStreamLoading ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
+                  <Loader2 size={32} style={{ margin: '0 auto 12px', animation: 'spin 1s linear infinite' }} />
+                  Extracting stream URL...
                 </div>
-                <button
-                  onClick={() => copyToClipboard(testResult.token!)}
+              ) : cdnStreamUrl ? (
+                <>
+                  <div style={{
+                    background: '#000',
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                    marginBottom: '16px',
+                    aspectRatio: '16/9',
+                    position: 'relative'
+                  }}>
+                    <video
+                      ref={videoRef}
+                      controls
+                      autoPlay
+                      playsInline
+                      muted
+                      style={{ width: '100%', height: '100%' }}
+                    />
+                    {playerError && (
+                      <div style={{
+                        position: 'absolute',
+                        bottom: '10px',
+                        left: '10px',
+                        right: '10px',
+                        background: 'rgba(239, 68, 68, 0.9)',
+                        color: '#fff',
+                        padding: '8px 12px',
+                        borderRadius: '6px',
+                        fontSize: '12px'
+                      }}>
+                        {playerError}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ 
+                    background: 'rgba(15, 23, 42, 0.6)', 
+                    padding: '12px 16px', 
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px'
+                  }}>
+                    <code style={{ 
+                      color: '#22c55e', 
+                      fontSize: '11px',
+                      flex: 1,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      {cdnStreamUrl}
+                    </code>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={() => copyToClipboard(cdnStreamUrl)}
+                        style={{
+                          background: 'rgba(34, 197, 94, 0.2)',
+                          border: 'none',
+                          color: '#22c55e',
+                          cursor: 'pointer',
+                          padding: '8px',
+                          borderRadius: '6px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontSize: '12px'
+                        }}
+                      >
+                        <Copy size={14} /> Copy
+                      </button>
+                      <a
+                        href={cdnStreamUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          background: 'rgba(34, 197, 94, 0.2)',
+                          border: 'none',
+                          color: '#22c55e',
+                          cursor: 'pointer',
+                          padding: '8px',
+                          borderRadius: '6px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontSize: '12px',
+                          textDecoration: 'none'
+                        }}
+                      >
+                        <ExternalLink size={14} /> Open
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Debug Info */}
+                  {cdnStreamDebug && (
+                    <details style={{ marginTop: '12px' }}>
+                      <summary style={{ color: '#64748b', fontSize: '12px', cursor: 'pointer' }}>Debug Info</summary>
+                      <pre style={{ 
+                        color: '#94a3b8', 
+                        fontSize: '11px', 
+                        background: 'rgba(0,0,0,0.3)',
+                        padding: '12px',
+                        borderRadius: '8px',
+                        marginTop: '8px',
+                        overflow: 'auto',
+                        maxHeight: '200px'
+                      }}>
+                        {JSON.stringify(cdnStreamDebug, null, 2)}
+                      </pre>
+                    </details>
+                  )}
+                </>
+              ) : cdnStreamDebug?.error && (
+                <div style={{
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  color: '#ef4444'
+                }}>
+                  <div style={{ fontWeight: '600', marginBottom: '8px' }}>Failed to extract stream</div>
+                  <div style={{ fontSize: '13px' }}>{cdnStreamDebug.error}</div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+
+      {/* ============================================ */}
+      {/* PPV.TO TAB */}
+      {/* ============================================ */}
+      {activeTab === 'ppv' && (
+        <div>
+          {/* Controls */}
+          <div style={{
+            background: 'rgba(30, 41, 59, 0.5)',
+            borderRadius: '16px',
+            padding: '24px',
+            marginBottom: '24px',
+            border: '1px solid rgba(255, 255, 255, 0.1)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <h3 style={{ color: '#f8fafc', margin: 0, fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Calendar size={18} color="#f59e0b" />
+                PPV.to Events & Streams
+              </h3>
+              <button
+                onClick={loadPpvStreams}
+                disabled={ppvLoading}
+                style={{
+                  padding: '8px 16px',
+                  background: ppvLoading ? 'rgba(245, 158, 11, 0.3)' : 'rgba(245, 158, 11, 0.2)',
+                  border: '1px solid rgba(245, 158, 11, 0.3)',
+                  borderRadius: '8px',
+                  color: '#f59e0b',
+                  fontSize: '13px',
+                  cursor: ppvLoading ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                {ppvLoading ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <RotateCcw size={14} />}
+                Refresh
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+              {/* Category Filter */}
+              <select
+                value={ppvSelectedCategory}
+                onChange={(e) => setPpvSelectedCategory(e.target.value)}
+                style={{
+                  padding: '10px 14px',
+                  background: 'rgba(15, 23, 42, 0.6)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '8px',
+                  color: '#f8fafc',
+                  fontSize: '14px',
+                  minWidth: '180px',
+                  outline: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="all">All Categories</option>
+                {ppvCategories.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+
+              {/* Search */}
+              <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
+                <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
+                <input
+                  type="text"
+                  placeholder="Search events..."
+                  value={ppvSearch}
+                  onChange={(e) => setPpvSearch(e.target.value)}
                   style={{
-                    background: 'transparent',
+                    width: '100%',
+                    padding: '10px 14px 10px 38px',
+                    background: 'rgba(15, 23, 42, 0.6)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: '8px',
+                    color: '#f8fafc',
+                    fontSize: '14px',
+                    outline: 'none'
+                  }}
+                />
+              </div>
+
+              {/* Live Only Toggle */}
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={ppvLiveOnly}
+                  onChange={(e) => setPpvLiveOnly(e.target.checked)}
+                  style={{ cursor: 'pointer' }}
+                />
+                <span style={{ color: '#f59e0b', fontSize: '13px' }}>Live Only</span>
+              </label>
+            </div>
+          </div>
+
+          {/* PPV Stream Grid */}
+          <div style={{
+            background: 'rgba(30, 41, 59, 0.5)',
+            borderRadius: '16px',
+            padding: '24px',
+            marginBottom: '24px',
+            border: '1px solid rgba(255, 255, 255, 0.1)'
+          }}>
+            {ppvLoading ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
+                <Loader2 size={32} style={{ margin: '0 auto 12px', animation: 'spin 1s linear infinite' }} />
+                Loading PPV events...
+              </div>
+            ) : (
+              (() => {
+                let filtered = ppvStreams;
+                
+                if (ppvSelectedCategory !== 'all') {
+                  filtered = filtered.filter(s => s.category === ppvSelectedCategory);
+                }
+                
+                if (ppvLiveOnly) {
+                  filtered = filtered.filter(s => s.status === 'live');
+                }
+                
+                if (ppvSearch) {
+                  const searchLower = ppvSearch.toLowerCase();
+                  filtered = filtered.filter(s => s.title.toLowerCase().includes(searchLower));
+                }
+
+                return (
+                  <>
+                    <div style={{ marginBottom: '12px', color: '#64748b', fontSize: '13px' }}>
+                      {filtered.length} events {ppvSearch ? `matching "${ppvSearch}"` : ''}
+                      {ppvLiveOnly && ' (live only)'}
+                    </div>
+                    <div style={{ 
+                      display: 'grid', 
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', 
+                      gap: '12px',
+                      maxHeight: '500px',
+                      overflowY: 'auto'
+                    }}>
+                      {filtered.map((stream) => (
+                        <div
+                          key={stream.id || stream.uri}
+                          style={{
+                            background: ppvSelectedStream?.uri === stream.uri 
+                              ? 'rgba(245, 158, 11, 0.2)' 
+                              : 'rgba(15, 23, 42, 0.6)',
+                            border: ppvSelectedStream?.uri === stream.uri 
+                              ? '1px solid #f59e0b' 
+                              : '1px solid rgba(255, 255, 255, 0.1)',
+                            borderRadius: '12px',
+                            padding: '14px 16px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px'
+                          }}
+                        >
+                          {stream.thumbnail ? (
+                            <img 
+                              src={stream.thumbnail} 
+                              alt={stream.title}
+                              style={{ width: '60px', height: '40px', borderRadius: '6px', objectFit: 'cover' }}
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            />
+                          ) : (
+                            <div style={{
+                              width: '60px',
+                              height: '40px',
+                              borderRadius: '6px',
+                              background: 'rgba(245, 158, 11, 0.2)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}>
+                              <Calendar size={20} color="#f59e0b" />
+                            </div>
+                          )}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ 
+                              color: '#f8fafc', 
+                              fontSize: '14px', 
+                              fontWeight: '500',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis'
+                            }}>
+                              {stream.title}
+                            </div>
+                            <div style={{ color: '#64748b', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                fontSize: '10px',
+                                fontWeight: '600',
+                                background: stream.status === 'live' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(100, 100, 100, 0.2)',
+                                color: stream.status === 'live' ? '#ef4444' : '#94a3b8'
+                              }}>
+                                {stream.status === 'live' ? '● LIVE' : stream.status?.toUpperCase() || 'UPCOMING'}
+                              </span>
+                              <span>{stream.category}</span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => loadPpvStream(stream)}
+                            disabled={ppvStreamLoading}
+                            style={{
+                              padding: '8px 14px',
+                              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                              border: 'none',
+                              borderRadius: '6px',
+                              color: '#fff',
+                              fontSize: '12px',
+                              fontWeight: '500',
+                              cursor: ppvStreamLoading ? 'not-allowed' : 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              opacity: ppvStreamLoading ? 0.5 : 1
+                            }}
+                          >
+                            <Play size={14} /> Test
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                );
+              })()
+            )}
+          </div>
+
+          {/* PPV Player */}
+          {(ppvStreamLoading || ppvStreamUrl) && (
+            <div style={{
+              background: 'rgba(30, 41, 59, 0.5)',
+              borderRadius: '16px',
+              padding: '24px',
+              border: '1px solid rgba(245, 158, 11, 0.3)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+                <h3 style={{ color: '#f8fafc', margin: 0, fontSize: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <Play size={20} color="#f59e0b" />
+                  {ppvSelectedStream?.title || 'Stream'}
+                </h3>
+                <span style={{ color: '#f59e0b', fontSize: '12px', background: 'rgba(245, 158, 11, 0.2)', padding: '4px 10px', borderRadius: '6px' }}>
+                  PPV.to
+                </span>
+              </div>
+
+              {ppvStreamLoading ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
+                  <Loader2 size={32} style={{ margin: '0 auto 12px', animation: 'spin 1s linear infinite' }} />
+                  Extracting stream URL...
+                </div>
+              ) : ppvStreamUrl ? (
+                <>
+                  <div style={{
+                    background: '#000',
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                    marginBottom: '16px',
+                    aspectRatio: '16/9',
+                    position: 'relative'
+                  }}>
+                    <video
+                      ref={videoRef}
+                      controls
+                      autoPlay
+                      playsInline
+                      muted
+                      style={{ width: '100%', height: '100%' }}
+                    />
+                    {playerError && (
+                      <div style={{
+                        position: 'absolute',
+                        bottom: '10px',
+                        left: '10px',
+                        right: '10px',
+                        background: 'rgba(239, 68, 68, 0.9)',
+                        color: '#fff',
+                        padding: '8px 12px',
+                        borderRadius: '6px',
+                        fontSize: '12px'
+                      }}>
+                        {playerError}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ 
+                    background: 'rgba(15, 23, 42, 0.6)', 
+                    padding: '12px 16px', 
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px'
+                  }}>
+                    <code style={{ 
+                      color: '#f59e0b', 
+                      fontSize: '11px',
+                      flex: 1,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      {ppvStreamUrl}
+                    </code>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={() => copyToClipboard(ppvStreamUrl)}
+                        style={{
+                          background: 'rgba(245, 158, 11, 0.2)',
+                          border: 'none',
+                          color: '#f59e0b',
+                          cursor: 'pointer',
+                          padding: '8px',
+                          borderRadius: '6px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontSize: '12px'
+                        }}
+                      >
+                        <Copy size={14} /> Copy
+                      </button>
+                      <a
+                        href={ppvStreamUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          background: 'rgba(245, 158, 11, 0.2)',
+                          border: 'none',
+                          color: '#f59e0b',
+                          cursor: 'pointer',
+                          padding: '8px',
+                          borderRadius: '6px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontSize: '12px',
+                          textDecoration: 'none'
+                        }}
+                      >
+                        <ExternalLink size={14} /> Open
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Debug Info */}
+                  {ppvStreamDebug && (
+                    <details style={{ marginTop: '12px' }}>
+                      <summary style={{ color: '#64748b', fontSize: '12px', cursor: 'pointer' }}>Debug Info</summary>
+                      <pre style={{ 
+                        color: '#94a3b8', 
+                        fontSize: '11px', 
+                        background: 'rgba(0,0,0,0.3)',
+                        padding: '12px',
+                        borderRadius: '8px',
+                        marginTop: '8px',
+                        overflow: 'auto',
+                        maxHeight: '200px'
+                      }}>
+                        {JSON.stringify(ppvStreamDebug, null, 2)}
+                      </pre>
+                    </details>
+                  )}
+                </>
+              ) : ppvStreamDebug?.error && (
+                <div style={{
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  color: '#ef4444'
+                }}>
+                  <div style={{ fontWeight: '600', marginBottom: '8px' }}>Failed to extract stream</div>
+                  <div style={{ fontSize: '13px' }}>{ppvStreamDebug.error}</div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+
+      {/* ============================================ */}
+      {/* STALKER PORTAL TAB */}
+      {/* ============================================ */}
+      {activeTab === 'stalker' && (
+        <div>
+          {/* Connection Form */}
+          <div style={{
+            background: 'rgba(30, 41, 59, 0.5)',
+            borderRadius: '16px',
+            padding: '24px',
+            marginBottom: '24px',
+            border: '1px solid rgba(255, 255, 255, 0.1)'
+          }}>
+            <h3 style={{ color: '#f8fafc', margin: '0 0 20px 0', fontSize: '16px' }}>
+              Portal Connection
+            </h3>
+            
+            <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+              <div style={{ flex: '1', minWidth: '250px' }}>
+                <label style={{ display: 'block', color: '#94a3b8', fontSize: '14px', marginBottom: '8px' }}>
+                  Portal URL
+                </label>
+                <input
+                  type="text"
+                  value={portalUrl}
+                  onChange={(e) => setPortalUrl(e.target.value)}
+                  placeholder="http://example.com/c"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    background: 'rgba(15, 23, 42, 0.6)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: '8px',
+                    color: '#f8fafc',
+                    fontSize: '14px',
+                    outline: 'none'
+                  }}
+                />
+              </div>
+              
+              <div style={{ flex: '1', minWidth: '200px' }}>
+                <label style={{ display: 'block', color: '#94a3b8', fontSize: '14px', marginBottom: '8px' }}>
+                  MAC Address
+                </label>
+                <input
+                  type="text"
+                  value={macAddress}
+                  onChange={(e) => setMacAddress(e.target.value)}
+                  placeholder="00:1A:79:XX:XX:XX"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    background: 'rgba(15, 23, 42, 0.6)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: '8px',
+                    color: '#f8fafc',
+                    fontSize: '14px',
+                    outline: 'none'
+                  }}
+                />
+              </div>
+              
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
+                <button
+                  onClick={testConnection}
+                  disabled={loading || !portalUrl || !macAddress}
+                  style={{
+                    padding: '12px 24px',
+                    background: loading ? 'rgba(120, 119, 198, 0.3)' : 'linear-gradient(135deg, #7877c6 0%, #9333ea 100%)',
                     border: 'none',
-                    color: '#94a3b8',
-                    cursor: 'pointer',
-                    padding: '4px'
+                    borderRadius: '8px',
+                    color: '#fff',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
                   }}
                 >
-                  <Copy size={16} />
+                  {loading ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> : <Wifi size={18} />}
+                  {loading ? 'Testing...' : 'Test Connection'}
+                </button>
+                <button
+                  onClick={debugSources}
+                  disabled={debugSourcesLoading || !portalUrl || !macAddress}
+                  style={{
+                    padding: '12px 16px',
+                    background: debugSourcesLoading ? 'rgba(251, 191, 36, 0.3)' : 'rgba(251, 191, 36, 0.2)',
+                    border: '1px solid rgba(251, 191, 36, 0.3)',
+                    borderRadius: '8px',
+                    color: '#fbbf24',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: debugSourcesLoading ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
+                  title="Test which IP sources can connect to this portal"
+                >
+                  {debugSourcesLoading ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> : <Server size={18} />}
+                  Debug Sources
                 </button>
               </div>
             </div>
-          )}
-        </div>
-      )}
-
-      {/* Channels Browser - Shows ALL channels loaded at once */}
-      {testResult?.success && (
-        <div style={{
-          background: 'rgba(30, 41, 59, 0.5)',
-          borderRadius: '16px',
-          padding: '24px',
-          marginBottom: '24px',
-          border: '1px solid rgba(255, 255, 255, 0.1)'
-        }}>
-          <h3 style={{ color: '#f8fafc', margin: '0 0 20px 0', fontSize: '16px' }}>
-            Channel Browser ({totalChannels} channels loaded)
-          </h3>
-
-          {/* Channel Filters */}
-          <div style={{ marginBottom: '16px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-            {/* Category Dropdown */}
-            <select
-              value={selectedCategory}
-              onChange={(e) => {
-                setSelectedCategory(e.target.value);
-                if (testResult?.token) {
-                  loadAllChannels(testResult.token, true, e.target.value);
-                }
-              }}
-              style={{
-                padding: '8px 12px',
-                background: 'rgba(15, 23, 42, 0.6)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: '8px',
-                color: '#f8fafc',
-                fontSize: '13px',
-                minWidth: '200px',
-                outline: 'none',
-                cursor: 'pointer'
-              }}
-            >
-              <option value="all">All US/NA/CA Categories</option>
-              {availableCategories.map(cat => (
-                <option key={cat.id} value={cat.id}>{cat.title}</option>
-              ))}
-            </select>
-            
-            {/* Search */}
-            <input
-              type="text"
-              placeholder="Search channels..."
-              value={channelSearch}
-              onChange={(e) => setChannelSearch(e.target.value)}
-              style={{
-                padding: '8px 12px',
-                background: 'rgba(15, 23, 42, 0.6)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: '8px',
-                color: '#f8fafc',
-                fontSize: '13px',
-                width: '200px',
-                outline: 'none'
-              }}
-            />
-            
-            {/* Reload button */}
-            <button
-              onClick={() => loadAllChannels(undefined, true, selectedCategory)}
-              disabled={loadingChannels}
-              style={{
-                padding: '6px 12px',
-                background: loadingChannels ? 'rgba(120, 119, 198, 0.3)' : 'rgba(120, 119, 198, 0.2)',
-                border: '1px solid rgba(120, 119, 198, 0.3)',
-                borderRadius: '6px',
-                color: '#7877c6',
-                fontSize: '12px',
-                cursor: loadingChannels ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px'
-              }}
-            >
-              {loadingChannels ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <RotateCcw size={12} />}
-              Reload
-            </button>
           </div>
 
-          {/* Channels List */}
-          {loadingChannels ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
-              <Loader2 size={32} style={{ margin: '0 auto 12px', animation: 'spin 1s linear infinite' }} />
-              {selectedCategory !== 'all' 
-                ? `Loading channels from selected category...` 
-                : 'Loading US/NA/CA channels...'}
-            </div>
-          ) : channels.length > 0 ? (
-            (() => {
-              // Apply search filter only (category filter is done server-side)
-              let filteredChannels = channels;
-              
-              // Search filter
-              if (channelSearch) {
-                const searchLower = channelSearch.toLowerCase();
-                filteredChannels = filteredChannels.filter(ch => 
-                  ch.name.toLowerCase().includes(searchLower)
-                );
-              }
-              
-              // Sort by genre then name for better organization
-              filteredChannels.sort((a, b) => {
-                // First sort by genre
-                const genreCompare = (a.genre_title || '').localeCompare(b.genre_title || '');
-                if (genreCompare !== 0) return genreCompare;
-                // Then by name
-                return a.name.localeCompare(b.name);
-              });
-              
-              return (
-            <>
-              <div style={{ marginBottom: '12px', color: '#64748b', fontSize: '13px' }}>
-                🇺🇸 {filteredChannels.length} channels {channelSearch ? `matching "${channelSearch}"` : ''} 
-                {selectedCategory !== 'all' && availableCategories.find(c => c.id === selectedCategory)?.title 
-                  ? ` in ${availableCategories.find(c => c.id === selectedCategory)?.title}` 
-                  : ''}
+          {/* Debug Sources Results */}
+          {debugSourcesResult && (
+            <div style={{
+              background: 'rgba(30, 41, 59, 0.5)',
+              borderRadius: '16px',
+              padding: '24px',
+              marginBottom: '24px',
+              border: '1px solid rgba(251, 191, 36, 0.3)'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h3 style={{ color: '#fbbf24', margin: 0, fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Server size={18} />
+                  IP Source Debug Results
+                </h3>
+                <button
+                  onClick={() => setDebugSourcesResult(null)}
+                  style={{
+                    padding: '4px 8px',
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#64748b',
+                    cursor: 'pointer',
+                    fontSize: '18px'
+                  }}
+                >
+                  ×
+                </button>
               </div>
-              <div style={{ 
-                display: 'grid', 
-                gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', 
-                gap: '10px',
-                maxHeight: '600px',
-                overflowY: 'auto',
-                padding: '4px'
-              }}>
-                {filteredChannels.map((channel) => (
-                  <div
-                    key={channel.id}
+              
+              {debugSourcesResult.summary && (
+                <div style={{
+                  background: 'rgba(0, 0, 0, 0.2)',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  marginBottom: '16px',
+                  color: '#f8fafc',
+                  fontSize: '14px'
+                }}>
+                  <strong>Recommendation:</strong> {debugSourcesResult.summary.recommendation}
+                </div>
+              )}
+              
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '12px' }}>
+                {debugSourcesResult.results && Object.entries(debugSourcesResult.results).map(([key, result]: [string, any]) => (
+                  <div 
+                    key={key}
                     style={{
-                      background: selectedChannel?.id === channel.id 
-                        ? 'rgba(120, 119, 198, 0.2)' 
-                        : 'rgba(15, 23, 42, 0.6)',
-                      border: selectedChannel?.id === channel.id 
-                        ? '1px solid #7877c6' 
-                        : '1px solid rgba(255, 255, 255, 0.1)',
-                      borderRadius: '12px',
-                      padding: '12px 16px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '12px',
-                      transition: 'all 0.2s ease'
+                      background: result.success ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                      border: `1px solid ${result.success ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                      borderRadius: '8px',
+                      padding: '12px 16px'
                     }}
                   >
-                    {/* Skip HTTP logos to avoid mixed content warnings */}
-                    <div style={{
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: '8px',
-                      background: 'rgba(120, 119, 198, 0.2)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}>
-                      <Tv size={20} color="#7877c6" />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ 
-                        color: '#f8fafc', 
-                        fontSize: '14px', 
-                        fontWeight: '500',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis'
-                      }}>
-                        {channel.name}
-                      </div>
-                      <div style={{ color: '#64748b', fontSize: '12px' }}>
-                        #{channel.number}
-                      </div>
-                    </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); getStreamViaCF(channel); }}
-                      disabled={loadingStream}
-                      title="Play via Cloudflare"
-                      style={{
-                        padding: '8px 14px',
-                        background: 'linear-gradient(135deg, #7877c6 0%, #9333ea 100%)',
-                        border: 'none',
-                        borderRadius: '6px',
-                        color: '#fff',
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <span style={{ color: '#f8fafc', fontWeight: '600', fontSize: '13px' }}>{result.source}</span>
+                      <span style={{ 
+                        color: result.success ? '#22c55e' : '#ef4444',
                         fontSize: '12px',
-                        fontWeight: '500',
-                        cursor: loadingStream ? 'not-allowed' : 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        opacity: loadingStream ? 0.5 : 1
-                      }}
-                    >
-                      <Play size={14} /> Play
-                    </button>
+                        fontWeight: '600'
+                      }}>
+                        {result.success ? '✓ Works' : '✗ Blocked'}
+                      </span>
+                    </div>
+                    {result.latency && (
+                      <div style={{ color: '#94a3b8', fontSize: '12px' }}>
+                        Latency: {result.latency}ms
+                      </div>
+                    )}
+                    {result.error && (
+                      <div style={{ color: '#ef4444', fontSize: '12px' }}>
+                        Error: {result.error}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
-            </>
-              );
-            })()
-          ) : (
-            <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
-              {loadingChannels ? 'Loading all channels...' : 'Click "Reload All Channels" to load channels'}
             </div>
           )}
-        </div>
-      )}
 
-      {/* Stream Player */}
-      {(loadingStream || streamUrl) && (
-        <div style={{
-          background: 'rgba(30, 41, 59, 0.5)',
-          borderRadius: '16px',
-          padding: '24px',
-          border: '1px solid rgba(255, 255, 255, 0.1)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-            <h3 style={{ color: '#f8fafc', margin: 0, fontSize: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <Play size={20} />
-              {selectedChannel?.name || 'Stream'}
-            </h3>
-            <div style={{
-              padding: '4px 10px',
-              borderRadius: '6px',
-              fontSize: '11px',
-              fontWeight: '500',
-              background: RPI_PROXY_URL ? 'rgba(34, 197, 94, 0.2)' : 'rgba(251, 191, 36, 0.2)',
-              color: RPI_PROXY_URL ? '#22c55e' : '#fbbf24',
-              border: `1px solid ${RPI_PROXY_URL ? 'rgba(34, 197, 94, 0.3)' : 'rgba(251, 191, 36, 0.3)'}`
-            }}>
-              {RPI_PROXY_URL ? '🏠 RPi Proxy (Residential)' : '☁️ CF Proxy (Datacenter)'}
+          {/* Saved Accounts */}
+          <div style={{
+            background: 'rgba(30, 41, 59, 0.5)',
+            borderRadius: '16px',
+            padding: '24px',
+            marginBottom: '24px',
+            border: '1px solid rgba(255, 255, 255, 0.1)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ color: '#f8fafc', margin: 0, fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Star size={18} />
+                Saved Accounts ({savedAccounts.length})
+              </h3>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json"
+                  onChange={handleFileImport}
+                  style={{ display: 'none' }}
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{
+                    padding: '8px 16px',
+                    background: 'rgba(120, 119, 198, 0.2)',
+                    border: '1px solid rgba(120, 119, 198, 0.3)',
+                    borderRadius: '8px',
+                    color: '#7877c6',
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <Upload size={14} /> Import JSON
+                </button>
+                {testResult?.success && (testResult.content?.itv || 0) > 0 && (
+                  <button
+                    onClick={saveCurrentAccount}
+                    style={{
+                      padding: '8px 16px',
+                      background: 'rgba(34, 197, 94, 0.2)',
+                      border: '1px solid rgba(34, 197, 94, 0.3)',
+                      borderRadius: '8px',
+                      color: '#22c55e',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <Star size={14} /> Save Current
+                  </button>
+                )}
+              </div>
             </div>
+
+            {/* Auto-Cycle Controls */}
+            {savedAccounts.length > 0 && (
+              <div style={{
+                background: 'rgba(15, 23, 42, 0.4)',
+                borderRadius: '12px',
+                padding: '16px',
+                marginBottom: '16px',
+                border: '1px solid rgba(255, 255, 255, 0.05)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <Zap size={18} color="#fbbf24" />
+                    <span style={{ color: '#f8fafc', fontSize: '14px', fontWeight: '500' }}>Auto-Cycle Test</span>
+                  </div>
+                  
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={testStreamDuringCycle}
+                        onChange={(e) => setTestStreamDuringCycle(e.target.checked)}
+                        disabled={autoCycleRunning}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      <span style={{ color: '#94a3b8', fontSize: '13px' }}>Test stream access</span>
+                    </label>
+                    
+                    {!autoCycleRunning ? (
+                      <button
+                        onClick={startAutoCycle}
+                        style={{
+                          padding: '8px 16px',
+                          background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
+                          border: 'none',
+                          borderRadius: '8px',
+                          color: '#000',
+                          fontSize: '13px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        <RotateCcw size={14} /> Start Cycle Test
+                      </button>
+                    ) : (
+                      <button
+                        onClick={stopAutoCycle}
+                        style={{
+                          padding: '8px 16px',
+                          background: 'rgba(239, 68, 68, 0.8)',
+                          border: 'none',
+                          borderRadius: '8px',
+                          color: '#fff',
+                          fontSize: '13px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        <Square size={14} /> Stop
+                      </button>
+                    )}
+                  </div>
+                </div>
+                
+                {autoCycleRunning && (
+                  <div style={{ marginTop: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <Loader2 size={14} color="#fbbf24" style={{ animation: 'spin 1s linear infinite' }} />
+                      <span style={{ color: '#fbbf24', fontSize: '13px' }}>
+                        Testing {autoCycleProgress.current}/{autoCycleProgress.total}: {autoCycleProgress.currentAccount}
+                      </span>
+                    </div>
+                    <div style={{
+                      height: '4px',
+                      background: 'rgba(255, 255, 255, 0.1)',
+                      borderRadius: '2px',
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{
+                        height: '100%',
+                        width: `${(autoCycleProgress.current / autoCycleProgress.total) * 100}%`,
+                        background: 'linear-gradient(90deg, #fbbf24, #f59e0b)',
+                        transition: 'width 0.3s ease'
+                      }} />
+                    </div>
+                  </div>
+                )}
+                
+                {autoCycleResults.length > 0 && !autoCycleRunning && (
+                  <div style={{ marginTop: '12px', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <CheckCircle size={14} color="#22c55e" />
+                      <span style={{ color: '#22c55e', fontSize: '13px' }}>
+                        {autoCycleResults.filter(r => r.canStream).length} working
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <AlertCircle size={14} color="#f59e0b" />
+                      <span style={{ color: '#f59e0b', fontSize: '13px' }}>
+                        {autoCycleResults.filter(r => r.success && !r.canStream).length} connected (no stream)
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <AlertCircle size={14} color="#ef4444" />
+                      <span style={{ color: '#ef4444', fontSize: '13px' }}>
+                        {autoCycleResults.filter(r => !r.success).length} failed
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {savedAccounts.length === 0 ? (
+              <p style={{ color: '#64748b', fontSize: '14px', margin: 0 }}>
+                No saved accounts. Import a results JSON file or save a working account.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
+                {savedAccounts.map((account, idx) => (
+                  <div
+                    key={`${account.portal}-${account.mac}-${idx}`}
+                    style={{
+                      background: 'rgba(15, 23, 42, 0.6)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      borderRadius: '8px',
+                      padding: '12px 16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '12px'
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ color: '#f8fafc', fontSize: '13px', fontWeight: '500' }}>
+                        {account.mac}
+                      </div>
+                      <div style={{ color: '#64748b', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {account.portal} • {account.channels.toLocaleString()} channels
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={() => loadAccount(account)}
+                        style={{
+                          padding: '6px 12px',
+                          background: 'rgba(120, 119, 198, 0.2)',
+                          border: 'none',
+                          borderRadius: '6px',
+                          color: '#7877c6',
+                          fontSize: '12px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Load
+                      </button>
+                      <button
+                        onClick={() => removeAccount(account.portal, account.mac)}
+                        style={{
+                          padding: '6px',
+                          background: 'rgba(239, 68, 68, 0.2)',
+                          border: 'none',
+                          borderRadius: '6px',
+                          color: '#ef4444',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center'
+                        }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Show channel cmd for debugging */}
-          {selectedChannel && (
-            <div style={{ 
-              background: 'rgba(15, 23, 42, 0.6)', 
-              padding: '12px 16px', 
-              borderRadius: '8px',
-              marginBottom: '16px'
+
+          {/* Test Result */}
+          {testResult && (
+            <div style={{
+              background: testResult.success 
+                ? 'rgba(34, 197, 94, 0.1)' 
+                : 'rgba(239, 68, 68, 0.1)',
+              borderRadius: '16px',
+              padding: '24px',
+              marginBottom: '24px',
+              border: `1px solid ${testResult.success ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`
             }}>
-              <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>Channel CMD:</div>
-              <code style={{ color: '#7877c6', fontSize: '11px', wordBreak: 'break-all' }}>
-                {selectedChannel.cmd || '(empty)'}
-              </code>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                {testResult.success ? (
+                  <CheckCircle size={24} color="#22c55e" />
+                ) : (
+                  <AlertCircle size={24} color="#ef4444" />
+                )}
+                <h3 style={{ 
+                  color: testResult.success ? '#22c55e' : '#ef4444', 
+                  margin: 0, 
+                  fontSize: '18px' 
+                }}>
+                  {testResult.success ? 'Connection Successful' : 'Connection Failed'}
+                </h3>
+              </div>
+
+              {testResult.error && (
+                <p style={{ color: '#ef4444', margin: '0 0 16px 0' }}>{testResult.error}</p>
+              )}
+
+              {testResult.success && testResult.profile && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                  <div style={{ background: 'rgba(15, 23, 42, 0.4)', padding: '16px', borderRadius: '12px' }}>
+                    <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>Status</div>
+                    <div style={{ 
+                      color: (testResult.profile.status === 1 || testResult.profile.status === '1') ? '#22c55e' : '#ef4444',
+                      fontSize: '16px',
+                      fontWeight: '600'
+                    }}>
+                      {(testResult.profile.status === 1 || testResult.profile.status === '1') ? 'Active' : `Inactive (${testResult.profile.status})`}
+                    </div>
+                  </div>
+                  
+                  <div style={{ background: 'rgba(15, 23, 42, 0.4)', padding: '16px', borderRadius: '12px' }}>
+                    <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>Blocked</div>
+                    <div style={{ 
+                      color: (testResult.profile.blocked === '1' || testResult.profile.blocked === 1) ? '#ef4444' : '#22c55e',
+                      fontSize: '16px',
+                      fontWeight: '600'
+                    }}>
+                      {(testResult.profile.blocked === '1' || testResult.profile.blocked === 1) ? 'Yes' : 'No'}
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'rgba(15, 23, 42, 0.4)', padding: '16px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <Tv size={20} color="#7877c6" />
+                    <div>
+                      <div style={{ color: '#94a3b8', fontSize: '12px' }}>Live TV</div>
+                      <div style={{ color: '#f8fafc', fontSize: '16px', fontWeight: '600' }}>
+                        {testResult.content?.itv?.toLocaleString() || 0}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'rgba(15, 23, 42, 0.4)', padding: '16px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <Radio size={20} color="#7877c6" />
+                    <div>
+                      <div style={{ color: '#94a3b8', fontSize: '12px' }}>Radio</div>
+                      <div style={{ color: '#f8fafc', fontSize: '16px', fontWeight: '600' }}>
+                        {testResult.content?.radio?.toLocaleString() || 0}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'rgba(15, 23, 42, 0.4)', padding: '16px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <Film size={20} color="#7877c6" />
+                    <div>
+                      <div style={{ color: '#94a3b8', fontSize: '12px' }}>VOD</div>
+                      <div style={{ color: '#f8fafc', fontSize: '16px', fontWeight: '600' }}>
+                        {testResult.content?.vod?.toLocaleString() || 0}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {testResult.success && testResult.token && (
+                <div style={{ marginTop: '16px' }}>
+                  <div style={{ 
+                    background: 'rgba(15, 23, 42, 0.4)', 
+                    padding: '12px 16px', 
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}>
+                    <div>
+                      <span style={{ color: '#94a3b8', fontSize: '12px' }}>Token: </span>
+                      <code style={{ color: '#7877c6', fontSize: '12px' }}>{testResult.token}</code>
+                    </div>
+                    <button
+                      onClick={() => copyToClipboard(testResult.token!)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#94a3b8',
+                        cursor: 'pointer',
+                        padding: '4px'
+                      }}
+                    >
+                      <Copy size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          {loadingStream ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
-              <Loader2 size={32} style={{ margin: '0 auto 12px', animation: 'spin 1s linear infinite' }} />
-              Getting stream URL...
-            </div>
-          ) : streamUrl ? (
-            <>
-              <div 
-                style={{
-                  background: '#000',
-                  borderRadius: '12px',
-                  overflow: 'hidden',
-                  marginBottom: '16px',
-                  aspectRatio: '16/9',
-                  position: 'relative'
-                }}
-              >
-                <video
-                  ref={videoRef}
-                  controls
-                  autoPlay
-                  playsInline
-                  muted
-                  style={{ width: '100%', height: '100%' }}
-                />
-                {playerError && (
-                  <div style={{
-                    position: 'absolute',
-                    bottom: '10px',
-                    left: '10px',
-                    right: '10px',
-                    background: 'rgba(239, 68, 68, 0.9)',
-                    color: '#fff',
+          {/* Channels Browser */}
+          {testResult?.success && (
+            <div style={{
+              background: 'rgba(30, 41, 59, 0.5)',
+              borderRadius: '16px',
+              padding: '24px',
+              marginBottom: '24px',
+              border: '1px solid rgba(255, 255, 255, 0.1)'
+            }}>
+              <h3 style={{ color: '#f8fafc', margin: '0 0 20px 0', fontSize: '16px' }}>
+                Channel Browser ({totalChannels} channels loaded)
+              </h3>
+
+              <div style={{ marginBottom: '16px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => {
+                    setSelectedCategory(e.target.value);
+                    if (testResult?.token) {
+                      loadAllChannels(testResult.token, true, e.target.value);
+                    }
+                  }}
+                  style={{
                     padding: '8px 12px',
+                    background: 'rgba(15, 23, 42, 0.6)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: '8px',
+                    color: '#f8fafc',
+                    fontSize: '13px',
+                    minWidth: '200px',
+                    outline: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="all">All US/NA/CA Categories</option>
+                  {availableCategories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.title}</option>
+                  ))}
+                </select>
+                
+                <input
+                  type="text"
+                  placeholder="Search channels..."
+                  value={channelSearch}
+                  onChange={(e) => setChannelSearch(e.target.value)}
+                  style={{
+                    padding: '8px 12px',
+                    background: 'rgba(15, 23, 42, 0.6)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: '8px',
+                    color: '#f8fafc',
+                    fontSize: '13px',
+                    width: '200px',
+                    outline: 'none'
+                  }}
+                />
+                
+                <button
+                  onClick={() => loadAllChannels(undefined, true, selectedCategory)}
+                  disabled={loadingChannels}
+                  style={{
+                    padding: '6px 12px',
+                    background: loadingChannels ? 'rgba(120, 119, 198, 0.3)' : 'rgba(120, 119, 198, 0.2)',
+                    border: '1px solid rgba(120, 119, 198, 0.3)',
                     borderRadius: '6px',
-                    fontSize: '12px'
-                  }}>
-                    {playerError}
-                  </div>
-                )}
+                    color: '#7877c6',
+                    fontSize: '12px',
+                    cursor: loadingChannels ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  {loadingChannels ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <RotateCcw size={12} />}
+                  Reload
+                </button>
               </div>
 
-              <div style={{ 
-                background: 'rgba(15, 23, 42, 0.6)', 
-                padding: '12px 16px', 
-                borderRadius: '8px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '12px'
-              }}>
-                <code style={{ 
-                  color: '#7877c6', 
-                  fontSize: '12px',
-                  flex: 1,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
-                }}>
-                  {rawStreamUrl || streamUrl}
-                </code>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  {selectedChannel && (
-                    <button
-                      onClick={() => getStream(selectedChannel)}
-                      disabled={loadingStream}
-                      style={{
-                        background: 'rgba(34, 197, 94, 0.2)',
-                        border: 'none',
-                        color: '#22c55e',
-                        cursor: loadingStream ? 'not-allowed' : 'pointer',
-                        padding: '8px',
-                        borderRadius: '6px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        fontSize: '12px'
-                      }}
-                      title="Get fresh stream URL with new token"
-                    >
-                      {loadingStream ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : '🔄'} Refresh
-                    </button>
-                  )}
-                  <button
-                    onClick={() => copyToClipboard(rawStreamUrl || streamUrl || '')}
-                    style={{
-                      background: 'rgba(120, 119, 198, 0.2)',
-                      border: 'none',
-                      color: '#7877c6',
-                      cursor: 'pointer',
-                      padding: '8px',
-                      borderRadius: '6px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      fontSize: '12px'
-                    }}
-                  >
-                    <Copy size={14} /> Copy
-                  </button>
-                  <a
-                    href={rawStreamUrl || streamUrl || ''}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      background: 'rgba(120, 119, 198, 0.2)',
-                      border: 'none',
-                      color: '#7877c6',
-                      cursor: 'pointer',
-                      padding: '8px',
-                      borderRadius: '6px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      fontSize: '12px',
-                      textDecoration: 'none'
-                    }}
-                  >
-                    <ExternalLink size={14} /> Open
-                  </a>
+              {loadingChannels ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
+                  <Loader2 size={32} style={{ margin: '0 auto 12px', animation: 'spin 1s linear infinite' }} />
+                  Loading channels...
                 </div>
-              </div>
-
-              <div style={{ 
-                background: 'rgba(251, 191, 36, 0.1)', 
-                border: '1px solid rgba(251, 191, 36, 0.3)',
-                borderRadius: '8px',
-                padding: '12px 16px',
-                marginTop: '12px'
-              }}>
-                <p style={{ color: '#fbbf24', fontSize: '13px', margin: '0 0 8px 0', fontWeight: '500' }}>
-                  ⚠️ Stream not playing? This is normal for IPTV streams!
-                </p>
-                <p style={{ color: '#d4a', fontSize: '12px', margin: '0 0 8px 0' }}>
-                  Most IPTV portals serve raw MPEG-TS streams which browsers cannot play directly.
-                </p>
-                <ol style={{ color: '#fbbf24', fontSize: '12px', margin: 0, paddingLeft: '20px' }}>
-                  <li style={{ marginBottom: '4px' }}><strong>Use VLC:</strong> Copy the URL and paste into VLC (File → Open Network Stream)</li>
-                  <li style={{ marginBottom: '4px' }}><strong>Use the VLC command:</strong> Click "Copy VLC Command" below and paste in terminal</li>
-                  <li>The stream URL is valid - it just needs a proper MPEG-TS player</li>
-                </ol>
-                {rawStreamUrl && (
-                  <div style={{ marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <button
-                      onClick={() => {
-                        // Copy URL to clipboard
-                        navigator.clipboard.writeText(rawStreamUrl);
-                        alert('URL copied! Paste into VLC: File → Open Network Stream\n\nNote: Tokens expire quickly - paste immediately!');
-                      }}
-                      style={{
-                        padding: '8px 16px',
-                        background: 'rgba(34, 197, 94, 0.3)',
-                        border: '1px solid rgba(34, 197, 94, 0.5)',
-                        borderRadius: '6px',
-                        color: '#22c55e',
-                        fontSize: '12px',
-                        cursor: 'pointer',
-                        fontWeight: '600'
-                      }}
-                    >
-                      📋 Copy URL for VLC (Recommended)
-                    </button>
-                    <button
-                      onClick={() => {
-                        // Generate VLC command
-                        const vlcCmd = `vlc "${rawStreamUrl}"`;
-                        navigator.clipboard.writeText(vlcCmd);
-                        alert('VLC command copied!\n\nPaste in terminal immediately - tokens expire fast!');
-                      }}
-                      style={{
-                        padding: '8px 16px',
-                        background: 'rgba(251, 191, 36, 0.2)',
-                        border: '1px solid rgba(251, 191, 36, 0.4)',
-                        borderRadius: '6px',
-                        color: '#fbbf24',
-                        fontSize: '12px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Copy VLC Command
-                    </button>
-                    <button
-                      onClick={() => {
-                        // Try playing directly without proxy
-                        if (videoRef.current && hlsRef.current) {
-                          hlsRef.current.destroy();
-                        }
-                        setStreamUrl(rawStreamUrl);
-                      }}
-                      style={{
-                        padding: '8px 16px',
-                        background: 'rgba(100, 100, 100, 0.2)',
-                        border: '1px solid rgba(100, 100, 100, 0.4)',
-                        borderRadius: '6px',
-                        color: '#94a3b8',
-                        fontSize: '12px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Try Direct (Usually Fails)
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Stream Debug Info */}
-              {streamDebug && (
-                <div style={{ marginTop: '12px' }}>
-                  {/* Method indicator */}
-                  {streamDebug.usedMethod && (
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      marginBottom: '8px',
-                      padding: '8px 12px',
-                      background: streamDebug.usedMethod === 'direct' 
-                        ? 'rgba(249, 115, 22, 0.1)' 
-                        : 'rgba(120, 119, 198, 0.1)',
-                      border: `1px solid ${streamDebug.usedMethod === 'direct' ? 'rgba(249, 115, 22, 0.3)' : 'rgba(120, 119, 198, 0.3)'}`,
-                      borderRadius: '6px'
-                    }}>
-                      <Zap size={14} color={streamDebug.usedMethod === 'direct' ? '#f97316' : '#7877c6'} />
-                      <span style={{ 
-                        color: streamDebug.usedMethod === 'direct' ? '#f97316' : '#7877c6', 
-                        fontSize: '12px', 
-                        fontWeight: '500' 
+              ) : channels.length > 0 ? (
+                (() => {
+                  let filteredChannels = channels;
+                  
+                  if (channelSearch) {
+                    const searchLower = channelSearch.toLowerCase();
+                    filteredChannels = filteredChannels.filter(ch => 
+                      ch.name.toLowerCase().includes(searchLower)
+                    );
+                  }
+                  
+                  filteredChannels.sort((a, b) => {
+                    const genreCompare = (a.genre_title || '').localeCompare(b.genre_title || '');
+                    if (genreCompare !== 0) return genreCompare;
+                    return a.name.localeCompare(b.name);
+                  });
+                  
+                  return (
+                    <>
+                      <div style={{ marginBottom: '12px', color: '#64748b', fontSize: '13px' }}>
+                        🇺🇸 {filteredChannels.length} channels {channelSearch ? `matching "${channelSearch}"` : ''}
+                      </div>
+                      <div style={{ 
+                        display: 'grid', 
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', 
+                        gap: '10px',
+                        maxHeight: '500px',
+                        overflowY: 'auto'
                       }}>
-                        Stream via: {streamDebug.usedMethod === 'direct' ? 'Cloudflare (Direct)' : streamDebug.usedMethod}
-                      </span>
-                      {streamDebug.cfToken && (
-                        <span style={{ color: '#64748b', fontSize: '11px', marginLeft: 'auto' }}>
-                          CF Token: {streamDebug.cfToken}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  {streamDebug.note && (
-                    <div style={{
-                      padding: '8px 12px',
-                      background: 'rgba(34, 197, 94, 0.1)',
-                      border: '1px solid rgba(34, 197, 94, 0.3)',
-                      borderRadius: '6px',
-                      marginBottom: '8px',
-                      color: '#22c55e',
-                      fontSize: '12px'
-                    }}>
-                      💡 {streamDebug.note}
-                    </div>
-                  )}
-                  <details>
-                    <summary style={{ 
-                      color: '#94a3b8', 
-                      cursor: 'pointer', 
-                      padding: '8px',
-                      background: 'rgba(30, 41, 59, 0.3)',
-                      borderRadius: '6px',
-                      fontSize: '12px'
-                    }}>
-                      View Stream API Response
-                    </summary>
-                    <pre style={{
-                      background: 'rgba(15, 23, 42, 0.6)',
-                      padding: '12px',
-                      borderRadius: '0 0 6px 6px',
-                      overflow: 'auto',
-                      maxHeight: '200px',
-                      color: '#94a3b8',
-                      fontSize: '11px',
-                      margin: 0
-                    }}>
-                      {JSON.stringify(streamDebug, null, 2)}
-                    </pre>
-                  </details>
+                        {filteredChannels.map((channel) => (
+                          <div
+                            key={channel.id}
+                            style={{
+                              background: selectedChannel?.id === channel.id 
+                                ? 'rgba(120, 119, 198, 0.2)' 
+                                : 'rgba(15, 23, 42, 0.6)',
+                              border: selectedChannel?.id === channel.id 
+                                ? '1px solid #7877c6' 
+                                : '1px solid rgba(255, 255, 255, 0.1)',
+                              borderRadius: '12px',
+                              padding: '12px 16px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '12px'
+                            }}
+                          >
+                            <div style={{
+                              width: '40px',
+                              height: '40px',
+                              borderRadius: '8px',
+                              background: 'rgba(120, 119, 198, 0.2)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}>
+                              <Tv size={20} color="#7877c6" />
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ 
+                                color: '#f8fafc', 
+                                fontSize: '14px', 
+                                fontWeight: '500',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis'
+                              }}>
+                                {channel.name}
+                              </div>
+                              <div style={{ color: '#64748b', fontSize: '12px' }}>
+                                #{channel.number}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => getStreamViaCF(channel)}
+                              disabled={loadingStream}
+                              style={{
+                                padding: '8px 14px',
+                                background: 'linear-gradient(135deg, #7877c6 0%, #9333ea 100%)',
+                                border: 'none',
+                                borderRadius: '6px',
+                                color: '#fff',
+                                fontSize: '12px',
+                                fontWeight: '500',
+                                cursor: loadingStream ? 'not-allowed' : 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                opacity: loadingStream ? 0.5 : 1
+                              }}
+                            >
+                              <Play size={14} /> Play
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  );
+                })()
+              ) : (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                  Click "Reload" to load channels
                 </div>
               )}
-            </>
-          ) : null}
+            </div>
+          )}
+
+          {/* Stalker Stream Player */}
+          {(loadingStream || streamUrl) && (
+            <div style={{
+              background: 'rgba(30, 41, 59, 0.5)',
+              borderRadius: '16px',
+              padding: '24px',
+              border: '1px solid rgba(120, 119, 198, 0.3)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+                <h3 style={{ color: '#f8fafc', margin: 0, fontSize: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <Play size={20} />
+                  {selectedChannel?.name || 'Stream'}
+                </h3>
+                <div style={{
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  fontSize: '11px',
+                  fontWeight: '500',
+                  background: RPI_PROXY_URL ? 'rgba(34, 197, 94, 0.2)' : 'rgba(251, 191, 36, 0.2)',
+                  color: RPI_PROXY_URL ? '#22c55e' : '#fbbf24'
+                }}>
+                  {RPI_PROXY_URL ? '🏠 RPi Proxy' : '☁️ CF Proxy'}
+                </div>
+              </div>
+
+              {loadingStream ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
+                  <Loader2 size={32} style={{ margin: '0 auto 12px', animation: 'spin 1s linear infinite' }} />
+                  Getting stream URL...
+                </div>
+              ) : streamUrl ? (
+                <>
+                  <div style={{
+                    background: '#000',
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                    marginBottom: '16px',
+                    aspectRatio: '16/9',
+                    position: 'relative'
+                  }}>
+                    <video
+                      ref={videoRef}
+                      controls
+                      autoPlay
+                      playsInline
+                      muted
+                      style={{ width: '100%', height: '100%' }}
+                    />
+                    {playerError && (
+                      <div style={{
+                        position: 'absolute',
+                        bottom: '10px',
+                        left: '10px',
+                        right: '10px',
+                        background: 'rgba(239, 68, 68, 0.9)',
+                        color: '#fff',
+                        padding: '8px 12px',
+                        borderRadius: '6px',
+                        fontSize: '12px'
+                      }}>
+                        {playerError}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ 
+                    background: 'rgba(15, 23, 42, 0.6)', 
+                    padding: '12px 16px', 
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px'
+                  }}>
+                    <code style={{ 
+                      color: '#7877c6', 
+                      fontSize: '11px',
+                      flex: 1,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      {rawStreamUrl || streamUrl}
+                    </code>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={() => copyToClipboard(rawStreamUrl || streamUrl || '')}
+                        style={{
+                          background: 'rgba(120, 119, 198, 0.2)',
+                          border: 'none',
+                          color: '#7877c6',
+                          cursor: 'pointer',
+                          padding: '8px',
+                          borderRadius: '6px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontSize: '12px'
+                        }}
+                      >
+                        <Copy size={14} /> Copy
+                      </button>
+                      <a
+                        href={rawStreamUrl || streamUrl || ''}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          background: 'rgba(120, 119, 198, 0.2)',
+                          border: 'none',
+                          color: '#7877c6',
+                          cursor: 'pointer',
+                          padding: '8px',
+                          borderRadius: '6px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontSize: '12px',
+                          textDecoration: 'none'
+                        }}
+                      >
+                        <ExternalLink size={14} /> Open
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* VLC Help */}
+                  <div style={{ 
+                    background: 'rgba(251, 191, 36, 0.1)', 
+                    border: '1px solid rgba(251, 191, 36, 0.3)',
+                    borderRadius: '8px',
+                    padding: '12px 16px',
+                    marginTop: '12px'
+                  }}>
+                    <p style={{ color: '#fbbf24', fontSize: '13px', margin: '0 0 8px 0', fontWeight: '500' }}>
+                      ⚠️ Stream not playing?
+                    </p>
+                    <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>
+                      Most IPTV streams are raw MPEG-TS. Copy the URL and paste into VLC (File → Open Network Stream).
+                    </p>
+                  </div>
+
+                  {/* Debug Info */}
+                  {streamDebug && (
+                    <details style={{ marginTop: '12px' }}>
+                      <summary style={{ color: '#64748b', fontSize: '12px', cursor: 'pointer' }}>Debug Info</summary>
+                      <pre style={{ 
+                        color: '#94a3b8', 
+                        fontSize: '11px', 
+                        background: 'rgba(0,0,0,0.3)',
+                        padding: '12px',
+                        borderRadius: '8px',
+                        marginTop: '8px',
+                        overflow: 'auto',
+                        maxHeight: '200px'
+                      }}>
+                        {JSON.stringify(streamDebug, null, 2)}
+                      </pre>
+                    </details>
+                  )}
+                </>
+              ) : null}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Raw Profile Data */}
-      {testResult?.success && testResult.profile && (
-        <details style={{ marginTop: '24px' }}>
-          <summary style={{ 
-            color: '#94a3b8', 
-            cursor: 'pointer', 
-            padding: '12px',
-            background: 'rgba(30, 41, 59, 0.3)',
-            borderRadius: '8px',
-            fontSize: '14px'
-          }}>
-            View Raw Profile Data
-          </summary>
-          <pre style={{
-            background: 'rgba(15, 23, 42, 0.6)',
-            padding: '16px',
-            borderRadius: '0 0 8px 8px',
-            overflow: 'auto',
-            maxHeight: '400px',
-            color: '#94a3b8',
-            fontSize: '12px',
-            margin: 0
-          }}>
-            {JSON.stringify(testResult.profile, null, 2)}
-          </pre>
-        </details>
-      )}
+      {/* CSS for spin animation */}
+      <style jsx global>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }

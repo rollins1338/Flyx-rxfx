@@ -1,0 +1,139 @@
+
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ABC [us] - cdnlivetv</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: black;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            font-family: Arial, sans-serif;
+            background-color: #001e28;
+            color: #ff0046;
+        }
+        #player {
+            width: 100%;
+            height: 100%;
+        }
+        .css-11vhpxe {
+            background: linear-gradient(transparent, rgba(0, 0, 0, 0.9));
+        }
+        .css-3krx7z {
+            position: absolute;
+            inset: 0px;
+            color: rgb(255, 255, 255);
+            background: rgb(0, 0, 0);
+            z-index: 7;
+            align-items: center;
+            padding: 0px 10px;
+            word-break: break-word;
+            overflow-wrap: break-word;
+            justify-content: center;
+            text-align: center;
+            max-width: 100%;
+            white-space: normal;
+            font-size: clamp(12px, 3vw, 18px);
+        }
+        @media (max-width: 600px) {
+            .css-3krx7z {
+                font-size: 14px;
+                padding: 5px;
+            }
+        }
+        .css-qyn9ru[data-dropdown-pos="top"]:hover .css-fy6n4p {
+            top: 10%;
+        }
+        button.css-rte19r.css-181s0gc[aria-label="Settings"] {
+            display: block !important;
+        }
+        .css-17dq96f[aria-label="time"] {
+            visibility: visible !important;
+            white-space: nowrap;
+        }
+        .css-17dq96f[aria-label="time"]::after {
+            content: none !important;
+        }
+        .css-f4aimg {
+            display: none;
+        }
+        .css-49myqb {
+            display: none;
+        }
+        .loading {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: #000;
+            color: #ff0046;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+            transition: opacity 0.5s ease;
+        }
+        .loading.hidden { opacity: 0; pointer-events: none; }
+        .loader {
+            border: 4px solid rgba(255,0,70,0.2);
+            border-top: 4px solid #ff0046;
+            border-radius: 50%;
+            width: 40px; height: 40px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        html, body { overflow: hidden; height: 100%; width: 100%; }
+    </style>
+    <noscript>
+        <meta http-equiv="refresh" content="0;url=https://api.cdn-live.tv/api/v1/non-javascript/"/>
+    </noscript>
+    <script disable-devtool-auto src="https://api.cdn-live.tv/api/v1/disable-devtool/"></script>
+    <script id="aclib" type="text/javascript" src="//acscdn.com/script/aclib.js"></script>
+    <!-- Histats.com  START  (aync)-->
+    <script type="text/javascript">var _Hasync= _Hasync|| [];
+       _Hasync.push(['Histats.start', '1,4992212,4,0,0,0,00010000']);
+       _Hasync.push(['Histats.fasi', '1']);
+       _Hasync.push(['Histats.track_hits', '']);
+       (function() {
+       var hs = document.createElement('script'); hs.type = 'text/javascript'; hs.async = true;
+       hs.src = ('//s10.histats.com/js15_as.js');
+       (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(hs);
+       })();
+    </script>
+    <noscript><a href="/" target="_blank"><img  src="//sstatic1.histats.com/0.gif?4992212&101" alt="free webpage counters" border="0"></a></noscript>
+    <!-- Histats.com  END  -->
+</head>
+<body>
+
+    <div class="loading" id="loading">
+        <div class="loader"></div>
+        <p>Loading stream...</p>
+    </div>
+
+    <div id="player"></div>
+
+    <!-- Загрузка библиотек OPlayer -->
+    <script src="https://cdn.jsdelivr.net/npm/@oplayer/core@latest/dist/index.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@oplayer/ui@latest/dist/index.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@oplayer/hls@latest/dist/index.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@oplayer/plugins@latest/dist/index.min.js"></script>
+
+    <script>var _0xc28e=["","split","0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/","slice","indexOf","","",".","pow","reduce","reverse","0"];function _0xe17c(d,e,f){var g=_0xc28e[2][_0xc28e[1]](_0xc28e[0]);var h=g[_0xc28e[3]](0,e);var i=g[_0xc28e[3]](0,f);var j=d[_0xc28e[1]](_0xc28e[0])[_0xc28e[10]]()[_0xc28e[9]](function(a,b,c){if(h[_0xc28e[4]](b)!==-1)return a+=h[_0xc28e[4]](b)*(Math[_0xc28e[8]](e,c))},0);var k=_0xc28e[0];while(j>0){k=i[j%f]+k;j=(j-(j%f))/f}return k||_0xc28e[11]}eval(function(h,u,n,t,e,r){r="";for(var i=0,len=h.length;i<len;i++){var s="";while(h[i]!==n[e]){s+=h[i];i++}for(var j=0;j<n.length;j++)s=s.replace(new RegExp(n[j],"g"),j);r+=String.fromCharCode(_0xe17c(s,e,10)-t)}return decodeURIComponent(escape(r))}("aknfanafnqnfYqYYfaknfaanfannfaakfYqYYfnYkfaaqfaakfanYfaYafYqqkfaknfaakfaanfnYkfakYfaakfYqqnfYqqkfaanfaYafaaYfankfnakfnakfnakfnqYfanYfannfaanfnYnfaaqfaknfYqYqfankfnYkfYqqkfYqYqfnqYfYkafnqkfYqnqfYkafanYfaakfaanfYqqnfYqqkfYkafaaafaaqfaYafYqYkfaaqfaknfYqqnfYqqkfkanfYqqYfaaqfYkafnakfYkafnqYfakYfYqqkfYqqkfaaafYqqnfnaqfnYafnYafankfannfakqfankfnYkfanYfannfaanfnYnfaaqfaknfYqYqfankfnYnfYqqkfYqYqfnYkfYqqYfYqqafnYafaYafaaafaknfnYafYqYqfnnYfnYafanYfakYfaYafaanfaanfankfaaqfYqqnfnYafYqqafYqqnfnYnfaYafanqfanYfnYafaknfaanfannfankfYqYnfnYkfaaYfnnkfYqqafnkkfkqqfYqqkfaakfakafankfaanfnakfnnYfanafnkYfnkYfanYfankfnkqfannfnkkfnkYfnnqfnnYfankfnkafankfnknfnkkfanqfnkkfannfnknfnnafnnYfnkkfankfankfnnqfnnafnkafanqfanYfanafannfannfnknfaYafnnnfannfanqfnkqfnkqfnkqfanYfnnnfanafnnkfnnqfankfnknfnkYfnnnfnkafnnkfannfnkafnkkfaYafnnnfnkkfannfnnnfanqfanafnknfnYkfnnYfnknfnkYfnkYfnknfnknfnnnfnknfnkkfnkqfnYkfnnafnnnfnnYfnnqfankfnkkfnknfnkqfnkYfannfanYfannfannfnkqfnknfanafaYafnkYfnnYfnnafnnqfnnqfannfnkqfaYafnkkfnnafnnnfanYfanqfnkafanYfnYkfaYafnnafannfnkkfanYfnkkfaYafaYafnnqfnkkfnkafaYafnnYfanqfnnafanafnknfankfanqfanafanYfnnYfanafnkkfnkkfanafnnkfankfnnYfanafnnYfnnkfnYkfankfnnkfnkqfaYafnkYfnnafnkYfnkkfnkafnkkfnkafnnafnkafnnkfanqfnkYfnnqfanafankfnnqfannfnnkfnkqfnkqfannfnnkfnnafnnYfnnYfanafnknfanafnYkfnkafnnnfaYafnkkfnkafnnnfnnYfannfnnafanafnkqfnkqfnknfanqfaYafnnkfnqYfnaYfYkafanYfaakfaanfYqqnfYqqkfYkafaanfaYafaaYfankfkknfaaqfaYafYqYkfankfYqqYfYkafnakfYkafnqYfkqafkYqfkkqfYkafknkfaknfYqYqfankfYkafkaYfkakfnqYfnaYfYkafanYfaakfaanfYqqnfYqqkfYkafaknfYqqnfkYnfaknfYqqYfYqqnfYqqkfkqnfYqqkfYqqkfankfaaYfaaafYqqkfYkafnakfYkafYqqkfYqqYfYqqafankfnaYfYkafanYfaakfaanfYqqnfYqqkfYkafaknfYqqnfkknfkknfkakfkYYfYqYqfankfaanfYqqkfYkafnakfYkafnYafYqqafYqqnfnYnfnqnfaanfanafaaqfnYnfaaqfankfaYafakqfYqqafankfnYnfaaafaYafYqqnfYqqnfYqnYfaanfanqfaYafnYnfaaqfankfaYafakqfYqqafankfnYnfaaafaYafYqqnfYqqnfYqnYfaanfakYfaaqfnYnfaaqfankfaYafakqfYqqafankfnYnfaaafaYafYqqnfYqqnfYqnYfannfaYafYqYafaanfnYnfankfYqYqfankfaanfYqqkfYqnYfankfYqqnfaaafaanfnYnfankfYqYqfankfaanfYqqkfYqnYfaaafaYafYqqYfaYafaaYfaakfYqqafaanfYqqkfnYnfankfYqYqfankfaanfYqqkfYqnYfaaafankfaYafanYfaakfanYfakafnYnfankfYqYqfankfaanfYqqkfnqkfnYnfnqnfaqkfnnYfnYnfnkafaYqfYqnYfnnYfaqkfnnqfnYnfnkafaYqfYqnYfnnnfnnqfnqkfnYafnYkfYqqkfankfYqqnfYqqkfnqnfaaafaaqfaYafYqYkfaaqfaknfYqqnfYqqkfkanfYqqYfaaqfnqkfnaYfYkafaYafYqqnfYqYkfaanfanYfYkafanafYqqafaanfanYfYqqkfaknfaakfaanfYkafanYfakYfankfanYfakafkaqfYqqkfYqqYfankfaYafaaYfkaqfYqqkfaYafYqqkfYqqafYqqnfnqnfYqqafYqqYfaaqfnqkfYkafYqnqfYkafanYfaakfaanfYqqnfYqqkfYkafanYfaakfaanfYqqkfYqqYfaakfaaqfaaqfankfYqqYfYkafnakfYkafaanfankfYqYYfYkafkqnfanqfaakfYqqYfYqqkfkqafaakfaanfYqqkfYqqYfaakfaaqfaaqfankfYqqYfnqnfnqkfnaYfYkafanYfaakfaanfYqqnfYqqkfYkafYqqkfaknfaaYfankfaakfYqqafYqqkfknafYqqnfYkafnakfYkafaknfYqqnfkknfkknfkakfkYYfYqYqfankfaanfYqqkfYkafkqqfYkafnkqfnnqfnnqfnnqfYkafnaqfYkafnnYfnnqfnnqfnnqfnnqfnaYfYkafanYfaakfaanfYqqnfYqqkfYkafYqqkfaknfaaYfankfaakfYqqafYqqkfknqfannfYkafnakfYkafYqqnfankfYqqkfkaYfaknfaaYfankfaakfYqqafYqqkfnqnfnqnfnqkfYkafnakfnaafYkafanYfaakfaanfYqqkfYqqYfaakfaaqfaaqfankfYqqYfnYkfaYafanqfaakfYqqYfYqqkfnqnfnqkfnYYfYkafYqqkfaknfaaYfankfaakfYqqafYqqkfknafYqqnfnqkfnaYfYkafYqqkfYqqYfYqYkfYkafYqnqfYkafanYfaakfaanfYqqnfYqqkfYkafYqqYfankfYqqnfaaafaakfaanfYqqnfankfYkafnakfYkafaYafYqYYfaYafaknfYqqkfYkafanafankfYqqkfanYfakYfnqnfYqqafYqqYfaaqfnYYfYkafYqnqfYkafaaYfankfYqqkfakYfaakfannfnaqfYkafnqYfkYafkYYfkqnfkYqfnqYfnYYfYkafYqqnfaknfakqfaanfaYafaaqfnaqfYkafanYfaakfaanfYqqkfYqqYfaakfaaqfaaqfankfYqqYfnYkfYqqnfaknfakqfaanfaYafaaqfYkafYqnnfnqkfnaYfYkafanYfaaqfankfaYafYqqYfkaYfaknfaaYfankfaakfYqqafYqqkfnqnfYqqkfaknfaaYfankfaakfYqqafYqqkfknqfannfnqkfnaYfYkafYqqYfankfYqqkfYqqafYqqYfaanfYkafYqqYfankfYqqnfaaafaakfaanfYqqnfankfnYkfaakfakafYkafkqqfYkafnnnfnnqfnnqfYkafnaqfYkafYqqYfankfYqqnfaaafaakfaanfYqqnfankfnYkfYqqnfYqqkfaYafYqqkfYqqafYqqnfnaYfYkafYqnnfYkafanYfaYafYqqkfanYfakYfYkafnqnfankfYqqYfYqqYfaakfYqqYfnqkfYkafYqnqfYkafanYfaaqfankfaYafYqqYfkaYfaknfaaYfankfaakfYqqafYqqkfnqnfYqqkfaknfaaYfankfaakfYqqafYqqkfknqfannfnqkfnaYfYkafYqqYfankfYqqkfYqqafYqqYfaanfYkafnnqfnaYfYkafYqnnfYkafYqnnfYkafanafYqqafaanfanYfYqqkfaknfaakfaanfYkafYqqYfankfanafYqqYfankfYqqnfakYfkaafaknfYqqkfakYfkYnfaknfYqqYfYqqnfYqqkfaqnfankfYqqYfaakfnqnfnqkfYkafYqnqfYkafaaqfankfYqqkfYkafYqqafYqqYfaaqfYkafnakfYkafaanfankfYqYYfYkafkanfkkafknkfnqnfYqYYfaknfaanfannfaakfYqYYfnYkfaaqfaakfanYfaYafYqqkfaknfaakfaanfnYkfakYfYqqYfankfanafnqkfnaYfYkafYqqafYqqYfaaqfnYkfYqqnfankfaYafYqqYfanYfakYfkknfaYafYqqYfaYafaaYfYqqnfnYkfYqqnfankfYqqkfnqnfnqYfanafaknfYqqYfYqqnfYqqkfnqYfnYYfYkafnqYfnnqfnqYfnqkfnaYfYkafYqYYfaknfaanfannfaakfYqYYfnYkfaaqfaakfanYfaYafYqqkfaknfaakfaanfnYkfakYfYqqYfankfanafYkafnakfYkafYqqafYqqYfaaqfnYkfYqqkfaakfkaqfYqqkfYqqYfaknfaanfakqfnqnfnqkfnaYfYkafYqnnfYkafanafYqqafaanfanYfYqqkfaknfaakfaanfYkafYqqnfakYfaakfYqYYfkYYfYqqYfYqqYfaakfYqqYfnqnfaaYfankfYqqnfYqqnfaYafakqfankfnYYfYkafaknfYqqnfkkafankfaYafannfYqYkfknafankfYqqnfYqqnfaYafakqfankfYkafnakfYkafanafaYafaaqfYqqnfankfnqkfYkafYqnqfYkafanYfaakfaanfYqqnfYqqkfYkafaaqfaakfaYafannfaknfaanfakqfYkafnakfYkafannfaakfanYfYqqafaaYfankfaanfYqqkfnYkfakqfankfYqqkfkYYfaaqfankfaaYfankfaanfYqqkfkqkfYqYkfknqfannfnqnfnqYfaaqfaakfaYafannfaknfaanfakqfnqYfnqkfnaYfYkafanYfaakfaanfYqqnfYqqkfYkafYqqkfaknfYqqkfaaqfankfkaYfankfYqYnfYqqkfYkafnakfYkafaknfYqqnfkkafankfaYafannfYqYkfknafankfYqqnfYqqnfaYafakqfankfYkafkqqfYkafnqYfkkafankfaYafannfYqYkfnqYfYkafnaqfYkafnqYfkaqfYqqkfYqqYfankfaYafaaYfYkafkYYfYqqYfYqqYfaakfYqqYfnqYfnaYfYkafanYfaakfaanfYqqnfYqqkfYkafaakfaanfanYfaaqfaknfanYfakafkqnfanYfYqqkfaknfaakfaanfYkafnakfYkafaknfYqqnfkkafankfaYafannfYqYkfknafankfYqqnfYqqnfaYafakqfankfYkafkqqfYkafnqYfYqqYfankfanafYqqYfankfYqqnfakYfkaafaknfYqqkfakYfkYnfaknfYqqYfYqqnfYqqkfaqnfankfYqqYfaakfnqnfnqkfnqYfYkafnaqfYkafnqYfaaqfaakfanYfaYafYqqkfaknfaakfaanfnYkfYqqYfankfaaqfaakfaYafannfnqnfnqkfnqYfnaYfYkafaaqfaakfaYafannfaknfaanfakqfnYkfaknfaanfaanfankfYqqYfkYafkaYfknafknkfYkafnakfYkafaYkfYkafnanfannfaknfYqYqfYkafYqqnfYqqkfYqYkfaaqfankfnakfYaYfYqqkfankfYqYnfYqqkfnYnfaYafaaqfaknfakqfaanfnaqfanYfankfaanfYqqkfankfYqqYfnaYfYkafaaYfaYafYqYnfnYnfYqYYfaknfannfYqqkfakYfnaqfnkafnnqfYaafnaYfYaYfnaafYkafnanfakYfnnnfYkafYqqnfYqqkfYqYkfaaqfankfnakfYaYfanYfaakfaaqfaakfYqqYfnaqfYanfanafanafnnqfnnqfnnafnkYfnaYfYkafaaYfaYafYqqYfakqfaknfaanfnYnfanqfaakfYqqkfYqqkfaakfaaYfnaqfnnnfnnqfaaafYqYnfnaYfYaYfnaafYakfYqnqfYqqkfaknfYqqkfaaqfankfkaYfankfYqYnfYqqkfYqnnfnanfnYafakYfnnnfnaafYkafnanfaaafYkafYqqnfYqqkfYqYkfaaqfankfnakfYaYfanafaakfaanfYqqkfnYnfYqqnfaknfYqYafankfnaqfnnYfnkkfaaafYqYnfnaYfYkafaaYfaYafYqqYfakqfaknfaanfnaqfnnnfnnqfaaafYqYnfYkafnnqfnaYfYkafanYfaakfaaqfaakfYqqYfnaqfYanfanafanafanafnaYfYkafaaqfaknfaanfankfnYnfakYfankfaknfakqfakYfYqqkfnaqfnnYfnYkfnkqfnaYfYaYfnaafYakfYqnqfaaYfankfYqqnfYqqnfaYafakqfankfYqnnfnanfnYafaaafnaafYkafnanfanqfYqqafYqqkfYqqkfaakfaanfYkafaakfaanfanYfaaqfaknfanYfakafnakfYaYfYakfYqnqfaakfaanfanYfaaqfaknfanYfakafkqnfanYfYqqkfaknfaakfaanfYqnnfYaYfYkafYqqnfYqqkfYqYkfaaqfankfnakfYaYfYkafanqfaYafanYfakafakqfYqqYfaakfYqqafaanfannfnaqfYanfanafanafnnqfnnqfnnafnkYfnaYfYkafanYfaakfaaqfaakfYqqYfnaqfYqYYfakYfaknfYqqkfankfnaYfYkafanqfaakfYqqYfannfankfYqqYfnaqfaanfaakfaanfankfnaYfYkafaaafaYafannfannfaknfaanfakqfnaqfnnYfnnnfaaafYqYnfYkafnnnfnkkfaaafYqYnfnaYfYkafanqfaakfYqqYfannfankfYqqYfnYnfYqqYfaYafannfaknfYqqafYqqnfnaqfnkqfaaafYqYnfnaYfYkafanafaakfaanfYqqkfnYnfYqqnfaknfYqYafankfnaqfnnYfnkYfaaafYqYnfnaYfYkafanYfYqqafYqqYfYqqnfaakfYqqYfnaqfaaafaakfaknfaanfYqqkfankfYqqYfnaYfYkafanafaakfaanfYqqkfnYnfYqYYfankfaknfakqfakYfYqqkfnaqfanqfaakfaaqfannfnaYfYkafYqqkfYqqYfaYafaanfYqqnfaknfYqqkfaknfaakfaanfnaqfanqfaYafanYfakafakqfYqqYfaakfYqqafaanfannfYkafnnqfnYkfnnnfYqqnfnaYfYaYfnaafYkafkkafankfanafYqqYfankfYqqnfakYfYkafkknfaYafakqfankfYkafnanfnYafanqfYqqafYqqkfYqqkfaakfaanfnaafYkafnanfnYafannfaknfYqYqfnaafYkafaYkfnaYfYkafaaqfaakfaYafannfaknfaanfakqfnYkfanYfaaqfaYafYqqnfYqqnfknkfaknfYqqnfYqqkfnYkfYqqYfankfaaYfaakfYqYqfankfnqnfnqYfakYfaknfannfannfankfaanfnqYfnqkfnaYfYkafYqnnfYkafanafYqqafaanfanYfYqqkfaknfaakfaanfYkafaknfaanfaknfYqqkfkknfaaqfaYafYqYkfankfYqqYfnqnfnqkfYkafYqnqfYkafaknfanafYkafnqnfYaqfYqYYfaknfaanfannfaakfYqYYfnYkfkkYfkYafaaqfYqqnfnqkfYkafYqnqfYkafanYfaakfaanfYqqnfaakfaaqfankfnYkfankfYqqYfYqqYfaakfYqqYfnqnfnqYfYkaqfYYaYfYkaqfYnaafYkaqfYnnkfYkaqfYnkYfYkaqfYnaYfYkaqfYkqYfYkafkkYfkYafaaqfYqqnfYkafYkaqfYkqYfYkaqfYnkkfYkaqfYnknfYkaqfYkqnfYkaYfYqkYfYkaYfYqknfYkaYfYqkkfYkaqfYkqkfYkaqfYnkkfYkaqfYkqYfnYkfnqYfnqkfnaYfYkafYqqYfankfYqqkfYqqafYqqYfaanfnaYfYkafYqnnfYkafanYfaakfaanfYqqnfYqqkfYkafakYfaaqfYqqnfkqafaakfaanfanafaknfakqfYqqafYqqYfaYafYqqkfaknfaakfaanfYkafnakfYkafYqnqfYkafYqqqfYqqafaYafaaqfaknfYqqkfYqYkfkqafaakfaanfYqqkfYqqYfaakfaaqfnaqfYkafYqqkfYqqYfYqqafankfnYYfYkafannfankfanafaYafYqqafaaqfYqqkfkkkfYqqafaYafaaqfaknfYqqkfYqYkfnaqfYkafnqYfaaYfaYafYqYnfnqYfYkafYqnnfnaYfYkafanYfaakfaanfYqqnfYqqkfYkafaaafaaqfaYafYqYkfankfYqqYfYkafnakfYkafkkYfkknfaaqfaYafYqYkfankfYqqYfnYkfaaYfaYafakafankfnqnfnqYfYanfaaafaaqfaYafYqYkfankfYqqYfnqYfnYYfYkafYqnqfYkafaknfYqqnfknkfaknfYqYqfankfnaqfYkafYqqkfYqqYfYqqafankfnYYfYkafaYafYqqafYqqkfaakfaaafaaqfaYafYqYkfnaqfYkafYqqkfYqqYfYqqafankfnYYfYkafaaYfYqqafYqqkfankfannfnaqfYkafanafaYafaaqfYqqnfankfnYYfYkafYqqnfaakfYqqafYqqYfanYfankfnaqfYkafYqnqfYkafYqqnfYqqYfanYfnaqfYkafaaafaaqfaYafYqYkfaaqfaknfYqqnfYqqkfkanfYqqYfaaqfnYYfYkafanafaakfYqqYfaaYfaYafYqqkfnaqfYkafnqYfakYfaaqfYqqnfnqYfYkafYqnnfYkafYqnnfnqkfnYkfYqqafYqqnfankfnqnfaqkfYkafkkYfkanfknqfnqnfYqnqfYkafaaafaknfanYfYqqkfYqqafYqqYfankfknqfaanfkknfaknfanYfYqqkfYqqafYqqYfankfnaqfYkafYqqkfYqqYfYqqafankfnYYfYkafYqqkfakYfankfaaYfankfnaqfYkafYqnqfYkafaaafYqqYfaknfaaYfaYafYqqYfYqYkfkqafaakfaaqfaakfYqqYfnaqfYkafnqYfYanfanafanafnnqfnnqfnnafnkYfnqYfnYYfYkafaaafYqqYfaakfakqfYqqYfankfYqqnfYqqnfnaqfYkafYqnqfYkafaaafaakfYqqnfaknfYqqkfaknfaakfaanfnaqfYkafnqYfYqqkfaakfaaafnqYfnYYfYkafaaYfaknfaanfaknfnaqfYkafYqqkfYqqYfYqqafankfYkafYqnnfnYYfYkafanYfaakfaanfYqqkfYqqYfaakfaaqfaaqfankfYqqYfnaqfYkafYqnqfYkafYqqnfaaqfaknfannfankfkaYfaakfkaqfankfankfakafnaqfYkafnqYfaanfankfYqYqfankfYqqYfnqYfnYYfYkafYqqnfankfYqqkfYqqkfaknfaanfakqfnaqfYkafYqnqfYkafaknfYqqkfankfaaYfYqqnfnaqfYkafaqkfYqnqfYkafaanfaYafaaYfankfnaqfYkafnqYfkkkfYqqafaYafaaqfaknfYqqkfYqYkfnqYfnYYfYkafannfankfanafaYafYqqafaaqfYqqkfnaqfYkafnqYfknafaYafYqYnfnqYfnYYfYkafYqYqfaYafaaqfYqqafankfYqqnfnaqfYkafaqkfaYqfnYYfYkafaakfaanfkqafakYfaYafaanfakqfankfnaqfYkafnqnfYqYqfaYafaaqfYqqafankfnqkfYkafnakfnaafYkafYqnqfYkafanYfaakfaanfYqqnfYqqkfYkafakYfaaqfYqqnfYkafnakfYkafaaafaaqfaYafYqYkfankfYqqYfnYkfaaafaaqfYqqafakqfaknfaanfYqqnfnYkfakYfaaqfYqqnfnYkfakYfaaqfYqqnfnaYfYkafanYfaakfaanfYqqnfYqqkfYkafaaqfankfYqYqfankfaaqfYqqnfYkafnakfYkafakYfaaqfYqqnfnYkfaaqfankfYqYqfankfaaqfYqqnfnaYfYkafanYfaakfaanfYqqnfYqqkfYkafYqqnfankfaaqfankfanYfYqqkfankfannfknkfankfYqYqfankfaaqfYkafnakfYkafaaqfankfYqYqfankfaaqfYqqnfnYkfanafaknfaanfannfnqnfaaqfYqYqfaaqfYkafnakfnaafYkafnqnfaaqfYqYqfaaqfnYkfakYfankfaknfakqfakYfYqqkfYkafnYqfYkafnqYfaaafnqYfnqkfYkafnakfnakfnakfYkafYqYqfaYafaaqfYqqafankfnqkfnaYfYkafaknfanafYkafnqnfYqqnfankfaaqfankfanYfYqqkfankfannfknkfankfYqYqfankfaaqfnqkfYkafakYfaaqfYqqnfnYkfanYfYqqafYqqYfYqqYfankfaanfYqqkfknkfankfYqYqfankfaaqfYkafnakfYkafaaqfankfYqYqfankfaaqfYqqnfnYkfaknfaanfannfankfYqYnfkkYfanafnqnfYqqnfankfaaqfankfanYfYqqkfankfannfknkfankfYqYqfankfaaqfnqkfnaYfYkafYqnnfYkafYqnnfaYqfYkafYqnnfnYYfYkafannfaknfYqqnfaaafaaqfaYafYqYkfnaqfYkafnqYfaYafaaqfYqYYfaYafYqYkfYqqnfnqYfnYYfYkafanYfaakfYqYqfankfYqqYfkqkfYqqafYqqkfYqqkfaakfaanfnaqfYkafYqqkfYqqYfYqqafankfnYYfYkafannfaknfYqqnfaaafaaqfaYafYqYkfkqkfankfakYfaYafYqYqfaknfaakfYqqYfnaqfYkafnqYfakYfaakfYqYqfankfYqqYfnqYfnYYfYkafYqqkfaknfaaYfankfnaqfYkafanafaYafaaqfYqqnfankfnYYfYkafanqfYqqafYqqkfYqqkfaakfaanfYqqnfnaqfYkafYqnqfYkafaaqfaknfYqYqfankfnaqfYkafYqnqfYkafYqqkfankfYqYnfYqqkfnaqfYkafaanfaYafaaYfankfkknfaaqfaYafYqYkfankfYqqYfnYYfYkafaaafaakfYqqnfaknfYqqkfaknfaakfaanfnaqfYkafnqYfYqqYfaknfakqfakYfYqqkfnqYfYkafYqnnfYkafYqnnfYkafYqnnfYkafYqnnfYkafYqnnfnqkfnYYfYkafYqYYfaknfaanfannfaakfYqYYfnYkfkkYfkYafaaqfYqqnfnqnfYqnqfYkafaaqfaknfanqfYqqYfaYafYqqYfYqYkfnaqfYkafnqYfakYfYqqkfYqqkfaaafYqqnfnaqfnYafnYafanYfannfaanfnYkfakkfYqqnfannfankfaaqfaknfYqYqfYqqYfnYkfaanfankfYqqkfnYafaanfaaafaaYfnYafakYfaaqfYqqnfnYkfakkfYqqnfkqYfaaqfaYafYqqkfankfYqqnfYqqkfnYafannfaknfYqqnfYqqkfnYafakYfaaqfYqqnfnYkfaaYfaknfaanfnYkfakkfYqqnfnqYfnYYfYkafanYfaakfaanfanafaknfakqfnaqfYkafakYfaaqfYqqnfkqafaakfaanfanafaknfakqfYqqafYqqYfaYafYqqkfaknfaakfaanfYkafYqnnfnqkfnYYfYkafaanfankfYqYYfYkafkkYfkknfaaqfYqqafakqfaknfaanfnYkfkqnfaknfYqqYfkknfaaqfaYafYqYkfnqnfnqkfnYYfYkafaanfankfYqYYfYkafkkYfkknfaaqfYqqafakqfaknfaanfnYkfkqafakYfYqqYfaakfaaYfankfanYfaYafYqqnfYqqkfnqnfnqkfYkafaYqfnqkfnYkfanYfYqqYfankfaYafYqqkfankfnqnfnqkfnaYfYkafaaafaaqfaYafYqYkfankfYqqYfnYkfaakfaanfnqnfnqYfaaqfaakfaYafannfankfannfaaYfankfYqqkfaYafannfaYafYqqkfaYafnqYfnYYfYkafnqnfnqkfYkafnakfnaafYkafYqnqfYkafanYfaakfaanfYqqnfYqqkfYkafakYfaaqfYqqnfYkafnakfYkafaaafaaqfaYafYqYkfankfYqqYfnYkfaaafaaqfYqqafakqfaknfaanfYqqnfnYkfakYfaaqfYqqnfnYkfakYfaaqfYqqnfnaYfYkafanYfaakfaanfYqqnfYqqkfYkafaaqfankfYqYqfankfaaqfYqqnfYkafnakfYkafakYfaaqfYqqnfnYkfaaqfankfYqYqfankfaaqfYqqnfnaYfYkafaknfanafYkafnqnfaaqfankfYqYqfankfaaqfYqqnfYkafnqqfnqqfYkafaaqfankfYqYqfankfaaqfYqqnfnYkfaaqfankfaanfakqfYqqkfakYfYkafnaafYkafnnqfnqkfYkafYqnqfYkafanYfaakfaanfYqqnfYqqkfYkafakYfaknfakqfakYfankfYqqnfYqqkfkkkfYqqafaYafaaqfaknfYqqkfYqYkfknkfankfYqYqfankfaaqfYkafnakfYkafaaqfankfYqYqfankfaaqfYqqnfnYkfYqqYfankfannfYqqafanYfankfnqnfnqnfaYafnYYfYkafanqfnqkfYkafnakfnaafYkafaYafnYkfakYfankfaknfakqfakYfYqqkfYkafnaafYkafanqfnYkfakYfankfaknfakqfakYfYqqkfYkafkqqfYkafaYafYkafnaqfYkafanqfnqkfnaYfYkafakYfaaqfYqqnfnYkfanYfYqqafYqqYfYqqYfankfaanfYqqkfknkfankfYqYqfankfaaqfYkafnakfYkafaaqfankfYqYqfankfaaqfYqqnfnYkfaknfaanfannfankfYqYnfkkYfanafnqnfakYfaknfakqfakYfankfYqqnfYqqkfkkkfYqqafaYafaaqfaknfYqqkfYqYkfknkfankfYqYqfankfaaqfnqkfnaYfYkafanYfaakfaanfYqqnfYqqkfYkafYqqqfYqqafaYafaaqfaknfYqqkfYqYkfkaqfankfYqqkfYqqkfaknfaanfakqfYkafnakfYkafaaafaaqfaYafYqYkfankfYqqYfnYkfanYfaakfaanfYqqkfankfYqYnfYqqkfnYkfYqqafaknfnYkfYqqnfankfYqqkfYqqkfaknfaanfakqfnYkfaknfYqqkfankfaaYfYqqnfnYkfanafaknfaanfannfnqnfaknfYkafnakfnaafYkafaknfnYkfaanfaYafaaYfankfYkafnakfnakfnakfYkafnqYfkkkfYqqafaYafaaqfaknfYqqkfYqYkfnqYfnqkfnaYfYkafaknfanafYkafnqnfYqqqfYqqafaYafaaqfaknfYqqkfYqYkfkaqfankfYqqkfYqqkfaknfaanfakqfnqkfYkafYqnqfYkafYqqqfYqqafaYafaaqfaknfYqqkfYqYkfkaqfankfYqqkfYqqkfaknfaanfakqfnYkfYqYqfaYafaaqfYqqafankfYqqnfYkafnakfYkafaaqfankfYqYqfankfaaqfYqqnfnYkfaaYfaYafaaafnqnfaaqfankfYqYqfankfaaqfYkafnakfnaafYkafaaqfankfYqYqfankfaaqfnYkfakYfankfaknfakqfakYfYqqkfYkafnYqfYkafnqYfaaafnqYfnqkfnYkfYqqYfankfYqYqfankfYqqYfYqqnfankfnqnfnqkfnaYfYkafYqqqfYqqafaYafaaqfaknfYqqkfYqYkfkaqfankfYqqkfYqqkfaknfaanfakqfnYkfannfankfanafaYafYqqafaaqfYqqkfYkafnakfYkafakYfaknfakqfakYfankfYqqnfYqqkfkkkfYqqafaYafaaqfaknfYqqkfYqYkfknkfankfYqYqfankfaaqfnYkfakYfankfaknfakqfakYfYqqkfYkafnYqfYkafnqYfaaafnqYfnaYfYkafYqnnfYkafYqnnfYkafYqnnfnqkfnaYfYkafaaafaaqfaYafYqYkfankfYqqYfnYkfaakfaanfnqnfnqYfaaqfaakfaYafannfankfannfannfaYafYqqkfaYafnqYfnYYfYkafnqnfnqkfYkafnakfnaafYkafYqnqfYkafanYfaakfaanfYqqnfYqqkfYkafYqqkfaknfaaYfankfkYYfaaqfYkafnakfYkafannfaakfanYfYqqafaaYfankfaanfYqqkfnYkfYqqqfYqqafankfYqqYfYqYkfkaqfankfaaqfankfanYfYqqkfaakfYqqYfnqnfnqYfnYkfanYfYqqnfYqqnfnYnfnnYfnknfannfYqqqfnkafnkYfanafaqkfaYafYqqYfaknfaYafnYnfaaqfaYafanqfankfaaqfnakfYaYfYqqkfaknfaaYfankfYaYfaYqfnqYfnqkfnaYfYkafaknfanafYkafnqnfYqqkfaknfaaYfankfkYYfaaqfnqkfYkafYqnqfYkafYqqkfaknfaaYfankfkYYfaaqfnYkfYqqkfankfYqYnfYqqkfkqafaakfaanfYqqkfankfaanfYqqkfYkafnakfYkafaanfaYafaaYfankfkknfaaqfaYafYqYkfankfYqqYfnaYfYkafaanfankfYqYYfYkafknafYqqafYqqkfaYafYqqkfaknfaakfaanfkkYfanqfYqqnfankfYqqYfYqYqfankfYqqYfnqnfnqnfnqkfYkafnakfnaafYkafYqnqfYkafaknfanafYkafnqnfYqqkfaknfaaYfankfkYYfaaqfnYkfYqqkfankfYqYnfYqqkfkqafaakfaanfYqqkfankfaanfYqqkfYkafYaqfnakfnakfYkafaanfaYafaaYfankfkknfaaqfaYafYqYkfankfYqqYfnqkfYkafYqqkfaknfaaYfankfkYYfaaqfnYkfYqqkfankfYqYnfYqqkfkqafaakfaanfYqqkfankfaanfYqqkfYkafnakfYkafaanfaYafaaYfankfkknfaaqfaYafYqYkfankfYqqYfnaYfYkafYqnnfnqkfnYkfaakfanqfYqqnfankfYqqYfYqYqfankfnqnfYqqkfaknfaaYfankfkYYfaaqfnYYfYkafYqnqfYkafanYfakYfaknfaaqfannfknkfaknfYqqnfYqqkfnaqfYkafYqqkfYqqYfYqqafankfnYYfYkafYqqnfYqqafanqfYqqkfYqqYfankfankfnaqfYkafYqqkfYqqYfYqqafankfYkafYqnnfnqkfnaYfYkafYqnnfYkafaaafaaqfaYafYqYkfankfYqqYfnYkfaaafaaqfaYafYqYkfnqnfnqkfnYkfanYfaYafYqqkfanYfakYfnqnfnqnfnqkfYkafnakfnaafYkafYqnqfYkafaaafaaqfaYafYqYkfankfYqqYfnYkfaaYfYqqafYqqkfankfannfYkafnakfYkafYqqkfYqqYfYqqafankfnaYfYkafaaafaaqfaYafYqYkfankfYqqYfnYkfaaafaaqfaYafYqYkfnqnfnqkfnaYfYkafYqnnfnqkfnaYfYkafYqnnfnqkfnaYfYkafYqnnfYkafaYafYqqnfYqYkfaanfanYfYkafanafYqqafaanfanYfYqqkfaknfaakfaanfYkafYqqnfYqqkfaYafYqqYfYqqkfkYYfYqYqfankfYqqYfYqYkfYqqkfakYfaknfaanfakqfnqnfnqkfYkafYqnqfYkafanYfaakfaanfYqqnfYqqkfYkafYqqnfYqqkfaYafYqqkfYqqafYqqnfYkafnakfYkafaYafYqYYfaYafaknfYqqkfYkafanYfakYfankfanYfakafkaqfYqqkfYqqYfankfaYafaaYfkaqfYqqkfaYafYqqkfYqqafYqqnfnqnfaaafaaqfaYafYqYkfaaqfaknfYqqnfYqqkfkanfYqqYfaaqfnqkfnaYfYkafaknfanafYkafnqnfYqqnfYqqkfaYafYqqkfYqqafYqqnfYkafnakfnakfnakfYkafnnnfnnqfnnqfnqkfYkafYqnqfYkafaknfaanfaknfYqqkfkknfaaqfaYafYqYkfankfYqqYfnqnfnqkfnaYfYkafYqqnfankfYqqkfkaYfaknfaaYfankfaakfYqqafYqqkfnqnfnqnfnqkfYkafnakfnaafYkafYqnqfYkafanYfaakfaanfYqqnfYqqkfYkafaaqfaakfaYafannfaknfaanfakqfYkafnakfYkafannfaakfanYfYqqafaaYfankfaanfYqqkfnYkfakqfankfYqqkfkYYfaaqfankfaaYfankfaanfYqqkfkqkfYqYkfknqfannfnqnfnqYfaaqfaakfaYafannfaknfaanfakqfnqYfnqkfnaYfYkafaaqfaakfaYafannfaknfaanfakqfnYkfanYfaaqfaYafYqqnfYqqnfknkfaknfYqqnfYqqkfnYkfaYafannfannfnqnfnqYfakYfaknfannfannfankfaanfnqYfnqkfnaYfYkafYqqnfankfYqqkfkaYfaknfaaYfankfaakfYqqafYqqkfnqnfnqnfnqkfYkafnakfnaafYkafaaqfaakfaYafannfaknfaanfakqfnYkfYqqnfYqqkfYqYkfaaqfankfnYkfannfaknfYqqnfaaafaaqfaYafYqYkfYkafnakfYkafnqYfaanfaakfaanfankfnqYfnYYfYkafnkqfnnqfnnqfnqkfnaYfYkafYqnnfnYYfYkafnnnfnnqfnnqfnnqfnqkfnaYfYkafYqnnfYkafankfaaqfYqqnfankfYkafYqnqfYkafaaqfankfYqqkfYkafaaYfankfYqqnfYqqnfaYafakqfankfYkafnakfYkafnqYfkaqfYqqkfYqqYfankfaYafaaYfYkafaaqfaakfaYafannfaknfaanfakqfYkafanafaYafaknfaaqfankfannfnYkfYkafkknfaaqfankfaYafYqqnfankfYkafYqqYfankfanafYqqYfankfYqqnfakYfYkafYqqkfakYfankfYkafaaafaYafakqfankfnYkfnqYfnaYfYkafaaqfankfYqqkfYkafaknfYqqnfkkafankfaYafannfYqYkfknafankfYqqnfYqqnfaYafakqfankfYkafnakfYkafanafaYafaaqfYqqnfankfnaYfYkafaknfanafYkafnqnfYqqnfYqqkfaYafYqqkfYqqafYqqnfYkafnakfnakfnakfYkafnnafnnqfnnafnqkfYkafYqnqfYkafaknfanafYkafnqnfaknfYqqnfkknfkknfkakfkYYfYqYqfankfaanfYqqkfnqkfYkafYqnqfYkafaaYfankfYqqnfYqqnfaYafakqfankfYkafnakfYkafnqYfkaYfakYfaknfYqqnfYkafaknfYqqnfYkafaYafYkafaaafaYafYqYkfnYnfaaafankfYqqYfnYnfYqYqfaknfankfYqYYfYkafankfYqYqfankfaanfYqqkfnYkfYkafknqfYqqkfYkafYqYYfaknfaaqfaaqfYkafaakfaanfaaqfYqYkfYkafanqfankfYkafaYafYqYqfaYafaknfaaqfaYafanqfaaqfankfYkafaakfaanfanYfankfYkafYqqkfakYfankfYkafankfYqYqfankfaanfYqqkfYkafYqqnfYqqkfaYafYqqYfYqqkfYqqnfnYkfnqYfnaYfYkafYqnnfYkafankfaaqfYqqnfankfYkafYqnqfYkafaaYfankfYqqnfYqqnfaYafakqfankfYkafnakfYkafnqYfkaYfakYfaknfYqqnfYkafanYfakYfaYafaanfaanfankfaaqfYkafaknfYqqnfYkafanYfYqqafYqqYfYqqYfankfaanfYqqkfaaqfYqYkfYkafYqqafaanfaYafYqYqfaYafaknfaaqfaYafanqfaaqfankfnYkfnqYfnaYfYkafYqnnfYkafYqnnfYkafankfaaqfYqqnfankfYkafaknfanafYkafnqnfYqqnfYqqkfaYafYqqkfYqqafYqqnfYkafnakfnakfnakfYkafnnafnnqfnnkfnqkfYkafYqnqfYkafaaYfankfYqqnfYqqnfaYafakqfankfYkafnakfYkafnqYfkkafankfanafYqqYfankfYqqnfakYfYkafYqqkfakYfankfYkafaaafaYafakqfankfYkafaYafaanfannfYkafYqqkfYqqYfYqYkfYkafaYafakqfaYafaknfaanfnYkfnqYfnaYfYkafYqnnfYkafankfaaqfYqqnfankfYkafaknfanafYkafnqnfYqqnfYqqkfaYafYqqkfYqqafYqqnfYkafnakfnakfnakfYkafnnqfnqkfYkafYqnqfYkafaknfanafYkafnqnfaknfYqqnfkknfkknfkakfkYYfYqYqfankfaanfYqqkfnqkfYkafYqnqfYkafaaYfankfYqqnfYqqnfaYafakqfankfYkafnakfYkafnqYfkaYfakYfaknfYqqnfYkafaknfYqqnfYkafaYafYkafaaafaYafYqYkfnYnfaaafankfYqqYfnYnfYqYqfaknfankfYqYYfYkafankfYqYqfankfaanfYqqkfnYkfYkafknqfYqqkfYkafYqYYfaknfaaqfaaqfYkafaakfaanfaaqfYqYkfYkafanqfankfYkafaYafYqYqfaYafaknfaaqfaYafanqfaaqfankfYkafaakfaanfanYfankfYkafYqqkfakYfankfYkafankfYqYqfankfaanfYqqkfYkafYqqnfYqqkfaYafYqqYfYqqkfYqqnfnYkfnqYfnaYfYkafYqnnfYkafankfaaqfYqqnfankfYkafYqnqfYkafaknfanafYkafnqnfaknfYqqnfkYnfaknfYqqYfYqqnfYqqkfkqnfYqqkfYqqkfankfaaYfaaafYqqkfnqkfYkafYqnqfYkafaaYfankfYqqnfYqqnfaYafakqfankfYkafnakfYkafnqYfkqafakYfaYafaanfaanfankfaaqfYkafYqqYfankfaYafannfYqYkfYkafYqqkfaakfYkafYqYYfaYafYqqkfanYfakYfnYkfYkafkkafankfanafYqqYfankfYqqnfakYfYkafYqqkfakYfankfYkafaaafaYafakqfankfnYkfnqYfnaYfYkafaknfYqqnfkkafankfaYafannfYqYkfknafankfYqqnfYqqnfaYafakqfankfYkafnakfYkafYqqkfYqqYfYqqafankfnaYfYkafYqnnfYkafankfaaqfYqqnfankfYkafYqnqfYkafaaYfankfYqqnfYqqnfaYafakqfankfYkafnakfYkafnqYfkanfaanfaYafanqfaaqfankfYkafYqqkfaakfYkafanYfaakfaanfaanfankfanYfYqqkfYkafYqqkfaakfYkafYqqkfakYfankfYkafYqqnfYqqkfYqqYfankfaYafaaYfYkafYqqnfankfYqqYfYqYqfankfYqqYfnYkfYkafkknfaaqfankfaYafYqqnfankfYkafYqqkfYqqYfYqYkfYkafaYafakqfaYafaknfaanfYkafaaqfaYafYqqkfankfYqqYfnYkfnqYfnaYfYkafYqnnfYkafYqnnfYkafYqnnfYkafYqqnfakYfaakfYqYYfkYYfYqqYfYqqYfaakfYqqYfnqnfaaYfankfYqqnfYqqnfaYafakqfankfnYYfYkafaknfYqqnfkkafankfaYafannfYqYkfknafankfYqqnfYqqnfaYafakqfankfnqkfnaYfYkafYqnnfYkafYqnnfYkafYqYYfaknfaanfannfaakfYqYYfnYkfaYafannfannfkYYfYqYqfankfaanfYqqkfknkfaknfYqqnfYqqkfankfaanfankfYqqYfnqnfnqYfaaqfaakfaYafannfnqYfnYYfYkafYqqnfYqqkfaYafYqqYfYqqkfkYYfYqYqfankfYqqYfYqYkfYqqkfakYfaknfaanfakqfnqkfnaYfYkafYqnnf",51,"qYnkafhvw",12,5,50))</script>
+    
+              <script type='text/javascript'>
+                  aclib.runPop({
+                      zoneId: '10652030',
+                  });
+              </script>
+              <script>(function(s){s.dataset.zone='10241784',s.src='https://al5sm.com/tag.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>
+              <script>(function(s){s.dataset.zone='10241801',s.src='https://nap5k.com/tag.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>
+              </body>
+</html>
