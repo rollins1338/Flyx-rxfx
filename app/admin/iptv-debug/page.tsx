@@ -211,9 +211,10 @@ export default function IPTVDebugPage() {
       setCdnStreamDebug(data);
       
       if (data.success && data.streamUrl) {
-        // Proxy the stream through our API to add proper headers
+        // Proxy the stream through Cloudflare worker (not Vercel)
         // The raw URL from edge.cdn-live-tv.ru requires Referer header
-        const proxiedUrl = `/api/livetv/cdn-live-proxy?url=${encodeURIComponent(data.streamUrl)}`;
+        const cfBaseUrl = CF_PROXY_URL.replace(/\/+$/, '');
+        const proxiedUrl = `${cfBaseUrl}/cdn-live/stream?url=${encodeURIComponent(data.streamUrl)}`;
         setCdnStreamUrl(proxiedUrl);
       }
     } catch (error) {
@@ -268,7 +269,11 @@ export default function IPTVDebugPage() {
       setPpvStreamDebug(data);
       
       if (data.success && data.streamUrl) {
-        setPpvStreamUrl(data.streamUrl);
+        // Proxy the stream through Cloudflare worker (not Vercel)
+        // PPV streams require Referer: https://pooembed.top/
+        const cfBaseUrl = CF_PROXY_URL.replace(/\/+$/, '');
+        const proxiedUrl = `${cfBaseUrl}/ppv/stream?url=${encodeURIComponent(data.streamUrl)}`;
+        setPpvStreamUrl(proxiedUrl);
       }
     } catch (error) {
       console.error('Failed to get PPV stream:', error);

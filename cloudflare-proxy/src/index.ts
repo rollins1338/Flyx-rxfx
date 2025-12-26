@@ -32,6 +32,8 @@ import { handleAnimeKaiRequest } from './animekai-proxy';
 import { handleFlixerRequest } from './flixer-proxy';
 import { handleAnalyticsRequest } from './analytics-proxy';
 import { handleTMDBRequest } from './tmdb-proxy';
+import { handleCDNLiveRequest } from './cdn-live-proxy';
+import { handlePPVRequest } from './ppv-proxy';
 import { createLogger, generateRequestId, type LogLevel } from './logger';
 
 export interface Env {
@@ -309,6 +311,34 @@ export default {
         metrics.errors++;
         logger.error('TMDB proxy error', error as Error);
         return errorResponse('TMDB proxy error', 500);
+      }
+    }
+
+    // Route to CDN-Live.tv proxy (live TV streams)
+    // Proxies m3u8/ts with proper Referer headers
+    if (path.startsWith('/cdn-live')) {
+      logger.info('Routing to CDN-Live proxy', { path });
+      
+      try {
+        return await handleCDNLiveRequest(request, env);
+      } catch (error) {
+        metrics.errors++;
+        logger.error('CDN-Live proxy error', error as Error);
+        return errorResponse('CDN-Live proxy error', 500);
+      }
+    }
+
+    // Route to PPV.to proxy (PPV streams)
+    // Proxies m3u8/ts with proper Referer headers for pooembed.top
+    if (path.startsWith('/ppv')) {
+      logger.info('Routing to PPV proxy', { path });
+      
+      try {
+        return await handlePPVRequest(request, env);
+      } catch (error) {
+        metrics.errors++;
+        logger.error('PPV proxy error', error as Error);
+        return errorResponse('PPV proxy error', 500);
       }
     }
 
