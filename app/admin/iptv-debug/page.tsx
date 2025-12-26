@@ -29,7 +29,7 @@ import type mpegts from 'mpegts.js';
 // Proxy URLs for IPTV streams
 const RPI_PROXY_URL = process.env.NEXT_PUBLIC_RPI_PROXY_URL;
 const CF_PROXY_URL = process.env.NEXT_PUBLIC_CF_TV_PROXY_URL || process.env.NEXT_PUBLIC_CF_PROXY_URL || 'https://media-proxy.vynx.workers.dev';
-const RPI_PROXY_KEY = process.env.NEXT_PUBLIC_RPI_PROXY_KEY;
+const _RPI_PROXY_KEY = process.env.NEXT_PUBLIC_RPI_PROXY_KEY;
 
 // Tab types
 type DebugTab = 'cdn-live' | 'ppv' | 'stalker';
