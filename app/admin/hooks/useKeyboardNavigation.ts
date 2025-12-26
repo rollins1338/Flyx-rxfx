@@ -202,10 +202,10 @@ export function useKeyboardNavigation(options: KeyboardNavigationOptions = {}) {
       : document;
     
     if (container) {
-      container.addEventListener('keydown', handleKeyDown);
+      container.addEventListener('keydown', handleKeyDown as EventListener);
       
       return () => {
-        container.removeEventListener('keydown', handleKeyDown);
+        container.removeEventListener('keydown', handleKeyDown as EventListener);
       };
     }
   }, [handleKeyDown, containerSelector]);
@@ -289,11 +289,11 @@ export function useFocusTrap(isActive: boolean = true) {
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keydown', handleKeyDown as EventListener);
 
     return () => {
       clearTimeout(timer);
-      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keydown', handleKeyDown as EventListener);
     };
   }, [isActive, containerRef, focusFirst]);
 
