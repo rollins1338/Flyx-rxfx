@@ -7,7 +7,6 @@
  */
 
 import { useState, useEffect } from 'react';
-import { useStats } from '../context/StatsContext';
 import BotFilterControls from '../components/BotFilterControls';
 
 interface BotDetection {
@@ -56,7 +55,6 @@ interface BotDetectionMetrics {
 }
 
 export default function BotDetectionPage() {
-  const { stats } = useStats();
   const [detections, setDetections] = useState<BotDetection[]>([]);
   const [metrics, setMetrics] = useState<BotDetectionMetrics | null>(null);
   const [criteria, setCriteria] = useState<DetectionCriteria | null>(null);
