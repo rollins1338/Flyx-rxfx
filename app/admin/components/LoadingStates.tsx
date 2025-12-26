@@ -1,7 +1,7 @@
 'use client';
 
 import { ReactNode } from 'react';
-import { DESIGN_TOKENS, ANIMATIONS } from './DesignSystem';
+import { DESIGN_TOKENS } from './DesignSystem';
 import LoadingSpinner from './LoadingSpinner';
 
 interface LoadingStateProps {
