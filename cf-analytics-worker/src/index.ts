@@ -703,6 +703,12 @@ export default {
           }
           return await handleGetActivityHistory(url, env, corsHeaders);
 
+        case '/admin/bot-stats':
+          if (request.method !== 'GET') {
+            return Response.json({ error: 'Method not allowed' }, { status: 405, headers: corsHeaders });
+          }
+          return await handleGetBotStats(url, env, corsHeaders);
+
         case '/events':
         case '/event':
           if (request.method !== 'POST') {
@@ -1714,43 +1720,90 @@ async function handleGetLiveTVSessions(
   const history = url.searchParams.get('history') === 'true';
   const days = parseInt(url.searchParams.get('days') || '7');
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  const fiveMinAgo = Date.now() - 5 * 60 * 1000;
 
   try {
+    // Get current viewers (active in last 5 minutes)
+    const currentViewers = await env.DB.prepare(`
+      SELECT COUNT(DISTINCT user_id) as count
+      FROM live_activity 
+      WHERE is_active = 1 AND activity_type = 'livetv' AND last_heartbeat >= ?
+    `).bind(fiveMinAgo).first() as { count: number } | null;
+
+    // Get current stats
+    const currentStats = await env.DB.prepare(`
+      SELECT 
+        COALESCE(SUM(watch_duration), 0) as total_watch_time,
+        COALESCE(SUM(buffer_events), 0) as total_buffer_events,
+        COUNT(*) as recent_sessions,
+        COALESCE(AVG(watch_duration), 0) as avg_session_duration
+      FROM livetv_sessions 
+      WHERE started_at >= ?
+    `).bind(fiveMinAgo).first();
+
+    // Get all-time stats
+    const allTimeStats = await env.DB.prepare(`
+      SELECT COALESCE(SUM(watch_duration), 0) as total_historical_watch_time
+      FROM livetv_sessions
+    `).first() as { total_historical_watch_time: number } | null;
+
+    // Get active channels with viewer counts
+    const activeChannels = await env.DB.prepare(`
+      SELECT 
+        channel_id as channelId,
+        channel_name as channelName,
+        category,
+        COUNT(DISTINCT user_id) as viewerCount
+      FROM livetv_sessions 
+      WHERE started_at >= ? AND ended_at IS NULL
+      GROUP BY channel_id, channel_name, category
+      ORDER BY viewerCount DESC
+      LIMIT 20
+    `).bind(fiveMinAgo).all();
+
+    // Get category breakdown
+    const categories = await env.DB.prepare(`
+      SELECT 
+        category,
+        COUNT(DISTINCT user_id) as viewerCount
+      FROM livetv_sessions 
+      WHERE started_at >= ? AND ended_at IS NULL AND category IS NOT NULL
+      GROUP BY category
+      ORDER BY viewerCount DESC
+    `).bind(fiveMinAgo).all();
+
+    // Get recent history if requested
+    let recentHistory: any[] = [];
     if (history) {
-      // Get historical stats
-      const stats = await env.DB.prepare(`
+      const historyResult = await env.DB.prepare(`
         SELECT 
-          channel_name,
-          category,
-          COUNT(*) as session_count,
-          SUM(watch_duration) as total_watch_time,
-          AVG(watch_duration) as avg_watch_time,
-          COUNT(DISTINCT user_id) as unique_viewers
+          channel_name as channelName,
+          SUM(watch_duration) as totalWatchDuration,
+          MIN(started_at) as startedAt,
+          MAX(ended_at) as endedAt
         FROM livetv_sessions 
         WHERE started_at >= ?
-        GROUP BY channel_name, category
-        ORDER BY session_count DESC
-        LIMIT 50
+        GROUP BY channel_name
+        ORDER BY totalWatchDuration DESC
+        LIMIT 20
       `).bind(cutoff).all();
-
-      return Response.json({
-        success: true,
-        channels: stats.results || [],
-        days,
-      }, { headers: corsHeaders });
+      recentHistory = historyResult.results || [];
     }
-
-    // Get current/recent sessions
-    const sessions = await env.DB.prepare(`
-      SELECT * FROM livetv_sessions 
-      WHERE started_at >= ? 
-      ORDER BY started_at DESC 
-      LIMIT 100
-    `).bind(cutoff).all();
 
     return Response.json({
       success: true,
-      sessions: sessions.results || [],
+      currentViewers: currentViewers?.count || 0,
+      stats: {
+        totalCurrentWatchTime: Number(currentStats?.total_watch_time) || 0,
+        totalBufferEvents: Number(currentStats?.total_buffer_events) || 0,
+        recentSessions: Number(currentStats?.recent_sessions) || 0,
+        avgSessionDuration: Math.round(Number(currentStats?.avg_session_duration) || 0),
+        totalHistoricalWatchTime: Number(allTimeStats?.total_historical_watch_time) || 0,
+      },
+      channels: activeChannels.results || [],
+      categories: categories.results || [],
+      recentHistory: history ? recentHistory : undefined,
+      days,
     }, { headers: corsHeaders });
   } catch (error) {
     console.error('[GetLiveTVSessions] DB error:', error);
@@ -2258,8 +2311,12 @@ async function handleGetUnifiedStats(
       contentStats,
       pageViewStats,
       geoStats,
+      cityStats,
+      deviceStats,
+      realtimeGeoStats,
       topContent,
-      peakStats
+      peakStats,
+      userActivityStats
     ] = await Promise.all([
       // Real-time activity (5 min window, truly active = 1 min)
       env.DB.prepare(`
@@ -2284,8 +2341,6 @@ async function handleGetUnifiedStats(
       `).bind(oneDayAgo, sevenDaysAgo, thirtyDaysAgo).first(),
 
       // Content/watch stats (last 24h)
-      // NOTE: duration column stores actual watch time in seconds (not video length)
-      // We divide by 60 to return minutes to the client
       env.DB.prepare(`
         SELECT 
           COUNT(*) as total_sessions,
@@ -2293,6 +2348,8 @@ async function handleGetUnifiedStats(
           COALESCE(AVG(duration), 0) / 60 as avg_duration,
           COALESCE(AVG(completion_percentage), 0) as completion_rate,
           SUM(CASE WHEN is_completed = 1 THEN 1 ELSE 0 END) as completed_sessions,
+          COALESCE(SUM(pause_count), 0) as total_pauses,
+          COALESCE(SUM(seek_count), 0) as total_seeks,
           SUM(CASE WHEN content_type = 'movie' THEN 1 ELSE 0 END) as movie_sessions,
           SUM(CASE WHEN content_type = 'tv' THEN 1 ELSE 0 END) as tv_sessions,
           COUNT(DISTINCT content_id) as unique_content
@@ -2313,11 +2370,47 @@ async function handleGetUnifiedStats(
           country,
           COUNT(DISTINCT user_id) as count
         FROM page_views 
-        WHERE entry_time >= ? AND country IS NOT NULL
+        WHERE entry_time >= ? AND country IS NOT NULL AND country != ''
         GROUP BY country
         ORDER BY count DESC
-        LIMIT 10
+        LIMIT 20
       `).bind(sevenDaysAgo).all(),
+
+      // City stats (last 7 days)
+      env.DB.prepare(`
+        SELECT 
+          city,
+          country,
+          COUNT(DISTINCT user_id) as count
+        FROM page_views 
+        WHERE entry_time >= ? AND city IS NOT NULL AND city != '' AND country IS NOT NULL
+        GROUP BY city, country
+        ORDER BY count DESC
+        LIMIT 30
+      `).bind(sevenDaysAgo).all(),
+
+      // Device stats (last 7 days)
+      env.DB.prepare(`
+        SELECT 
+          device_type as device,
+          COUNT(DISTINCT user_id) as count
+        FROM page_views 
+        WHERE entry_time >= ? AND device_type IS NOT NULL
+        GROUP BY device_type
+        ORDER BY count DESC
+      `).bind(sevenDaysAgo).all(),
+
+      // Real-time geographic (currently active users by country)
+      env.DB.prepare(`
+        SELECT 
+          country,
+          COUNT(DISTINCT user_id) as count
+        FROM live_activity 
+        WHERE is_active = 1 AND last_heartbeat >= ? AND country IS NOT NULL AND country != ''
+        GROUP BY country
+        ORDER BY count DESC
+        LIMIT 20
+      `).bind(fiveMinAgo).all(),
 
       // Top content (last 7 days)
       env.DB.prepare(`
@@ -2338,6 +2431,15 @@ async function handleGetUnifiedStats(
       env.DB.prepare(`
         SELECT * FROM peak_stats WHERE date = ?
       `).bind(today).first(),
+
+      // User activity stats (new users, returning users)
+      env.DB.prepare(`
+        SELECT 
+          COUNT(DISTINCT CASE WHEN first_seen >= ? THEN user_id END) as new_today,
+          COUNT(DISTINCT CASE WHEN first_seen < ? AND last_seen >= ? THEN user_id END) as returning
+        FROM user_activity
+        WHERE last_seen >= ?
+      `).bind(oneDayAgo, oneDayAgo, oneDayAgo, oneDayAgo).first(),
     ]);
 
     // All-time watch time
@@ -2367,14 +2469,19 @@ async function handleGetUnifiedStats(
         browsing: liveActivity?.browsing || 0,
         livetv: liveActivity?.livetv || 0,
       },
+      realtimeGeographic: (realtimeGeoStats.results || []).map((g: any) => ({
+        country: g.country,
+        countryName: g.country,
+        count: g.count,
+      })),
       peakStats: formattedPeakStats,
       users: {
         total: userStats?.total || 0,
         dau: userStats?.dau || 0,
         wau: userStats?.wau || 0,
         mau: userStats?.mau || 0,
-        newToday: 0, // Not tracked in page_views
-        returning: 0, // Not tracked in page_views
+        newToday: userActivityStats?.new_today || 0,
+        returning: userActivityStats?.returning || 0,
       },
       content: {
         totalSessions: Number(contentStats?.total_sessions) || 0,
@@ -2383,6 +2490,8 @@ async function handleGetUnifiedStats(
         avgDuration: Math.round(Number(contentStats?.avg_duration) || 0),
         completionRate: Math.round(Number(contentStats?.completion_rate) || 0),
         completedSessions: Number(contentStats?.completed_sessions) || 0,
+        totalPauses: Number(contentStats?.total_pauses) || 0,
+        totalSeeks: Number(contentStats?.total_seeks) || 0,
         movieSessions: Number(contentStats?.movie_sessions) || 0,
         tvSessions: Number(contentStats?.tv_sessions) || 0,
         uniqueContentWatched: Number(contentStats?.unique_content) || 0,
@@ -2393,25 +2502,361 @@ async function handleGetUnifiedStats(
       },
       geographic: (geoStats.results || []).map((g: any) => ({
         country: g.country,
-        countryName: g.country, // Could add country name lookup
+        countryName: g.country,
         count: g.count,
       })),
-      devices: [], // Not tracked in current schema
+      cities: (cityStats.results || []).map((c: any) => ({
+        city: c.city,
+        country: c.country,
+        countryName: c.country,
+        count: c.count,
+      })),
+      devices: (deviceStats.results || []).map((d: any) => ({
+        device: d.device || 'unknown',
+        count: d.count,
+      })),
       topContent: topContent.results || [],
+      botDetection: await getBotDetectionStats(env, sevenDaysAgo),
       timeRanges: {
         realtime: '5 minutes',
+        realtimeGeographic: '5 minutes',
         dau: '24 hours',
         wau: '7 days',
         mau: '30 days',
         content: '24 hours',
         geographic: '7 days',
+        cities: '7 days',
         devices: '7 days',
         pageViews: '24 hours',
+        botDetection: '7 days',
       },
       timestamp: now,
     }, { headers: corsHeaders });
   } catch (error) {
     console.error('[GetUnifiedStats] DB error:', error);
+    return Response.json({ error: 'Database error', details: String(error) }, { status: 500, headers: corsHeaders });
+  }
+}
+
+// Helper function to get bot detection stats for unified-stats
+async function getBotDetectionStats(env: Env, cutoff: number): Promise<any> {
+  try {
+    // Get bot hit totals
+    const botTotals = await env.DB.prepare(`
+      SELECT 
+        COUNT(*) as total_hits,
+        COUNT(DISTINCT user_agent) as unique_bots,
+        COUNT(CASE WHEN confidence >= 80 THEN 1 END) as high_confidence,
+        COUNT(CASE WHEN confidence >= 50 AND confidence < 80 THEN 1 END) as medium_confidence,
+        COUNT(CASE WHEN confidence < 50 THEN 1 END) as low_confidence,
+        AVG(confidence) as avg_confidence
+      FROM bot_hits 
+      WHERE hit_time >= ? AND (hit_type = 'bot' OR hit_type IS NULL)
+    `).bind(cutoff).first();
+
+    // Get recent bot detections
+    const recentBots = await env.DB.prepare(`
+      SELECT 
+        id,
+        bot_name,
+        bot_category,
+        user_agent,
+        country,
+        city,
+        page_path,
+        confidence,
+        hit_time
+      FROM bot_hits 
+      WHERE hit_time >= ? AND (hit_type = 'bot' OR hit_type IS NULL)
+      ORDER BY hit_time DESC
+      LIMIT 20
+    `).bind(cutoff).all();
+
+    return {
+      totalDetections: Number(botTotals?.total_hits) || 0,
+      uniqueBots: Number(botTotals?.unique_bots) || 0,
+      confirmedBots: Number(botTotals?.high_confidence) || 0,
+      suspectedBots: Number(botTotals?.medium_confidence) || 0,
+      pendingReview: Number(botTotals?.low_confidence) || 0,
+      avgConfidenceScore: Math.round(Number(botTotals?.avg_confidence) || 0),
+      recentDetections: (recentBots.results || []).map((b: any) => ({
+        id: b.id,
+        botName: b.bot_name,
+        category: b.bot_category,
+        userAgent: b.user_agent,
+        country: b.country,
+        city: b.city,
+        pagePath: b.page_path,
+        confidence: b.confidence,
+        hitTime: b.hit_time,
+      })),
+    };
+  } catch (error) {
+    console.error('[getBotDetectionStats] Error:', error);
+    return {
+      totalDetections: 0,
+      uniqueBots: 0,
+      confirmedBots: 0,
+      suspectedBots: 0,
+      pendingReview: 0,
+      avgConfidenceScore: 0,
+      recentDetections: [],
+    };
+  }
+}
+
+// GET /admin/bot-stats - Get detailed bot traffic statistics
+async function handleGetBotStats(
+  url: URL,
+  env: Env,
+  corsHeaders: HeadersInit
+): Promise<Response> {
+  const days = parseInt(url.searchParams.get('days') || '7');
+  const limit = Math.min(parseInt(url.searchParams.get('limit') || '100'), 500);
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+
+  try {
+    // Get overall bot stats
+    const [
+      totals,
+      todayTotals,
+      byCategory,
+      byName,
+      byCountry,
+      byHour,
+      byPath,
+      recentHits,
+      topUserAgents,
+      ipPatterns
+    ] = await Promise.all([
+      // Total bot hits
+      env.DB.prepare(`
+        SELECT 
+          COUNT(*) as total_hits,
+          COUNT(DISTINCT user_agent) as unique_user_agents,
+          COUNT(DISTINCT country) as unique_countries,
+          COUNT(DISTINCT page_path) as unique_paths,
+          AVG(confidence) as avg_confidence,
+          MAX(confidence) as max_confidence,
+          MIN(confidence) as min_confidence
+        FROM bot_hits 
+        WHERE hit_time >= ? AND (hit_type = 'bot' OR hit_type IS NULL)
+      `).bind(cutoff).first(),
+
+      // Today's bot hits
+      env.DB.prepare(`
+        SELECT 
+          COUNT(*) as total_hits,
+          COUNT(DISTINCT user_agent) as unique_user_agents
+        FROM bot_hits 
+        WHERE hit_time >= ? AND (hit_type = 'bot' OR hit_type IS NULL)
+      `).bind(oneDayAgo).first(),
+
+      // By category
+      env.DB.prepare(`
+        SELECT 
+          bot_category as category,
+          COUNT(*) as hit_count,
+          COUNT(DISTINCT user_agent) as unique_bots,
+          AVG(confidence) as avg_confidence
+        FROM bot_hits 
+        WHERE hit_time >= ? AND (hit_type = 'bot' OR hit_type IS NULL)
+        GROUP BY bot_category
+        ORDER BY hit_count DESC
+      `).bind(cutoff).all(),
+
+      // By bot name
+      env.DB.prepare(`
+        SELECT 
+          bot_name as name,
+          bot_category as category,
+          COUNT(*) as hit_count,
+          AVG(confidence) as avg_confidence,
+          MAX(hit_time) as last_seen
+        FROM bot_hits 
+        WHERE hit_time >= ? AND (hit_type = 'bot' OR hit_type IS NULL)
+        GROUP BY bot_name, bot_category
+        ORDER BY hit_count DESC
+        LIMIT ?
+      `).bind(cutoff, limit).all(),
+
+      // By country
+      env.DB.prepare(`
+        SELECT 
+          country,
+          COUNT(*) as hit_count,
+          COUNT(DISTINCT bot_name) as unique_bots
+        FROM bot_hits 
+        WHERE hit_time >= ? AND country IS NOT NULL AND (hit_type = 'bot' OR hit_type IS NULL)
+        GROUP BY country
+        ORDER BY hit_count DESC
+        LIMIT 30
+      `).bind(cutoff).all(),
+
+      // By hour (for pattern analysis)
+      env.DB.prepare(`
+        SELECT 
+          CAST(strftime('%H', datetime(hit_time/1000, 'unixepoch')) AS INTEGER) as hour,
+          COUNT(*) as hit_count
+        FROM bot_hits 
+        WHERE hit_time >= ? AND (hit_type = 'bot' OR hit_type IS NULL)
+        GROUP BY hour
+        ORDER BY hour
+      `).bind(cutoff).all(),
+
+      // By page path (most targeted pages)
+      env.DB.prepare(`
+        SELECT 
+          page_path as path,
+          COUNT(*) as hit_count,
+          COUNT(DISTINCT bot_name) as unique_bots
+        FROM bot_hits 
+        WHERE hit_time >= ? AND page_path IS NOT NULL AND (hit_type = 'bot' OR hit_type IS NULL)
+        GROUP BY page_path
+        ORDER BY hit_count DESC
+        LIMIT 30
+      `).bind(cutoff).all(),
+
+      // Recent hits (detailed)
+      env.DB.prepare(`
+        SELECT 
+          id,
+          bot_name,
+          bot_category,
+          user_agent,
+          country,
+          city,
+          page_path,
+          referrer,
+          confidence,
+          hit_time
+        FROM bot_hits 
+        WHERE hit_time >= ? AND (hit_type = 'bot' OR hit_type IS NULL)
+        ORDER BY hit_time DESC
+        LIMIT ?
+      `).bind(cutoff, limit).all(),
+
+      // Top user agents
+      env.DB.prepare(`
+        SELECT 
+          user_agent,
+          bot_name,
+          bot_category,
+          COUNT(*) as hit_count,
+          AVG(confidence) as avg_confidence
+        FROM bot_hits 
+        WHERE hit_time >= ? AND (hit_type = 'bot' OR hit_type IS NULL)
+        GROUP BY user_agent
+        ORDER BY hit_count DESC
+        LIMIT 50
+      `).bind(cutoff).all(),
+
+      // IP patterns (grouped by first 3 octets for privacy)
+      env.DB.prepare(`
+        SELECT 
+          country,
+          city,
+          COUNT(*) as hit_count,
+          COUNT(DISTINCT bot_name) as unique_bots,
+          GROUP_CONCAT(DISTINCT bot_name) as bot_names
+        FROM bot_hits 
+        WHERE hit_time >= ? AND (hit_type = 'bot' OR hit_type IS NULL)
+        GROUP BY country, city
+        HAVING hit_count >= 5
+        ORDER BY hit_count DESC
+        LIMIT 30
+      `).bind(cutoff).all(),
+    ]);
+
+    // Calculate daily trend
+    const dailyTrend = await env.DB.prepare(`
+      SELECT 
+        DATE(datetime(hit_time/1000, 'unixepoch')) as date,
+        COUNT(*) as hit_count,
+        COUNT(DISTINCT bot_name) as unique_bots
+      FROM bot_hits 
+      WHERE hit_time >= ? AND (hit_type = 'bot' OR hit_type IS NULL)
+      GROUP BY date
+      ORDER BY date DESC
+      LIMIT ?
+    `).bind(cutoff, days).all();
+
+    return Response.json({
+      success: true,
+      summary: {
+        totalHits: Number(totals?.total_hits) || 0,
+        todayHits: Number(todayTotals?.total_hits) || 0,
+        uniqueUserAgents: Number(totals?.unique_user_agents) || 0,
+        uniqueCountries: Number(totals?.unique_countries) || 0,
+        uniquePaths: Number(totals?.unique_paths) || 0,
+        avgConfidence: Math.round(Number(totals?.avg_confidence) || 0),
+        maxConfidence: Number(totals?.max_confidence) || 0,
+        minConfidence: Number(totals?.min_confidence) || 0,
+      },
+      byCategory: (byCategory.results || []).map((c: any) => ({
+        category: c.category || 'unknown',
+        hitCount: c.hit_count,
+        uniqueBots: c.unique_bots,
+        avgConfidence: Math.round(c.avg_confidence || 0),
+      })),
+      byName: (byName.results || []).map((b: any) => ({
+        name: b.name || 'unknown',
+        category: b.category || 'unknown',
+        hitCount: b.hit_count,
+        avgConfidence: Math.round(b.avg_confidence || 0),
+        lastSeen: b.last_seen,
+      })),
+      byCountry: (byCountry.results || []).map((c: any) => ({
+        country: c.country,
+        hitCount: c.hit_count,
+        uniqueBots: c.unique_bots,
+      })),
+      byHour: (byHour.results || []).map((h: any) => ({
+        hour: h.hour,
+        hitCount: h.hit_count,
+      })),
+      byPath: (byPath.results || []).map((p: any) => ({
+        path: p.path,
+        hitCount: p.hit_count,
+        uniqueBots: p.unique_bots,
+      })),
+      recentHits: (recentHits.results || []).map((h: any) => ({
+        id: h.id,
+        botName: h.bot_name,
+        category: h.bot_category,
+        userAgent: h.user_agent,
+        country: h.country,
+        city: h.city,
+        path: h.page_path,
+        referrer: h.referrer,
+        confidence: h.confidence,
+        hitTime: h.hit_time,
+      })),
+      topUserAgents: (topUserAgents.results || []).map((u: any) => ({
+        userAgent: u.user_agent,
+        botName: u.bot_name,
+        category: u.bot_category,
+        hitCount: u.hit_count,
+        avgConfidence: Math.round(u.avg_confidence || 0),
+      })),
+      ipPatterns: (ipPatterns.results || []).map((p: any) => ({
+        country: p.country,
+        city: p.city,
+        hitCount: p.hit_count,
+        uniqueBots: p.unique_bots,
+        botNames: p.bot_names?.split(',') || [],
+      })),
+      dailyTrend: (dailyTrend.results || []).map((d: any) => ({
+        date: d.date,
+        hitCount: d.hit_count,
+        uniqueBots: d.unique_bots,
+      })),
+      days,
+      timestamp: Date.now(),
+    }, { headers: corsHeaders });
+  } catch (error) {
+    console.error('[GetBotStats] DB error:', error);
     return Response.json({ error: 'Database error', details: String(error) }, { status: 500, headers: corsHeaders });
   }
 }

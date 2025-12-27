@@ -80,6 +80,40 @@ interface ReviewStatistics {
   avgAccuracyImprovement: number;
 }
 
+// Bot traffic data from CF worker
+interface BotTrafficData {
+  summary: {
+    totalHits: number;
+    todayHits: number;
+    uniqueUserAgents: number;
+    uniqueCountries: number;
+    uniquePaths: number;
+    avgConfidence: number;
+    maxConfidence: number;
+    minConfidence: number;
+  };
+  byCategory: Array<{ category: string; hitCount: number; uniqueBots: number; avgConfidence: number }>;
+  byName: Array<{ name: string; category: string; hitCount: number; avgConfidence: number; lastSeen: number }>;
+  byCountry: Array<{ country: string; hitCount: number; uniqueBots: number }>;
+  byHour: Array<{ hour: number; hitCount: number }>;
+  byPath: Array<{ path: string; hitCount: number; uniqueBots: number }>;
+  recentHits: Array<{
+    id: string;
+    botName: string;
+    category: string;
+    userAgent: string;
+    country: string;
+    city: string;
+    path: string;
+    referrer: string;
+    confidence: number;
+    hitTime: number;
+  }>;
+  topUserAgents: Array<{ userAgent: string; botName: string; category: string; hitCount: number; avgConfidence: number }>;
+  ipPatterns: Array<{ country: string; city: string; hitCount: number; uniqueBots: number; botNames: string[] }>;
+  dailyTrend: Array<{ date: string; hitCount: number; uniqueBots: number }>;
+}
+
 export default function BotDetectionPage() {
   const [detections, setDetections] = useState<BotDetection[]>([]);
   const [metrics, setMetrics] = useState<BotDetectionMetrics | null>(null);
@@ -89,18 +123,25 @@ export default function BotDetectionPage() {
   const [detailViewDetection, setDetailViewDetection] = useState<BotDetection | null>(null);
   const [reviewNotes, setReviewNotes] = useState('');
   const [reviewDecision, setReviewDecision] = useState<'confirm_bot' | 'confirm_human' | 'needs_more_data'>('confirm_bot');
-  const [activeTab, setActiveTab] = useState<'overview' | 'detections' | 'criteria' | 'review'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'traffic' | 'detections' | 'criteria' | 'review'>('overview');
   const [reviewHistory, setReviewHistory] = useState<ReviewHistoryItem[]>([]);
   const [reviewStats, setReviewStats] = useState<ReviewStatistics | null>(null);
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewSuccess, setReviewSuccess] = useState<string | null>(null);
   const [reviewError, setReviewError] = useState<string | null>(null);
   
+  // Bot traffic data from CF worker
+  const [botTraffic, setBotTraffic] = useState<BotTrafficData | null>(null);
+  const [trafficLoading, setTrafficLoading] = useState(false);
+  const [trafficDays, setTrafficDays] = useState(7);
+  const [selectedBotHit, setSelectedBotHit] = useState<BotTrafficData['recentHits'][0] | null>(null);
+  
   // Use StatsContext for global bot filter settings
   const { refresh: refreshStats } = useStats();
 
   useEffect(() => {
     fetchBotDetectionData();
+    fetchBotTrafficData();
   }, []);
 
   const fetchBotDetectionData = useCallback(async () => {
@@ -120,6 +161,31 @@ export default function BotDetectionPage() {
       setLoading(false);
     }
   }, []);
+
+  const fetchBotTrafficData = useCallback(async () => {
+    try {
+      setTrafficLoading(true);
+      // Try CF worker first, fallback to unified-stats
+      const cfWorkerUrl = process.env.NEXT_PUBLIC_CF_ANALYTICS_URL || 'https://flyx-analytics.vynx.workers.dev';
+      const response = await fetch(`${cfWorkerUrl}/admin/bot-stats?days=${trafficDays}&limit=100`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setBotTraffic(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch bot traffic data:', error);
+    } finally {
+      setTrafficLoading(false);
+    }
+  }, [trafficDays]);
+
+  // Refetch traffic data when days change
+  useEffect(() => {
+    if (activeTab === 'traffic') {
+      fetchBotTrafficData();
+    }
+  }, [trafficDays, activeTab, fetchBotTrafficData]);
 
   const fetchReviewHistory = useCallback(async () => {
     try {
@@ -260,6 +326,7 @@ export default function BotDetectionPage() {
       }}>
         {[
           { key: 'overview', label: '📊 Overview' },
+          { key: 'traffic', label: '🚦 Bot Traffic' },
           { key: 'detections', label: '🔍 Recent Detections' },
           { key: 'criteria', label: '⚙️ Detection Criteria' },
           { key: 'review', label: '👥 Manual Review' },
@@ -520,6 +587,98 @@ export default function BotDetectionPage() {
             </div>
           </div>
 
+          {/* Real-time Bot Traffic Summary */}
+          {botTraffic && (
+            <div style={{
+              background: 'rgba(239, 68, 68, 0.05)',
+              border: '1px solid rgba(239, 68, 68, 0.2)',
+              borderRadius: '8px',
+              padding: '20px',
+              marginBottom: '24px',
+            }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '16px',
+              }}>
+                <h3 style={{
+                  color: '#f1f5f9',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  margin: 0,
+                }}>
+                  🚦 Real-time Bot Traffic (Last 7 Days)
+                </h3>
+                <button
+                  onClick={() => setActiveTab('traffic')}
+                  style={{
+                    padding: '6px 12px',
+                    background: 'rgba(239, 68, 68, 0.2)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    borderRadius: '4px',
+                    color: '#ef4444',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  View Details →
+                </button>
+              </div>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                gap: '16px',
+              }}>
+                <div>
+                  <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>Total Bot Hits</div>
+                  <div style={{ color: '#ef4444', fontSize: '24px', fontWeight: '700' }}>
+                    {botTraffic.summary.totalHits.toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>Today</div>
+                  <div style={{ color: '#f59e0b', fontSize: '24px', fontWeight: '700' }}>
+                    {botTraffic.summary.todayHits.toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>Unique Bots</div>
+                  <div style={{ color: '#3b82f6', fontSize: '24px', fontWeight: '700' }}>
+                    {botTraffic.summary.uniqueUserAgents}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>Countries</div>
+                  <div style={{ color: '#22c55e', fontSize: '24px', fontWeight: '700' }}>
+                    {botTraffic.summary.uniqueCountries}
+                  </div>
+                </div>
+              </div>
+              {botTraffic.byName.length > 0 && (
+                <div style={{ marginTop: '16px' }}>
+                  <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '8px' }}>Top Bots:</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {botTraffic.byName.slice(0, 5).map((bot, i) => (
+                      <span
+                        key={i}
+                        style={{
+                          background: 'rgba(239, 68, 68, 0.1)',
+                          color: '#f87171',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          fontSize: '11px',
+                        }}
+                      >
+                        {bot.name} ({bot.hitCount})
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Quick Actions */}
           <div style={{
             background: 'rgba(15, 23, 42, 0.6)',
@@ -540,6 +699,22 @@ export default function BotDetectionPage() {
               gap: '12px',
               flexWrap: 'wrap',
             }}>
+              <button
+                onClick={() => setActiveTab('traffic')}
+                style={{
+                  padding: '10px 20px',
+                  background: '#ef4444',
+                  border: 'none',
+                  borderRadius: '6px',
+                  color: 'white',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.2s ease',
+                }}
+              >
+                🚦 View Bot Traffic
+              </button>
               <button
                 onClick={() => setActiveTab('review')}
                 style={{
@@ -589,7 +764,10 @@ export default function BotDetectionPage() {
                 View Detection Criteria
               </button>
               <button
-                onClick={fetchBotDetectionData}
+                onClick={() => {
+                  fetchBotDetectionData();
+                  fetchBotTrafficData();
+                }}
                 style={{
                   padding: '10px 20px',
                   background: 'rgba(255, 255, 255, 0.1)',
@@ -602,9 +780,571 @@ export default function BotDetectionPage() {
                   transition: 'all 0.2s ease',
                 }}
               >
-                🔄 Refresh Data
+                🔄 Refresh All Data
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bot Traffic Tab - Real-time bot traffic from CF Worker */}
+      {activeTab === 'traffic' && (
+        <div>
+          {/* Time Range Selector */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '20px',
+          }}>
+            <div style={{
+              display: 'flex',
+              gap: '8px',
+            }}>
+              {[1, 7, 14, 30].map((days) => (
+                <button
+                  key={days}
+                  onClick={() => setTrafficDays(days)}
+                  style={{
+                    padding: '8px 16px',
+                    background: trafficDays === days ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                    border: trafficDays === days ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: '6px',
+                    color: trafficDays === days ? '#60a5fa' : '#94a3b8',
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {days === 1 ? 'Today' : `${days} Days`}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={fetchBotTrafficData}
+              disabled={trafficLoading}
+              style={{
+                padding: '8px 16px',
+                background: 'rgba(255, 255, 255, 0.1)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                borderRadius: '6px',
+                color: '#f1f5f9',
+                fontSize: '13px',
+                cursor: trafficLoading ? 'not-allowed' : 'pointer',
+                opacity: trafficLoading ? 0.6 : 1,
+              }}
+            >
+              {trafficLoading ? '⏳ Loading...' : '🔄 Refresh'}
+            </button>
+          </div>
+
+          {trafficLoading && !botTraffic ? (
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              height: '200px',
+              color: '#94a3b8',
+            }}>
+              Loading bot traffic data...
+            </div>
+          ) : botTraffic ? (
+            <>
+              {/* Summary Cards */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                gap: '16px',
+                marginBottom: '24px',
+              }}>
+                <div style={{
+                  background: 'rgba(15, 23, 42, 0.6)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '8px',
+                  padding: '16px',
+                }}>
+                  <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>Total Bot Hits</div>
+                  <div style={{ color: '#ef4444', fontSize: '28px', fontWeight: '700' }}>
+                    {botTraffic.summary.totalHits.toLocaleString()}
+                  </div>
+                  <div style={{ color: '#94a3b8', fontSize: '11px', marginTop: '4px' }}>
+                    Today: {botTraffic.summary.todayHits.toLocaleString()}
+                  </div>
+                </div>
+                <div style={{
+                  background: 'rgba(15, 23, 42, 0.6)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '8px',
+                  padding: '16px',
+                }}>
+                  <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>Unique Bots</div>
+                  <div style={{ color: '#f59e0b', fontSize: '28px', fontWeight: '700' }}>
+                    {botTraffic.summary.uniqueUserAgents.toLocaleString()}
+                  </div>
+                  <div style={{ color: '#94a3b8', fontSize: '11px', marginTop: '4px' }}>
+                    User agents detected
+                  </div>
+                </div>
+                <div style={{
+                  background: 'rgba(15, 23, 42, 0.6)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '8px',
+                  padding: '16px',
+                }}>
+                  <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>Countries</div>
+                  <div style={{ color: '#3b82f6', fontSize: '28px', fontWeight: '700' }}>
+                    {botTraffic.summary.uniqueCountries}
+                  </div>
+                  <div style={{ color: '#94a3b8', fontSize: '11px', marginTop: '4px' }}>
+                    Geographic spread
+                  </div>
+                </div>
+                <div style={{
+                  background: 'rgba(15, 23, 42, 0.6)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '8px',
+                  padding: '16px',
+                }}>
+                  <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>Avg Confidence</div>
+                  <div style={{ color: '#22c55e', fontSize: '28px', fontWeight: '700' }}>
+                    {botTraffic.summary.avgConfidence}%
+                  </div>
+                  <div style={{ color: '#94a3b8', fontSize: '11px', marginTop: '4px' }}>
+                    Detection accuracy
+                  </div>
+                </div>
+              </div>
+
+              {/* Two Column Layout */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '20px',
+                marginBottom: '24px',
+              }}>
+                {/* By Category */}
+                <div style={{
+                  background: 'rgba(15, 23, 42, 0.6)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '8px',
+                  padding: '16px',
+                }}>
+                  <h3 style={{ color: '#f1f5f9', fontSize: '16px', fontWeight: '600', margin: '0 0 16px 0' }}>
+                    🏷️ By Category
+                  </h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {botTraffic.byCategory.slice(0, 8).map((cat, i) => (
+                      <div key={i} style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '8px 12px',
+                        background: 'rgba(255, 255, 255, 0.02)',
+                        borderRadius: '4px',
+                      }}>
+                        <span style={{ color: '#f1f5f9', fontSize: '13px' }}>{cat.category || 'Unknown'}</span>
+                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                          <span style={{ color: '#94a3b8', fontSize: '12px' }}>{cat.uniqueBots} bots</span>
+                          <span style={{ color: '#ef4444', fontSize: '14px', fontWeight: '600' }}>
+                            {cat.hitCount.toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    {botTraffic.byCategory.length === 0 && (
+                      <div style={{ color: '#94a3b8', fontSize: '13px', textAlign: 'center', padding: '20px' }}>
+                        No bot traffic data
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* By Country */}
+                <div style={{
+                  background: 'rgba(15, 23, 42, 0.6)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '8px',
+                  padding: '16px',
+                }}>
+                  <h3 style={{ color: '#f1f5f9', fontSize: '16px', fontWeight: '600', margin: '0 0 16px 0' }}>
+                    🌍 By Country
+                  </h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {botTraffic.byCountry.slice(0, 8).map((country, i) => (
+                      <div key={i} style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '8px 12px',
+                        background: 'rgba(255, 255, 255, 0.02)',
+                        borderRadius: '4px',
+                      }}>
+                        <span style={{ color: '#f1f5f9', fontSize: '13px' }}>{country.country || 'Unknown'}</span>
+                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                          <span style={{ color: '#94a3b8', fontSize: '12px' }}>{country.uniqueBots} bots</span>
+                          <span style={{ color: '#3b82f6', fontSize: '14px', fontWeight: '600' }}>
+                            {country.hitCount.toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    {botTraffic.byCountry.length === 0 && (
+                      <div style={{ color: '#94a3b8', fontSize: '13px', textAlign: 'center', padding: '20px' }}>
+                        No geographic data
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Hourly Pattern */}
+              <div style={{
+                background: 'rgba(15, 23, 42, 0.6)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '8px',
+                padding: '16px',
+                marginBottom: '24px',
+              }}>
+                <h3 style={{ color: '#f1f5f9', fontSize: '16px', fontWeight: '600', margin: '0 0 16px 0' }}>
+                  ⏰ Hourly Bot Activity Pattern
+                </h3>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'flex-end',
+                  gap: '4px',
+                  height: '120px',
+                  padding: '0 8px',
+                }}>
+                  {Array.from({ length: 24 }, (_, hour) => {
+                    const hourData = botTraffic.byHour.find(h => h.hour === hour);
+                    const maxHits = Math.max(...botTraffic.byHour.map(h => h.hitCount), 1);
+                    const height = hourData ? (hourData.hitCount / maxHits) * 100 : 0;
+                    return (
+                      <div
+                        key={hour}
+                        style={{
+                          flex: 1,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: '4px',
+                        }}
+                        title={`${hour}:00 - ${hourData?.hitCount || 0} hits`}
+                      >
+                        <div
+                          style={{
+                            width: '100%',
+                            height: `${Math.max(height, 2)}%`,
+                            background: height > 50 ? '#ef4444' : height > 25 ? '#f59e0b' : '#3b82f6',
+                            borderRadius: '2px 2px 0 0',
+                            transition: 'height 0.3s ease',
+                          }}
+                        />
+                        <span style={{ color: '#64748b', fontSize: '9px' }}>
+                          {hour}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Top Bots Table */}
+              <div style={{
+                background: 'rgba(15, 23, 42, 0.6)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '8px',
+                overflow: 'hidden',
+                marginBottom: '24px',
+              }}>
+                <div style={{
+                  padding: '16px',
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+                }}>
+                  <h3 style={{ color: '#f1f5f9', fontSize: '16px', fontWeight: '600', margin: 0 }}>
+                    🤖 Top Bots by Activity
+                  </h3>
+                </div>
+                <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: 'rgba(255, 255, 255, 0.02)' }}>
+                        <th style={{ padding: '12px', textAlign: 'left', color: '#94a3b8', fontSize: '12px', fontWeight: '500' }}>Bot Name</th>
+                        <th style={{ padding: '12px', textAlign: 'left', color: '#94a3b8', fontSize: '12px', fontWeight: '500' }}>Category</th>
+                        <th style={{ padding: '12px', textAlign: 'right', color: '#94a3b8', fontSize: '12px', fontWeight: '500' }}>Hits</th>
+                        <th style={{ padding: '12px', textAlign: 'right', color: '#94a3b8', fontSize: '12px', fontWeight: '500' }}>Confidence</th>
+                        <th style={{ padding: '12px', textAlign: 'right', color: '#94a3b8', fontSize: '12px', fontWeight: '500' }}>Last Seen</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {botTraffic.byName.slice(0, 20).map((bot, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                          <td style={{ padding: '12px', color: '#f1f5f9', fontSize: '13px' }}>{bot.name || 'Unknown'}</td>
+                          <td style={{ padding: '12px' }}>
+                            <span style={{
+                              background: 'rgba(59, 130, 246, 0.1)',
+                              color: '#60a5fa',
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                            }}>
+                              {bot.category || 'unknown'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px', textAlign: 'right', color: '#ef4444', fontSize: '14px', fontWeight: '600' }}>
+                            {bot.hitCount.toLocaleString()}
+                          </td>
+                          <td style={{ padding: '12px', textAlign: 'right', color: '#f59e0b', fontSize: '13px' }}>
+                            {bot.avgConfidence}%
+                          </td>
+                          <td style={{ padding: '12px', textAlign: 'right', color: '#94a3b8', fontSize: '12px' }}>
+                            {new Date(bot.lastSeen).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {botTraffic.byName.length === 0 && (
+                    <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>
+                      No bot data available
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Recent Bot Hits */}
+              <div style={{
+                background: 'rgba(15, 23, 42, 0.6)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '8px',
+                overflow: 'hidden',
+              }}>
+                <div style={{
+                  padding: '16px',
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+                }}>
+                  <h3 style={{ color: '#f1f5f9', fontSize: '16px', fontWeight: '600', margin: 0 }}>
+                    📋 Recent Bot Hits (Click to inspect)
+                  </h3>
+                </div>
+                <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
+                  {botTraffic.recentHits.map((hit, i) => (
+                    <div
+                      key={i}
+                      onClick={() => setSelectedBotHit(hit)}
+                      style={{
+                        padding: '12px 16px',
+                        borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                        cursor: 'pointer',
+                        background: selectedBotHit?.id === hit.id ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                        transition: 'background-color 0.2s ease',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
+                        <div>
+                          <span style={{ color: '#f1f5f9', fontSize: '14px', fontWeight: '500' }}>{hit.botName || 'Unknown Bot'}</span>
+                          <span style={{
+                            marginLeft: '8px',
+                            background: 'rgba(59, 130, 246, 0.1)',
+                            color: '#60a5fa',
+                            padding: '2px 6px',
+                            borderRadius: '3px',
+                            fontSize: '10px',
+                          }}>
+                            {hit.category || 'unknown'}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <span style={{ color: '#94a3b8', fontSize: '11px' }}>
+                            {hit.country}{hit.city ? `, ${hit.city}` : ''}
+                          </span>
+                          <span style={{
+                            color: hit.confidence >= 80 ? '#ef4444' : hit.confidence >= 50 ? '#f59e0b' : '#3b82f6',
+                            fontSize: '13px',
+                            fontWeight: '600',
+                          }}>
+                            {hit.confidence}%
+                          </span>
+                        </div>
+                      </div>
+                      <div style={{ color: '#64748b', fontSize: '11px', fontFamily: 'monospace' }}>
+                        {hit.path} • {new Date(hit.hitTime).toLocaleString()}
+                      </div>
+                    </div>
+                  ))}
+                  {botTraffic.recentHits.length === 0 && (
+                    <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>
+                      No recent bot hits
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div style={{
+              background: 'rgba(15, 23, 42, 0.6)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: '8px',
+              padding: '40px',
+              textAlign: 'center',
+              color: '#94a3b8',
+            }}>
+              Failed to load bot traffic data. Click refresh to try again.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Bot Hit Detail Modal */}
+      {selectedBotHit && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+          }}
+          onClick={() => setSelectedBotHit(null)}
+        >
+          <div
+            style={{
+              background: '#1e293b',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: '12px',
+              padding: '24px',
+              maxWidth: '600px',
+              width: '90%',
+              maxHeight: '80vh',
+              overflowY: 'auto',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 style={{ color: '#f1f5f9', fontSize: '20px', fontWeight: '700', margin: 0 }}>
+                🔍 Bot Hit Details
+              </h2>
+              <button
+                onClick={() => setSelectedBotHit(null)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#94a3b8',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  lineHeight: 1,
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{
+              display: 'grid',
+              gap: '16px',
+            }}>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '16px',
+              }}>
+                <div style={{
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px solid rgba(255, 255, 255, 0.05)',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  textAlign: 'center',
+                }}>
+                  <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>Bot Name</div>
+                  <div style={{ color: '#f1f5f9', fontSize: '18px', fontWeight: '600' }}>
+                    {selectedBotHit.botName || 'Unknown'}
+                  </div>
+                </div>
+                <div style={{
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px solid rgba(255, 255, 255, 0.05)',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  textAlign: 'center',
+                }}>
+                  <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>Confidence</div>
+                  <div style={{
+                    color: selectedBotHit.confidence >= 80 ? '#ef4444' : selectedBotHit.confidence >= 50 ? '#f59e0b' : '#3b82f6',
+                    fontSize: '24px',
+                    fontWeight: '700',
+                  }}>
+                    {selectedBotHit.confidence}%
+                  </div>
+                </div>
+              </div>
+
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.02)',
+                border: '1px solid rgba(255, 255, 255, 0.05)',
+                borderRadius: '8px',
+                padding: '16px',
+              }}>
+                <h4 style={{ color: '#f1f5f9', fontSize: '14px', fontWeight: '600', margin: '0 0 12px 0' }}>
+                  Request Details
+                </h4>
+                <div style={{ display: 'grid', gap: '8px', color: '#94a3b8', fontSize: '13px' }}>
+                  <div><strong style={{ color: '#f1f5f9' }}>Category:</strong> {selectedBotHit.category || 'Unknown'}</div>
+                  <div><strong style={{ color: '#f1f5f9' }}>Path:</strong> <code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: '3px' }}>{selectedBotHit.path}</code></div>
+                  <div><strong style={{ color: '#f1f5f9' }}>Country:</strong> {selectedBotHit.country || 'Unknown'}</div>
+                  <div><strong style={{ color: '#f1f5f9' }}>City:</strong> {selectedBotHit.city || 'Unknown'}</div>
+                  <div><strong style={{ color: '#f1f5f9' }}>Time:</strong> {new Date(selectedBotHit.hitTime).toLocaleString()}</div>
+                  {selectedBotHit.referrer && (
+                    <div><strong style={{ color: '#f1f5f9' }}>Referrer:</strong> {selectedBotHit.referrer}</div>
+                  )}
+                </div>
+              </div>
+
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.02)',
+                border: '1px solid rgba(255, 255, 255, 0.05)',
+                borderRadius: '8px',
+                padding: '16px',
+              }}>
+                <h4 style={{ color: '#f1f5f9', fontSize: '14px', fontWeight: '600', margin: '0 0 8px 0' }}>
+                  User Agent
+                </h4>
+                <div style={{
+                  color: '#94a3b8',
+                  fontSize: '12px',
+                  fontFamily: 'monospace',
+                  wordBreak: 'break-all',
+                  lineHeight: '1.5',
+                  background: 'rgba(0,0,0,0.2)',
+                  padding: '12px',
+                  borderRadius: '4px',
+                }}>
+                  {selectedBotHit.userAgent}
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setSelectedBotHit(null)}
+              style={{
+                width: '100%',
+                marginTop: '20px',
+                padding: '12px 20px',
+                background: 'rgba(255, 255, 255, 0.1)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                borderRadius: '6px',
+                color: '#f1f5f9',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+              }}
+            >
+              Close
+            </button>
           </div>
         </div>
       )}

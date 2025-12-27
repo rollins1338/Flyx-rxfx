@@ -14,6 +14,7 @@ import { useAdmin } from '../context/AdminContext';
 import { useStats } from '../context/StatsContext';
 import { getAdminAnalyticsUrl } from '../hooks/useAnalyticsApi';
 import BotFilterControls from '../components/BotFilterControls';
+import DataExportPanel from '../components/DataExportPanel';
 
 // Custom hook for debounced value
 function useDebounce<T>(value: T, delay: number): T {
@@ -113,7 +114,14 @@ interface TrafficSources {
   }>;
 }
 
-type AnalyticsTab = 'overview' | 'sessions' | 'livetv' | 'trends' | 'engagement' | 'traffic';
+type AnalyticsTab = 'overview' | 'sessions' | 'livetv' | 'trends' | 'engagement' | 'traffic' | 'geographic' | 'export';
+
+// Pagination state interface
+interface PaginationState {
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
 
 export default function UnifiedAnalyticsPage() {
   useAdmin(); // Context for admin state
@@ -134,6 +142,17 @@ export default function UnifiedAnalyticsPage() {
   const [filterContentType, setFilterContentType] = useState<string>('all');
   const [sortField, setSortField] = useState<'started_at' | 'total_watch_time' | 'completion_percentage'>('started_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  
+  // Pagination state
+  const [pagination, setPagination] = useState<PaginationState>({
+    page: 1,
+    pageSize: 50,
+    totalPages: 1
+  });
+  
+  // Auto-refresh state
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
 
   // Debounce search query for better performance (300ms delay)
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
@@ -143,7 +162,22 @@ export default function UnifiedAnalyticsPage() {
     fetchLiveTVAnalytics();
     fetchTrafficSources();
     fetchPreviousPeriodData();
+    setLastRefreshTime(new Date());
   }, [timeRange, botFilterOptions]);
+
+  // Auto-refresh every 30 seconds when enabled
+  useEffect(() => {
+    if (!autoRefresh) return;
+    
+    const interval = setInterval(() => {
+      fetchAnalytics();
+      fetchLiveTVAnalytics();
+      fetchTrafficSources();
+      setLastRefreshTime(new Date());
+    }, 30000);
+    
+    return () => clearInterval(interval);
+  }, [autoRefresh, timeRange, botFilterOptions]);
 
   const fetchAnalytics = async () => {
     setLoading(true);
@@ -280,6 +314,22 @@ export default function UnifiedAnalyticsPage() {
     return result;
   }, [sessions, debouncedSearchQuery, filterDevice, filterQuality, filterContentType, sortField, sortOrder]);
 
+  // Update pagination when filtered sessions change
+  useEffect(() => {
+    setPagination(prev => ({
+      ...prev,
+      page: 1,
+      totalPages: Math.ceil(filteredSessions.length / prev.pageSize)
+    }));
+  }, [filteredSessions.length]);
+
+  // Paginated sessions
+  const paginatedSessions = useMemo(() => {
+    const start = (pagination.page - 1) * pagination.pageSize;
+    const end = start + pagination.pageSize;
+    return filteredSessions.slice(start, end);
+  }, [filteredSessions, pagination.page, pagination.pageSize]);
+
   // Calculate trends using real previous period data
   const trends = useMemo((): TrendData[] => {
     const calculateChange = (current: number, previous: number | undefined): number => {
@@ -405,6 +455,8 @@ export default function UnifiedAnalyticsPage() {
     { id: 'trends', label: '📈 Trends', count: null },
     { id: 'engagement', label: '💡 Engagement', count: null },
     { id: 'traffic', label: '🌐 Traffic', count: trafficSources?.totals?.total_hits || null },
+    { id: 'geographic', label: '🗺️ Geographic', count: unifiedStats.topCountries?.length || null },
+    { id: 'export', label: '📥 Export', count: null },
   ];
 
   if (loading && !unifiedStats.totalSessions) {
@@ -445,26 +497,81 @@ export default function UnifiedAnalyticsPage() {
             <p style={{ margin: '8px 0 0 0', color: '#94a3b8', fontSize: '16px' }}>
               Comprehensive analytics with real-time insights and advanced filtering
             </p>
+            {lastRefreshTime && (
+              <p style={{ margin: '4px 0 0 0', color: '#64748b', fontSize: '12px' }}>
+                Last updated: {lastRefreshTime.toLocaleTimeString()}
+                {autoRefresh && <span style={{ marginLeft: '8px', color: '#22c55e' }}>• Auto-refresh ON</span>}
+              </p>
+            )}
           </div>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {['24h', '7d', '30d', 'all'].map((range) => (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {['24h', '7d', '30d', 'all'].map((range) => (
+                <button
+                  key={range}
+                  onClick={() => setTimeRange(range)}
+                  style={{
+                    padding: '8px 16px',
+                    background: timeRange === range ? '#7877c6' : 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid',
+                    borderColor: timeRange === range ? '#7877c6' : 'rgba(255, 255, 255, 0.1)',
+                    borderRadius: '8px',
+                    color: timeRange === range ? 'white' : '#94a3b8',
+                    cursor: 'pointer',
+                    fontSize: '13px'
+                  }}
+                >
+                  {range === '24h' ? '24 Hours' : range === '7d' ? '7 Days' : range === '30d' ? '30 Days' : 'All Time'}
+                </button>
+              ))}
               <button
-                key={range}
-                onClick={() => setTimeRange(range)}
+                onClick={() => {
+                  fetchAnalytics();
+                  fetchLiveTVAnalytics();
+                  fetchTrafficSources();
+                  fetchPreviousPeriodData();
+                  setLastRefreshTime(new Date());
+                }}
+                disabled={loading}
                 style={{
                   padding: '8px 16px',
-                  background: timeRange === range ? '#7877c6' : 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid',
-                  borderColor: timeRange === range ? '#7877c6' : 'rgba(255, 255, 255, 0.1)',
+                  background: 'rgba(59, 130, 246, 0.2)',
+                  border: '1px solid #3b82f6',
                   borderRadius: '8px',
-                  color: timeRange === range ? 'white' : '#94a3b8',
-                  cursor: 'pointer',
-                  fontSize: '13px'
+                  color: '#3b82f6',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  fontSize: '13px',
+                  opacity: loading ? 0.5 : 1
                 }}
               >
-                {range === '24h' ? '24 Hours' : range === '7d' ? '7 Days' : range === '30d' ? '30 Days' : 'All Time'}
+                🔄 Refresh
               </button>
-            ))}
+            </div>
+            <button
+              onClick={() => setAutoRefresh(!autoRefresh)}
+              style={{
+                padding: '6px 12px',
+                background: autoRefresh ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid',
+                borderColor: autoRefresh ? '#22c55e' : 'rgba(255, 255, 255, 0.1)',
+                borderRadius: '6px',
+                color: autoRefresh ? '#22c55e' : '#94a3b8',
+                cursor: 'pointer',
+                fontSize: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <span style={{ 
+                width: '8px', 
+                height: '8px', 
+                borderRadius: '50%', 
+                background: autoRefresh ? '#22c55e' : '#64748b',
+                animation: autoRefresh ? 'pulse 2s infinite' : 'none'
+              }} />
+              {autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh OFF'}
+            </button>
           </div>
         </div>
       </div>
@@ -531,7 +638,8 @@ export default function UnifiedAnalyticsPage() {
 
       {activeTab === 'sessions' && (
         <SessionsTab 
-          sessions={filteredSessions}
+          sessions={paginatedSessions}
+          totalSessions={filteredSessions.length}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
           filterDevice={filterDevice}
@@ -544,13 +652,16 @@ export default function UnifiedAnalyticsPage() {
           setSortField={setSortField}
           sortOrder={sortOrder}
           setSortOrder={setSortOrder}
+          pagination={pagination}
+          setPagination={setPagination}
           formatDate={formatDate}
           formatDuration={formatDuration}
           getCompletionColor={getCompletionColor}
+          allSessions={sessions}
         />
       )}
 
-      {activeTab === 'livetv' && liveTVAnalytics && (
+      {activeTab === 'livetv' && (
         <LiveTVTab 
           liveTVAnalytics={liveTVAnalytics}
           formatDuration={formatDuration}
@@ -575,6 +686,19 @@ export default function UnifiedAnalyticsPage() {
         <TrafficTab 
           trafficSources={trafficSources}
         />
+      )}
+
+      {activeTab === 'geographic' && (
+        <GeographicTab 
+          topCountries={unifiedStats.topCountries}
+          topCities={unifiedStats.topCities}
+          realtimeGeographic={unifiedStats.realtimeGeographic}
+          deviceBreakdown={unifiedStats.deviceBreakdown}
+        />
+      )}
+
+      {activeTab === 'export' && (
+        <ExportTab />
       )}
     </div>
   );
@@ -641,6 +765,80 @@ function OverviewTab({ unifiedStats, contentSegmentation }: any) {
         </div>
       </div>
 
+      {/* Top Content */}
+      {unifiedStats.topContent && unifiedStats.topContent.length > 0 && (
+        <div style={{ background: 'rgba(255, 255, 255, 0.03)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '24px', marginBottom: '24px' }}>
+          <h3 style={{ margin: '0 0 20px 0', color: '#f8fafc', fontSize: '16px', fontWeight: '600' }}>🔥 Top Content (Last 7 Days)</h3>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                  <th style={{ padding: '12px', textAlign: 'left', color: '#94a3b8', fontSize: '13px', fontWeight: '500' }}>#</th>
+                  <th style={{ padding: '12px', textAlign: 'left', color: '#94a3b8', fontSize: '13px', fontWeight: '500' }}>Title</th>
+                  <th style={{ padding: '12px', textAlign: 'left', color: '#94a3b8', fontSize: '13px', fontWeight: '500' }}>Type</th>
+                  <th style={{ padding: '12px', textAlign: 'right', color: '#94a3b8', fontSize: '13px', fontWeight: '500' }}>Views</th>
+                  <th style={{ padding: '12px', textAlign: 'right', color: '#94a3b8', fontSize: '13px', fontWeight: '500' }}>Watch Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {unifiedStats.topContent.slice(0, 10).map((content: any, index: number) => (
+                  <tr key={content.contentId} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                    <td style={{ padding: '12px', color: '#64748b', fontSize: '14px' }}>{index + 1}</td>
+                    <td style={{ padding: '12px', color: '#f8fafc', fontSize: '14px', fontWeight: '500' }}>{content.contentTitle}</td>
+                    <td style={{ padding: '12px' }}>
+                      <span style={{
+                        padding: '4px 8px',
+                        borderRadius: '12px',
+                        fontSize: '11px',
+                        background: content.contentType === 'movie' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                        color: content.contentType === 'movie' ? '#10b981' : '#f59e0b'
+                      }}>
+                        {content.contentType}
+                      </span>
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'right', color: '#7877c6', fontWeight: '600' }}>{content.watchCount}</td>
+                    <td style={{ padding: '12px', textAlign: 'right', color: '#94a3b8' }}>{content.totalWatchTime}m</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Device Breakdown */}
+      {unifiedStats.deviceBreakdown && unifiedStats.deviceBreakdown.length > 0 && (
+        <div style={{ background: 'rgba(255, 255, 255, 0.03)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '24px', marginBottom: '24px' }}>
+          <h3 style={{ margin: '0 0 20px 0', color: '#f8fafc', fontSize: '16px', fontWeight: '600' }}>📱 Device Breakdown</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px' }}>
+            {unifiedStats.deviceBreakdown.map((device: any) => {
+              const total = unifiedStats.deviceBreakdown.reduce((sum: number, d: any) => sum + d.count, 0);
+              const percentage = total > 0 ? Math.round((device.count / total) * 100) : 0;
+              const deviceIcons: Record<string, string> = {
+                desktop: '🖥️',
+                mobile: '📱',
+                tablet: '📲',
+                tv: '📺',
+                unknown: '❓'
+              };
+              return (
+                <div key={device.device} style={{
+                  padding: '16px',
+                  background: 'rgba(255,255,255,0.02)',
+                  borderRadius: '12px',
+                  textAlign: 'center'
+                }}>
+                  <div style={{ fontSize: '32px', marginBottom: '8px' }}>{deviceIcons[device.device] || '📱'}</div>
+                  <div style={{ color: '#f8fafc', fontWeight: '600', textTransform: 'capitalize' }}>{device.device}</div>
+                  <div style={{ color: '#7877c6', fontSize: '24px', fontWeight: '700', margin: '8px 0' }}>{device.count}</div>
+                  <div style={{ color: '#64748b', fontSize: '12px' }}>{percentage}% of users</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Top Countries */}
       {unifiedStats.topCountries && unifiedStats.topCountries.length > 0 && (
         <div style={{ background: 'rgba(255, 255, 255, 0.03)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '24px', marginBottom: '24px' }}>
@@ -706,6 +904,7 @@ function ActivityBar({ label, icon, value, total }: { label: string; icon: strin
 
 function SessionsTab({ 
   sessions, 
+  totalSessions,
   searchQuery, 
   setSearchQuery, 
   filterDevice, 
@@ -718,18 +917,21 @@ function SessionsTab({
   setSortField,
   sortOrder,
   setSortOrder,
+  pagination,
+  setPagination,
   formatDate,
   formatDuration,
-  getCompletionColor
+  getCompletionColor,
+  allSessions
 }: any) {
-  // Get unique values for filter options
-  const deviceOptions = [...new Set(sessions.map((s: WatchSession) => s.device_type).filter(Boolean))] as string[];
-  const qualityOptions = [...new Set(sessions.map((s: WatchSession) => s.quality).filter(Boolean))] as string[];
+  // Get unique values for filter options from all sessions
+  const deviceOptions = [...new Set(allSessions.map((s: WatchSession) => s.device_type).filter(Boolean))] as string[];
+  const qualityOptions = [...new Set(allSessions.map((s: WatchSession) => s.quality).filter(Boolean))] as string[];
 
   return (
     <div>
       <h2 style={{ margin: '0 0 24px 0', color: '#f8fafc', fontSize: '20px' }}>
-        Watch Sessions ({sessions.length.toLocaleString()})
+        Watch Sessions ({totalSessions.toLocaleString()})
       </h2>
 
       {/* Advanced Filters */}
@@ -849,7 +1051,7 @@ function SessionsTab({
               </tr>
             </thead>
             <tbody>
-              {sessions.slice(0, 100).map((session: WatchSession) => (
+              {sessions.map((session: WatchSession) => (
                 <tr key={session.id} style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
                   <td style={tdStyle}>
                     <div>
@@ -904,23 +1106,91 @@ function SessionsTab({
             </tbody>
           </table>
         </div>
-        {sessions.length > 100 && (
-          <div style={{ padding: '16px', textAlign: 'center', color: '#64748b', fontSize: '14px' }}>
-            Showing first 100 of {sessions.length.toLocaleString()} sessions
+        {/* Pagination Controls */}
+        <div style={{ 
+          padding: '16px', 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          borderTop: '1px solid rgba(255, 255, 255, 0.05)'
+        }}>
+          <div style={{ color: '#64748b', fontSize: '14px' }}>
+            Showing {((pagination.page - 1) * pagination.pageSize) + 1} - {Math.min(pagination.page * pagination.pageSize, totalSessions)} of {totalSessions.toLocaleString()} sessions
           </div>
-        )}
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <select
+              value={pagination.pageSize}
+              onChange={(e) => setPagination((prev: any) => ({ ...prev, pageSize: parseInt(e.target.value), page: 1 }))}
+              style={{
+                padding: '6px 12px',
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '6px',
+                color: '#f8fafc',
+                fontSize: '13px'
+              }}
+            >
+              <option value="25">25 per page</option>
+              <option value="50">50 per page</option>
+              <option value="100">100 per page</option>
+            </select>
+            <button
+              onClick={() => setPagination((prev: any) => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
+              disabled={pagination.page === 1}
+              style={{
+                padding: '6px 12px',
+                background: pagination.page === 1 ? 'rgba(255, 255, 255, 0.02)' : 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '6px',
+                color: pagination.page === 1 ? '#64748b' : '#f8fafc',
+                cursor: pagination.page === 1 ? 'not-allowed' : 'pointer',
+                fontSize: '13px'
+              }}
+            >
+              ← Previous
+            </button>
+            <span style={{ color: '#94a3b8', fontSize: '13px', padding: '0 8px' }}>
+              Page {pagination.page} of {pagination.totalPages || 1}
+            </span>
+            <button
+              onClick={() => setPagination((prev: any) => ({ ...prev, page: Math.min(prev.totalPages, prev.page + 1) }))}
+              disabled={pagination.page >= pagination.totalPages}
+              style={{
+                padding: '6px 12px',
+                background: pagination.page >= pagination.totalPages ? 'rgba(255, 255, 255, 0.02)' : 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '6px',
+                color: pagination.page >= pagination.totalPages ? '#64748b' : '#f8fafc',
+                cursor: pagination.page >= pagination.totalPages ? 'not-allowed' : 'pointer',
+                fontSize: '13px'
+              }}
+            >
+              Next →
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
 function LiveTVTab({ liveTVAnalytics, formatDuration }: any) {
+  if (!liveTVAnalytics) {
+    return (
+      <div style={{ textAlign: 'center', padding: '60px', color: '#94a3b8' }}>
+        <div style={{ fontSize: '48px', marginBottom: '16px' }}>📺</div>
+        <h3 style={{ color: '#f8fafc', margin: '0 0 8px 0' }}>Live TV Analytics</h3>
+        <p>Loading Live TV data...</p>
+      </div>
+    );
+  }
+
   return (
     <div>
       <h2 style={{ margin: '0 0 24px 0', color: '#f8fafc', fontSize: '20px' }}>Live TV Analytics</h2>
       
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '28px' }}>
-        <StatCard title="Current Viewers" value={liveTVAnalytics.currentViewers} icon="👥" color="#10b981" pulse />
+        <StatCard title="Current Viewers" value={liveTVAnalytics.currentViewers || 0} icon="👥" color="#10b981" pulse />
         <StatCard title="Total Watch Time" value={formatDuration(liveTVAnalytics.stats?.totalCurrentWatchTime || 0)} icon="⏱️" color="#7877c6" />
         <StatCard title="Avg Session" value={formatDuration(liveTVAnalytics.stats?.avgSessionDuration || 0)} icon="📊" color="#f59e0b" />
         <StatCard title="Recent Sessions" value={liveTVAnalytics.stats?.recentSessions || 0} icon="📺" color="#ec4899" />
@@ -929,12 +1199,12 @@ function LiveTVTab({ liveTVAnalytics, formatDuration }: any) {
       </div>
 
       {/* Active Channels */}
-      {liveTVAnalytics.channels && liveTVAnalytics.channels.length > 0 && (
+      {liveTVAnalytics.channels && liveTVAnalytics.channels.length > 0 ? (
         <div style={{ background: 'rgba(255, 255, 255, 0.03)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '24px' }}>
           <h3 style={{ margin: '0 0 20px 0', color: '#f8fafc', fontSize: '16px', fontWeight: '600' }}>🔴 Active Channels</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '12px' }}>
             {liveTVAnalytics.channels.map((channel: any) => (
-              <div key={channel.channelId} style={{
+              <div key={channel.channelId || channel.channelName} style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '12px',
@@ -950,6 +1220,37 @@ function LiveTVTab({ liveTVAnalytics, formatDuration }: any) {
                 <div style={{ color: '#10b981', fontWeight: '700' }}>
                   {channel.viewerCount} <span style={{ fontSize: '12px', fontWeight: '400' }}>viewers</span>
                 </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div style={{ 
+          textAlign: 'center', 
+          padding: '40px', 
+          background: 'rgba(255, 255, 255, 0.03)', 
+          borderRadius: '16px',
+          border: '1px solid rgba(255, 255, 255, 0.1)'
+        }}>
+          <div style={{ fontSize: '32px', marginBottom: '12px' }}>📺</div>
+          <p style={{ color: '#64748b', margin: 0 }}>No active Live TV channels at the moment</p>
+        </div>
+      )}
+
+      {/* Categories */}
+      {liveTVAnalytics.categories && liveTVAnalytics.categories.length > 0 && (
+        <div style={{ background: 'rgba(255, 255, 255, 0.03)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '24px', marginTop: '24px' }}>
+          <h3 style={{ margin: '0 0 20px 0', color: '#f8fafc', fontSize: '16px', fontWeight: '600' }}>📁 Categories</h3>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+            {liveTVAnalytics.categories.map((cat: any) => (
+              <div key={cat.category} style={{
+                padding: '8px 16px',
+                background: 'rgba(120, 119, 198, 0.2)',
+                borderRadius: '20px',
+                color: '#f8fafc',
+                fontSize: '14px'
+              }}>
+                {cat.category}: <span style={{ fontWeight: '600', color: '#7877c6' }}>{cat.viewerCount}</span>
               </div>
             ))}
           </div>
@@ -984,54 +1285,153 @@ function TrendsTab({ trends, timeRange, formatDuration }: any) {
           </p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px' }}>
-          {trends.map((trend: TrendData) => {
-            const hasPreviousData = trend.previous > 0;
-            return (
-              <div key={trend.label} style={{
-                background: 'rgba(255, 255, 255, 0.03)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: '16px',
-                padding: '20px'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <span style={{ color: '#f8fafc', fontWeight: '600' }}>{trend.label}</span>
-                  {hasPreviousData ? (
-                    <span style={{
-                      color: trend.change >= 0 ? '#10b981' : '#ef4444',
-                      fontSize: '14px',
-                      fontWeight: '600'
-                    }}>
-                      {trend.change >= 0 ? '↑' : '↓'} {Math.abs(trend.change)}%
-                    </span>
-                  ) : (
-                    <span style={{ color: '#64748b', fontSize: '12px' }}>No prior data</span>
+        <>
+          {/* Trend Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '32px' }}>
+            {trends.map((trend: TrendData) => {
+              const hasPreviousData = trend.previous > 0;
+              const changeColor = trend.change >= 0 ? '#10b981' : '#ef4444';
+              const changeIcon = trend.change >= 0 ? '📈' : '📉';
+              return (
+                <div key={trend.label} style={{
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '16px',
+                  padding: '24px',
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}>
+                  {/* Background indicator */}
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    right: 0,
+                    width: '80px',
+                    height: '80px',
+                    background: `${changeColor}10`,
+                    borderRadius: '0 0 0 100%'
+                  }} />
+                  
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <span style={{ color: '#f8fafc', fontWeight: '600', fontSize: '15px' }}>{trend.label}</span>
+                    {hasPreviousData ? (
+                      <span style={{
+                        color: changeColor,
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        background: `${changeColor}20`,
+                        padding: '4px 10px',
+                        borderRadius: '20px'
+                      }}>
+                        {changeIcon} {trend.change >= 0 ? '+' : ''}{trend.change}%
+                      </span>
+                    ) : (
+                      <span style={{ color: '#64748b', fontSize: '12px' }}>No prior data</span>
+                    )}
+                  </div>
+                  
+                  {/* Visual comparison bar */}
+                  {hasPreviousData && (
+                    <div style={{ marginBottom: '16px' }}>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', height: '60px' }}>
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                          <div style={{
+                            width: '100%',
+                            height: `${Math.min(100, (trend.previous / Math.max(trend.current, trend.previous)) * 50)}px`,
+                            background: 'rgba(148, 163, 184, 0.3)',
+                            borderRadius: '4px 4px 0 0'
+                          }} />
+                          <span style={{ color: '#64748b', fontSize: '10px', marginTop: '4px' }}>Previous</span>
+                        </div>
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                          <div style={{
+                            width: '100%',
+                            height: `${Math.min(100, (trend.current / Math.max(trend.current, trend.previous)) * 50)}px`,
+                            background: `linear-gradient(180deg, ${changeColor}, ${changeColor}80)`,
+                            borderRadius: '4px 4px 0 0'
+                          }} />
+                          <span style={{ color: '#94a3b8', fontSize: '10px', marginTop: '4px' }}>Current</span>
+                        </div>
+                      </div>
+                    </div>
                   )}
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <div>
-                    <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>Current</div>
-                    <div style={{ color: '#f8fafc', fontSize: '18px', fontWeight: '700' }}>
-                      {typeof trend.current === 'number' && trend.label.includes('Time') 
-                        ? formatDuration(trend.current) 
-                        : trend.current}
+                  
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <div>
+                      <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>Current</div>
+                      <div style={{ color: '#f8fafc', fontSize: '20px', fontWeight: '700' }}>
+                        {typeof trend.current === 'number' && trend.label.includes('Time') 
+                          ? formatDuration(trend.current) 
+                          : typeof trend.current === 'number' ? trend.current.toLocaleString() : trend.current}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>Previous</div>
+                      <div style={{ color: '#64748b', fontSize: '20px', fontWeight: '700' }}>
+                        {hasPreviousData 
+                          ? (typeof trend.previous === 'number' && trend.label.includes('Time') 
+                              ? formatDuration(trend.previous) 
+                              : typeof trend.previous === 'number' ? trend.previous.toLocaleString() : trend.previous)
+                          : 'N/A'}
+                      </div>
                     </div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>Previous</div>
-                    <div style={{ color: '#64748b', fontSize: '18px', fontWeight: '700' }}>
-                      {hasPreviousData 
-                        ? (typeof trend.previous === 'number' && trend.label.includes('Time') 
-                            ? formatDuration(trend.previous) 
-                            : trend.previous)
-                        : 'N/A'}
+                </div>
+              );
+            })}
+          </div>
+          
+          {/* Summary Section */}
+          <div style={{ 
+            background: 'rgba(255, 255, 255, 0.03)', 
+            borderRadius: '16px', 
+            border: '1px solid rgba(255, 255, 255, 0.1)', 
+            padding: '24px' 
+          }}>
+            <h3 style={{ margin: '0 0 16px 0', color: '#f8fafc', fontSize: '16px', fontWeight: '600' }}>📊 Period Summary</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+              {trends.map((trend: TrendData) => {
+                const isPositive = trend.change >= 0;
+                return (
+                  <div key={`summary-${trend.label}`} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '12px',
+                    background: 'rgba(255,255,255,0.02)',
+                    borderRadius: '8px'
+                  }}>
+                    <div style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '8px',
+                      background: isPositive ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '18px'
+                    }}>
+                      {isPositive ? '📈' : '📉'}
+                    </div>
+                    <div>
+                      <div style={{ color: '#94a3b8', fontSize: '12px' }}>{trend.label}</div>
+                      <div style={{ 
+                        color: isPositive ? '#10b981' : '#ef4444', 
+                        fontWeight: '600',
+                        fontSize: '14px'
+                      }}>
+                        {isPositive ? '+' : ''}{trend.change}% vs previous
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                );
+              })}
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
@@ -1157,6 +1557,186 @@ function TrafficTab({ trafficSources }: any) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Geographic Tab Component
+function GeographicTab({ topCountries, topCities, realtimeGeographic, deviceBreakdown }: any) {
+  return (
+    <div>
+      <h2 style={{ margin: '0 0 16px 0', color: '#f8fafc', fontSize: '20px' }}>Geographic Analytics</h2>
+      <p style={{ color: '#94a3b8', marginBottom: '24px' }}>User distribution by location and device</p>
+
+      {/* Real-time Geographic */}
+      {realtimeGeographic && realtimeGeographic.length > 0 && (
+        <div style={{ background: 'rgba(255, 255, 255, 0.03)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '24px', marginBottom: '24px' }}>
+          <h3 style={{ margin: '0 0 20px 0', color: '#f8fafc', fontSize: '16px', fontWeight: '600' }}>🟢 Currently Active Users by Country</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+            {realtimeGeographic.slice(0, 12).map((country: any) => {
+              const total = realtimeGeographic.reduce((sum: number, c: any) => sum + c.count, 0);
+              const percentage = total > 0 ? Math.round((country.count / total) * 100) : 0;
+              return (
+                <div key={country.country} style={{
+                  padding: '16px',
+                  background: 'rgba(255,255,255,0.02)',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <div>
+                    <div style={{ color: '#f8fafc', fontWeight: '500' }}>{country.countryName || country.country}</div>
+                    <div style={{ color: '#64748b', fontSize: '12px' }}>{percentage}% of active</div>
+                  </div>
+                  <div style={{ 
+                    color: '#22c55e', 
+                    fontWeight: '700', 
+                    fontSize: '20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}>
+                    <span style={{ 
+                      width: '8px', 
+                      height: '8px', 
+                      borderRadius: '50%', 
+                      background: '#22c55e',
+                      animation: 'pulse 2s infinite'
+                    }} />
+                    {country.count}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Top Countries (Historical) */}
+      {topCountries && topCountries.length > 0 && (
+        <div style={{ background: 'rgba(255, 255, 255, 0.03)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '24px', marginBottom: '24px' }}>
+          <h3 style={{ margin: '0 0 20px 0', color: '#f8fafc', fontSize: '16px', fontWeight: '600' }}>🌍 Top Countries (Last 7 Days)</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {topCountries.slice(0, 10).map((country: any, index: number) => {
+              const maxCount = topCountries[0]?.count || 1;
+              const percentage = Math.round((country.count / maxCount) * 100);
+              return (
+                <div key={country.country} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ color: '#64748b', fontSize: '14px', width: '24px' }}>#{index + 1}</span>
+                  <span style={{ color: '#f8fafc', width: '150px' }}>{country.countryName || country.country}</span>
+                  <div style={{ flex: 1, height: '24px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{
+                      height: '100%',
+                      width: `${percentage}%`,
+                      background: 'linear-gradient(90deg, #7877c6, #a855f7)',
+                      borderRadius: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      paddingLeft: '8px'
+                    }}>
+                      {percentage > 20 && <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>{country.count}</span>}
+                    </div>
+                  </div>
+                  {percentage <= 20 && <span style={{ color: '#7877c6', fontWeight: '600', width: '60px', textAlign: 'right' }}>{country.count}</span>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Top Cities */}
+      {topCities && topCities.length > 0 && (
+        <div style={{ background: 'rgba(255, 255, 255, 0.03)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '24px', marginBottom: '24px' }}>
+          <h3 style={{ margin: '0 0 20px 0', color: '#f8fafc', fontSize: '16px', fontWeight: '600' }}>🏙️ Top Cities</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+            {topCities.slice(0, 15).map((city: any) => (
+              <div key={`${city.city}-${city.country}`} style={{
+                padding: '12px',
+                background: 'rgba(255,255,255,0.02)',
+                borderRadius: '8px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <div>
+                  <div style={{ color: '#f8fafc', fontWeight: '500' }}>{city.city}</div>
+                  <div style={{ color: '#64748b', fontSize: '12px' }}>{city.countryName || city.country}</div>
+                </div>
+                <span style={{ color: '#7877c6', fontWeight: '600' }}>{city.count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Device Breakdown */}
+      {deviceBreakdown && deviceBreakdown.length > 0 && (
+        <div style={{ background: 'rgba(255, 255, 255, 0.03)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '24px' }}>
+          <h3 style={{ margin: '0 0 20px 0', color: '#f8fafc', fontSize: '16px', fontWeight: '600' }}>📱 Device Distribution</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px' }}>
+            {deviceBreakdown.map((device: any) => {
+              const total = deviceBreakdown.reduce((sum: number, d: any) => sum + d.count, 0);
+              const percentage = total > 0 ? Math.round((device.count / total) * 100) : 0;
+              const deviceIcons: Record<string, string> = {
+                desktop: '🖥️',
+                mobile: '📱',
+                tablet: '📲',
+                tv: '📺',
+                unknown: '❓'
+              };
+              const deviceColors: Record<string, string> = {
+                desktop: '#3b82f6',
+                mobile: '#10b981',
+                tablet: '#f59e0b',
+                tv: '#ec4899',
+                unknown: '#64748b'
+              };
+              return (
+                <div key={device.device} style={{
+                  padding: '20px',
+                  background: 'rgba(255,255,255,0.02)',
+                  borderRadius: '12px',
+                  textAlign: 'center',
+                  borderTop: `3px solid ${deviceColors[device.device] || '#7877c6'}`
+                }}>
+                  <div style={{ fontSize: '36px', marginBottom: '12px' }}>{deviceIcons[device.device] || '📱'}</div>
+                  <div style={{ color: '#f8fafc', fontWeight: '600', textTransform: 'capitalize', marginBottom: '4px' }}>{device.device}</div>
+                  <div style={{ color: '#7877c6', fontSize: '28px', fontWeight: '700' }}>{device.count}</div>
+                  <div style={{ color: '#64748b', fontSize: '13px' }}>{percentage}% of users</div>
+                  <div style={{ 
+                    marginTop: '12px', 
+                    height: '6px', 
+                    background: 'rgba(255,255,255,0.1)', 
+                    borderRadius: '3px',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      height: '100%',
+                      width: `${percentage}%`,
+                      background: deviceColors[device.device] || '#7877c6',
+                      borderRadius: '3px'
+                    }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Export Tab Component
+function ExportTab() {
+  return (
+    <div>
+      <h2 style={{ margin: '0 0 16px 0', color: '#f8fafc', fontSize: '20px' }}>Data Export</h2>
+      <p style={{ color: '#94a3b8', marginBottom: '24px' }}>Export analytics data in various formats for reporting and analysis</p>
+      
+      <DataExportPanel />
     </div>
   );
 }
