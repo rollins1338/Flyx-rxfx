@@ -7,13 +7,13 @@ import { memo, useState, useRef, useEffect } from 'react';
 import styles from '../LiveTV.module.css';
 
 interface SourceTabsProps {
-  selectedSource: 'all' | 'cable' | 'dlhd' | 'ppv' | 'cdnlive';
-  onSourceChange: (source: 'all' | 'cable' | 'dlhd' | 'ppv' | 'cdnlive') => void;
+  selectedSource: 'all' | 'channels' | 'dlhd' | 'ppv' | 'cdnlive';
+  onSourceChange: (source: 'all' | 'channels' | 'dlhd' | 'ppv' | 'cdnlive') => void;
   stats: {
     live: number;
     total: number;
     sources: {
-      cable: number;
+      channels: number;
       dlhd: number;
       ppv: number;
       cdnlive: number;
@@ -27,10 +27,10 @@ const SOURCE_CONFIG = {
     icon: '🏆',
     description: 'All available streams',
   },
-  cable: {
-    label: 'Cable TV',
+  channels: {
+    label: 'TV Channels',
     icon: '📺',
-    description: 'Standard cable channels',
+    description: 'DLHD TV channels (850+)',
   },
   dlhd: {
     label: 'Live Events',

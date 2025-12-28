@@ -1,15 +1,25 @@
 /**
- * Cable Channels Grid Component
- * Displays standard cable TV channels in a grid layout
+ * DLHD Channels Grid Component
+ * Displays DLHD TV channels in a grid layout
  */
 
 import { memo } from 'react';
-import { CableChannel, CHANNEL_CATEGORIES } from '@/app/lib/data/cable-channels';
+import { DLHDChannel } from '../hooks/useLiveTVData';
 import styles from '../LiveTV.module.css';
 
+const CATEGORY_INFO: Record<string, { name: string; icon: string }> = {
+  sports: { name: 'Sports', icon: '⚽' },
+  entertainment: { name: 'Entertainment', icon: '🎬' },
+  movies: { name: 'Movies', icon: '🎥' },
+  news: { name: 'News', icon: '📰' },
+  kids: { name: 'Kids', icon: '🧸' },
+  documentary: { name: 'Documentary', icon: '🌍' },
+  music: { name: 'Music', icon: '🎵' },
+};
+
 interface CableChannelsGridProps {
-  channels: CableChannel[];
-  onChannelPlay: (channel: CableChannel) => void;
+  channels: DLHDChannel[];
+  onChannelPlay: (channel: DLHDChannel) => void;
   loading?: boolean;
 }
 
@@ -22,8 +32,8 @@ export const CableChannelsGrid = memo(function CableChannelsGrid({
     return (
       <div className={styles.loadingState}>
         <div className={styles.loadingSpinner}></div>
-        <h3>Loading Cable Channels...</h3>
-        <p>Fetching available cable TV channels</p>
+        <h3>Loading TV Channels...</h3>
+        <p>Fetching available DLHD channels</p>
       </div>
     );
   }
@@ -32,8 +42,8 @@ export const CableChannelsGrid = memo(function CableChannelsGrid({
     return (
       <div className={styles.emptyState}>
         <div className={styles.emptyIcon}>📺</div>
-        <h3>No Cable Channels Found</h3>
-        <p>No cable channels match your current filters</p>
+        <h3>No Channels Found</h3>
+        <p>No channels match your current filters</p>
       </div>
     );
   }
@@ -45,19 +55,19 @@ export const CableChannelsGrid = memo(function CableChannelsGrid({
     }
     acc[channel.category].push(channel);
     return acc;
-  }, {} as Record<string, CableChannel[]>);
+  }, {} as Record<string, DLHDChannel[]>);
 
   return (
     <div className={styles.cableChannelsContainer}>
       {Object.entries(channelsByCategory).map(([category, categoryChannels]) => {
-        const categoryInfo = CHANNEL_CATEGORIES[category as keyof typeof CHANNEL_CATEGORIES];
+        const categoryInfo = CATEGORY_INFO[category] || { name: category, icon: '📺' };
         
         return (
           <div key={category} className={styles.categorySection}>
             <div className={styles.sectionHeader}>
               <h3 className={styles.sectionTitle}>
-                <span>{categoryInfo?.icon || '📺'}</span>
-                {categoryInfo?.name || category}
+                <span>{categoryInfo.icon}</span>
+                {categoryInfo.name}
                 <span className={styles.sectionCount}>
                   {categoryChannels.length} channels
                 </span>
@@ -73,27 +83,21 @@ export const CableChannelsGrid = memo(function CableChannelsGrid({
                 >
                   <div className={styles.channelHeader}>
                     <div className={styles.channelIcon}>
-                      {categoryInfo?.icon || '📺'}
+                      {channel.countryInfo?.flag || categoryInfo.icon}
                     </div>
                     <div className={styles.channelInfo}>
                       <h4 className={styles.channelName}>{channel.name}</h4>
                       <p className={styles.channelCategory}>
-                        {categoryInfo?.name || category}
+                        {channel.countryInfo?.name || channel.country}
                       </p>
                     </div>
                   </div>
                   
                   <div className={styles.channelMeta}>
                     <span className={styles.channelShortName}>
-                      {channel.shortName}
+                      {categoryInfo.name}
                     </span>
-                    {channel.hdVariants && channel.hdVariants.length > 0 && (
-                      <span className={styles.hdBadge}>
-                        {channel.hdVariants.includes('FHD') ? 'FHD' : 
-                         channel.hdVariants.includes('HD') ? 'HD' : 
-                         channel.hdVariants[0]}
-                      </span>
-                    )}
+                    <span className={styles.hdBadge}>HD</span>
                   </div>
                   
                   <div className={styles.channelOverlay}>

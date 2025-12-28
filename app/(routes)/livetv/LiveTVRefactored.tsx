@@ -8,8 +8,7 @@
 import { useState, useCallback } from 'react';
 import { Navigation } from '@/components/layout/Navigation';
 import { Footer } from '@/components/layout/Footer';
-import { useLiveTVData, LiveEvent } from './hooks/useLiveTVData';
-import { CableChannel } from '@/app/lib/data/cable-channels';
+import { useLiveTVData, LiveEvent, DLHDChannel } from './hooks/useLiveTVData';
 import { LiveTVHeader } from './components/LiveTVHeader';
 import { SourceTabs } from './components/SourceTabs';
 import { CategoryFilters } from './components/CategoryFilters';
@@ -21,7 +20,7 @@ import styles from './LiveTV.module.css';
 export default function LiveTVRefactored() {
   const {
     events,
-    cableChannels,
+    dlhdChannels,
     categories,
     loading,
     error,
@@ -38,7 +37,7 @@ export default function LiveTVRefactored() {
   } = useLiveTVData();
 
   const [selectedEvent, setSelectedEvent] = useState<LiveEvent | null>(null);
-  const [selectedChannel, setSelectedChannel] = useState<CableChannel | null>(null);
+  const [selectedChannel, setSelectedChannel] = useState<DLHDChannel | null>(null);
   const [isPlayerOpen, setIsPlayerOpen] = useState(false);
 
   // Handle event play
@@ -48,8 +47,8 @@ export default function LiveTVRefactored() {
     setIsPlayerOpen(true);
   }, []);
 
-  // Handle cable channel play
-  const handlePlayChannel = useCallback((channel: CableChannel) => {
+  // Handle DLHD channel play
+  const handlePlayChannel = useCallback((channel: DLHDChannel) => {
     setSelectedChannel(channel);
     setSelectedEvent(null);
     setIsPlayerOpen(true);
@@ -93,9 +92,9 @@ export default function LiveTVRefactored() {
         />
 
         {/* Content based on selected source */}
-        {selectedSource === 'cable' ? (
+        {selectedSource === 'channels' ? (
           <CableChannelsGrid
-            channels={cableChannels}
+            channels={dlhdChannels}
             onChannelPlay={handlePlayChannel}
             loading={loading}
           />

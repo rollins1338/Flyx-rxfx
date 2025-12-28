@@ -5,8 +5,7 @@
 
 import { memo, useEffect, useState } from 'react';
 import { useVideoPlayer } from '../hooks/useVideoPlayer';
-import { LiveEvent } from '../hooks/useLiveTVData';
-import { CableChannel } from '@/app/lib/data/cable-channels';
+import { LiveEvent, DLHDChannel } from '../hooks/useLiveTVData';
 import styles from '../LiveTV.module.css';
 
 // Sport icon mapping
@@ -16,7 +15,8 @@ const SPORT_ICONS: Record<string, string> = {
   'rugby': '🏉', 'motorsport': '🏎️', 'f1': '🏎️', 'boxing': '🥊',
   'mma': '🥊', 'ufc': '🥊', 'wwe': '🤼', 'volleyball': '🏐',
   'am. football': '🏈', 'nfl': '🏈', 'darts': '🎯', '24/7': '📺',
-  'cable tv': '📺',
+  'tv channel': '📺', 'sports': '⚽', 'entertainment': '🎬', 
+  'movies': '🎥', 'news': '📰', 'kids': '🧸', 'documentary': '🌍',
 };
 
 function getSportIcon(sport: string): string {
@@ -29,7 +29,7 @@ function getSportIcon(sport: string): string {
 
 interface VideoPlayerProps {
   event?: LiveEvent | null;
-  channel?: CableChannel | null;
+  channel?: DLHDChannel | null;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -77,7 +77,7 @@ export const VideoPlayer = memo(function VideoPlayer({
       };
       loadStream(source);
     } else if (channel) {
-      // For cable channels, we'll use DLHD source with the channel ID
+      // For DLHD channels, use the channel ID
       const source = {
         type: 'dlhd' as const,
         channelId: channel.id,
@@ -156,7 +156,7 @@ export const VideoPlayer = memo(function VideoPlayer({
   }
 
   const displayTitle = event?.title || channel?.name || 'Unknown';
-  const displaySport = event?.sport || (channel ? 'Cable TV' : undefined);
+  const displaySport = event?.sport || (channel ? channel.category : undefined);
   const isLive = event?.isLive || (channel ? true : false);
 
   return (
