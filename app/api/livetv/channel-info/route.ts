@@ -12,7 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { channelRouter, ChannelInfo } from '@/app/lib/livetv/channel-router';
+import { channelRouter } from '@/app/lib/livetv/channel-router';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
