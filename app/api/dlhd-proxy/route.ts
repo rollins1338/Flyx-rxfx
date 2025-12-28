@@ -10,12 +10,20 @@
  *   - Segment proxying
  * 
  * This Vercel route just forwards to the CF Worker.
+ * Route is determined by NEXT_PUBLIC_USE_DLHD_PROXY:
+ *   - true: /dlhd (Oxylabs residential proxy)
+ *   - false: /tv (direct fetch with RPI fallback)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
+
+// Determine route based on env var
+function getTvRoute(): string {
+  return process.env.NEXT_PUBLIC_USE_DLHD_PROXY === 'true' ? '/dlhd' : '/tv';
+}
 
 export async function GET(request: NextRequest) {
   const cfProxyUrl = process.env.NEXT_PUBLIC_CF_TV_PROXY_URL;
@@ -29,6 +37,7 @@ export async function GET(request: NextRequest) {
   
   // Strip trailing path if present
   const baseUrl = cfProxyUrl.replace(/\/(tv|dlhd)\/?$/, '');
+  const route = getTvRoute();
   
   const searchParams = request.nextUrl.searchParams;
   const channel = searchParams.get('channel');
@@ -41,8 +50,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Forward to Cloudflare Worker DLHD endpoint
-    const cfUrl = `${baseUrl}/dlhd?channel=${channel}`;
+    // Forward to Cloudflare Worker - route determined by NEXT_PUBLIC_USE_DLHD_PROXY
+    const cfUrl = `${baseUrl}${route}?channel=${channel}`;
     
     const response = await fetch(cfUrl, {
       headers: {

@@ -1,13 +1,13 @@
 import { Metadata } from 'next';
-import LiveTVClient from './LiveTVClient';
+import LiveTVRefactored from './LiveTVRefactored';
 
 export const metadata: Metadata = {
-  title: 'Live TV - Flyx | 850+ Channels',
-  description: 'Watch 850+ live TV channels including sports, news, entertainment, and more. Stream live events, matches, and shows ad-free on Flyx.',
-  keywords: ['live tv', 'streaming', 'sports', 'news', 'entertainment', 'live channels', 'flyx'],
+  title: 'Live TV - Flyx | Live Sports & Events',
+  description: 'Watch live sports, PPV events, and TV channels. Stream NFL, NBA, UFC, Soccer, and more ad-free on Flyx.',
+  keywords: ['live tv', 'live sports', 'streaming', 'nfl', 'nba', 'ufc', 'soccer', 'ppv', 'flyx'],
   openGraph: {
-    title: 'Live TV - Flyx | 850+ Channels',
-    description: 'Watch 850+ live TV channels including sports, news, entertainment, and more. Stream live events ad-free.',
+    title: 'Live TV - Flyx | Live Sports & Events',
+    description: 'Watch live sports, PPV events, and TV channels. Stream NFL, NBA, UFC, Soccer, and more ad-free.',
     url: 'https://tv.vynx.cc/livetv',
     siteName: 'Flyx 2.0',
     type: 'website',
@@ -15,11 +15,11 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Live TV - Flyx | 850+ Channels',
-    description: 'Watch 850+ live TV channels including sports, news, entertainment, and more. Stream live events ad-free.',
+    title: 'Live TV - Flyx | Live Sports & Events',
+    description: 'Watch live sports, PPV events, and TV channels. Stream NFL, NBA, UFC, Soccer, and more ad-free.',
   },
 };
 
 export default function LiveTVPage() {
-  return <LiveTVClient />;
+  return <LiveTVRefactored />;
 }

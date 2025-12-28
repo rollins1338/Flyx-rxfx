@@ -35,16 +35,22 @@ const CACHE_TTL = 30000; // 30 seconds cache TTL - balances freshness with perfo
 
 export async function GET(request: NextRequest) {
   try {
+    console.log('[Unified Stats] API called');
+    
     const authResult = await verifyAdminAuth(request);
     if (!authResult.success) {
+      console.log('[Unified Stats] Auth failed');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    console.log('[Unified Stats] Auth successful');
     const now = Date.now();
     
     // Get time range from query params (default: 24h)
     const { searchParams } = new URL(request.url);
     const timeRange = searchParams.get('timeRange') || '24h';
+    
+    console.log('[Unified Stats] Time range:', timeRange);
     
     // Calculate time boundaries based on selected range
     const getTimeRangeMs = (range: string): number => {
@@ -98,6 +104,8 @@ export async function GET(request: NextRequest) {
     const twoMinutesAgo = now - 2 * 60 * 1000;
     let realtime = { totalActive: 0, trulyActive: 0, watching: 0, browsing: 0, livetv: 0, unknown: 0 };
     
+    console.log('[Unified Stats] Fetching realtime data, fiveMinutesAgo:', new Date(fiveMinutesAgo).toISOString());
+    
     try {
       // Count unique users per activity type from live_activity table
       // This matches what /api/analytics/live-activity returns
@@ -122,6 +130,8 @@ export async function GET(request: NextRequest) {
         isNeon ? [fiveMinutesAgo, twoMinutesAgo] : [twoMinutesAgo, fiveMinutesAgo]
       );
       
+      console.log('[Unified Stats] Live activity query result:', liveResult);
+      
       let total = 0;
       let strictTotal = 0;
       for (const row of liveResult) {
@@ -137,6 +147,8 @@ export async function GET(request: NextRequest) {
       }
       realtime.totalActive = total;
       realtime.trulyActive = strictTotal;
+      
+      console.log('[Unified Stats] Realtime stats:', realtime);
       
     } catch (e) {
       console.error('Error fetching realtime stats:', e);
@@ -259,6 +271,9 @@ export async function GET(request: NextRequest) {
       tvSessions: 0,
       uniqueContentWatched: 0
     };
+    
+    console.log('[Unified Stats] Fetching content metrics, selectedRangeStart:', new Date(selectedRangeStart).toISOString(), 'now:', new Date(now).toISOString());
+    
     try {
       // Count sessions from selected time range with valid data
       const contentQuery = isNeon
@@ -291,6 +306,8 @@ export async function GET(request: NextRequest) {
       
       const contentResult = await adapter.query(contentQuery, [selectedRangeStart, now]);
       
+      console.log('[Unified Stats] Content query result:', contentResult);
+      
       if (contentResult[0]) {
         content.totalSessions = parseInt(contentResult[0].total_sessions) || 0;
         content.totalWatchTime = Math.round(parseFloat(contentResult[0].total_watch_time) / 60) || 0; // Convert to minutes
@@ -303,6 +320,8 @@ export async function GET(request: NextRequest) {
         content.tvSessions = parseInt(contentResult[0].tv_sessions) || 0;
         content.uniqueContentWatched = parseInt(contentResult[0].unique_content) || 0;
       }
+      
+      console.log('[Unified Stats] Content metrics:', content);
       
       // Also get all-time watch time for reference
       const allTimeQuery = isNeon
@@ -614,6 +633,15 @@ export async function GET(request: NextRequest) {
       data: responseData,
       timestamp: now,
     };
+
+    console.log('[Unified Stats] Response data summary:', {
+      success: responseData.success,
+      realtime: responseData.realtime,
+      users: responseData.users,
+      content: responseData.content,
+      topContentCount: responseData.topContent?.length || 0,
+      devicesCount: responseData.devices?.length || 0,
+    });
 
     return NextResponse.json(responseData);
 

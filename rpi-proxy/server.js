@@ -934,6 +934,150 @@ function proxyRequest(targetUrl, res) {
   proxyReq.end();
 }
 
+/**
+ * PPV.to stream proxy - fetches poocloud.in streams from residential IP
+ * 
+ * poocloud.in blocks:
+ *   1. Datacenter IPs (Cloudflare, AWS, etc.)
+ * 
+ * Requires:
+ *   - Referer: https://pooembed.top/
+ *   - Origin: https://pooembed.top
+ * 
+ * This proxy fetches from a residential IP with the required headers.
+ */
+function proxyPPVStream(targetUrl, res) {
+  const url = new URL(targetUrl);
+  const client = url.protocol === 'https:' ? https : http;
+  
+  // Validate domain - only allow poocloud.in
+  if (!url.hostname.endsWith('poocloud.in')) {
+    console.log(`[PPV] Invalid domain: ${url.hostname}`);
+    res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+    return res.end(JSON.stringify({ error: 'Invalid domain - only poocloud.in allowed' }));
+  }
+  
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': '*/*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Referer': 'https://pooembed.top/',
+    'Origin': 'https://pooembed.top',
+    'Connection': 'keep-alive',
+  };
+
+  const options = {
+    hostname: url.hostname,
+    port: url.port || (url.protocol === 'https:' ? 443 : 80),
+    path: url.pathname + url.search,
+    method: 'GET',
+    headers,
+    timeout: 30000,
+  };
+
+  console.log(`[PPV] Proxying: ${targetUrl.substring(0, 80)}...`);
+
+  const proxyReq = client.request(options, (proxyRes) => {
+    const contentType = proxyRes.headers['content-type'] || 'application/octet-stream';
+    
+    console.log(`[PPV] Response: ${proxyRes.statusCode} - ${contentType}`);
+    
+    // For m3u8 playlists, we need to rewrite URLs
+    if (contentType.includes('mpegurl') || targetUrl.endsWith('.m3u8') || targetUrl.includes('.m3u8?')) {
+      const chunks = [];
+      
+      proxyRes.on('data', chunk => chunks.push(chunk));
+      
+      proxyRes.on('end', () => {
+        const data = Buffer.concat(chunks);
+        const text = data.toString('utf8');
+        
+        console.log(`[PPV] M3U8 content: ${data.length} bytes`);
+        
+        // Get base URL for relative paths
+        const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1);
+        
+        // Rewrite URLs in the playlist to go through this proxy
+        // Note: The CF worker will call this endpoint, so we return relative URLs
+        // that the CF worker will then rewrite to its own /ppv/stream endpoint
+        const rewritten = text.split('\n').map(line => {
+          const trimmed = line.trim();
+          
+          // Skip empty lines
+          if (trimmed === '') return line;
+          
+          // Handle EXT-X-KEY URI
+          if (trimmed.includes('URI="')) {
+            return trimmed.replace(/URI="([^"]+)"/, (_, uri) => {
+              const fullUrl = uri.startsWith('http') ? uri : baseUrl + uri;
+              // Return the full URL - CF worker will rewrite it
+              return `URI="${fullUrl}"`;
+            });
+          }
+          
+          // Skip other comments
+          if (trimmed.startsWith('#')) return line;
+          
+          // Rewrite segment URLs to full URLs
+          if (trimmed.startsWith('http')) {
+            return trimmed; // Already absolute
+          } else if (trimmed.endsWith('.ts') || trimmed.endsWith('.m3u8') || 
+                     trimmed.includes('.ts?') || trimmed.includes('.m3u8?')) {
+            return baseUrl + trimmed;
+          }
+          
+          return line;
+        }).join('\n');
+
+        res.writeHead(proxyRes.statusCode, {
+          'Content-Type': 'application/vnd.apple.mpegurl',
+          'Content-Length': Buffer.byteLength(rewritten),
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'no-cache',
+        });
+        res.end(rewritten);
+      });
+    } else {
+      // For binary content (ts segments), stream directly
+      const chunks = [];
+      
+      proxyRes.on('data', chunk => chunks.push(chunk));
+      
+      proxyRes.on('end', () => {
+        const data = Buffer.concat(chunks);
+        
+        console.log(`[PPV] Binary content: ${data.length} bytes`);
+        
+        res.writeHead(proxyRes.statusCode, {
+          'Content-Type': contentType,
+          'Content-Length': data.length,
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'no-cache',
+        });
+        res.end(data);
+      });
+    }
+  });
+
+  proxyReq.on('error', (err) => {
+    console.error(`[PPV Error] ${err.message}`);
+    if (!res.headersSent) {
+      res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ error: 'PPV proxy error', details: err.message }));
+    }
+  });
+
+  proxyReq.on('timeout', () => {
+    proxyReq.destroy();
+    if (!res.headersSent) {
+      res.writeHead(504, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ error: 'PPV proxy timeout' }));
+    }
+  });
+
+  proxyReq.end();
+}
+
 const server = http.createServer(async (req, res) => {
   const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   
@@ -1153,6 +1297,27 @@ const server = http.createServer(async (req, res) => {
       proxyIPTVStream(decoded, mac, token, res);
     } catch (err) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid URL' }));
+    }
+    return;
+  }
+
+  // PPV proxy endpoint - proxies poocloud.in streams from residential IP
+  // poocloud.in blocks datacenter IPs (Cloudflare, AWS, etc.)
+  // Requires Referer: https://pooembed.top/ header
+  if (reqUrl.pathname === '/ppv') {
+    const targetUrl = reqUrl.searchParams.get('url');
+    
+    if (!targetUrl) {
+      res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ error: 'Missing url parameter' }));
+    }
+
+    try {
+      const decoded = decodeURIComponent(targetUrl);
+      proxyPPVStream(decoded, res);
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
       res.end(JSON.stringify({ error: 'Invalid URL' }));
     }
     return;
@@ -1903,6 +2068,7 @@ server.listen(PORT, () => {
 ╠═══════════════════════════════════════════════════════════╣
 ║  Endpoints:                                               ║
 ║    GET /proxy?url=<encoded_url>  - Proxy a request        ║
+║    GET /ppv?url=<encoded_url>    - PPV.to stream proxy    ║
 ║    GET /heartbeat?channel=&server=&domain= - DLHD session ║
 ║    GET /iptv/stream?url=&mac=&token= - IPTV stream proxy  ║
 ║    GET /animekai?url=&referer= - AnimeKai/Flixer CDN      ║
@@ -1912,6 +2078,7 @@ server.listen(PORT, () => {
 ║  CDN Support:                                             ║
 ║    - MegaUp (AnimeKai): No Referer header                 ║
 ║    - Flixer (p.XXXXX.workers.dev): Requires Referer       ║
+║    - PPV.to (poocloud.in): Requires Referer pooembed.top  ║
 ╠═══════════════════════════════════════════════════════════╣
 ║  Expose with:                                             ║
 ║    cloudflared tunnel --url localhost:${PORT.toString().padEnd(20)}║

@@ -486,6 +486,30 @@ export default {
           },
           servers: ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot'],
         },
+        ppv: {
+          path: '/ppv/',
+          description: 'PPV.to stream proxy (pooembed.top/poocloud.in)',
+          usage: '/ppv/stream?url=<encoded_url>',
+          subRoutes: {
+            stream: '/ppv/stream?url=<encoded_url> - Proxy m3u8/ts with proper Referer',
+            health: '/ppv/health - Health check',
+            test: '/ppv/test - Test upstream connectivity',
+          },
+          validDomains: ['poocloud.in', 'pooembed.top'],
+          requiredHeaders: {
+            Referer: 'https://pooembed.top/',
+            Origin: 'https://pooembed.top',
+          },
+        },
+        cdnLive: {
+          path: '/cdn-live/',
+          description: 'CDN-Live.tv stream proxy',
+          usage: '/cdn-live/stream?url=<encoded_url>',
+          subRoutes: {
+            stream: '/cdn-live/stream?url=<encoded_url> - Proxy m3u8/ts',
+            health: '/cdn-live/health - Health check',
+          },
+        },
         analytics: {
           path: '/analytics/',
           description: 'Analytics proxy - bypasses Vercel Edge, writes directly to Neon',

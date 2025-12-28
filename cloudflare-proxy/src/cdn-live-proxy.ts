@@ -70,7 +70,7 @@ export async function handleCDNLiveRequest(request: Request, env: Env): Promise<
       const decodedUrl = decodeURIComponent(streamUrl);
       
       // Validate URL is from expected domain
-      if (!decodedUrl.includes('cdn-live-tv.ru') && !decodedUrl.includes('cdn-live.tv')) {
+      if (!decodedUrl.includes('cdn-live-tv.ru') && !decodedUrl.includes('cdn-live.tv') && !decodedUrl.includes('cdn-live-tv.cfd')) {
         return jsonResponse({ error: 'Invalid URL domain' }, 400);
       }
 

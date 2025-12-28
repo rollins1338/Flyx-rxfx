@@ -3,12 +3,21 @@
  * 
  * Routes key requests through Cloudflare Worker → RPI Proxy
  * Keys MUST come from residential IP - datacenter IPs are blocked.
+ * 
+ * Route is determined by NEXT_PUBLIC_USE_DLHD_PROXY:
+ *   - true: /dlhd/key (Oxylabs residential proxy)
+ *   - false: /tv/key (direct fetch with RPI fallback)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
+
+// Determine route based on env var
+function getTvRoute(): string {
+  return process.env.NEXT_PUBLIC_USE_DLHD_PROXY === 'true' ? '/dlhd' : '/tv';
+}
 
 export async function GET(request: NextRequest) {
   const cfProxyUrl = process.env.NEXT_PUBLIC_CF_TV_PROXY_URL;
@@ -22,6 +31,7 @@ export async function GET(request: NextRequest) {
   
   // Strip trailing path if present
   const baseUrl = cfProxyUrl.replace(/\/(tv|dlhd)\/?$/, '');
+  const route = getTvRoute();
   
   const searchParams = request.nextUrl.searchParams;
   const url = searchParams.get('url');
@@ -38,12 +48,12 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Forward to Cloudflare Worker DLHD key endpoint
+    // Forward to Cloudflare Worker key endpoint - route determined by NEXT_PUBLIC_USE_DLHD_PROXY
     let cfUrl: string;
     if (url) {
-      cfUrl = `${baseUrl}/dlhd/key?url=${encodeURIComponent(url)}`;
+      cfUrl = `${baseUrl}${route}/key?url=${encodeURIComponent(url)}`;
     } else {
-      cfUrl = `${baseUrl}/dlhd/key?channel=${channel}`;
+      cfUrl = `${baseUrl}${route}/key?channel=${channel}`;
     }
     
     const response = await fetch(cfUrl, {

@@ -2348,8 +2348,8 @@ async function handleGetUnifiedStats(
           COALESCE(AVG(duration), 0) / 60 as avg_duration,
           COALESCE(AVG(completion_percentage), 0) as completion_rate,
           SUM(CASE WHEN is_completed = 1 THEN 1 ELSE 0 END) as completed_sessions,
-          COALESCE(SUM(pause_count), 0) as total_pauses,
-          COALESCE(SUM(seek_count), 0) as total_seeks,
+          0 as total_pauses,
+          0 as total_seeks,
           SUM(CASE WHEN content_type = 'movie' THEN 1 ELSE 0 END) as movie_sessions,
           SUM(CASE WHEN content_type = 'tv' THEN 1 ELSE 0 END) as tv_sessions,
           COUNT(DISTINCT content_id) as unique_content
@@ -2376,14 +2376,14 @@ async function handleGetUnifiedStats(
         LIMIT 20
       `).bind(sevenDaysAgo).all(),
 
-      // City stats (last 7 days)
+      // City stats (last 7 days) - from live_activity which has city
       env.DB.prepare(`
         SELECT 
           city,
           country,
           COUNT(DISTINCT user_id) as count
-        FROM page_views 
-        WHERE entry_time >= ? AND city IS NOT NULL AND city != '' AND country IS NOT NULL
+        FROM live_activity 
+        WHERE last_heartbeat >= ? AND city IS NOT NULL AND city != '' AND country IS NOT NULL
         GROUP BY city, country
         ORDER BY count DESC
         LIMIT 30

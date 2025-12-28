@@ -182,6 +182,19 @@ export default function UnifiedAnalyticsPage() {
   const fetchAnalytics = async () => {
     setLoading(true);
     try {
+      // Fetch both unified stats (for real-time data) and watch sessions (for detailed session data)
+      const params: any = { 
+        timeRange: timeRange,
+        limit: '200' 
+      };
+      
+      // Apply bot filtering
+      if (!botFilterOptions.includeBots) {
+        params.excludeBots = 'true';
+        params.confidenceThreshold = botFilterOptions.confidenceThreshold.toString();
+      }
+
+      // Fetch detailed session data for the sessions tab
       const now = Date.now();
       const ranges: Record<string, number> = {
         '24h': 24 * 60 * 60 * 1000,
@@ -191,20 +204,20 @@ export default function UnifiedAnalyticsPage() {
       };
 
       const startDate = ranges[timeRange] ? now - ranges[timeRange] : 0;
-      const params: any = { limit: '200' };
-      if (startDate) params.startDate = startDate.toString();
+      const sessionParams: any = { limit: '200' };
+      if (startDate) sessionParams.startDate = startDate.toString();
       
-      // Apply bot filtering
+      // Apply bot filtering to session data too
       if (!botFilterOptions.includeBots) {
-        params.excludeBots = 'true';
-        params.confidenceThreshold = botFilterOptions.confidenceThreshold.toString();
+        sessionParams.excludeBots = 'true';
+        sessionParams.confidenceThreshold = botFilterOptions.confidenceThreshold.toString();
       }
 
-      const response = await fetch(getAdminAnalyticsUrl('watch-session', params));
-      const data = await response.json();
+      const sessionResponse = await fetch(getAdminAnalyticsUrl('watch-session', sessionParams));
+      const sessionData = await sessionResponse.json();
 
-      if (data.success) {
-        setSessions(data.sessions || []);
+      if (sessionData.success) {
+        setSessions(sessionData.sessions || []);
       }
     } catch (error) {
       console.error('Failed to fetch analytics:', error);
@@ -710,11 +723,15 @@ function OverviewTab({ unifiedStats, contentSegmentation }: any) {
     <div>
       <h2 style={{ margin: '0 0 24px 0', color: '#f8fafc', fontSize: '20px' }}>Analytics Overview</h2>
       
-      {/* Real-time Activity */}
+      {/* Real-time Activity - ALWAYS SHOWS CURRENT USERS */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px', marginBottom: '32px' }}>
         <div style={{ background: 'rgba(255, 255, 255, 0.03)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '24px' }}>
-          <h3 style={{ margin: '0 0 20px 0', color: '#f8fafc', fontSize: '16px', fontWeight: '600' }}>🟢 Real-time Activity</h3>
+          <h3 style={{ margin: '0 0 20px 0', color: '#f8fafc', fontSize: '16px', fontWeight: '600' }}>🟢 Real-time Activity (Right Now)</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+              <span style={{ color: '#f8fafc', fontWeight: '600' }}>🔴 Total Active Users</span>
+              <span style={{ color: '#10b981', fontSize: '24px', fontWeight: '700' }}>{unifiedStats.liveUsers}</span>
+            </div>
             <ActivityBar 
               label="Watching VOD" 
               icon="▶️" 
@@ -734,8 +751,43 @@ function OverviewTab({ unifiedStats, contentSegmentation }: any) {
               total={unifiedStats.liveUsers} 
             />
           </div>
+          <div style={{ marginTop: '16px', padding: '12px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px', fontSize: '12px', color: '#64748b' }}>
+            💡 This shows users active in the last 5 minutes (real-time heartbeat data)
+          </div>
         </div>
         
+        <div style={{ background: 'rgba(255, 255, 255, 0.03)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '24px' }}>
+          <h3 style={{ margin: '0 0 20px 0', color: '#f8fafc', fontSize: '16px', fontWeight: '600' }}>📊 Historical Sessions</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#f8fafc' }}>Total Sessions</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ color: '#7877c6', fontWeight: '600' }}>{unifiedStats.totalSessions}</span>
+                <span style={{ color: '#64748b', fontSize: '12px' }}>completed</span>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#f8fafc' }}>Watch Time</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ color: '#10b981', fontWeight: '600' }}>{unifiedStats.totalWatchTime}</span>
+                <span style={{ color: '#64748b', fontSize: '12px' }}>minutes</span>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#f8fafc' }}>Completion Rate</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ color: '#f59e0b', fontWeight: '600' }}>{unifiedStats.completionRate}%</span>
+              </div>
+            </div>
+          </div>
+          <div style={{ marginTop: '16px', padding: '12px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px', fontSize: '12px', color: '#64748b' }}>
+            📈 This shows completed watch sessions (historical data)
+          </div>
+        </div>
+      </div>
+
+      {/* Content Type Breakdown */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px', marginBottom: '32px' }}>
         <div style={{ background: 'rgba(255, 255, 255, 0.03)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '24px' }}>
           <h3 style={{ margin: '0 0 20px 0', color: '#f8fafc', fontSize: '16px', fontWeight: '600' }}>🎬 Content Type Breakdown</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -759,6 +811,33 @@ function OverviewTab({ unifiedStats, contentSegmentation }: any) {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ color: '#7877c6', fontWeight: '700' }}>{contentSegmentation.total.sessions}</span>
                 <span style={{ color: '#64748b', fontSize: '12px' }}>sessions</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div style={{ background: 'rgba(255, 255, 255, 0.03)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '24px' }}>
+          <h3 style={{ margin: '0 0 20px 0', color: '#f8fafc', fontSize: '16px', fontWeight: '600' }}>👥 User Activity</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#f8fafc' }}>Active Today</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ color: '#10b981', fontWeight: '600' }}>{unifiedStats.activeToday}</span>
+                <span style={{ color: '#64748b', fontSize: '12px' }}>users</span>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#f8fafc' }}>Active This Week</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ color: '#f59e0b', fontWeight: '600' }}>{unifiedStats.activeThisWeek}</span>
+                <span style={{ color: '#64748b', fontSize: '12px' }}>users</span>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#f8fafc' }}>Total Users</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ color: '#7877c6', fontWeight: '600' }}>{unifiedStats.totalUsers}</span>
+                <span style={{ color: '#64748b', fontSize: '12px' }}>all time</span>
               </div>
             </div>
           </div>
@@ -924,6 +1003,9 @@ function SessionsTab({
   getCompletionColor,
   allSessions
 }: any) {
+  // Get unified stats from context to show warning
+  const { stats: unifiedStats } = useStats();
+  
   // Get unique values for filter options from all sessions
   const deviceOptions = [...new Set(allSessions.map((s: WatchSession) => s.device_type).filter(Boolean))] as string[];
   const qualityOptions = [...new Set(allSessions.map((s: WatchSession) => s.quality).filter(Boolean))] as string[];
@@ -933,6 +1015,46 @@ function SessionsTab({
       <h2 style={{ margin: '0 0 24px 0', color: '#f8fafc', fontSize: '20px' }}>
         Watch Sessions ({totalSessions.toLocaleString()})
       </h2>
+
+      {/* Warning when no sessions but active users */}
+      {totalSessions === 0 && unifiedStats.liveUsers > 0 && (
+        <div style={{
+          padding: '16px',
+          background: 'rgba(245, 158, 11, 0.1)',
+          border: '1px solid rgba(245, 158, 11, 0.3)',
+          borderRadius: '12px',
+          marginBottom: '24px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+            <span style={{ fontSize: '20px' }}>⚠️</span>
+            <span style={{ color: '#f59e0b', fontWeight: '600' }}>No Completed Sessions Found</span>
+          </div>
+          <p style={{ color: '#f8fafc', margin: '0 0 8px 0', fontSize: '14px' }}>
+            There are currently <strong>{unifiedStats.liveUsers} active users</strong> but no completed watch sessions in the selected time range.
+          </p>
+          <p style={{ color: '#94a3b8', margin: '0 0 12px 0', fontSize: '13px' }}>
+            💡 Sessions appear here only after users stop watching. Check the "Live Activity" page to see users currently watching content.
+          </p>
+          <a 
+            href="/admin/live" 
+            style={{ 
+              display: 'inline-flex', 
+              alignItems: 'center', 
+              gap: '8px', 
+              padding: '8px 16px', 
+              background: 'rgba(245, 158, 11, 0.2)', 
+              color: '#f59e0b', 
+              textDecoration: 'none', 
+              borderRadius: '8px', 
+              fontSize: '13px', 
+              fontWeight: '500',
+              border: '1px solid rgba(245, 158, 11, 0.3)'
+            }}
+          >
+            🔴 View Live Activity
+          </a>
+        </div>
+      )}
 
       {/* Advanced Filters */}
       <div style={{ 

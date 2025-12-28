@@ -28,9 +28,12 @@ export function getStreamProxyUrl(
     throw new Error('Stream proxy not configured. Set NEXT_PUBLIC_CF_STREAM_PROXY_URL environment variable.');
   }
   
+  // Strip trailing slash if present to avoid double slashes
+  const baseUrl = cfProxyUrl.replace(/\/+$/, '');
+  
   // Add noreferer param for sources that block requests with Origin header (like MegaUp CDN)
   const noRefParam = skipOrigin ? '&noreferer=true' : '';
-  return `${cfProxyUrl}/?url=${encodeURIComponent(url)}&source=${source}&referer=${encodeURIComponent(referer)}${noRefParam}`;
+  return `${baseUrl}?url=${encodeURIComponent(url)}&source=${source}&referer=${encodeURIComponent(referer)}${noRefParam}`;
 }
 
 // Check if DLHD proxy (Oxylabs residential) should be used for Live TV
@@ -81,6 +84,36 @@ export function getTvSegmentProxyUrl(segmentUrl: string): string {
   const baseUrl = getTvProxyBaseUrl();
   const route = getTvProxyRoute();
   return `${baseUrl}${route}/segment?url=${encodeURIComponent(segmentUrl)}`;
+}
+
+// PPV stream proxy URL - uses dedicated /ppv/stream route
+// This route has proper Referer handling for pooembed.top streams
+export function getPpvStreamProxyUrl(url: string): string {
+  const cfProxyUrl = process.env.NEXT_PUBLIC_CF_STREAM_PROXY_URL;
+  
+  if (!cfProxyUrl) {
+    throw new Error('PPV proxy not configured. Set NEXT_PUBLIC_CF_STREAM_PROXY_URL environment variable.');
+  }
+  
+  // Strip trailing /stream suffix if present to get base URL
+  const baseUrl = cfProxyUrl.replace(/\/stream\/?$/, '').replace(/\/+$/, '');
+  // Use dedicated /ppv/stream route which has proper referer handling and URL rewriting
+  return `${baseUrl}/ppv/stream?url=${encodeURIComponent(url)}`;
+}
+
+// CDN-Live stream proxy URL - uses dedicated /cdn-live/stream route
+// This route has proper Referer handling and URL rewriting for CDN-Live streams
+export function getCdnLiveStreamProxyUrl(url: string): string {
+  const cfProxyUrl = process.env.NEXT_PUBLIC_CF_STREAM_PROXY_URL;
+  
+  if (!cfProxyUrl) {
+    throw new Error('CDN-Live proxy not configured. Set NEXT_PUBLIC_CF_STREAM_PROXY_URL environment variable.');
+  }
+  
+  // Strip trailing /stream suffix if present to get base URL
+  const baseUrl = cfProxyUrl.replace(/\/stream\/?$/, '').replace(/\/+$/, '');
+  // Use dedicated /cdn-live/stream route which has proper referer handling and URL rewriting
+  return `${baseUrl}/cdn-live/stream?url=${encodeURIComponent(url)}`;
 }
 
 // Check if Cloudflare Workers are configured (required)
