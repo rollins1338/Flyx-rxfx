@@ -74,16 +74,45 @@ export async function getDLHDStream(channelId: string, _cfProxyUrl?: string): Pr
 /**
  * Get stream URL from cdn-live.tv
  * 
- * cdn-live.tv provides embed URLs that need to be processed to extract m3u8
- * Format: https://cdn-live.tv/embed/{eventId} or https://cdn-live.tv/live/{channelName}
+ * CDN Live now uses a channel-based API. The cdnliveId can be either:
+ * - A channel name (e.g., "espn", "abc")
+ * - A channel name with country code (e.g., "espn:us", "abc:us")
+ * - Legacy eventId format (will be tried as channel name)
  */
-export async function getCDNLiveStream(eventId: string): Promise<StreamResult> {
+export async function getCDNLiveStream(cdnliveId: string): Promise<StreamResult> {
   try {
-    // Call our API to extract the stream
-    const response = await fetch(`/api/livetv/cdnlive-stream?eventId=${encodeURIComponent(eventId)}`);
+    // Parse channel name and country code if provided
+    let channel = cdnliveId;
+    let code = '';
+    
+    if (cdnliveId.includes(':')) {
+      const parts = cdnliveId.split(':');
+      channel = parts[0];
+      code = parts[1] || '';
+    }
+    
+    // Build the API URL
+    let apiUrl = `/api/livetv/cdnlive-stream?channel=${encodeURIComponent(channel)}`;
+    if (code) {
+      apiUrl += `&code=${encodeURIComponent(code)}`;
+    }
+    
+    // Call our API to get the stream
+    const response = await fetch(apiUrl);
     const data = await response.json();
     
     if (!data.success) {
+      // If we have a playerUrl, we can still use it for iframe embedding
+      if (data.playerUrl) {
+        return {
+          success: true,
+          streamUrl: data.playerUrl,
+          source: 'cdnlive',
+          headers: data.headers,
+          isLive: data.isLive,
+        };
+      }
+      
       return {
         success: false,
         source: 'cdnlive',
@@ -91,9 +120,10 @@ export async function getCDNLiveStream(eventId: string): Promise<StreamResult> {
       };
     }
     
+    // Prefer streamUrl if available, otherwise use playerUrl
     return {
       success: true,
-      streamUrl: data.streamUrl,
+      streamUrl: data.streamUrl || data.playerUrl,
       source: 'cdnlive',
       headers: data.headers,
       isLive: data.isLive,

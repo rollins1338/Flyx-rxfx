@@ -1,9 +1,9 @@
 /**
  * Source Tabs Component
- * Navigation between different stream sources
+ * Clean dropdown menu for stream source selection
  */
 
-import { memo } from 'react';
+import { memo, useState, useRef, useEffect } from 'react';
 import styles from '../LiveTV.module.css';
 
 interface SourceTabsProps {
@@ -54,6 +54,9 @@ export const SourceTabs = memo(function SourceTabs({
   onSourceChange,
   stats,
 }: SourceTabsProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   const getSourceCount = (source: keyof typeof SOURCE_CONFIG) => {
     if (source === 'all') return stats.total;
     return stats.sources[source as keyof typeof stats.sources] || 0;
@@ -61,51 +64,93 @@ export const SourceTabs = memo(function SourceTabs({
 
   const getLiveCount = (source: keyof typeof SOURCE_CONFIG) => {
     if (source === 'all') return stats.live;
-    // For now, return a portion of live events per source
-    // In a real implementation, you'd track this per source
     const ratio = stats.sources[source as keyof typeof stats.sources] / stats.total;
     return Math.round(stats.live * ratio);
   };
 
-  return (
-    <div className={styles.sourceTabs}>
-      <div className={styles.sourceTabsContainer}>
-        {Object.entries(SOURCE_CONFIG).map(([key, config]) => {
-          const sourceKey = key as keyof typeof SOURCE_CONFIG;
-          const count = getSourceCount(sourceKey);
-          const liveCount = getLiveCount(sourceKey);
-          const isActive = selectedSource === sourceKey;
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
 
-          return (
-            <button
-              key={sourceKey}
-              onClick={() => onSourceChange(sourceKey)}
-              className={`${styles.sourceTab} ${isActive ? styles.active : ''}`}
-              aria-pressed={isActive}
-            >
-              <div className={styles.sourceTabContent}>
-                <div className={styles.sourceTabHeader}>
-                  <span className={styles.sourceTabIcon}>{config.icon}</span>
-                  <span className={styles.sourceTabLabel}>{config.label}</span>
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const selectedConfig = SOURCE_CONFIG[selectedSource];
+  const selectedCount = getSourceCount(selectedSource);
+  const selectedLiveCount = getLiveCount(selectedSource);
+
+  const handleSourceSelect = (source: keyof typeof SOURCE_CONFIG) => {
+    onSourceChange(source);
+    setIsOpen(false);
+  };
+
+  return (
+    <div className={styles.sourceDropdownWrapper} ref={dropdownRef}>
+      {/* Dropdown Trigger */}
+      <button
+        className={styles.sourceDropdownTrigger}
+        onClick={() => setIsOpen(!isOpen)}
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+      >
+        <span className={styles.sourceDropdownIcon}>{selectedConfig.icon}</span>
+        <div className={styles.sourceDropdownInfo}>
+          <span className={styles.sourceDropdownLabel}>{selectedConfig.label}</span>
+          <span className={styles.sourceDropdownMeta}>
+            {selectedCount} streams {selectedLiveCount > 0 && `• ${selectedLiveCount} live`}
+          </span>
+        </div>
+        <svg 
+          className={`${styles.sourceDropdownChevron} ${isOpen ? styles.open : ''}`}
+          width="20" 
+          height="20" 
+          viewBox="0 0 24 24" 
+          fill="none" 
+          stroke="currentColor" 
+          strokeWidth="2"
+        >
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+
+      {/* Dropdown Menu */}
+      {isOpen && (
+        <div className={styles.sourceDropdownMenu} role="listbox">
+          {Object.entries(SOURCE_CONFIG).map(([key, config]) => {
+            const sourceKey = key as keyof typeof SOURCE_CONFIG;
+            const count = getSourceCount(sourceKey);
+            const liveCount = getLiveCount(sourceKey);
+            const isActive = selectedSource === sourceKey;
+
+            return (
+              <button
+                key={sourceKey}
+                onClick={() => handleSourceSelect(sourceKey)}
+                className={`${styles.sourceDropdownItem} ${isActive ? styles.active : ''}`}
+                role="option"
+                aria-selected={isActive}
+              >
+                <span className={styles.sourceDropdownItemIcon}>{config.icon}</span>
+                <div className={styles.sourceDropdownItemInfo}>
+                  <span className={styles.sourceDropdownItemLabel}>{config.label}</span>
+                  <span className={styles.sourceDropdownItemDesc}>{config.description}</span>
+                </div>
+                <div className={styles.sourceDropdownItemStats}>
+                  <span className={styles.sourceDropdownItemCount}>{count}</span>
                   {liveCount > 0 && (
-                    <span className={styles.liveIndicator}>
-                      {liveCount} live
-                    </span>
+                    <span className={styles.sourceDropdownItemLive}>{liveCount} live</span>
                   )}
                 </div>
-                <div className={styles.sourceTabMeta}>
-                  <span className={styles.sourceTabDescription}>
-                    {config.description}
-                  </span>
-                  <span className={styles.sourceTabCount}>
-                    {count} streams
-                  </span>
-                </div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 });

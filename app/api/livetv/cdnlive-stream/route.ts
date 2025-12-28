@@ -1,167 +1,87 @@
 /**
  * CDN Live Stream Extractor API
  * 
- * Extracts m3u8 stream URLs from cdn-live.tv embed pages.
- * Supports both event-based and channel-based streams.
+ * Extracts m3u8 stream URLs from cdn-live.tv by reverse engineering
+ * their obfuscated JavaScript player.
  * 
  * Usage:
- *   GET /api/livetv/cdnlive-stream?eventId={eventId}
- *   GET /api/livetv/cdnlive-stream?channel={channelName}
+ *   GET /api/livetv/cdnlive-stream?channel={channelName}&code={countryCode}
+ *   GET /api/livetv/cdnlive-stream?eventId={eventId} (legacy)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { decodeStreamFromPlayer, getCDNLiveStreamUrl, getTokenTTL } from '@/app/lib/livetv/cdnlive-decoder';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
 
-// CDN Live domains (they rotate domains frequently)
-const CDN_LIVE_DOMAINS = [
-  'cdn-live.tv',
-  'cdn-live.me',
-  'cdnlive.tv',
-  'cdnlive.me',
-];
+const API_BASE = 'https://api.cdn-live.tv';
+const CDN_LIVE_BASE = 'https://cdn-live.tv';
 
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
-interface StreamResult {
-  success: boolean;
-  streamUrl?: string;
-  method?: string;
-  error?: string;
-  isLive?: boolean;
-  headers?: Record<string, string>;
+interface CDNLiveChannel {
+  name: string;
+  code: string;
+  url: string;
+  image: string;
+  status: string;
+  viewers: number;
 }
 
 /**
- * Try to extract m3u8 from embed page HTML
+ * Fetch channel list from CDN Live API
  */
-function extractM3U8FromHTML(html: string): { url: string; method: string } | null {
-  // Pattern 1: JWPlayer file config
-  const jwPlayerPattern = /file\s*:\s*["']([^"']+\.m3u8[^"']*)["']/i;
-  const jwMatch = html.match(jwPlayerPattern);
-  if (jwMatch) {
-    return { url: jwMatch[1], method: 'jwplayer' };
-  }
-  
-  // Pattern 2: HLS.js source
-  const hlsPattern = /hls\.loadSource\s*\(\s*["']([^"']+\.m3u8[^"']*)["']\s*\)/i;
-  const hlsMatch = html.match(hlsPattern);
-  if (hlsMatch) {
-    return { url: hlsMatch[1], method: 'hlsjs' };
-  }
-  
-  // Pattern 3: Video source tag
-  const sourcePattern = /<source[^>]+src=["']([^"']+\.m3u8[^"']*)["']/i;
-  const sourceMatch = html.match(sourcePattern);
-  if (sourceMatch) {
-    return { url: sourceMatch[1], method: 'source-tag' };
-  }
-  
-  // Pattern 4: Base64 encoded URL (atob)
-  const atobPattern = /atob\s*\(\s*["']([A-Za-z0-9+/=]+)["']\s*\)/g;
-  let atobMatch;
-  while ((atobMatch = atobPattern.exec(html)) !== null) {
-    try {
-      const decoded = Buffer.from(atobMatch[1], 'base64').toString('utf-8');
-      if (decoded.includes('.m3u8') || decoded.includes('m3u8')) {
-        return { url: decoded, method: 'atob' };
-      }
-    } catch {
-      // Continue to next match
-    }
-  }
-  
-  // Pattern 5: Generic m3u8 URL in page
-  const genericPattern = /["'](https?:\/\/[^"']*\.m3u8[^"']*)["']/i;
-  const genericMatch = html.match(genericPattern);
-  if (genericMatch) {
-    return { url: genericMatch[1], method: 'generic' };
-  }
-  
-  // Pattern 6: Clappr player source
-  const clapprPattern = /source\s*:\s*["']([^"']+\.m3u8[^"']*)["']/i;
-  const clapprMatch = html.match(clapprPattern);
-  if (clapprMatch) {
-    return { url: clapprMatch[1], method: 'clappr' };
-  }
-  
-  return null;
-}
-
-/**
- * Fetch embed page and extract stream URL
- */
-async function extractStream(embedUrl: string, referer: string): Promise<StreamResult> {
+async function fetchChannelList(): Promise<CDNLiveChannel[]> {
   try {
-    const response = await fetch(embedUrl, {
+    const response = await fetch(`${API_BASE}/api/v1/channels/?user=cdnlivetv&plan=free`, {
       headers: {
         'User-Agent': USER_AGENT,
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Referer': referer,
+        'Accept': 'application/json',
+        'Referer': `${CDN_LIVE_BASE}/`,
       },
     });
     
     if (!response.ok) {
-      return { success: false, error: `Embed page returned ${response.status}` };
+      return [];
     }
     
-    const html = await response.text();
-    
-    // Check for offline/not live indicators
-    const offlinePatterns = [
-      /stream.*offline/i,
-      /not.*live/i,
-      /coming.*soon/i,
-      /event.*ended/i,
-      /no.*stream/i,
-    ];
-    
-    for (const pattern of offlinePatterns) {
-      if (pattern.test(html)) {
-        return { success: false, error: 'Stream is not currently live', isLive: false };
-      }
-    }
-    
-    // Try to extract m3u8 URL
-    const extracted = extractM3U8FromHTML(html);
-    
-    if (extracted) {
-      // Determine the correct referer for playback
-      const urlObj = new URL(embedUrl);
-      const playbackHeaders = {
-        'Referer': `${urlObj.protocol}//${urlObj.host}/`,
-        'Origin': `${urlObj.protocol}//${urlObj.host}`,
-      };
-      
-      return {
-        success: true,
-        streamUrl: extracted.url,
-        method: extracted.method,
-        isLive: true,
-        headers: playbackHeaders,
-      };
-    }
-    
-    // Check if there's an iframe to follow
-    const iframePattern = /<iframe[^>]+src=["']([^"']+)["']/i;
-    const iframeMatch = html.match(iframePattern);
-    
-    if (iframeMatch) {
-      const iframeSrc = iframeMatch[1].startsWith('http') 
-        ? iframeMatch[1] 
-        : new URL(iframeMatch[1], embedUrl).href;
-      
-      // Recursively try the iframe URL
-      return extractStream(iframeSrc, embedUrl);
-    }
-    
-    return { success: false, error: 'Could not extract stream URL from embed page' };
-    
-  } catch (error: any) {
-    return { success: false, error: error.message || 'Failed to fetch embed page' };
+    const data = await response.json();
+    return data.channels || [];
+  } catch {
+    return [];
   }
+}
+
+/**
+ * Find a channel by name (fuzzy match)
+ */
+function findChannel(channels: CDNLiveChannel[], searchName: string, countryCode?: string): CDNLiveChannel | null {
+  const searchLower = searchName.toLowerCase().replace(/[^a-z0-9]/g, '');
+  
+  // First try exact match with country code
+  if (countryCode) {
+    const exactMatch = channels.find(ch => 
+      ch.name.toLowerCase().replace(/[^a-z0-9]/g, '') === searchLower &&
+      ch.code.toLowerCase() === countryCode.toLowerCase()
+    );
+    if (exactMatch) return exactMatch;
+  }
+  
+  // Try exact match without country code
+  const exactMatch = channels.find(ch => 
+    ch.name.toLowerCase().replace(/[^a-z0-9]/g, '') === searchLower
+  );
+  if (exactMatch) return exactMatch;
+  
+  // Try partial match
+  const partialMatch = channels.find(ch => 
+    ch.name.toLowerCase().replace(/[^a-z0-9]/g, '').includes(searchLower) ||
+    searchLower.includes(ch.name.toLowerCase().replace(/[^a-z0-9]/g, ''))
+  );
+  if (partialMatch) return partialMatch;
+  
+  return null;
 }
 
 export async function GET(request: NextRequest) {
@@ -169,6 +89,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const eventId = searchParams.get('eventId');
     const channel = searchParams.get('channel');
+    const code = searchParams.get('code') || 'us';
     
     if (!eventId && !channel) {
       return NextResponse.json(
@@ -177,45 +98,113 @@ export async function GET(request: NextRequest) {
       );
     }
     
-    // Try each domain until one works
-    for (const domain of CDN_LIVE_DOMAINS) {
-      const embedUrl = eventId 
-        ? `https://${domain}/embed/${eventId}`
-        : `https://${domain}/live/${channel}`;
+    // If channel is provided, use the decoder
+    if (channel) {
+      // Fetch channel list to verify channel exists and get info
+      const channels = await fetchChannelList();
+      const foundChannel = channels.length > 0 ? findChannel(channels, channel, code) : null;
       
-      const referer = `https://${domain}/`;
+      // Check if channel is online (if we found it)
+      if (foundChannel && foundChannel.status !== 'online') {
+        return NextResponse.json({
+          success: false,
+          error: `Channel "${foundChannel.name}" is currently offline`,
+          isLive: false,
+          channelInfo: {
+            name: foundChannel.name,
+            code: foundChannel.code,
+            status: foundChannel.status,
+            viewers: foundChannel.viewers,
+          },
+        }, { status: 404 });
+      }
       
-      const result = await extractStream(embedUrl, referer);
+      // Use the decoder to extract the stream URL
+      const playerUrl = foundChannel?.url || 
+        `${CDN_LIVE_BASE}/api/v1/channels/player/?name=${encodeURIComponent(channel.toLowerCase())}&code=${code}&user=cdnlivetv&plan=free`;
       
-      if (result.success) {
+      const decoded = await decodeStreamFromPlayer(playerUrl);
+      
+      if (decoded.success && decoded.streamUrl) {
+        // Calculate cache TTL based on token expiration
+        const ttl = decoded.expiresAt ? Math.min(getTokenTTL(decoded.expiresAt), 3600) : 60;
+        
         return NextResponse.json({
           success: true,
-          streamUrl: result.streamUrl,
-          method: result.method,
-          domain,
-          isLive: result.isLive,
-          headers: result.headers,
+          streamUrl: decoded.streamUrl,
+          channelId: decoded.channelId,
+          method: 'deobfuscated',
+          isLive: true,
+          expiresAt: decoded.expiresAt,
+          ttl,
+          headers: {
+            'Referer': 'https://cdn-live.tv/',
+            'Origin': 'https://cdn-live.tv',
+          },
+          channelInfo: foundChannel ? {
+            name: foundChannel.name,
+            code: foundChannel.code,
+            status: foundChannel.status,
+            viewers: foundChannel.viewers,
+          } : undefined,
         }, {
           headers: {
-            'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
+            'Cache-Control': `public, s-maxage=${Math.min(ttl, 300)}, stale-while-revalidate=${Math.min(ttl * 2, 600)}`,
           },
         });
       }
       
-      // If explicitly not live, don't try other domains
-      if (result.isLive === false) {
+      // Decoding failed
+      return NextResponse.json({
+        success: false,
+        error: decoded.error || 'Failed to decode stream URL',
+        playerUrl,
+        channelInfo: foundChannel ? {
+          name: foundChannel.name,
+          code: foundChannel.code,
+          status: foundChannel.status,
+          viewers: foundChannel.viewers,
+        } : undefined,
+      }, { status: 404 });
+    }
+    
+    // Legacy eventId support
+    if (eventId) {
+      const decoded = await getCDNLiveStreamUrl(eventId, 'us');
+      
+      if (decoded.success && decoded.streamUrl) {
+        const ttl = decoded.expiresAt ? Math.min(getTokenTTL(decoded.expiresAt), 3600) : 60;
+        
         return NextResponse.json({
-          success: false,
-          error: result.error,
-          isLive: false,
-        }, { status: 404 });
+          success: true,
+          streamUrl: decoded.streamUrl,
+          channelId: decoded.channelId,
+          method: 'deobfuscated',
+          isLive: true,
+          expiresAt: decoded.expiresAt,
+          ttl,
+          headers: {
+            'Referer': 'https://cdn-live.tv/',
+            'Origin': 'https://cdn-live.tv',
+          },
+        }, {
+          headers: {
+            'Cache-Control': `public, s-maxage=${Math.min(ttl, 300)}, stale-while-revalidate=${Math.min(ttl * 2, 600)}`,
+          },
+        });
       }
+      
+      return NextResponse.json({
+        success: false,
+        error: decoded.error || 'Could not extract stream for eventId',
+        suggestion: 'Use ?channel=channelName&code=countryCode',
+      }, { status: 404 });
     }
     
     return NextResponse.json({
       success: false,
-      error: 'Could not extract stream from any CDN Live domain',
-    }, { status: 404 });
+      error: 'Invalid request',
+    }, { status: 400 });
     
   } catch (error: any) {
     console.error('[CDN Live Stream API] Error:', error);
