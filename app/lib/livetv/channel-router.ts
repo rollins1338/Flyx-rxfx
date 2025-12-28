@@ -13,7 +13,7 @@
  */
 
 import channelMappings from '@/app/data/channel-mappings.json';
-import { LiveTVSourceType, StreamResult, ChannelMapping } from './source-providers';
+import { LiveTVSourceType, ChannelMapping } from './source-providers';
 
 export interface ChannelInfo {
   id: string;
@@ -77,6 +77,7 @@ export class ChannelRouter {
       return {
         id,
         ...info,
+        priority: info.priority as LiveTVSourceType[],
       };
     }
 
@@ -95,7 +96,11 @@ export class ChannelRouter {
     const searchTerm = name.toLowerCase();
     return Object.entries(this.mappings.channels)
       .filter(([_, info]) => info.name.toLowerCase().includes(searchTerm))
-      .map(([id, info]) => ({ id, ...info }));
+      .map(([id, info]) => ({ 
+        id, 
+        ...info, 
+        priority: info.priority as LiveTVSourceType[] 
+      }));
   }
 
   /**
@@ -104,7 +109,11 @@ export class ChannelRouter {
   getChannelsByCategory(category: string): ChannelInfo[] {
     return Object.entries(this.mappings.channels)
       .filter(([_, info]) => info.category === category)
-      .map(([id, info]) => ({ id, ...info }));
+      .map(([id, info]) => ({ 
+        id, 
+        ...info, 
+        priority: info.priority as LiveTVSourceType[] 
+      }));
   }
 
   /**
@@ -113,7 +122,11 @@ export class ChannelRouter {
   getChannelsByCountry(country: string): ChannelInfo[] {
     return Object.entries(this.mappings.channels)
       .filter(([_, info]) => info.country === country)
-      .map(([id, info]) => ({ id, ...info }));
+      .map(([id, info]) => ({ 
+        id, 
+        ...info, 
+        priority: info.priority as LiveTVSourceType[] 
+      }));
   }
 
   /**
@@ -122,7 +135,11 @@ export class ChannelRouter {
   getChannelsByProvider(provider: LiveTVSourceType): ChannelInfo[] {
     return Object.entries(this.mappings.channels)
       .filter(([_, info]) => info.providers[provider])
-      .map(([id, info]) => ({ id, ...info }));
+      .map(([id, info]) => ({ 
+        id, 
+        ...info, 
+        priority: info.priority as LiveTVSourceType[] 
+      }));
   }
 
   /**
