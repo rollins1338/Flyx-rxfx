@@ -1,13 +1,21 @@
 /**
  * TV Proxy Cloudflare Worker
  *
- * Proxies daddyhd.com live streams with automatic server lookup.
- * NO RPI PROXY NEEDED - handles all auth directly via CF Worker!
+ * DLHD ONLY - NO IPTV/STALKER PROVIDERS!
+ * 
+ * Proxies DLHD live streams with automatic server lookup.
+ * Uses proper channel routing to differentiate from other providers.
  *
  * Routes:
- *   GET /?channel=<id>           - Get proxied M3U8 playlist
+ *   GET /?channel=<id>           - Get proxied M3U8 playlist (DLHD channels only)
  *   GET /key?url=<encoded_url>   - Proxy encryption key (with auth)
  *   GET /segment?url=<encoded_url> - Proxy video segment
+ * 
+ * PROVIDER DIFFERENTIATION:
+ * - This proxy handles DLHD channels ONLY (numeric IDs: 1-850)
+ * - CDN-Live.tv channels use /cdn-live/* routes
+ * - PPV.to channels use /ppv/* routes
+ * - NO IPTV/Stalker providers are used here
  */
 
 import { createLogger, type LogLevel } from './logger';
@@ -40,12 +48,12 @@ const CDN_DOMAINS = ['kiko2.ru', 'giokko.ru'];
 
 // Caches
 const serverKeyCache = new Map<string, { serverKey: string; fetchedAt: number }>();
-const SERVER_KEY_CACHE_TTL_MS = 30 * 60 * 1000;
+const SERVER_KEY_CACHE_TTL_MS = 10 * 60 * 1000; // Reduced to 10 minutes
 
 // Token pool per channel - rotate between multiple tokens to handle more concurrent users
 // DLHD limits ~4 concurrent channels per token, so we maintain a pool
 const TOKEN_POOL_SIZE = 5; // 5 tokens × 4 channels = ~20 concurrent streams per channel
-const SESSION_CACHE_TTL_MS = 4 * 60 * 1000; // 4 min TTL (shorter to refresh more often)
+const SESSION_CACHE_TTL_MS = 2 * 60 * 1000; // Reduced to 2 min TTL (refresh more often)
 
 interface SessionData {
   token: string;
@@ -413,7 +421,39 @@ export default {
       const channel = url.searchParams.get('channel');
       if (!channel) {
         return jsonResponse(
-          { error: 'Missing channel parameter', usage: 'GET /?channel=51' },
+          { 
+            error: 'Missing channel parameter', 
+            usage: 'GET /?channel=51',
+            note: 'DLHD channels only (numeric IDs 1-850). Use /cdn-live or /ppv for other providers.'
+          },
+          400,
+          requestOrigin
+        );
+      }
+
+      // Validate DLHD channel format (numeric only)
+      if (!/^\d+$/.test(channel)) {
+        return jsonResponse(
+          { 
+            error: 'Invalid DLHD channel format', 
+            provided: channel,
+            expected: 'Numeric ID (e.g., 51, 325)',
+            note: 'DLHD uses numeric channel IDs. For other formats, use /cdn-live or /ppv routes.'
+          },
+          400,
+          requestOrigin
+        );
+      }
+
+      const channelNum = parseInt(channel);
+      if (channelNum < 1 || channelNum > 850) {
+        return jsonResponse(
+          { 
+            error: 'DLHD channel out of range', 
+            provided: channelNum,
+            validRange: '1-850',
+            note: 'DLHD has 850 available channels'
+          },
           400,
           requestOrigin
         );
@@ -457,41 +497,74 @@ async function handlePlaylistRequest(
         const m3u8Url = constructM3U8Url(serverKey, channelKey, domain);
         logger.info('Trying M3U8', { serverKey, domain });
 
-        const response = await fetch(`${m3u8Url}?_t=${Date.now()}`, {
-          headers: {
-            'User-Agent': USER_AGENT,
-            Referer: `https://${PLAYER_DOMAIN}/`,
-          },
-        });
+        // Retry logic with exponential backoff
+        let retryCount = 0;
+        const maxRetries = 2;
+        
+        while (retryCount <= maxRetries) {
+          try {
+            const response = await fetch(`${m3u8Url}?_t=${Date.now()}`, {
+              headers: {
+                'User-Agent': USER_AGENT,
+                Referer: `https://${PLAYER_DOMAIN}/`,
+              },
+              signal: AbortSignal.timeout(10000), // 10s timeout
+            });
 
-        const content = await response.text();
+            const content = await response.text();
 
-        if (content.includes('#EXTM3U') || content.includes('#EXT-X-')) {
-          serverKeyCache.set(channelKey, { serverKey, fetchedAt: Date.now() });
-          logger.info('Found working server', { serverKey, domain });
+            if (content.includes('#EXTM3U') || content.includes('#EXT-X-')) {
+              serverKeyCache.set(channelKey, { serverKey, fetchedAt: Date.now() });
+              logger.info('Found working server', { serverKey, domain, retryCount });
 
-          const proxiedM3U8 = rewriteM3U8(content, proxyOrigin, m3u8Url);
+              const proxiedM3U8 = rewriteM3U8(content, proxyOrigin, m3u8Url);
 
-          return new Response(proxiedM3U8, {
-            status: 200,
-            headers: {
-              'Content-Type': 'application/vnd.apple.mpegurl',
-              ...corsHeaders(origin),
-              'Cache-Control': 'no-store, no-cache, must-revalidate',
-              'X-DLHD-Channel': channel,
-              'X-DLHD-Server': serverKey,
-            },
-          });
+              return new Response(proxiedM3U8, {
+                status: 200,
+                headers: {
+                  'Content-Type': 'application/vnd.apple.mpegurl',
+                  ...corsHeaders(origin),
+                  'Cache-Control': 'no-store, no-cache, must-revalidate',
+                  'X-DLHD-Channel': channel,
+                  'X-DLHD-Server': serverKey,
+                  'X-Retry-Count': retryCount.toString(),
+                },
+              });
+            }
+
+            // If response is not valid M3U8, break retry loop
+            lastError = `Invalid M3U8 from ${combo} (${content.substring(0, 100)})`;
+            break;
+          } catch (fetchErr) {
+            retryCount++;
+            const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 5000); // Max 5s delay
+            
+            if (retryCount <= maxRetries) {
+              logger.warn('M3U8 fetch failed, retrying', { 
+                serverKey, 
+                domain, 
+                retryCount, 
+                delay,
+                error: (fetchErr as Error).message 
+              });
+              await new Promise(resolve => setTimeout(resolve, delay));
+            } else {
+              lastError = `Error from ${combo} after ${maxRetries} retries: ${(fetchErr as Error).message}`;
+            }
+          }
         }
-
-        lastError = `Invalid M3U8 from ${combo}`;
       } catch (err) {
         lastError = `Error from ${combo}: ${(err as Error).message}`;
       }
     }
   }
 
-  return jsonResponse({ error: 'Failed to fetch M3U8', details: lastError }, 502, origin);
+  return jsonResponse({ 
+    error: 'Failed to fetch M3U8', 
+    details: lastError,
+    triedCombinations: triedCombinations.length,
+    suggestion: 'Check if RPI proxy is configured for residential IP fallback'
+  }, 502, origin);
 }
 
 async function handleKeyProxy(
@@ -571,6 +644,12 @@ async function handleKeyProxy(
       error: 'Key fetch failed',
       details: result.error,
       hint: 'Session may have expired or rate limited',
+      channel,
+      sessionAge: session ? `${Math.floor((Date.now() - (session as any).fetchedAt) / 1000)}s` : 'unknown',
+      debugInfo: {
+        keyUrlDomain: new URL(keyUrl).hostname,
+        sessionToken: session?.token?.substring(0, 8) + '...',
+      }
     },
     502,
     origin

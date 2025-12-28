@@ -1,0 +1,165 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2025-12-28T00:00:00.000Z",
+  "providers": {
+    "dlhd": {
+      "name": "DLHD",
+      "description": "Premium live TV channels with high quality streams",
+      "baseUrl": "/tv",
+      "totalChannels": 850,
+      "categories": ["sports", "entertainment", "news", "movies", "documentary", "kids", "music"],
+      "countries": ["usa", "uk", "canada", "international"],
+      "channelIdFormat": "numeric",
+      "examples": ["51", "206", "283", "302"]
+    },
+    "cdnlive": {
+      "name": "CDN-Live.tv",
+      "description": "Live sports events and premium channels",
+      "baseUrl": "/cdn-live",
+      "totalChannels": 200,
+      "categories": ["sports", "entertainment", "news"],
+      "countries": ["usa", "uk", "international"],
+      "channelIdFormat": "eventId",
+      "examples": ["ufc-301", "nfl-game-123", "premier-league-match"]
+    },
+    "ppv": {
+      "name": "PPV.to",
+      "description": "Pay-per-view events and premium content",
+      "baseUrl": "/ppv",
+      "totalChannels": 100,
+      "categories": ["sports", "movies", "entertainment"],
+      "countries": ["usa", "international"],
+      "channelIdFormat": "uriName",
+      "examples": ["boxing-event-1", "ufc-fight-night", "premium-movie"]
+    }
+  },
+  "channels": {
+    "abc-usa": {
+      "name": "ABC USA",
+      "category": "entertainment",
+      "country": "usa",
+      "providers": {
+        "dlhd": "51",
+        "cdnlive": null,
+        "ppv": null
+      },
+      "priority": ["dlhd"]
+    },
+    "espn": {
+      "name": "ESPN",
+      "category": "sports",
+      "country": "usa",
+      "providers": {
+        "dlhd": "325",
+        "cdnlive": "espn-live",
+        "ppv": null
+      },
+      "priority": ["dlhd", "cdnlive"]
+    },
+    "fox-sports": {
+      "name": "FOX Sports",
+      "category": "sports",
+      "country": "usa",
+      "providers": {
+        "dlhd": "100",
+        "cdnlive": "fox-sports-1",
+        "ppv": null
+      },
+      "priority": ["dlhd", "cdnlive"]
+    },
+    "cnn": {
+      "name": "CNN",
+      "category": "news",
+      "country": "usa",
+      "providers": {
+        "dlhd": "200",
+        "cdnlive": "cnn-live",
+        "ppv": null
+      },
+      "priority": ["dlhd", "cdnlive"]
+    },
+    "ufc-ppv": {
+      "name": "UFC Pay-Per-View",
+      "category": "sports",
+      "country": "usa",
+      "providers": {
+        "dlhd": null,
+        "cdnlive": "ufc-event",
+        "ppv": "ufc-fight-night"
+      },
+      "priority": ["ppv", "cdnlive"]
+    },
+    "boxing-ppv": {
+      "name": "Boxing Pay-Per-View",
+      "category": "sports",
+      "country": "usa",
+      "providers": {
+        "dlhd": null,
+        "cdnlive": null,
+        "ppv": "boxing-event"
+      },
+      "priority": ["ppv"]
+    },
+    "premier-league": {
+      "name": "Premier League",
+      "category": "sports",
+      "country": "uk",
+      "providers": {
+        "dlhd": "150",
+        "cdnlive": "premier-league-live",
+        "ppv": null
+      },
+      "priority": ["dlhd", "cdnlive"]
+    },
+    "nfl-redzone": {
+      "name": "NFL RedZone",
+      "category": "sports",
+      "country": "usa",
+      "providers": {
+        "dlhd": "175",
+        "cdnlive": "nfl-redzone",
+        "ppv": null
+      },
+      "priority": ["dlhd", "cdnlive"]
+    }
+  },
+  "categoryMappings": {
+    "sports": {
+      "dlhd": ["123", "124", "125", "150", "175", "200", "325"],
+      "cdnlive": ["espn-live", "fox-sports-1", "nfl-redzone", "premier-league-live"],
+      "ppv": ["ufc-fight-night", "boxing-event", "nfl-playoff"]
+    },
+    "entertainment": {
+      "dlhd": ["51", "206", "283", "302", "303"],
+      "cdnlive": ["entertainment-1", "entertainment-2"],
+      "ppv": ["premium-movie", "special-event"]
+    },
+    "news": {
+      "dlhd": ["200", "201", "202"],
+      "cdnlive": ["cnn-live", "fox-news", "bbc-news"],
+      "ppv": null
+    },
+    "movies": {
+      "dlhd": ["303", "304", "305"],
+      "cdnlive": ["movie-channel-1"],
+      "ppv": ["premium-movie", "new-release"]
+    }
+  },
+  "countryMappings": {
+    "usa": {
+      "dlhd": ["51", "206", "283", "302", "303", "325"],
+      "cdnlive": ["espn-live", "fox-sports-1", "cnn-live"],
+      "ppv": ["ufc-fight-night", "boxing-event"]
+    },
+    "uk": {
+      "dlhd": ["150", "151", "152"],
+      "cdnlive": ["premier-league-live", "bbc-live"],
+      "ppv": null
+    },
+    "international": {
+      "dlhd": ["206", "304"],
+      "cdnlive": ["international-sports"],
+      "ppv": ["international-ppv"]
+    }
+  }
+}
