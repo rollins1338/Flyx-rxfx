@@ -179,16 +179,25 @@
 }
 
 .sourceTabsContainer {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1rem;
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  padding: 0.5rem 0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.sourceTabsContainer::-webkit-scrollbar {
+  display: none;
 }
 
 .sourceTab {
+  flex: 0 0 auto;
+  min-width: 180px;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
-  padding: 1.25rem;
+  padding: 1rem;
   cursor: pointer;
   transition: all 0.3s ease;
   text-align: left;
@@ -1061,7 +1070,20 @@
   }
 
   .sourceTabsContainer {
-    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+  
+  .sourceTab {
+    min-width: 160px;
+    padding: 0.75rem;
+  }
+  
+  .sourceTabIcon {
+    font-size: 1.25rem;
+  }
+  
+  .sourceTabLabel {
+    font-size: 0.9rem;
   }
 
   .filtersContainer {
@@ -1153,5 +1175,174 @@
   .playButton svg {
     width: 1.25rem;
     height: 1.25rem;
+  }
+}
+/* ============================================
+   CABLE CHANNELS GRID
+   ============================================ */
+
+.cableChannelsContainer {
+  margin-bottom: 2rem;
+}
+
+.categorySection {
+  margin-bottom: 3rem;
+}
+
+.channelsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.channelCard {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.channelCard:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.channelHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.channelIcon {
+  width: 2.5rem;
+  height: 2.5rem;
+  background: linear-gradient(135deg, #4ecdc4, #44a08d);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.channelInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.channelName {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.25rem;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.channelCategory {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0;
+  text-transform: capitalize;
+}
+
+.channelMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.channelShortName {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+}
+
+.hdBadge {
+  background: linear-gradient(135deg, #ff6b6b, #ff5252);
+  color: #ffffff;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.channelOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.channelCard:hover .channelOverlay {
+  opacity: 1;
+}
+
+.channelOverlay .playButton {
+  width: 3rem;
+  height: 3rem;
+  background: rgba(255, 255, 255, 0.9);
+  border: none;
+  border-radius: 50%;
+  color: #000000;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(10px);
+}
+
+.channelOverlay .playButton:hover {
+  background: #ffffff;
+  transform: scale(1.1);
+}
+
+.channelOverlay .playButton svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-left: 0.15rem;
+}
+
+/* Mobile responsive for cable channels */
+@media (max-width: 768px) {
+  .channelsGrid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 0.75rem;
+  }
+  
+  .channelCard {
+    padding: 0.75rem;
+  }
+  
+  .channelIcon {
+    width: 2rem;
+    height: 2rem;
+    font-size: 1rem;
+  }
+  
+  .channelName {
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .channelsGrid {
+    grid-template-columns: 1fr;
   }
 }

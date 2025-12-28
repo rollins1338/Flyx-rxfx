@@ -6,16 +6,37 @@
 import { memo, useEffect, useState } from 'react';
 import { useVideoPlayer } from '../hooks/useVideoPlayer';
 import { LiveEvent } from '../hooks/useLiveTVData';
+import { CableChannel } from '@/app/lib/data/cable-channels';
 import styles from '../LiveTV.module.css';
 
+// Sport icon mapping
+const SPORT_ICONS: Record<string, string> = {
+  'soccer': '⚽', 'football': '⚽', 'basketball': '🏀', 'tennis': '🎾',
+  'cricket': '🏏', 'hockey': '🏒', 'baseball': '⚾', 'golf': '⛳',
+  'rugby': '🏉', 'motorsport': '🏎️', 'f1': '🏎️', 'boxing': '🥊',
+  'mma': '🥊', 'ufc': '🥊', 'wwe': '🤼', 'volleyball': '🏐',
+  'am. football': '🏈', 'nfl': '🏈', 'darts': '🎯', '24/7': '📺',
+  'cable tv': '📺',
+};
+
+function getSportIcon(sport: string): string {
+  const lower = sport.toLowerCase();
+  for (const [key, icon] of Object.entries(SPORT_ICONS)) {
+    if (lower.includes(key)) return icon;
+  }
+  return '📺';
+}
+
 interface VideoPlayerProps {
-  event: LiveEvent | null;
+  event?: LiveEvent | null;
+  channel?: CableChannel | null;
   isOpen: boolean;
   onClose: () => void;
 }
 
 export const VideoPlayer = memo(function VideoPlayer({
   event,
+  channel,
   isOpen,
   onClose,
 }: VideoPlayerProps) {
@@ -39,20 +60,35 @@ export const VideoPlayer = memo(function VideoPlayer({
   const [showControls, setShowControls] = useState(true);
   const [controlsTimeout, setControlsTimeout] = useState<NodeJS.Timeout | null>(null);
 
-  // Load stream when event changes
+  // Load stream when event or channel changes
   useEffect(() => {
-    if (event && isOpen) {
-      const source = {
-        type: event.source,
-        channelId: event.channels[0]?.channelId || event.ppvUriName || event.cdnliveEmbedId || event.id,
-        title: event.title,
-        poster: event.poster,
-      };
-      loadStream(source);
+    if ((event || channel) && isOpen) {
+      let source;
+      
+      if (event) {
+        source = {
+          type: event.source,
+          channelId: event.channels[0]?.channelId || event.ppvUriName || event.cdnliveEmbedId || event.id,
+          title: event.title,
+          poster: event.poster,
+        };
+      } else if (channel) {
+        // For cable channels, we'll use the Stalker portal mapping
+        source = {
+          type: 'stalker' as const,
+          channelId: channel.id,
+          title: channel.name,
+          poster: undefined,
+        };
+      }
+      
+      if (source) {
+        loadStream(source);
+      }
     } else {
       stopStream();
     }
-  }, [event, isOpen, loadStream, stopStream]);
+  }, [event, channel, isOpen, loadStream, stopStream]);
 
   // Auto-hide controls
   useEffect(() => {
@@ -115,9 +151,13 @@ export const VideoPlayer = memo(function VideoPlayer({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, togglePlay, toggleMute, toggleFullscreen, isFullscreen, onClose, volume, setVolume]);
 
-  if (!isOpen || !event) {
+  if (!isOpen || (!event && !channel)) {
     return null;
   }
+
+  const displayTitle = event?.title || channel?.name || 'Unknown';
+  const displaySport = event?.sport || (channel ? 'Cable TV' : undefined);
+  const isLive = event?.isLive || (channel ? true : false);
 
   return (
     <div className={styles.playerModal}>
@@ -147,12 +187,23 @@ export const VideoPlayer = memo(function VideoPlayer({
               <h3>Stream Error</h3>
               <p>{error}</p>
               <button 
-                onClick={() => event && loadStream({
-                  type: event.source,
-                  channelId: event.channels[0]?.channelId || event.ppvUriName || event.cdnliveEmbedId || event.id,
-                  title: event.title,
-                  poster: event.poster,
-                })}
+                onClick={() => {
+                  if (event) {
+                    loadStream({
+                      type: event.source,
+                      channelId: event.channels[0]?.channelId || event.ppvUriName || event.cdnliveEmbedId || event.id,
+                      title: event.title,
+                      poster: event.poster,
+                    });
+                  } else if (channel) {
+                    loadStream({
+                      type: 'stalker' as const,
+                      channelId: channel.id,
+                      title: channel.name,
+                      poster: undefined,
+                    });
+                  }
+                }}
                 className={styles.retryButton}
               >
                 Retry
@@ -166,13 +217,13 @@ export const VideoPlayer = memo(function VideoPlayer({
           {/* Top Bar */}
           <div className={styles.topControls}>
             <div className={styles.eventInfo}>
-              <h3 className={styles.eventTitle}>{event.title}</h3>
-              {event.sport && (
+              <h3 className={styles.eventTitle}>{displayTitle}</h3>
+              {displaySport && (
                 <span className={styles.eventSport}>
-                  {getSportIcon(event.sport)} {event.sport}
+                  {getSportIcon(displaySport)} {displaySport}
                 </span>
               )}
-              {event.isLive && (
+              {isLive && (
                 <span className={styles.liveIndicator}>
                   <span className={styles.liveDot}></span>
                   LIVE
@@ -276,20 +327,3 @@ export const VideoPlayer = memo(function VideoPlayer({
     </div>
   );
 });
-
-// Helper function for sport icons
-function getSportIcon(sport: string): string {
-  const SPORT_ICONS: Record<string, string> = {
-    'soccer': '⚽', 'football': '⚽', 'basketball': '🏀', 'tennis': '🎾',
-    'cricket': '🏏', 'hockey': '🏒', 'baseball': '⚾', 'golf': '⛳',
-    'rugby': '🏉', 'motorsport': '🏎️', 'f1': '🏎️', 'boxing': '🥊',
-    'mma': '🥊', 'ufc': '🥊', 'wwe': '🤼', 'volleyball': '🏐',
-    'am. football': '🏈', 'nfl': '🏈', 'darts': '🎯', '24/7': '📺',
-  };
-
-  const lower = sport.toLowerCase();
-  for (const [key, icon] of Object.entries(SPORT_ICONS)) {
-    if (lower.includes(key)) return icon;
-  }
-  return '📺';
-}

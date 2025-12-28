@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { CableChannel, CABLE_CHANNELS, CHANNEL_CATEGORIES } from '@/app/lib/data/cable-channels';
 
 export interface LiveEvent {
   id: string;
@@ -39,10 +40,11 @@ export interface LiveCategory {
 
 export interface LiveTVState {
   events: LiveEvent[];
+  cableChannels: CableChannel[];
   categories: LiveCategory[];
   loading: boolean;
   error: string | null;
-  selectedSource: 'all' | 'dlhd' | 'ppv' | 'cdnlive';
+  selectedSource: 'all' | 'cable' | 'dlhd' | 'ppv' | 'cdnlive';
   selectedCategory: string;
   searchQuery: string;
   showLiveOnly: boolean;
@@ -83,6 +85,7 @@ function formatLocalTime(isoTime?: string, fallbackTime?: string): string {
 export function useLiveTVData() {
   const [state, setState] = useState<LiveTVState>({
     events: [],
+    cableChannels: [],
     categories: [],
     loading: true,
     error: null,
@@ -91,6 +94,18 @@ export function useLiveTVData() {
     searchQuery: '',
     showLiveOnly: false,
   });
+
+  // Fetch cable channels
+  const fetchCableChannels = useCallback(async (): Promise<CableChannel[]> => {
+    try {
+      // For now, return the static cable channels list
+      // In the future, this could fetch from Stalker portals or other sources
+      return CABLE_CHANNELS;
+    } catch (error) {
+      console.error('Failed to fetch cable channels:', error);
+      return [];
+    }
+  }, []);
 
   // Fetch DLHD schedule
   const fetchDLHDEvents = useCallback(async (): Promise<LiveEvent[]> => {
@@ -173,14 +188,15 @@ export function useLiveTVData() {
     }
   }, []);
 
-  // Fetch all events
-  const fetchAllEvents = useCallback(async () => {
+  // Fetch all events and cable channels
+  const fetchAllData = useCallback(async () => {
     setState(prev => ({ ...prev, loading: true, error: null }));
     
     try {
-      const [dlhdEvents, ppvEvents] = await Promise.all([
+      const [dlhdEvents, ppvEvents, cableChannels] = await Promise.all([
         fetchDLHDEvents(),
         fetchPPVEvents(),
+        fetchCableChannels(),
       ]);
 
       const allEvents = [...dlhdEvents, ...ppvEvents];
@@ -195,12 +211,25 @@ export function useLiveTVData() {
         }
       });
 
+      // Generate categories from cable channels
+      const cableCategories = new Map<string, number>();
+      cableChannels.forEach(channel => {
+        cableCategories.set(channel.category, (cableCategories.get(channel.category) || 0) + 1);
+      });
+
       const categories: LiveCategory[] = [
-        { id: 'all', name: 'All Sports', icon: '🏆', count: allEvents.length },
+        { id: 'all', name: 'All', icon: '🏆', count: allEvents.length },
         ...Array.from(categoryMap.entries()).map(([sport, count]) => ({
           id: sport,
           name: sport.charAt(0).toUpperCase() + sport.slice(1),
           icon: getSportIcon(sport),
+          count,
+        })),
+        // Add cable categories when cable source is selected
+        ...Array.from(cableCategories.entries()).map(([category, count]) => ({
+          id: category,
+          name: CHANNEL_CATEGORIES[category as keyof typeof CHANNEL_CATEGORIES]?.name || category,
+          icon: CHANNEL_CATEGORIES[category as keyof typeof CHANNEL_CATEGORIES]?.icon || '📺',
           count,
         })),
       ];
@@ -208,17 +237,55 @@ export function useLiveTVData() {
       setState(prev => ({
         ...prev,
         events: allEvents,
+        cableChannels,
         categories,
         loading: false,
       }));
     } catch (error) {
       setState(prev => ({
         ...prev,
-        error: error instanceof Error ? error.message : 'Failed to load events',
+        error: error instanceof Error ? error.message : 'Failed to load data',
         loading: false,
       }));
     }
-  }, [fetchDLHDEvents, fetchPPVEvents]);
+  }, [fetchDLHDEvents, fetchPPVEvents, fetchCableChannels]);
+
+  // Filter cable channels based on current state
+  const filteredCableChannels = useMemo(() => {
+    let filtered = state.cableChannels;
+
+    // Filter by category (for cable channels, use channel categories)
+    if (state.selectedCategory !== 'all') {
+      // Map sport categories to channel categories
+      const categoryMapping: Record<string, string[]> = {
+        'sports': ['sports'],
+        'news': ['news'],
+        'entertainment': ['entertainment', 'movies'],
+        'kids': ['kids'],
+        'movies': ['movies'],
+        'documentary': ['documentary'],
+        'music': ['music'],
+      };
+      
+      const channelCategories = categoryMapping[state.selectedCategory] || [state.selectedCategory];
+      filtered = filtered.filter(channel => 
+        channelCategories.includes(channel.category)
+      );
+    }
+
+    // Filter by search query
+    if (state.searchQuery) {
+      const query = state.searchQuery.toLowerCase();
+      filtered = filtered.filter(channel =>
+        channel.name.toLowerCase().includes(query) ||
+        channel.shortName.toLowerCase().includes(query) ||
+        channel.aliases.some(alias => alias.toLowerCase().includes(query)) ||
+        channel.category.toLowerCase().includes(query)
+      );
+    }
+
+    return filtered;
+  }, [state.cableChannels, state.selectedCategory, state.searchQuery]);
 
   // Filter events based on current state
   const filteredEvents = useMemo(() => {
@@ -261,6 +328,7 @@ export function useLiveTVData() {
     const liveCount = state.events.filter(event => event.isLive).length;
     const totalCount = state.events.length;
     const sourceStats = {
+      cable: state.cableChannels.length,
       dlhd: state.events.filter(event => event.source === 'dlhd').length,
       ppv: state.events.filter(event => event.source === 'ppv').length,
       cdnlive: state.events.filter(event => event.source === 'cdnlive').length,
@@ -268,10 +336,10 @@ export function useLiveTVData() {
 
     return {
       live: liveCount,
-      total: totalCount,
+      total: totalCount + state.cableChannels.length,
       sources: sourceStats,
     };
-  }, [state.events]);
+  }, [state.events, state.cableChannels]);
 
   // Actions
   const setSelectedSource = useCallback((source: LiveTVState['selectedSource']) => {
@@ -291,23 +359,24 @@ export function useLiveTVData() {
   }, []);
 
   const refresh = useCallback(() => {
-    fetchAllEvents();
-  }, [fetchAllEvents]);
+    fetchAllData();
+  }, [fetchAllData]);
 
   // Initial load
   useEffect(() => {
-    fetchAllEvents();
-  }, [fetchAllEvents]);
+    fetchAllData();
+  }, [fetchAllData]);
 
   // Auto-refresh every 2 minutes
   useEffect(() => {
-    const interval = setInterval(fetchAllEvents, 2 * 60 * 1000);
+    const interval = setInterval(fetchAllData, 2 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [fetchAllEvents]);
+  }, [fetchAllData]);
 
   return {
     // State
     events: filteredEvents,
+    cableChannels: filteredCableChannels,
     categories: state.categories,
     loading: state.loading,
     error: state.error,

@@ -9,16 +9,19 @@ import { useState, useCallback } from 'react';
 import { Navigation } from '@/components/layout/Navigation';
 import { Footer } from '@/components/layout/Footer';
 import { useLiveTVData, LiveEvent } from './hooks/useLiveTVData';
+import { CableChannel } from '@/app/lib/data/cable-channels';
 import { LiveTVHeader } from './components/LiveTVHeader';
 import { SourceTabs } from './components/SourceTabs';
 import { CategoryFilters } from './components/CategoryFilters';
 import { EventsGrid } from './components/EventsGrid';
+import { CableChannelsGrid } from './components/CableChannelsGrid';
 import { VideoPlayer } from './components/VideoPlayer';
 import styles from './LiveTV.module.css';
 
 export default function LiveTVRefactored() {
   const {
     events,
+    cableChannels,
     categories,
     loading,
     error,
@@ -35,11 +38,20 @@ export default function LiveTVRefactored() {
   } = useLiveTVData();
 
   const [selectedEvent, setSelectedEvent] = useState<LiveEvent | null>(null);
+  const [selectedChannel, setSelectedChannel] = useState<CableChannel | null>(null);
   const [isPlayerOpen, setIsPlayerOpen] = useState(false);
 
   // Handle event play
   const handlePlayEvent = useCallback((event: LiveEvent) => {
     setSelectedEvent(event);
+    setSelectedChannel(null);
+    setIsPlayerOpen(true);
+  }, []);
+
+  // Handle cable channel play
+  const handlePlayChannel = useCallback((channel: CableChannel) => {
+    setSelectedChannel(channel);
+    setSelectedEvent(null);
     setIsPlayerOpen(true);
   }, []);
 
@@ -47,6 +59,7 @@ export default function LiveTVRefactored() {
   const handleClosePlayer = useCallback(() => {
     setIsPlayerOpen(false);
     setSelectedEvent(null);
+    setSelectedChannel(null);
   }, []);
 
   return (
@@ -79,18 +92,27 @@ export default function LiveTVRefactored() {
           onLiveOnlyChange={setShowLiveOnly}
         />
 
-        {/* Events Grid */}
-        <EventsGrid
-          events={events}
-          onPlayEvent={handlePlayEvent}
-          loading={loading}
-          error={error}
-        />
+        {/* Content based on selected source */}
+        {selectedSource === 'cable' ? (
+          <CableChannelsGrid
+            channels={cableChannels}
+            onChannelPlay={handlePlayChannel}
+            loading={loading}
+          />
+        ) : (
+          <EventsGrid
+            events={events}
+            onPlayEvent={handlePlayEvent}
+            loading={loading}
+            error={error}
+          />
+        )}
       </main>
 
       {/* Video Player Modal */}
       <VideoPlayer
         event={selectedEvent}
+        channel={selectedChannel}
         isOpen={isPlayerOpen}
         onClose={handleClosePlayer}
       />
