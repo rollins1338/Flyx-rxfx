@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
 
     // Get stream URL with fallback
     const streamResult = await getStreamWithFallback(channelMapping, {
-      preferredProvider,
+      preferredSource: preferredProvider,
       excludeSources: excludeProviders,
     });
 
@@ -114,7 +114,9 @@ export async function POST(request: NextRequest) {
 
     // Determine which provider was used
     const usedProvider = streamResult.source;
-    const usedProviderId = channelInfo.providers[usedProvider];
+    const usedProviderId = usedProvider in channelInfo.providers 
+      ? channelInfo.providers[usedProvider as keyof typeof channelInfo.providers]
+      : null;
 
     return NextResponse.json({
       success: true,

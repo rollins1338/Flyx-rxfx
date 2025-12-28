@@ -9,7 +9,7 @@
 
 import { getTvPlaylistUrl } from '@/app/lib/proxy-config';
 
-export type LiveTVSourceType = 'dlhd' | 'cdnlive' | 'ppv' | 'xfinity';
+export type LiveTVSourceType = 'dlhd' | 'cdnlive' | 'ppv';
 
 export interface StreamSource {
   type: LiveTVSourceType;
