@@ -25,6 +25,25 @@ interface StreamResult {
 }
 
 /**
+ * Validate that a URL is actually an m3u8 stream URL, not an image or other garbage
+ */
+function isValidStreamUrl(url: string): boolean {
+  if (!url) return false;
+  if (!url.startsWith('http://') && !url.startsWith('https://')) return false;
+  
+  // Must contain .m3u8
+  if (!url.includes('.m3u8')) return false;
+  
+  // Must NOT be an image
+  const imagePatterns = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.ico', 'image', 'static.dzine', 'stylar_product'];
+  for (const pattern of imagePatterns) {
+    if (url.toLowerCase().includes(pattern)) return false;
+  }
+  
+  return true;
+}
+
+/**
  * Extract m3u8 URL from embed page
  */
 async function extractM3U8(uriName: string): Promise<StreamResult> {
@@ -47,7 +66,7 @@ async function extractM3U8(uriName: string): Promise<StreamResult> {
 
     // Check for "not live" or "offline" messages first
     if (html.includes('not live') || html.includes('offline') || html.includes('coming soon') || 
-        html.includes('Event has ended') || html.includes('not available')) {
+        html.includes('Event has ended') || html.includes('not available') || html.includes('Stream Offline')) {
       return { success: false, error: 'Stream is not currently live' };
     }
 
@@ -59,8 +78,7 @@ async function extractM3U8(uriName: string): Promise<StreamResult> {
       const base64 = atobMatch[1];
       try {
         const decoded = Buffer.from(base64, 'base64').toString('utf-8');
-        // Validate it's actually an m3u8 URL, not an image or other garbage
-        if (decoded.includes('.m3u8') && (decoded.startsWith('http://') || decoded.startsWith('https://'))) {
+        if (isValidStreamUrl(decoded)) {
           return { success: true, streamUrl: decoded, method: 'atob' };
         }
       } catch {}
@@ -74,7 +92,7 @@ async function extractM3U8(uriName: string): Promise<StreamResult> {
       const base64 = varAtobMatch[1];
       try {
         const decoded = Buffer.from(base64, 'base64').toString('utf-8');
-        if (decoded.includes('.m3u8') && (decoded.startsWith('http://') || decoded.startsWith('https://'))) {
+        if (isValidStreamUrl(decoded)) {
           return { success: true, streamUrl: decoded, method: 'atob_var' };
         }
       } catch {}
@@ -84,7 +102,7 @@ async function extractM3U8(uriName: string): Promise<StreamResult> {
     const filePattern = /file\s*:\s*["']([^"']+\.m3u8[^"']*)["']/;
     const fileMatch = html.match(filePattern);
 
-    if (fileMatch && fileMatch[1].startsWith('http')) {
+    if (fileMatch && isValidStreamUrl(fileMatch[1])) {
       return { success: true, streamUrl: fileMatch[1], method: 'direct' };
     }
 
@@ -92,35 +110,44 @@ async function extractM3U8(uriName: string): Promise<StreamResult> {
     const sourcePattern = /<source[^>]+src=["']([^"']+\.m3u8[^"']*)["']/i;
     const sourceMatch = html.match(sourcePattern);
 
-    if (sourceMatch && sourceMatch[1].startsWith('http')) {
+    if (sourceMatch && isValidStreamUrl(sourceMatch[1])) {
       return { success: true, streamUrl: sourceMatch[1], method: 'source_tag' };
     }
 
-    // Pattern 5: Look for any m3u8 URL in the page (but validate it's not an image)
+    // Pattern 5: Look for any m3u8 URL in the page
     const m3u8Pattern = /["'](https?:\/\/[^"'\s<>]+\.m3u8[^"'\s<>]*)["']/g;
     let m3u8Match;
     while ((m3u8Match = m3u8Pattern.exec(html)) !== null) {
       const url = m3u8Match[1];
-      // Skip if it looks like an image URL or other non-stream content
-      if (!url.includes('.png') && !url.includes('.jpg') && !url.includes('.jpeg') && 
-          !url.includes('.gif') && !url.includes('.webp') && !url.includes('image')) {
+      if (isValidStreamUrl(url)) {
         return { success: true, streamUrl: url, method: 'regex' };
       }
     }
 
-    // Pattern 6: Look for base64 encoded URLs in data attributes
+    // Pattern 6: Look for poocloud.in or similar stream URLs
+    const pooPattern = /["'](https?:\/\/[^"'\s<>]*poo[^"'\s<>]*\.m3u8[^"'\s<>]*)["']/gi;
+    let pooMatch;
+    while ((pooMatch = pooPattern.exec(html)) !== null) {
+      const url = pooMatch[1];
+      if (isValidStreamUrl(url)) {
+        return { success: true, streamUrl: url, method: 'poocloud' };
+      }
+    }
+
+    // Pattern 7: Look for base64 encoded URLs in data attributes
     const dataAttrPattern = /data-[a-z]+="([A-Za-z0-9+/=]{20,})"/gi;
     let dataMatch;
     while ((dataMatch = dataAttrPattern.exec(html)) !== null) {
       try {
         const decoded = Buffer.from(dataMatch[1], 'base64').toString('utf-8');
-        if (decoded.includes('.m3u8') && (decoded.startsWith('http://') || decoded.startsWith('https://'))) {
+        if (isValidStreamUrl(decoded)) {
           return { success: true, streamUrl: decoded, method: 'data_attr' };
         }
       } catch {}
     }
 
-    return { success: false, error: 'Could not extract stream URL from embed page - stream may be offline or page structure changed' };
+    // If we got here, the stream is likely offline - the embed page exists but has no valid stream
+    return { success: false, error: 'Stream is offline or not yet started - no valid m3u8 URL found' };
 
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to fetch embed page' };

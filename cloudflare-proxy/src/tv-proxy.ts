@@ -8,20 +8,29 @@
  *
  * Routes:
  *   GET /?channel=<id>           - Get proxied M3U8 playlist (DLHD channels only)
- *   GET /key?url=<encoded_url>   - Proxy encryption key (with auth)
+ *   GET /key?url=<encoded_url>   - Proxy encryption key (with auth via RPI)
  *   GET /segment?url=<encoded_url> - Proxy video segment
+ *   GET /health                  - Health check
  * 
  * PROVIDER DIFFERENTIATION:
  * - This proxy handles DLHD channels ONLY (numeric IDs: 1-850)
  * - CDN-Live.tv channels use /cdn-live/* routes
  * - PPV.to channels use /ppv/* routes
  * - NO IPTV/Stalker providers are used here
+ * 
+ * KEY FETCHING:
+ * - DLHD key server (chevy.kiko2.ru) blocks Cloudflare IPs
+ * - Key fetches are routed through RPI residential proxy
+ * - RPI proxy handles auth token fetching and heartbeat internally
  */
 
 import { createLogger, type LogLevel } from './logger';
 
 export interface Env {
   LOG_LEVEL?: string;
+  // RPI proxy for key fetches (key server blocks CF IPs)
+  RPI_PROXY_URL?: string;
+  RPI_PROXY_KEY?: string;
 }
 
 // Allowed origins for anti-leech protection
@@ -328,9 +337,90 @@ async function fetchKeyDirect(
       return { data, success: true };
     }
 
+    // If we got HTML or weird response, key server is blocking CF IPs
+    if (text.includes('fetchpoolctx') || text.includes('<!doctype') || data.byteLength > 100) {
+      return { data, success: false, error: 'Key server blocking CF IP' };
+    }
+
     return { data, success: false, error: `Invalid key: ${data.byteLength} bytes` };
   } catch (error) {
     return { data: new ArrayBuffer(0), success: false, error: (error as Error).message };
+  }
+}
+
+/**
+ * Fetch key via RPI residential proxy
+ * Uses the /proxy endpoint which handles DLHD key auth internally
+ */
+async function fetchKeyViaRpi(
+  keyUrl: string,
+  env: Env,
+  logger: any
+): Promise<{ data: ArrayBuffer; success: boolean; error?: string }> {
+  try {
+    let rpiBaseUrl = env.RPI_PROXY_URL!;
+    if (!rpiBaseUrl.startsWith('http://') && !rpiBaseUrl.startsWith('https://')) {
+      rpiBaseUrl = `https://${rpiBaseUrl}`;
+    }
+
+    // Use the /proxy endpoint - RPI handles DLHD key auth internally
+    const rpiParams = new URLSearchParams({
+      url: keyUrl,
+      key: env.RPI_PROXY_KEY!,
+    });
+
+    const rpiUrl = `${rpiBaseUrl}/proxy?${rpiParams.toString()}`;
+    logger.debug('Fetching key via RPI /proxy', { rpiUrl: rpiUrl.substring(0, 80) });
+
+    const response = await fetch(rpiUrl, {
+      signal: AbortSignal.timeout(15000),
+    });
+
+    const data = await response.arrayBuffer();
+    const text = new TextDecoder().decode(data);
+
+    logger.info('RPI proxy response', { 
+      status: response.status, 
+      size: data.byteLength,
+      preview: text.substring(0, 100)
+    });
+
+    // Check HTTP status first
+    if (!response.ok) {
+      try {
+        const errorJson = JSON.parse(text);
+        return { 
+          data, 
+          success: false, 
+          error: `RPI error ${response.status}: ${errorJson.error || text.substring(0, 100)}` 
+        };
+      } catch {
+        return { data, success: false, error: `RPI error ${response.status}: ${text.substring(0, 100)}` };
+      }
+    }
+
+    // Check for auth errors
+    if (text.includes('"E2"') || text.includes('"E3"')) {
+      return { data, success: false, error: `Auth error via RPI: ${text}` };
+    }
+
+    // Valid key is exactly 16 bytes
+    if (data.byteLength === 16 && !text.startsWith('{') && !text.startsWith('[')) {
+      logger.info('Key fetched via RPI successfully');
+      return { data, success: true };
+    }
+
+    return {
+      data,
+      success: false,
+      error: `Invalid key via RPI: ${data.byteLength} bytes`,
+    };
+  } catch (error) {
+    return {
+      data: new ArrayBuffer(0),
+      success: false,
+      error: `RPI proxy error: ${(error as Error).message}`,
+    };
   }
 }
 
@@ -410,8 +500,24 @@ export default {
     }
 
     try {
+      if (path === '/health') {
+        const hasRpi = !!(env.RPI_PROXY_URL && env.RPI_PROXY_KEY);
+        return jsonResponse({
+          status: 'healthy',
+          method: hasRpi ? 'cloudflare-with-rpi-fallback' : 'cloudflare-direct',
+          description: 'DLHD TV proxy',
+          rpiProxy: {
+            configured: hasRpi,
+            note: hasRpi
+              ? 'RPI proxy available for key fetches (key server blocks CF IPs)'
+              : 'RPI proxy NOT configured - key fetches may fail from CF',
+          },
+          timestamp: new Date().toISOString(),
+        }, 200, requestOrigin);
+      }
+
       if (path === '/key') {
-        return handleKeyProxy(url, logger, requestOrigin);
+        return handleKeyProxy(url, logger, requestOrigin, env);
       }
 
       if (path === '/segment') {
@@ -570,7 +676,8 @@ async function handlePlaylistRequest(
 async function handleKeyProxy(
   url: URL,
   logger: any,
-  origin: string | null
+  origin: string | null,
+  env: Env
 ): Promise<Response> {
   const keyUrlParam = url.searchParams.get('url');
   if (!keyUrlParam) {
@@ -588,6 +695,41 @@ async function handleKeyProxy(
   if (!channel) {
     return jsonResponse({ error: 'Could not extract channel' }, 400, origin);
   }
+
+  // DLHD key server blocks Cloudflare IPs, so we MUST use RPI proxy
+  if (env?.RPI_PROXY_URL && env?.RPI_PROXY_KEY) {
+    logger.info('Using RPI proxy for key fetch (CF IPs blocked by DLHD)');
+    
+    const result = await fetchKeyViaRpi(keyUrl, env, logger);
+    
+    if (result.success) {
+      logger.info('Key fetched via RPI successfully', { size: result.data.byteLength });
+      return new Response(result.data, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'Content-Length': '16',
+          ...corsHeaders(origin),
+          'Cache-Control': 'private, max-age=30',
+          'X-Fetched-By': 'rpi-proxy',
+        },
+      });
+    }
+    
+    // RPI proxy failed - return error
+    return jsonResponse(
+      {
+        error: 'Key fetch failed via RPI proxy',
+        details: result.error,
+        hint: 'Check RPI proxy logs for details',
+      },
+      502,
+      origin
+    );
+  }
+
+  // No RPI proxy configured - try direct fetch (will likely fail from CF IPs)
+  logger.warn('RPI proxy not configured, attempting direct fetch (may fail)');
 
   // Get session from pool
   const session = await getSession(channel, logger);
@@ -643,13 +785,9 @@ async function handleKeyProxy(
     {
       error: 'Key fetch failed',
       details: result.error,
-      hint: 'Session may have expired or rate limited',
+      hint: 'Configure RPI_PROXY_URL and RPI_PROXY_KEY for reliable DLHD streaming',
       channel,
       sessionAge: session ? `${Math.floor((Date.now() - (session as any).fetchedAt) / 1000)}s` : 'unknown',
-      debugInfo: {
-        keyUrlDomain: new URL(keyUrl).hostname,
-        sessionToken: session?.token?.substring(0, 8) + '...',
-      }
     },
     502,
     origin
