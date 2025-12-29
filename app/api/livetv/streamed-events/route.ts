@@ -25,10 +25,7 @@ interface StreamedMatch {
   }>;
 }
 
-interface StreamedSport {
-  id: string;
-  name: string;
-}
+
 
 const SPORT_ICONS: Record<string, string> = {
   football: '⚽',
