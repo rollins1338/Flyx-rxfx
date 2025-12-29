@@ -291,6 +291,7 @@ export function useVideoPlayer() {
     if (!video) return;
 
     const handlePlay = () => setState(prev => ({ ...prev, isPlaying: true }));
+    const handlePlaying = () => setState(prev => ({ ...prev, isPlaying: true }));
     const handlePause = () => setState(prev => ({ ...prev, isPlaying: false }));
     const handleTimeUpdate = () => {
       setState(prev => ({ 
@@ -308,12 +309,14 @@ export function useVideoPlayer() {
     };
 
     video.addEventListener('play', handlePlay);
+    video.addEventListener('playing', handlePlaying);
     video.addEventListener('pause', handlePause);
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('volumechange', handleVolumeChange);
 
     return () => {
       video.removeEventListener('play', handlePlay);
+      video.removeEventListener('playing', handlePlaying);
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('volumechange', handleVolumeChange);

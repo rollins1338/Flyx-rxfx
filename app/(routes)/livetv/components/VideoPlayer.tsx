@@ -287,10 +287,11 @@ export const VideoPlayer = memo(function VideoPlayer({
                   type="range"
                   min="0"
                   max="1"
-                  step="0.1"
+                  step="0.05"
                   value={isMuted ? 0 : volume}
                   onChange={(e) => setVolume(parseFloat(e.target.value))}
                   className={styles.volumeSlider}
+                  style={{ '--volume-percent': `${(isMuted ? 0 : volume) * 100}%` } as React.CSSProperties}
                   aria-label="Volume"
                 />
               </div>
