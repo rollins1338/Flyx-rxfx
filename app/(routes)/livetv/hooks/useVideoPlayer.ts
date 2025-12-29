@@ -34,7 +34,7 @@ export function useVideoPlayer() {
   
   const [state, setState] = useState<PlayerState>({
     isPlaying: false,
-    isMuted: false,
+    isMuted: true, // Start muted for autoplay to work
     isFullscreen: false,
     isLoading: false,
     error: null,
@@ -134,7 +134,23 @@ export function useVideoPlayer() {
       // HLS event handlers
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         setState(prev => ({ ...prev, isLoading: false }));
-        videoRef.current?.play();
+        const video = videoRef.current;
+        if (video) {
+          // Start muted for autoplay to work (browser policy)
+          video.muted = true;
+          video.play().then(() => {
+            // Try to unmute after successful play
+            setTimeout(() => {
+              if (video) {
+                video.muted = false;
+                setState(prev => ({ ...prev, isMuted: false }));
+              }
+            }, 100);
+          }).catch(err => {
+            console.warn('Autoplay failed:', err);
+            // Keep muted if autoplay fails
+          });
+        }
       });
 
       hls.on(Hls.Events.ERROR, (_, data) => {

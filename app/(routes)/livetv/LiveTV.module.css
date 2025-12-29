@@ -859,7 +859,7 @@
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.95);
-  z-index: 1000;
+  z-index: 9999;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -925,17 +925,18 @@
   inset: 0;
   background: linear-gradient(
     to bottom,
-    rgba(0, 0, 0, 0.7) 0%,
-    transparent 20%,
-    transparent 80%,
-    rgba(0, 0, 0, 0.8) 100%
+    rgba(0, 0, 0, 0.8) 0%,
+    transparent 15%,
+    transparent 85%,
+    rgba(0, 0, 0, 0.9) 100%
   );
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  opacity: 0;
+  opacity: 1;
   transition: opacity 0.3s ease;
-  z-index: 5;
+  z-index: 10;
+  pointer-events: auto;
 }
 
 .playerControls.visible {
@@ -944,9 +945,10 @@
 
 .topControls {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  padding: 1.5rem;
+  padding: 1.5rem 2rem;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
 }
 
 .eventInfo {
@@ -985,9 +987,10 @@
 }
 
 .closeButton {
-  width: 3rem;
-  height: 3rem;
-  background: rgba(255, 255, 255, 0.1);
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  background: rgba(255, 255, 255, 0.15);
   border: none;
   border-radius: 50%;
   color: #ffffff;
@@ -1000,28 +1003,30 @@
 }
 
 .closeButton:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .closeButton svg {
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 24px;
+  height: 24px;
 }
 
 .bottomControls {
-  padding: 1.5rem;
+  padding: 1.5rem 2rem;
+  background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
 }
 
 .controlsRow {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 1.5rem;
 }
 
 .playPauseButton {
-  width: 3rem;
-  height: 3rem;
-  background: rgba(255, 255, 255, 0.9);
+  width: 56px;
+  height: 56px;
+  min-width: 56px;
+  background: #ffffff;
   border: none;
   border-radius: 50%;
   color: #000000;
@@ -1030,16 +1035,17 @@
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
 }
 
 .playPauseButton:hover {
   background: #ffffff;
-  transform: scale(1.05);
+  transform: scale(1.1);
 }
 
 .playPauseButton svg {
-  width: 1.25rem;
-  height: 1.25rem;
+  width: 24px;
+  height: 24px;
 }
 
 .volumeControls {
@@ -1049,9 +1055,10 @@
 }
 
 .muteButton {
-  width: 2.5rem;
-  height: 2.5rem;
-  background: rgba(255, 255, 255, 0.1);
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  background: rgba(255, 255, 255, 0.15);
   border: none;
   border-radius: 50%;
   color: #ffffff;
@@ -1063,12 +1070,12 @@
 }
 
 .muteButton:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.25);
 }
 
 .muteButton svg {
-  width: 1.25rem;
-  height: 1.25rem;
+  width: 20px;
+  height: 20px;
 }
 
 .volumeSlider {
@@ -1112,20 +1119,22 @@
 .sourceLabel {
   background: rgba(255, 255, 255, 0.2);
   color: #ffffff;
-  padding: 0.4rem 0.75rem;
+  padding: 0.5rem 1rem;
   border-radius: 8px;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  backdrop-filter: blur(10px);
 }
 
 .fullscreenButton {
-  width: 2.5rem;
-  height: 2.5rem;
-  background: rgba(255, 255, 255, 0.1);
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  background: rgba(255, 255, 255, 0.15);
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   color: #ffffff;
   cursor: pointer;
   display: flex;
@@ -1135,12 +1144,12 @@
 }
 
 .fullscreenButton:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.25);
 }
 
 .fullscreenButton svg {
-  width: 1.25rem;
-  height: 1.25rem;
+  width: 20px;
+  height: 20px;
 }
 
 /* ============================================

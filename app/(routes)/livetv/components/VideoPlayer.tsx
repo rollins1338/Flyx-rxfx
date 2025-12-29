@@ -58,7 +58,7 @@ export const VideoPlayer = memo(function VideoPlayer({
   } = useVideoPlayer();
 
   const [showControls, setShowControls] = useState(true);
-  const [controlsTimeout, setControlsTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [controlsTimeout, setControlsTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
 
   // Load stream when event or channel changes
   useEffect(() => {
@@ -212,8 +212,8 @@ export const VideoPlayer = memo(function VideoPlayer({
           </div>
         )}
 
-        {/* Controls */}
-        <div className={`${styles.playerControls} ${showControls ? styles.visible : ''}`}>
+        {/* Controls - Always visible */}
+        <div className={styles.playerControls}>
           {/* Top Bar */}
           <div className={styles.topControls}>
             <div className={styles.eventInfo}>
