@@ -30,21 +30,28 @@ export const CableChannelsGrid = memo(function CableChannelsGrid({
 
   // Infinite scroll observer
   useEffect(() => {
+    const loadMoreEl = loadMoreRef.current;
+    if (!loadMoreEl) return;
+
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && displayCount < channels.length) {
-          setDisplayCount(prev => Math.min(prev + ITEMS_PER_PAGE, channels.length));
+        if (entries[0].isIntersecting) {
+          setDisplayCount(prev => {
+            if (prev >= channels.length) return prev;
+            return Math.min(prev + ITEMS_PER_PAGE, channels.length);
+          });
         }
       },
-      { threshold: 0.1, rootMargin: '100px' }
+      { threshold: 0.1, rootMargin: '200px' }
     );
 
-    if (loadMoreRef.current) {
-      observer.observe(loadMoreRef.current);
-    }
+    observer.observe(loadMoreEl);
 
-    return () => observer.disconnect();
-  }, [displayCount, channels.length]);
+    return () => {
+      observer.unobserve(loadMoreEl);
+      observer.disconnect();
+    };
+  }, [channels.length]);
 
   const displayedChannels = channels.slice(0, displayCount);
   const hasMore = displayCount < channels.length;
@@ -107,6 +114,7 @@ export const CableChannelsGrid = memo(function CableChannelsGrid({
       {hasMore && (
         <div ref={loadMoreRef} className={styles.loadMoreTrigger}>
           <div className={styles.loadingSpinner} />
+          <p>Loading more...</p>
         </div>
       )}
     </div>

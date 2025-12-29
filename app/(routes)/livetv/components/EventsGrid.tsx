@@ -34,21 +34,28 @@ export const EventsGrid = memo(function EventsGrid({
 
   // Infinite scroll observer
   useEffect(() => {
+    const loadMoreEl = loadMoreRef.current;
+    if (!loadMoreEl) return;
+
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && displayCount < events.length) {
-          setDisplayCount(prev => Math.min(prev + ITEMS_PER_PAGE, events.length));
+        if (entries[0].isIntersecting) {
+          setDisplayCount(prev => {
+            if (prev >= events.length) return prev;
+            return Math.min(prev + ITEMS_PER_PAGE, events.length);
+          });
         }
       },
-      { threshold: 0.1, rootMargin: '100px' }
+      { threshold: 0.1, rootMargin: '200px' }
     );
 
-    if (loadMoreRef.current) {
-      observer.observe(loadMoreRef.current);
-    }
+    observer.observe(loadMoreEl);
 
-    return () => observer.disconnect();
-  }, [displayCount, events.length]);
+    return () => {
+      observer.unobserve(loadMoreEl);
+      observer.disconnect();
+    };
+  }, [events.length]);
 
   const displayedEvents = events.slice(0, displayCount);
   const hasMore = displayCount < events.length;
@@ -107,6 +114,7 @@ export const EventsGrid = memo(function EventsGrid({
       {hasMore && (
         <div ref={loadMoreRef} className={styles.loadMoreTrigger}>
           <div className={styles.loadingSpinner} />
+          <p>Loading more...</p>
         </div>
       )}
     </div>

@@ -138,17 +138,22 @@ export function useVideoPlayer() {
         if (video) {
           // Start muted for autoplay to work (browser policy)
           video.muted = true;
+          setState(prev => ({ ...prev, isMuted: true }));
+          
           video.play().then(() => {
+            // Update playing state immediately
+            setState(prev => ({ ...prev, isPlaying: true }));
+            
             // Try to unmute after successful play
             setTimeout(() => {
-              if (video) {
-                video.muted = false;
+              if (videoRef.current) {
+                videoRef.current.muted = false;
                 setState(prev => ({ ...prev, isMuted: false }));
               }
             }, 100);
           }).catch(err => {
             console.warn('Autoplay failed:', err);
-            // Keep muted if autoplay fails
+            setState(prev => ({ ...prev, isPlaying: false }));
           });
         }
       });
@@ -285,20 +290,25 @@ export function useVideoPlayer() {
     }
   }, []);
 
-  // Video event handlers
+  // Video event handlers - re-attach when source changes
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    const handlePlay = () => setState(prev => ({ ...prev, isPlaying: true }));
-    const handlePlaying = () => setState(prev => ({ ...prev, isPlaying: true }));
-    const handlePause = () => setState(prev => ({ ...prev, isPlaying: false }));
-    const handleTimeUpdate = () => {
-      setState(prev => ({ 
-        ...prev, 
-        currentTime: video.currentTime,
-        duration: video.duration || 0,
-      }));
+    const handlePlay = () => {
+      console.log('Video play event');
+      setState(prev => ({ ...prev, isPlaying: true }));
+    };
+    const handlePlaying = () => {
+      console.log('Video playing event');
+      setState(prev => ({ ...prev, isPlaying: true }));
+    };
+    const handlePause = () => {
+      console.log('Video pause event');
+      setState(prev => ({ ...prev, isPlaying: false }));
+    };
+    const handleEnded = () => {
+      setState(prev => ({ ...prev, isPlaying: false }));
     };
     const handleVolumeChange = () => {
       setState(prev => ({ 
@@ -311,17 +321,17 @@ export function useVideoPlayer() {
     video.addEventListener('play', handlePlay);
     video.addEventListener('playing', handlePlaying);
     video.addEventListener('pause', handlePause);
-    video.addEventListener('timeupdate', handleTimeUpdate);
+    video.addEventListener('ended', handleEnded);
     video.addEventListener('volumechange', handleVolumeChange);
 
     return () => {
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('playing', handlePlaying);
       video.removeEventListener('pause', handlePause);
-      video.removeEventListener('timeupdate', handleTimeUpdate);
+      video.removeEventListener('ended', handleEnded);
       video.removeEventListener('volumechange', handleVolumeChange);
     };
-  }, []);
+  }, [currentSource]);
 
   // Fullscreen change handler
   useEffect(() => {

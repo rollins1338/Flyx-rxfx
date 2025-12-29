@@ -438,19 +438,15 @@ export function useLiveTVData() {
     setState(prev => ({ ...prev, showLiveOnly: showLive }));
   }, []);
 
+  // Initial load only
+  useEffect(() => {
+    fetchAllData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Manual refresh function (no auto-refresh to prevent flickering)
   const refresh = useCallback(() => {
     fetchAllData();
-  }, [fetchAllData]);
-
-  // Initial load
-  useEffect(() => {
-    fetchAllData();
-  }, [fetchAllData]);
-
-  // Auto-refresh every 2 minutes
-  useEffect(() => {
-    const interval = setInterval(fetchAllData, 2 * 60 * 1000);
-    return () => clearInterval(interval);
   }, [fetchAllData]);
 
   return {
