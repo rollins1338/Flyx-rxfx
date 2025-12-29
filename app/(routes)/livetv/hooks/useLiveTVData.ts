@@ -248,22 +248,27 @@ export function useLiveTVData() {
       const channels = data.channels || [];
       
       // Transform channels into events
-      const events: LiveEvent[] = channels.map((channel: any) => ({
-        id: `cdnlive-${channel.name.toLowerCase().replace(/\s+/g, '-')}-${channel.code}`,
-        title: channel.name,
-        sport: categorizeChannel(channel.name),
-        time: 'Live',
-        isLive: channel.status === 'online',
-        source: 'cdnlive' as const,
-        poster: channel.image,
-        viewers: channel.viewers?.toString(),
-        cdnliveEmbedId: channel.name,
-        channels: [{
-          name: channel.name,
-          channelId: channel.name,
-          href: channel.url,
-        }],
-      }));
+      // Only include online channels
+      const events: LiveEvent[] = channels
+        .filter((channel: any) => channel.status === 'online')
+        .map((channel: any) => ({
+          id: `cdnlive-${channel.name.toLowerCase().replace(/\s+/g, '-')}-${channel.code}`,
+          title: channel.name,
+          sport: categorizeChannel(channel.name),
+          time: 'Live',
+          isLive: true,
+          source: 'cdnlive' as const,
+          poster: channel.image,
+          viewers: channel.viewers?.toString(),
+          // Store channel name and code for stream URL construction
+          cdnliveEmbedId: `${channel.name}|${channel.code}`,
+          channels: [{
+            name: channel.name,
+            // channelId format: "channelName|countryCode" for CDN Live
+            channelId: `${channel.name}|${channel.code}`,
+            href: channel.url,
+          }],
+        }));
 
       return events;
     } catch (error) {

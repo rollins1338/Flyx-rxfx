@@ -52,9 +52,14 @@ export function useVideoPlayer() {
       case 'dlhd':
         return getTvPlaylistUrl(source.channelId);
       case 'ppv':
-        return getPpvStreamProxyUrl(source.channelId);
+        // PPV needs to fetch stream URL from API first, return API endpoint
+        return `/api/livetv/ppv-stream?uri=${encodeURIComponent(source.channelId)}`;
       case 'cdnlive':
-        return `/api/livetv/cdnlive-stream?embedId=${source.channelId}`;
+        // CDN Live channelId format: "channelName|countryCode"
+        const parts = source.channelId.split('|');
+        const channelName = encodeURIComponent(parts[0] || source.channelId);
+        const countryCode = parts[1] || 'us';
+        return `/api/livetv/cdnlive-stream?channel=${channelName}&code=${countryCode}`;
       default:
         throw new Error(`Unsupported source type: ${source.type}`);
     }
@@ -80,7 +85,24 @@ export function useVideoPlayer() {
         hlsRef.current.destroy();
       }
 
-      const streamUrl = getStreamUrl(source);
+      let streamUrl = getStreamUrl(source);
+      
+      // For CDN Live and PPV, we need to fetch the stream URL from the API first
+      if (source.type === 'cdnlive' || source.type === 'ppv') {
+        const apiResponse = await fetch(streamUrl);
+        const apiData = await apiResponse.json();
+        
+        if (!apiData.success || !apiData.streamUrl) {
+          throw new Error(apiData.error || `Failed to get ${source.type.toUpperCase()} stream URL`);
+        }
+        
+        // For PPV, we need to proxy the stream through Cloudflare
+        if (source.type === 'ppv') {
+          streamUrl = getPpvStreamProxyUrl(apiData.streamUrl);
+        } else {
+          streamUrl = apiData.streamUrl;
+        }
+      }
       
       // Create new HLS instance
       const hls = new Hls({
@@ -97,6 +119,12 @@ export function useVideoPlayer() {
         maxFragLookUpTolerance: 0.25,
         liveSyncDurationCount: 3,
         liveMaxLatencyDurationCount: 10,
+        // Add headers for CDN Live streams
+        xhrSetup: (xhr: XMLHttpRequest) => {
+          if (source.type === 'cdnlive') {
+            xhr.setRequestHeader('Referer', 'https://cdn-live.tv/');
+          }
+        },
       });
 
       hlsRef.current = hls;
