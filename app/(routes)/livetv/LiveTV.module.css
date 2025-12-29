@@ -990,7 +990,7 @@
   width: 48px;
   height: 48px;
   min-width: 48px;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.2);
   border: none;
   border-radius: 50%;
   color: #ffffff;
@@ -1000,15 +1000,18 @@
   justify-content: center;
   transition: all 0.2s ease;
   backdrop-filter: blur(10px);
+  flex-shrink: 0;
 }
 
 .closeButton:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.35);
 }
 
 .closeButton svg {
   width: 24px;
   height: 24px;
+  fill: #ffffff;
+  flex-shrink: 0;
 }
 
 .bottomControls {
@@ -1036,6 +1039,7 @@
   justify-content: center;
   transition: all 0.2s ease;
   box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  flex-shrink: 0;
 }
 
 .playPauseButton:hover {
@@ -1044,8 +1048,10 @@
 }
 
 .playPauseButton svg {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
+  fill: #000000;
+  flex-shrink: 0;
 }
 
 .volumeControls {
@@ -1058,7 +1064,7 @@
   width: 44px;
   height: 44px;
   min-width: 44px;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.2);
   border: none;
   border-radius: 50%;
   color: #ffffff;
@@ -1067,43 +1073,50 @@
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
+  flex-shrink: 0;
 }
 
 .muteButton:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.35);
 }
 
 .muteButton svg {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
+  fill: #ffffff;
+  flex-shrink: 0;
 }
 
 .volumeSlider {
-  width: 80px;
-  height: 4px;
+  width: 100px;
+  height: 6px;
   background: rgba(255, 255, 255, 0.3);
-  border-radius: 2px;
+  border-radius: 3px;
   outline: none;
   cursor: pointer;
   -webkit-appearance: none;
+  appearance: none;
 }
 
 .volumeSlider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 16px;
-  height: 16px;
+  appearance: none;
+  width: 18px;
+  height: 18px;
   background: #ffffff;
   border-radius: 50%;
   cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
 
 .volumeSlider::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   background: #ffffff;
   border-radius: 50%;
   cursor: pointer;
   border: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
 
 .controlsSpacer {
@@ -1132,7 +1145,7 @@
   width: 44px;
   height: 44px;
   min-width: 44px;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.2);
   border: none;
   border-radius: 12px;
   color: #ffffff;
@@ -1141,15 +1154,18 @@
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
+  flex-shrink: 0;
 }
 
 .fullscreenButton:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.35);
 }
 
 .fullscreenButton svg {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
+  fill: #ffffff;
+  flex-shrink: 0;
 }
 
 /* ============================================
