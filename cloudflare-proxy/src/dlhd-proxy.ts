@@ -412,7 +412,28 @@ async function fetchKeyViaRpi(
     const data = await response.arrayBuffer();
     const text = new TextDecoder().decode(data);
 
-    // Check for auth errors
+    logger.info('RPI proxy response', { 
+      status: response.status, 
+      size: data.byteLength,
+      preview: text.substring(0, 100)
+    });
+
+    // Check HTTP status first - RPI returns 502 on errors
+    if (!response.ok) {
+      // Try to parse error message from JSON response
+      try {
+        const errorJson = JSON.parse(text);
+        return { 
+          data, 
+          success: false, 
+          error: `RPI error ${response.status}: ${errorJson.error || errorJson.message || text.substring(0, 100)}` 
+        };
+      } catch {
+        return { data, success: false, error: `RPI error ${response.status}: ${text.substring(0, 100)}` };
+      }
+    }
+
+    // Check for auth errors in response body
     if (text.includes('"E2"') || text.includes('"E3"')) {
       return { data, success: false, error: `Auth error via RPI: ${text}` };
     }
@@ -714,16 +735,52 @@ async function handleKeyProxy(
     return jsonResponse({ error: 'Could not extract channel from key URL' }, 400, origin);
   }
 
+  // DLHD key server blocks Cloudflare IPs, so we MUST use RPI proxy
+  // The RPI proxy handles auth token fetching, heartbeat, and key fetching internally
+  if (env?.RPI_PROXY_URL && env?.RPI_PROXY_KEY) {
+    logger.info('Using RPI proxy for key fetch (CF IPs blocked by DLHD)');
+    
+    const result = await fetchKeyViaRpi(keyUrl, {}, env, logger);
+    
+    if (result.success) {
+      logger.info('Key fetched via RPI successfully', { size: result.data.byteLength });
+      return new Response(result.data, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'Content-Length': '16',
+          ...corsHeaders(origin),
+          'Cache-Control': 'private, max-age=30',
+          'X-Fetched-By': 'rpi-proxy',
+        },
+      });
+    }
+    
+    // RPI proxy failed - return error
+    return jsonResponse(
+      {
+        error: 'Key fetch failed via RPI proxy',
+        details: result.error,
+        hint: 'Check RPI proxy logs for details',
+      },
+      502,
+      origin
+    );
+  }
+
+  // No RPI proxy configured - try direct fetch (will likely fail from CF IPs)
+  logger.warn('RPI proxy not configured, attempting direct fetch (may fail)');
+  
   // Get session from pool
   const session = await getSession(channel, logger);
   if (!session) {
     return jsonResponse({ error: 'Failed to get auth session' }, 502, origin);
   }
 
-  // Call heartbeat (may fail due to rate limit, but key fetch often still works)
+  // Call heartbeat (will likely fail from CF IPs)
   await callHeartbeat(session, logger);
 
-  // Fetch key (tries direct first, falls back to RPI)
+  // Fetch key directly (will likely fail without valid session)
   const result = await fetchKeyDirect(keyUrl, session, logger, env);
 
   if (result.success) {
@@ -740,35 +797,11 @@ async function handleKeyProxy(
     });
   }
 
-  // If E2/E3 error, get a fresh token and retry
-  if (result.error?.includes('E2') || result.error?.includes('E3')) {
-    logger.info('Auth error, fetching fresh session', { error: result.error });
-
-    const freshSession = await getSession(channel, logger, true); // Force new
-    if (freshSession) {
-      await callHeartbeat(freshSession, logger);
-      const retryResult = await fetchKeyDirect(keyUrl, freshSession, logger, env);
-
-      if (retryResult.success) {
-        return new Response(retryResult.data, {
-          status: 200,
-          headers: {
-            'Content-Type': 'application/octet-stream',
-            'Content-Length': '16',
-            ...corsHeaders(origin),
-            'Cache-Control': 'private, max-age=30',
-            'X-Fetched-By': 'cloudflare-direct-retry',
-          },
-        });
-      }
-    }
-  }
-
   return jsonResponse(
     {
       error: 'Key fetch failed',
       details: result.error,
-      hint: 'Session may have expired or rate limited',
+      hint: 'Configure RPI_PROXY_URL and RPI_PROXY_KEY for reliable DLHD streaming',
     },
     502,
     origin

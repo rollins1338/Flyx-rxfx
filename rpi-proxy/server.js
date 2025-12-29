@@ -311,6 +311,7 @@ const { spawn } = require('child_process');
  *   1. Get FRESH auth token from player page (NO CACHING)
  *   2. Call heartbeat endpoint to establish FRESH session (NO CACHING)
  *   3. Fetch key with Authorization header
+ *   4. If E2 error, retry heartbeat and key fetch once
  */
 async function fetchKeyWithAuth(keyUrl, res) {
   // Extract channel from URL
@@ -333,114 +334,170 @@ async function fetchKeyWithAuth(keyUrl, res) {
   
   console.log(`[Key] Fetching key for channel ${channel} from ${serverInfo.server}.${serverInfo.domain}`);
   
-  // Step 1: Get auth data for this channel (token, country, timestamp)
-  const authData = await fetchAuthToken(channel);
-  if (!authData || !authData.token) {
-    console.log(`[Key] Could not get auth token for channel ${channel}`);
-    res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-    res.end(JSON.stringify({ error: 'Failed to get auth token' }));
-    return;
-  }
-  
-  // Step 2: Try to establish heartbeat session with CLIENT_TOKEN
-  // If heartbeat returns 404, the server doesn't have that endpoint - proceed anyway
-  // If heartbeat returns 403, we're blocked (datacenter IP) - proceed anyway and hope for the best
-  const hbResult = await establishHeartbeatSession(channel, serverInfo.server, serverInfo.domain, authData.token, authData.country, authData.timestamp);
-  if (hbResult.success) {
-    console.log(`[Key] Heartbeat OK, session expires at ${hbResult.expiry}`);
-  } else {
-    console.log(`[Key] Heartbeat skipped/failed: ${hbResult.error} - proceeding with key fetch`);
-  }
-  
-  // Generate CLIENT_TOKEN for key request
-  const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-  const channelKey = `premium${channel}`;
-  const clientToken = generateClientToken(channelKey, authData.country, authData.timestamp, userAgent);
-  
-  // Step 3: Fetch key with all auth headers (same as browser's xhrSetup)
-  const url = new URL(keyUrl);
-  const req = https.request({
-    hostname: url.hostname,
-    path: url.pathname,
-    method: 'GET',
-    headers: {
-      'User-Agent': userAgent,
-      'Accept': '*/*',
-      'Origin': 'https://epicplayplay.cfd',
-      'Referer': 'https://epicplayplay.cfd/',
-      'Authorization': `Bearer ${authData.token}`,
-      'X-Channel-Key': channelKey,
-      'X-Client-Token': clientToken,
-      'X-User-Agent': userAgent,
-    },
-  }, (proxyRes) => {
-    const chunks = [];
-    proxyRes.on('data', chunk => chunks.push(chunk));
-    proxyRes.on('end', () => {
-      const data = Buffer.concat(chunks);
-      const text = data.toString('utf8');
+  // Try up to 2 times (initial + 1 retry)
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    console.log(`[Key] Attempt ${attempt}/2`);
+    
+    // Step 1: Get auth data for this channel (token, country, timestamp)
+    const authData = await fetchAuthToken(channel);
+    if (!authData || !authData.token) {
+      console.log(`[Key] Could not get auth token for channel ${channel}`);
+      if (attempt === 2) {
+        res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ error: 'Failed to get auth token after 2 attempts' }));
+        return;
+      }
+      continue;
+    }
+    
+    // Step 2: Try to establish heartbeat session with CLIENT_TOKEN
+    // Try multiple servers if the first one fails
+    const serversToTry = [
+      { server: serverInfo.server, domain: serverInfo.domain },
+      { server: 'chevy', domain: 'kiko2.ru' },
+      { server: 'chevy', domain: 'giokko.ru' },
+    ];
+    
+    let hbSuccess = false;
+    for (const srv of serversToTry) {
+      const hbResult = await establishHeartbeatSession(channel, srv.server, srv.domain, authData.token, authData.country, authData.timestamp);
+      if (hbResult.success) {
+        console.log(`[Key] Heartbeat OK on ${srv.server}.${srv.domain}, session expires at ${hbResult.expiry}`);
+        hbSuccess = true;
+        break;
+      }
+      console.log(`[Key] Heartbeat failed on ${srv.server}.${srv.domain}: ${hbResult.error}`);
+    }
+    
+    if (!hbSuccess) {
+      console.log(`[Key] All heartbeat servers failed - proceeding with key fetch anyway`);
+    }
+    
+    // Generate CLIENT_TOKEN for key request
+    const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+    const channelKey = `premium${channel}`;
+    const clientToken = generateClientToken(channelKey, authData.country, authData.timestamp, userAgent);
+    
+    // Step 3: Fetch key with all auth headers (same as browser's xhrSetup)
+    const keyResult = await new Promise((resolve) => {
+      const url = new URL(keyUrl);
+      const req = https.request({
+        hostname: url.hostname,
+        path: url.pathname,
+        method: 'GET',
+        headers: {
+          'User-Agent': userAgent,
+          'Accept': '*/*',
+          'Origin': 'https://epicplayplay.cfd',
+          'Referer': 'https://epicplayplay.cfd/',
+          'Authorization': `Bearer ${authData.token}`,
+          'X-Channel-Key': channelKey,
+          'X-Client-Token': clientToken,
+          'X-User-Agent': userAgent,
+        },
+        timeout: 15000,
+      }, (proxyRes) => {
+        const chunks = [];
+        proxyRes.on('data', chunk => chunks.push(chunk));
+        proxyRes.on('end', () => {
+          const data = Buffer.concat(chunks);
+          const text = data.toString('utf8');
+          console.log(`[Key] Response: ${proxyRes.statusCode}, ${data.length} bytes`);
+          resolve({ status: proxyRes.statusCode, data, text });
+        });
+      });
       
-      console.log(`[Key] Response: ${proxyRes.statusCode}, ${data.length} bytes`);
+      req.on('error', (e) => {
+        console.error(`[Key] Request error: ${e.message}`);
+        resolve({ status: 502, data: null, text: null, error: e.message });
+      });
       
-      // Check for E2 error (session not established)
-      if (text.includes('"E2"') || text.includes('Session must be created')) {
-        console.log(`[Key] E2 error - session not established`);
+      req.on('timeout', () => {
+        req.destroy();
+        resolve({ status: 504, data: null, text: null, error: 'Timeout' });
+      });
+      
+      req.end();
+    });
+    
+    if (keyResult.error) {
+      console.log(`[Key] Request failed: ${keyResult.error}`);
+      if (attempt === 2) {
+        res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ error: 'Key fetch failed', details: keyResult.error }));
+        return;
+      }
+      continue;
+    }
+    
+    const { data, text } = keyResult;
+    
+    // Check for E2 error (session not established) - retry
+    if (text.includes('"E2"') || text.includes('Session must be created')) {
+      console.log(`[Key] E2 error - session not established, will retry`);
+      if (attempt === 2) {
         res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
         res.end(JSON.stringify({ 
-          error: 'Session not established', 
+          error: 'Session not established after 2 attempts', 
           code: 'E2',
-          hint: 'Heartbeat session required but failed. Retry may help.',
+          hint: 'Heartbeat session required but failed. DLHD may be blocking this IP.',
           response: text 
         }));
         return;
       }
-      
-      // Check for E3 error (token expired)
-      if (text.includes('"E3"') || text.includes('Token expired')) {
-        console.log(`[Key] E3 error - token expired`);
+      // Wait a bit before retry
+      await new Promise(r => setTimeout(r, 1000));
+      continue;
+    }
+    
+    // Check for E3 error (token expired) - retry
+    if (text.includes('"E3"') || text.includes('Token expired')) {
+      console.log(`[Key] E3 error - token expired, will retry`);
+      if (attempt === 2) {
         res.writeHead(401, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-        res.end(JSON.stringify({ error: 'Token expired', code: 'E3', response: text }));
+        res.end(JSON.stringify({ error: 'Token expired after 2 attempts', code: 'E3', response: text }));
         return;
       }
-      
-      // Check if we got a valid key (AES-128 keys are exactly 16 bytes)
-      if (data.length === 16) {
-        // Make sure it's not a JSON error that happens to be 16 bytes
-        if (text.startsWith('{') || text.startsWith('[')) {
-          console.log(`[Key] Got JSON error: ${text}`);
+      continue;
+    }
+    
+    // Check if we got a valid key (AES-128 keys are exactly 16 bytes)
+    if (data.length === 16) {
+      // Make sure it's not a JSON error that happens to be 16 bytes
+      if (text.startsWith('{') || text.startsWith('[')) {
+        console.log(`[Key] Got JSON error: ${text}`);
+        if (attempt === 2) {
           res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
           res.end(JSON.stringify({ error: 'Key server returned error', response: text }));
           return;
         }
-        
-        console.log(`[Key] ✅ Valid key: ${data.toString('hex')}`);
-        // NO CACHING - keys change frequently
-        res.writeHead(200, {
-          'Content-Type': 'application/octet-stream',
-          'Content-Length': data.length,
-          'Access-Control-Allow-Origin': '*',
-          'X-Fetched-By': 'fresh-auth-no-cache',
-        });
-        res.end(data);
-      } else {
-        console.log(`[Key] Unexpected response: ${data.length} bytes - ${text.substring(0, 100)}`);
-        res.writeHead(proxyRes.statusCode, {
-          'Content-Type': 'application/octet-stream',
-          'Content-Length': data.length,
-          'Access-Control-Allow-Origin': '*',
-        });
-        res.end(data);
+        continue;
       }
-    });
-  });
-  
-  req.on('error', (e) => {
-    console.error(`[Key] Request error: ${e.message}`);
-    res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-    res.end(JSON.stringify({ error: 'Key fetch failed', details: e.message }));
-  });
-  
-  req.end();
+      
+      console.log(`[Key] ✅ Valid key: ${data.toString('hex')}`);
+      res.writeHead(200, {
+        'Content-Type': 'application/octet-stream',
+        'Content-Length': data.length,
+        'Access-Control-Allow-Origin': '*',
+        'X-Fetched-By': 'fresh-auth-with-retry',
+        'X-Attempt': attempt.toString(),
+      });
+      res.end(data);
+      return;
+    }
+    
+    // Unexpected response
+    console.log(`[Key] Unexpected response: ${data.length} bytes - ${text.substring(0, 100)}`);
+    if (attempt === 2) {
+      res.writeHead(keyResult.status, {
+        'Content-Type': 'application/octet-stream',
+        'Content-Length': data.length,
+        'Access-Control-Allow-Origin': '*',
+      });
+      res.end(data);
+      return;
+    }
+  }
 }
 
 /**
