@@ -279,7 +279,6 @@ export function useLiveTVData() {
 
   // Fetch all events and channels
   const fetchAllData = useCallback(async () => {
-    console.log('[useLiveTVData] fetchAllData starting...');
     setState(prev => ({ ...prev, loading: true, error: null }));
     
     try {
@@ -289,13 +288,6 @@ export function useLiveTVData() {
         fetchCDNLiveEvents(),
         fetchDLHDChannels(),
       ]);
-
-      console.log('[useLiveTVData] Fetched data:', {
-        dlhdEvents: dlhdEvents.length,
-        ppvEvents: ppvEvents.length,
-        cdnliveEvents: cdnliveEvents.length,
-        dlhdChannels: dlhdChannels.length,
-      });
 
       const allEvents = [...dlhdEvents, ...ppvEvents, ...cdnliveEvents];
       

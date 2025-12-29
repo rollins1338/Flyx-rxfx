@@ -67,12 +67,7 @@ export function useVideoPlayer() {
 
   // Load HLS stream
   const loadStream = useCallback(async (source: StreamSource) => {
-    console.log('[useVideoPlayer] loadStream called with source:', source);
-    
-    if (!videoRef.current) {
-      console.error('[useVideoPlayer] videoRef.current is null!');
-      return;
-    }
+    if (!videoRef.current) return;
 
     setState(prev => ({ ...prev, isLoading: true, error: null }));
     setCurrentSource(source);
@@ -80,7 +75,6 @@ export function useVideoPlayer() {
     try {
       // Dynamic import HLS.js
       const Hls = (await import('hls.js')).default;
-      console.log('[useVideoPlayer] HLS.js loaded, isSupported:', Hls.isSupported());
       
       if (!Hls.isSupported()) {
         throw new Error('HLS is not supported in this browser');
@@ -92,17 +86,19 @@ export function useVideoPlayer() {
       }
 
       let streamUrl = getStreamUrl(source);
-      console.log('[useVideoPlayer] Initial stream URL:', streamUrl);
       
       // For CDN Live and PPV, we need to fetch the stream URL from the API first
       if (source.type === 'cdnlive' || source.type === 'ppv') {
-        console.log('[useVideoPlayer] Fetching stream URL from API...');
         const apiResponse = await fetch(streamUrl);
         const apiData = await apiResponse.json();
-        console.log('[useVideoPlayer] API response:', apiData);
         
         if (!apiData.success || !apiData.streamUrl) {
-          throw new Error(apiData.error || `Failed to get ${source.type.toUpperCase()} stream URL`);
+          // Check for specific offline error
+          const errorMsg = apiData.error || `Failed to get ${source.type.toUpperCase()} stream URL`;
+          if (errorMsg.toLowerCase().includes('offline') || errorMsg.toLowerCase().includes('not live')) {
+            throw new Error('This stream is not currently live. Please try again when the event starts.');
+          }
+          throw new Error(errorMsg);
         }
         
         // Proxy streams through Cloudflare for proper CORS and header handling
@@ -113,11 +109,9 @@ export function useVideoPlayer() {
         } else {
           streamUrl = apiData.streamUrl;
         }
-        console.log('[useVideoPlayer] Proxied stream URL:', streamUrl);
       }
       
       // Create new HLS instance
-      console.log('[useVideoPlayer] Creating HLS instance...');
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: true,
@@ -144,20 +138,29 @@ export function useVideoPlayer() {
 
       // HLS event handlers
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        console.log('[useVideoPlayer] MANIFEST_PARSED - stream ready');
         setState(prev => ({ ...prev, isLoading: false }));
         videoRef.current?.play();
       });
 
       hls.on(Hls.Events.ERROR, (_, data) => {
-        console.error('[useVideoPlayer] HLS Error:', data);
+        console.error('HLS Error:', data);
         
         if (data.fatal) {
-          setState(prev => ({ 
-            ...prev, 
-            isLoading: false, 
-            error: `Stream error: ${data.details}` 
-          }));
+          // Check if it's an offline stream error
+          const errorMsg = data.details || 'Stream error';
+          if (errorMsg.includes('image') || errorMsg.includes('offline')) {
+            setState(prev => ({ 
+              ...prev, 
+              isLoading: false, 
+              error: 'This stream is not currently live. Please try again when the event starts.' 
+            }));
+          } else {
+            setState(prev => ({ 
+              ...prev, 
+              isLoading: false, 
+              error: `Stream error: ${data.details}` 
+            }));
+          }
         }
       });
 
@@ -176,10 +179,8 @@ export function useVideoPlayer() {
       });
 
       // Load the stream
-      console.log('[useVideoPlayer] Loading source:', streamUrl);
       hls.loadSource(streamUrl);
       hls.attachMedia(videoRef.current);
-      console.log('[useVideoPlayer] HLS attached to video element');
 
       // Start analytics session
       startLiveTVSession({
@@ -197,7 +198,7 @@ export function useVideoPlayer() {
       });
 
     } catch (error) {
-      console.error('[useVideoPlayer] Error loading stream:', error);
+      console.error('Error loading stream:', error);
       setState(prev => ({ 
         ...prev, 
         isLoading: false, 

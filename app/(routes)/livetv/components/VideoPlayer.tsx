@@ -62,8 +62,6 @@ export const VideoPlayer = memo(function VideoPlayer({
 
   // Load stream when event or channel changes
   useEffect(() => {
-    console.log('[VideoPlayer] useEffect triggered - isOpen:', isOpen, 'event:', event?.title, 'channel:', channel?.name);
-    
     // Only load if player is open and we have something to play
     if (!isOpen) {
       stopStream();
@@ -77,7 +75,6 @@ export const VideoPlayer = memo(function VideoPlayer({
         title: event.title,
         poster: event.poster,
       };
-      console.log('[VideoPlayer] Loading event stream with source:', source);
       loadStream(source);
     } else if (channel) {
       // For DLHD channels, use the channel ID
@@ -87,7 +84,6 @@ export const VideoPlayer = memo(function VideoPlayer({
         title: channel.name,
         poster: undefined,
       };
-      console.log('[VideoPlayer] Loading channel stream with source:', source);
       loadStream(source);
     } else {
       stopStream();

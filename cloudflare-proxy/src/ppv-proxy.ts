@@ -28,6 +28,17 @@ const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
 // Valid domains for PPV streams
 const VALID_DOMAINS = ['poocloud.in', 'pooembed.top'];
 
+// Image patterns to reject - these indicate offline streams
+const IMAGE_PATTERNS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.ico', 'image', 'static.dzine', 'stylar_product'];
+
+/**
+ * Check if a URL is an image (indicates offline stream)
+ */
+function isImageUrl(url: string): boolean {
+  const lower = url.toLowerCase();
+  return IMAGE_PATTERNS.some(pattern => lower.includes(pattern));
+}
+
 function corsHeaders(): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': '*',
@@ -186,6 +197,15 @@ export async function handlePPVRequest(request: Request, env: Env): Promise<Resp
     try {
       const decodedUrl = decodeURIComponent(streamUrl);
       
+      // CRITICAL: Reject image URLs - these indicate offline streams
+      if (isImageUrl(decodedUrl)) {
+        logger.warn('Rejected image URL (stream offline)', { url: decodedUrl.substring(0, 80) });
+        return jsonResponse({ 
+          error: 'Stream is offline - received image URL instead of video',
+          url: decodedUrl.substring(0, 80),
+        }, 400);
+      }
+      
       // Validate domain
       if (!isValidDomain(decodedUrl)) {
         logger.warn('Invalid domain', { url: decodedUrl.substring(0, 80) });
@@ -233,6 +253,15 @@ export async function handlePPVRequest(request: Request, env: Env): Promise<Resp
       if (contentType.includes('mpegurl') || decodedUrl.endsWith('.m3u8') || decodedUrl.includes('.m3u8?')) {
         const text = await response.text();
         
+        // Check if the playlist contains image URLs (indicates offline stream)
+        if (IMAGE_PATTERNS.some(pattern => text.toLowerCase().includes(pattern))) {
+          logger.warn('M3U8 contains image URLs - stream is offline', { url: decodedUrl.substring(0, 80) });
+          return jsonResponse({ 
+            error: 'Stream is offline - playlist contains image URLs instead of video segments',
+            url: decodedUrl.substring(0, 80),
+          }, 503);
+        }
+        
         // Get base URL for relative paths
         const baseUrl = decodedUrl.substring(0, decodedUrl.lastIndexOf('/') + 1);
         
@@ -253,6 +282,12 @@ export async function handlePPVRequest(request: Request, env: Env): Promise<Resp
           
           // Skip other comments
           if (trimmed.startsWith('#')) return line;
+          
+          // Skip image URLs - don't rewrite them
+          if (isImageUrl(trimmed)) {
+            logger.warn('Skipping image URL in playlist', { url: trimmed.substring(0, 60) });
+            return '# SKIPPED: ' + trimmed; // Comment out the image URL
+          }
           
           // Rewrite segment URLs
           if (trimmed.startsWith('http')) {
