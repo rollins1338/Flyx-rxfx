@@ -20,7 +20,7 @@ export interface PlayerState {
 }
 
 export interface StreamSource {
-  type: 'dlhd' | 'ppv' | 'cdnlive';
+  type: 'dlhd' | 'ppv' | 'cdnlive' | 'streamed';
   channelId: string;
   title: string;
   poster?: string;
@@ -56,10 +56,16 @@ export function useVideoPlayer() {
         return `/api/livetv/ppv-stream?uri=${encodeURIComponent(source.channelId)}`;
       case 'cdnlive':
         // CDN Live channelId format: "channelName|countryCode"
-        const parts = source.channelId.split('|');
-        const channelName = encodeURIComponent(parts[0] || source.channelId);
-        const countryCode = parts[1] || 'us';
+        const cdnParts = source.channelId.split('|');
+        const channelName = encodeURIComponent(cdnParts[0] || source.channelId);
+        const countryCode = cdnParts[1] || 'us';
         return `/api/livetv/cdnlive-stream?channel=${channelName}&code=${countryCode}`;
+      case 'streamed':
+        // Streamed channelId format: "source:id"
+        const streamedParts = source.channelId.split(':');
+        const streamSource = streamedParts[0] || 'alpha';
+        const streamId = streamedParts[1] || source.channelId;
+        return `/api/livetv/streamed-stream?source=${streamSource}&id=${streamId}`;
       default:
         throw new Error(`Unsupported source type: ${source.type}`);
     }
@@ -87,27 +93,41 @@ export function useVideoPlayer() {
 
       let streamUrl = getStreamUrl(source);
       
-      // For CDN Live and PPV, we need to fetch the stream URL from the API first
-      if (source.type === 'cdnlive' || source.type === 'ppv') {
+      // For CDN Live, PPV, and Streamed, we need to fetch the stream URL from the API first
+      if (source.type === 'cdnlive' || source.type === 'ppv' || source.type === 'streamed') {
         const apiResponse = await fetch(streamUrl);
         const apiData = await apiResponse.json();
         
-        if (!apiData.success || !apiData.streamUrl) {
+        // Handle streamed differently - it returns embedUrl instead of streamUrl
+        if (source.type === 'streamed') {
+          if (!apiData.success) {
+            throw new Error(apiData.error || 'Failed to get stream');
+          }
+          // Streamed returns an embed URL - we need to extract the m3u8 or use the embed
+          if (apiData.stream?.streamUrl) {
+            streamUrl = apiData.stream.streamUrl;
+          } else if (apiData.stream?.embedUrl) {
+            // For now, show error that direct streaming isn't available
+            throw new Error('This stream requires an embed player. Direct streaming not available.');
+          } else {
+            throw new Error('No stream URL available');
+          }
+        } else if (!apiData.success || !apiData.streamUrl) {
           // Check for specific offline error
           const errorMsg = apiData.error || `Failed to get ${source.type.toUpperCase()} stream URL`;
           if (errorMsg.toLowerCase().includes('offline') || errorMsg.toLowerCase().includes('not live')) {
             throw new Error('This stream is not currently live. Please try again when the event starts.');
           }
           throw new Error(errorMsg);
-        }
-        
-        // Proxy streams through Cloudflare for proper CORS and header handling
-        if (source.type === 'ppv') {
-          streamUrl = getPpvStreamProxyUrl(apiData.streamUrl);
-        } else if (source.type === 'cdnlive') {
-          streamUrl = getCdnLiveStreamProxyUrl(apiData.streamUrl);
         } else {
-          streamUrl = apiData.streamUrl;
+          // Proxy streams through Cloudflare for proper CORS and header handling
+          if (source.type === 'ppv') {
+            streamUrl = getPpvStreamProxyUrl(apiData.streamUrl);
+          } else if (source.type === 'cdnlive') {
+            streamUrl = getCdnLiveStreamProxyUrl(apiData.streamUrl);
+          } else {
+            streamUrl = apiData.streamUrl;
+          }
         }
       }
       

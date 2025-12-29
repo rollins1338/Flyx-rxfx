@@ -7,8 +7,8 @@ import { memo } from 'react';
 import styles from '../LiveTV.module.css';
 
 interface SourceTabsProps {
-  selectedSource: 'all' | 'channels' | 'dlhd' | 'ppv' | 'cdnlive';
-  onSourceChange: (source: 'all' | 'channels' | 'dlhd' | 'ppv' | 'cdnlive') => void;
+  selectedSource: 'all' | 'channels' | 'dlhd' | 'ppv' | 'cdnlive' | 'streamed';
+  onSourceChange: (source: 'all' | 'channels' | 'dlhd' | 'ppv' | 'cdnlive' | 'streamed') => void;
   stats: {
     total: number;
     sources: {
@@ -16,6 +16,7 @@ interface SourceTabsProps {
       dlhd: number;
       ppv: number;
       cdnlive: number;
+      streamed: number;
     };
   };
 }
@@ -26,6 +27,7 @@ const SOURCES = [
   { id: 'dlhd', label: 'Events', icon: '🏟️' },
   { id: 'ppv', label: 'PPV', icon: '🥊' },
   { id: 'cdnlive', label: 'CDN', icon: '🌐' },
+  { id: 'streamed', label: 'Streamed', icon: '🎬' },
 ] as const;
 
 export const SourceTabs = memo(function SourceTabs({

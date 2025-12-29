@@ -105,13 +105,20 @@ export const VideoPlayer = memo(function VideoPlayer({
       } else if (event.source === 'dlhd' && event.channels && event.channels.length > 0) {
         // DLHD: use the first channel's channelId (numeric ID)
         channelId = event.channels[0].channelId;
+      } else if (event.source === 'cdnlive' && event.channels && event.channels.length > 0) {
+        // CDN Live: use channelName|countryCode format
+        channelId = event.channels[0].channelId;
+      } else if (event.source === 'streamed' && event.streamedSources && event.streamedSources.length > 0) {
+        // Streamed: use source:id format
+        const src = event.streamedSources[0];
+        channelId = `${src.source}:${src.id}`;
       } else {
         // Fallback to event.id
         channelId = event.id;
       }
       
       loadStream({
-        type: event.source as 'dlhd' | 'ppv' | 'cdnlive',
+        type: event.source as 'dlhd' | 'ppv' | 'cdnlive' | 'streamed',
         channelId,
         title: event.title,
         poster: event.poster,
@@ -248,11 +255,16 @@ export const VideoPlayer = memo(function VideoPlayer({
                       channelId = event.ppvUriName;
                     } else if (event.source === 'dlhd' && event.channels && event.channels.length > 0) {
                       channelId = event.channels[0].channelId;
+                    } else if (event.source === 'cdnlive' && event.channels && event.channels.length > 0) {
+                      channelId = event.channels[0].channelId;
+                    } else if (event.source === 'streamed' && event.streamedSources && event.streamedSources.length > 0) {
+                      const src = event.streamedSources[0];
+                      channelId = `${src.source}:${src.id}`;
                     } else {
                       channelId = event.id;
                     }
                     loadStream({
-                      type: event.source as 'dlhd' | 'ppv' | 'cdnlive',
+                      type: event.source as 'dlhd' | 'ppv' | 'cdnlive' | 'streamed',
                       channelId,
                       title: event.title,
                       poster: event.poster,

@@ -1,9 +1,11 @@
 /**
  * Custom hook for managing LiveTV data and state
- * Consolidates all data fetching and state management
+ * Provider-based architecture with separate data for each provider
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+
+export type Provider = 'dlhd' | 'cdnlive' | 'ppv' | 'streamed';
 
 export interface LiveEvent {
   id: string;
@@ -14,7 +16,7 @@ export interface LiveEvent {
   time: string;
   isoTime?: string;
   isLive: boolean;
-  source: 'dlhd' | 'ppv' | 'cdnlive';
+  source: Provider;
   poster?: string;
   viewers?: string;
   channels: Array<{
@@ -28,6 +30,9 @@ export interface LiveEvent {
   endsAt?: number;
   // CDN Live specific
   cdnliveEmbedId?: string;
+  // Streamed specific
+  streamedId?: string;
+  streamedSources?: Array<{ source: string; id: string }>;
 }
 
 export interface DLHDChannel {
@@ -47,16 +52,19 @@ export interface LiveCategory {
   count: number;
 }
 
-export interface LiveTVState {
+export interface ProviderData {
   events: LiveEvent[];
-  dlhdChannels: DLHDChannel[];
+  channels: DLHDChannel[];
   categories: LiveCategory[];
   loading: boolean;
   error: string | null;
-  selectedSource: 'all' | 'channels' | 'dlhd' | 'ppv' | 'cdnlive';
-  selectedCategory: string;
-  searchQuery: string;
-  showLiveOnly: boolean;
+}
+
+export interface ProviderStats {
+  dlhd: { events: number; channels: number; live: number };
+  cdnlive: { channels: number };
+  ppv: { events: number; live: number };
+  streamed: { events: number; live: number };
 }
 
 const SPORT_ICONS: Record<string, string> = {
@@ -64,7 +72,8 @@ const SPORT_ICONS: Record<string, string> = {
   'cricket': '🏏', 'hockey': '🏒', 'baseball': '⚾', 'golf': '⛳',
   'rugby': '🏉', 'motorsport': '🏎️', 'f1': '🏎️', 'boxing': '🥊',
   'mma': '🥊', 'ufc': '🥊', 'wwe': '🤼', 'volleyball': '🏐',
-  'am. football': '🏈', 'nfl': '🏈', 'darts': '🎯', '24/7': '📺',
+  'am. football': '🏈', 'american-football': '🏈', 'nfl': '🏈', 
+  'darts': '🎯', '24/7': '📺', 'fight': '🥊', 'other': '📺',
 };
 
 const CHANNEL_CATEGORY_ICONS: Record<string, { name: string; icon: string }> = {
@@ -76,24 +85,6 @@ const CHANNEL_CATEGORY_ICONS: Record<string, { name: string; icon: string }> = {
   documentary: { name: 'Documentary', icon: '🌍' },
   music: { name: 'Music', icon: '🎵' },
 };
-
-// Keywords to categorize CDN Live channels
-const SPORT_KEYWORDS = ['sport', 'espn', 'fox sport', 'bein', 'dazn', 'arena', 'sky sport', 
-  'canal sport', 'eleven', 'polsat sport', 'cosmote', 'nova sport', 'match', 'premier', 
-  'football', 'soccer', 'nba', 'nfl', 'nhl', 'mlb', 'tennis', 'golf', 'f1', 'motorsport'];
-
-function categorizeChannel(channelName: string): string {
-  const nameLower = channelName.toLowerCase();
-  for (const keyword of SPORT_KEYWORDS) {
-    if (nameLower.includes(keyword)) {
-      return 'sports';
-    }
-  }
-  if (nameLower.includes('news') || nameLower.includes('cnn') || nameLower.includes('bbc')) {
-    return 'news';
-  }
-  return 'entertainment';
-}
 
 function getSportIcon(sport: string): string {
   const lower = sport.toLowerCase();
@@ -119,83 +110,179 @@ function formatLocalTime(isoTime?: string, fallbackTime?: string): string {
   return fallbackTime || '';
 }
 
+function generateCategories(events: LiveEvent[], channels: DLHDChannel[], isChannelView: boolean): LiveCategory[] {
+  if (isChannelView) {
+    // Generate categories from channels
+    const categoryMap = new Map<string, number>();
+    channels.forEach(channel => {
+      categoryMap.set(channel.category, (categoryMap.get(channel.category) || 0) + 1);
+    });
+
+    return Array.from(categoryMap.entries())
+      .map(([category, count]) => ({
+        id: category,
+        name: CHANNEL_CATEGORY_ICONS[category]?.name || category.charAt(0).toUpperCase() + category.slice(1),
+        icon: CHANNEL_CATEGORY_ICONS[category]?.icon || '📺',
+        count,
+      }))
+      .sort((a, b) => b.count - a.count);
+  } else {
+    // Generate categories from events (sports)
+    const sportMap = new Map<string, number>();
+    events.forEach(event => {
+      if (event.sport) {
+        const sport = event.sport.toLowerCase();
+        sportMap.set(sport, (sportMap.get(sport) || 0) + 1);
+      }
+    });
+
+    return Array.from(sportMap.entries())
+      .map(([sport, count]) => ({
+        id: sport,
+        name: sport.charAt(0).toUpperCase() + sport.slice(1).replace(/-/g, ' '),
+        icon: getSportIcon(sport),
+        count,
+      }))
+      .sort((a, b) => b.count - a.count);
+  }
+}
+
 export function useLiveTVData() {
-  const [state, setState] = useState<LiveTVState>({
-    events: [],
-    dlhdChannels: [],
-    categories: [],
-    loading: true,
-    error: null,
-    selectedSource: 'all',
-    selectedCategory: 'all',
-    searchQuery: '',
-    showLiveOnly: false,
+  const [selectedProvider, setSelectedProvider] = useState<Provider>('dlhd');
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Provider-specific data
+  const [dlhdData, setDlhdData] = useState<ProviderData>({
+    events: [], channels: [], categories: [], loading: true, error: null
+  });
+  const [cdnliveData, setCdnliveData] = useState<ProviderData>({
+    events: [], channels: [], categories: [], loading: true, error: null
+  });
+  const [ppvData, setPpvData] = useState<ProviderData>({
+    events: [], channels: [], categories: [], loading: true, error: null
+  });
+  const [streamedData, setStreamedData] = useState<ProviderData>({
+    events: [], channels: [], categories: [], loading: true, error: null
   });
 
-  // Fetch DLHD channels (the actual working channels)
-  const fetchDLHDChannels = useCallback(async (): Promise<DLHDChannel[]> => {
+  // Fetch DLHD data (events + channels)
+  const fetchDLHDData = useCallback(async () => {
+    setDlhdData(prev => ({ ...prev, loading: true, error: null }));
+    
     try {
-      const response = await fetch('/api/livetv/dlhd-channels');
-      if (!response.ok) throw new Error('Failed to fetch DLHD channels');
-      
-      const data = await response.json();
-      if (!data.success) throw new Error(data.error || 'DLHD channels API error');
+      const [eventsRes, channelsRes] = await Promise.all([
+        fetch('/api/livetv/schedule'),
+        fetch('/api/livetv/dlhd-channels'),
+      ]);
 
-      return data.channels || [];
-    } catch (error) {
-      console.error('Failed to fetch DLHD channels:', error);
-      return [];
-    }
-  }, []);
-
-  // Fetch DLHD schedule (live events)
-  const fetchDLHDEvents = useCallback(async (): Promise<LiveEvent[]> => {
-    try {
-      const response = await fetch('/api/livetv/schedule');
-      if (!response.ok) throw new Error('Failed to fetch DLHD events');
-      
-      const data = await response.json();
-      if (!data.success) throw new Error(data.error || 'DLHD API error');
+      const eventsJson = await eventsRes.json();
+      const channelsJson = await channelsRes.json();
 
       const events: LiveEvent[] = [];
-      
-      for (const category of data.schedule.categories) {
-        for (const event of category.events) {
-          events.push({
-            id: `dlhd-${event.id}`,
-            title: event.title,
-            sport: event.sport,
-            league: event.league,
-            teams: event.teams,
-            time: formatLocalTime(event.isoTime, event.time),
-            isoTime: event.isoTime,
-            isLive: event.isLive,
-            source: 'dlhd',
-            channels: event.channels,
-          });
+      if (eventsJson.success && eventsJson.schedule?.categories) {
+        for (const category of eventsJson.schedule.categories) {
+          for (const event of category.events || []) {
+            events.push({
+              id: `dlhd-${event.id}`,
+              title: event.title,
+              sport: event.sport,
+              league: event.league,
+              teams: event.teams,
+              time: formatLocalTime(event.isoTime, event.time),
+              isoTime: event.isoTime,
+              isLive: event.isLive,
+              source: 'dlhd',
+              channels: event.channels || [],
+            });
+          }
         }
       }
 
-      return events;
+      const channels: DLHDChannel[] = channelsJson.success ? (channelsJson.channels || []) : [];
+      const categories = generateCategories(events, channels, false);
+
+      setDlhdData({
+        events,
+        channels,
+        categories,
+        loading: false,
+        error: null,
+      });
     } catch (error) {
-      console.error('Error fetching DLHD events:', error);
-      return [];
+      setDlhdData(prev => ({
+        ...prev,
+        loading: false,
+        error: error instanceof Error ? error.message : 'Failed to load DLHD data',
+      }));
     }
   }, []);
 
-  // Fetch PPV streams
-  const fetchPPVEvents = useCallback(async (): Promise<LiveEvent[]> => {
+  // Fetch CDN Live data
+  const fetchCDNLiveData = useCallback(async () => {
+    setCdnliveData(prev => ({ ...prev, loading: true, error: null }));
+    
+    try {
+      const response = await fetch('/api/livetv/cdn-live-channels');
+      const data = await response.json();
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      const channels = data.channels || [];
+      const onlineChannels = channels.filter((c: any) => c.status === 'online');
+
+      // Transform channels to events for display
+      const events: LiveEvent[] = onlineChannels.map((channel: any) => ({
+        id: `cdnlive-${channel.name.toLowerCase().replace(/\s+/g, '-')}-${channel.code}`,
+        title: channel.name,
+        sport: categorizeChannel(channel.name),
+        time: 'Live',
+        isLive: true,
+        source: 'cdnlive' as const,
+        poster: channel.image,
+        viewers: channel.viewers?.toString(),
+        cdnliveEmbedId: `${channel.name}|${channel.code}`,
+        channels: [{
+          name: channel.name,
+          channelId: `${channel.name}|${channel.code}`,
+          href: channel.url,
+        }],
+      }));
+
+      const categories = generateCategories(events, [], false);
+
+      setCdnliveData({
+        events,
+        channels: [],
+        categories,
+        loading: false,
+        error: null,
+      });
+    } catch (error) {
+      setCdnliveData(prev => ({
+        ...prev,
+        loading: false,
+        error: error instanceof Error ? error.message : 'Failed to load CDN Live data',
+      }));
+    }
+  }, []);
+
+  // Fetch PPV data
+  const fetchPPVData = useCallback(async () => {
+    setPpvData(prev => ({ ...prev, loading: true, error: null }));
+    
     try {
       const response = await fetch('/api/livetv/ppv-streams');
-      if (!response.ok) throw new Error('Failed to fetch PPV streams');
-      
       const data = await response.json();
-      if (!data.success) throw new Error(data.error || 'PPV API error');
+
+      if (!data.success) {
+        throw new Error(data.error || 'PPV API error');
+      }
 
       const events: LiveEvent[] = [];
-      
-      for (const category of data.categories) {
-        for (const stream of category.streams) {
+      for (const category of data.categories || []) {
+        for (const stream of category.streams || []) {
           const startTime = new Date(stream.startsAt * 1000);
           events.push({
             id: `ppv-${stream.id}`,
@@ -222,251 +309,176 @@ export function useLiveTVData() {
         }
       }
 
-      return events;
-    } catch (error) {
-      console.error('Error fetching PPV events:', error);
-      return [];
-    }
-  }, []);
+      const categories = generateCategories(events, [], false);
 
-  // Fetch CDN Live channels (transformed to events)
-  const fetchCDNLiveEvents = useCallback(async (): Promise<LiveEvent[]> => {
-    try {
-      // Use the direct channels API which is more reliable
-      const response = await fetch('/api/livetv/cdn-live-channels');
-      if (!response.ok) {
-        console.warn('CDN Live channels API failed:', response.status);
-        return [];
-      }
-      
-      const data = await response.json();
-      if (data.error) {
-        console.warn('CDN Live API returned error:', data.error);
-        return [];
-      }
-
-      const channels = data.channels || [];
-      
-      // Transform channels into events
-      // Only include online channels
-      const events: LiveEvent[] = channels
-        .filter((channel: any) => channel.status === 'online')
-        .map((channel: any) => ({
-          id: `cdnlive-${channel.name.toLowerCase().replace(/\s+/g, '-')}-${channel.code}`,
-          title: channel.name,
-          sport: categorizeChannel(channel.name),
-          time: 'Live',
-          isLive: true,
-          source: 'cdnlive' as const,
-          poster: channel.image,
-          viewers: channel.viewers?.toString(),
-          // Store channel name and code for stream URL construction
-          cdnliveEmbedId: `${channel.name}|${channel.code}`,
-          channels: [{
-            name: channel.name,
-            // channelId format: "channelName|countryCode" for CDN Live
-            channelId: `${channel.name}|${channel.code}`,
-            href: channel.url,
-          }],
-        }));
-
-      return events;
-    } catch (error) {
-      console.error('Error fetching CDN Live channels:', error);
-      return [];
-    }
-  }, []);
-
-  // Fetch all events and channels
-  const fetchAllData = useCallback(async () => {
-    setState(prev => ({ ...prev, loading: true, error: null }));
-    
-    try {
-      const [dlhdEvents, ppvEvents, cdnliveEvents, dlhdChannels] = await Promise.all([
-        fetchDLHDEvents(),
-        fetchPPVEvents(),
-        fetchCDNLiveEvents(),
-        fetchDLHDChannels(),
-      ]);
-
-      const allEvents = [...dlhdEvents, ...ppvEvents, ...cdnliveEvents];
-      
-      // Generate categories from events (for sports filtering)
-      const sportCategoryMap = new Map<string, number>();
-      
-      allEvents.forEach(event => {
-        if (event.sport) {
-          const sport = event.sport.toLowerCase();
-          sportCategoryMap.set(sport, (sportCategoryMap.get(sport) || 0) + 1);
-        }
-      });
-
-      // Generate categories from DLHD channels
-      const channelCategoryMap = new Map<string, number>();
-      dlhdChannels.forEach((channel: DLHDChannel) => {
-        channelCategoryMap.set(channel.category, (channelCategoryMap.get(channel.category) || 0) + 1);
-      });
-
-      const categories: LiveCategory[] = [
-        { id: 'all', name: 'All', icon: '🏆', count: allEvents.length + dlhdChannels.length },
-        // Sport categories from events
-        ...Array.from(sportCategoryMap.entries()).map(([sport, count]) => ({
-          id: sport,
-          name: sport.charAt(0).toUpperCase() + sport.slice(1),
-          icon: getSportIcon(sport),
-          count,
-        })),
-        // Channel categories
-        ...Array.from(channelCategoryMap.entries()).map(([category, count]) => ({
-          id: `channel-${category}`,
-          name: CHANNEL_CATEGORY_ICONS[category]?.name || category,
-          icon: CHANNEL_CATEGORY_ICONS[category]?.icon || '📺',
-          count,
-        })),
-      ];
-
-      setState(prev => ({
-        ...prev,
-        events: allEvents,
-        dlhdChannels,
+      setPpvData({
+        events,
+        channels: [],
         categories,
         loading: false,
-      }));
+        error: null,
+      });
     } catch (error) {
-      setState(prev => ({
+      setPpvData(prev => ({
         ...prev,
-        error: error instanceof Error ? error.message : 'Failed to load data',
         loading: false,
+        error: error instanceof Error ? error.message : 'Failed to load PPV data',
       }));
     }
-  }, [fetchDLHDEvents, fetchPPVEvents, fetchCDNLiveEvents, fetchDLHDChannels]);
+  }, []);
 
-  // Filter DLHD channels based on current state
-  const filteredDLHDChannels = useMemo(() => {
-    let filtered = state.dlhdChannels;
+  // Fetch Streamed data
+  const fetchStreamedData = useCallback(async () => {
+    setStreamedData(prev => ({ ...prev, loading: true, error: null }));
+    
+    try {
+      const response = await fetch('/api/livetv/streamed-events');
+      const data = await response.json();
 
-    // Filter by category
-    if (state.selectedCategory !== 'all') {
-      // Check if it's a channel category (prefixed with 'channel-')
-      if (state.selectedCategory.startsWith('channel-')) {
-        const category = state.selectedCategory.replace('channel-', '');
-        filtered = filtered.filter(channel => channel.category === category);
+      if (!data.success) {
+        throw new Error(data.error || 'Streamed API error');
       }
+
+      const events: LiveEvent[] = data.events || [];
+      const categories = generateCategories(events, [], false);
+
+      setStreamedData({
+        events,
+        channels: [],
+        categories,
+        loading: false,
+        error: null,
+      });
+    } catch (error) {
+      setStreamedData(prev => ({
+        ...prev,
+        loading: false,
+        error: error instanceof Error ? error.message : 'Failed to load Streamed data',
+      }));
     }
+  }, []);
 
-    // Filter by search query
-    if (state.searchQuery) {
-      const query = state.searchQuery.toLowerCase();
-      filtered = filtered.filter(channel =>
-        channel.name.toLowerCase().includes(query) ||
-        channel.category.toLowerCase().includes(query) ||
-        channel.country.toLowerCase().includes(query)
-      );
+  // Initial load - fetch all providers
+  useEffect(() => {
+    fetchDLHDData();
+    fetchCDNLiveData();
+    fetchPPVData();
+    fetchStreamedData();
+  }, [fetchDLHDData, fetchCDNLiveData, fetchPPVData, fetchStreamedData]);
+
+  // Get current provider data
+  const currentProviderData = useMemo(() => {
+    switch (selectedProvider) {
+      case 'dlhd': return dlhdData;
+      case 'cdnlive': return cdnliveData;
+      case 'ppv': return ppvData;
+      case 'streamed': return streamedData;
+      default: return dlhdData;
     }
+  }, [selectedProvider, dlhdData, cdnliveData, ppvData, streamedData]);
 
-    return filtered;
-  }, [state.dlhdChannels, state.selectedCategory, state.searchQuery]);
+  // Filter by search query
+  const filteredData = useMemo(() => {
+    if (!searchQuery) return currentProviderData;
 
-  // Filter events based on current state
-  const filteredEvents = useMemo(() => {
-    let filtered = state.events;
+    const query = searchQuery.toLowerCase();
+    
+    const filteredEvents = currentProviderData.events.filter(event =>
+      event.title.toLowerCase().includes(query) ||
+      event.sport?.toLowerCase().includes(query) ||
+      event.league?.toLowerCase().includes(query) ||
+      event.teams?.home.toLowerCase().includes(query) ||
+      event.teams?.away.toLowerCase().includes(query)
+    );
 
-    // Filter by source (skip if 'channels' since that's for DLHD channels, not events)
-    if (state.selectedSource !== 'all' && state.selectedSource !== 'channels') {
-      filtered = filtered.filter(event => event.source === state.selectedSource);
-    }
-
-    // Filter by category (only sport categories, not channel categories)
-    if (state.selectedCategory !== 'all' && !state.selectedCategory.startsWith('channel-')) {
-      filtered = filtered.filter(event => 
-        event.sport?.toLowerCase() === state.selectedCategory
-      );
-    }
-
-    // Filter by search query
-    if (state.searchQuery) {
-      const query = state.searchQuery.toLowerCase();
-      filtered = filtered.filter(event =>
-        event.title.toLowerCase().includes(query) ||
-        event.sport?.toLowerCase().includes(query) ||
-        event.league?.toLowerCase().includes(query) ||
-        event.teams?.home.toLowerCase().includes(query) ||
-        event.teams?.away.toLowerCase().includes(query)
-      );
-    }
-
-    // Filter by live only
-    if (state.showLiveOnly) {
-      filtered = filtered.filter(event => event.isLive);
-    }
-
-    return filtered;
-  }, [state.events, state.selectedSource, state.selectedCategory, state.searchQuery, state.showLiveOnly]);
-
-  // Stats
-  const stats = useMemo(() => {
-    const liveCount = state.events.filter(event => event.isLive).length;
-    const totalCount = state.events.length;
-    const sourceStats = {
-      channels: state.dlhdChannels.length,
-      dlhd: state.events.filter(event => event.source === 'dlhd').length,
-      ppv: state.events.filter(event => event.source === 'ppv').length,
-      cdnlive: state.events.filter(event => event.source === 'cdnlive').length,
-    };
+    const filteredChannels = currentProviderData.channels.filter(channel =>
+      channel.name.toLowerCase().includes(query) ||
+      channel.category.toLowerCase().includes(query) ||
+      channel.country.toLowerCase().includes(query)
+    );
 
     return {
-      live: liveCount,
-      total: totalCount + state.dlhdChannels.length,
-      sources: sourceStats,
+      ...currentProviderData,
+      events: filteredEvents,
+      channels: filteredChannels,
     };
-  }, [state.events, state.dlhdChannels]);
+  }, [currentProviderData, searchQuery]);
 
-  // Actions
-  const setSelectedSource = useCallback((source: LiveTVState['selectedSource']) => {
-    setState(prev => ({ ...prev, selectedSource: source }));
-  }, []);
+  // Stats for all providers
+  const stats: ProviderStats = useMemo(() => ({
+    dlhd: {
+      events: dlhdData.events.length,
+      channels: dlhdData.channels.length,
+      live: dlhdData.events.filter(e => e.isLive).length,
+    },
+    cdnlive: {
+      channels: cdnliveData.events.length, // CDN Live events are actually channels
+    },
+    ppv: {
+      events: ppvData.events.length,
+      live: ppvData.events.filter(e => e.isLive).length,
+    },
+    streamed: {
+      events: streamedData.events.length,
+      live: streamedData.events.filter(e => e.isLive).length,
+    },
+  }), [dlhdData, cdnliveData, ppvData, streamedData]);
 
-  const setSelectedCategory = useCallback((category: string) => {
-    setState(prev => ({ ...prev, selectedCategory: category }));
-  }, []);
-
-  const setSearchQuery = useCallback((query: string) => {
-    setState(prev => ({ ...prev, searchQuery: query }));
-  }, []);
-
-  const setShowLiveOnly = useCallback((showLive: boolean) => {
-    setState(prev => ({ ...prev, showLiveOnly: showLive }));
-  }, []);
-
-  // Initial load only
-  useEffect(() => {
-    fetchAllData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Manual refresh function (no auto-refresh to prevent flickering)
+  // Refresh current provider
   const refresh = useCallback(() => {
-    fetchAllData();
-  }, [fetchAllData]);
+    switch (selectedProvider) {
+      case 'dlhd': fetchDLHDData(); break;
+      case 'cdnlive': fetchCDNLiveData(); break;
+      case 'ppv': fetchPPVData(); break;
+      case 'streamed': fetchStreamedData(); break;
+    }
+  }, [selectedProvider, fetchDLHDData, fetchCDNLiveData, fetchPPVData, fetchStreamedData]);
+
+  // Refresh all providers
+  const refreshAll = useCallback(() => {
+    fetchDLHDData();
+    fetchCDNLiveData();
+    fetchPPVData();
+    fetchStreamedData();
+  }, [fetchDLHDData, fetchCDNLiveData, fetchPPVData, fetchStreamedData]);
 
   return {
-    // State
-    events: filteredEvents,
-    dlhdChannels: filteredDLHDChannels,
-    categories: state.categories,
-    loading: state.loading,
-    error: state.error,
-    selectedSource: state.selectedSource,
-    selectedCategory: state.selectedCategory,
-    searchQuery: state.searchQuery,
-    showLiveOnly: state.showLiveOnly,
+    // Current provider
+    selectedProvider,
+    setSelectedProvider,
+    
+    // Current provider data (filtered)
+    events: filteredData.events,
+    channels: filteredData.channels,
+    categories: filteredData.categories,
+    loading: filteredData.loading,
+    error: filteredData.error,
+    
+    // Search
+    searchQuery,
+    setSearchQuery,
+    
+    // Stats
     stats,
     
     // Actions
-    setSelectedSource,
-    setSelectedCategory,
-    setSearchQuery,
-    setShowLiveOnly,
     refresh,
+    refreshAll,
   };
+}
+
+// Helper function to categorize CDN Live channels
+function categorizeChannel(channelName: string): string {
+  const nameLower = channelName.toLowerCase();
+  const sportKeywords = ['sport', 'espn', 'fox sport', 'bein', 'dazn', 'arena', 'sky sport', 
+    'canal sport', 'eleven', 'polsat sport', 'cosmote', 'nova sport', 'match', 'premier', 
+    'football', 'soccer', 'nba', 'nfl', 'nhl', 'mlb', 'tennis', 'golf', 'f1', 'motorsport'];
+  
+  for (const keyword of sportKeywords) {
+    if (nameLower.includes(keyword)) return 'sports';
+  }
+  if (nameLower.includes('news') || nameLower.includes('cnn') || nameLower.includes('bbc')) {
+    return 'news';
+  }
+  return 'entertainment';
 }

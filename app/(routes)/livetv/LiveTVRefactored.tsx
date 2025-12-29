@@ -1,6 +1,6 @@
 /**
- * Refactored LiveTV Component
- * Modern, intuitive live TV experience with improved UX
+ * LiveTV Component
+ * Provider-based live TV experience with DLHD, CDN Live, PPV, and Streamed
  */
 
 'use client';
@@ -10,29 +10,23 @@ import { Navigation } from '@/components/layout/Navigation';
 import { Footer } from '@/components/layout/Footer';
 import { useLiveTVData, LiveEvent, DLHDChannel } from './hooks/useLiveTVData';
 import { LiveTVHeader } from './components/LiveTVHeader';
-import { SourceTabs } from './components/SourceTabs';
-import { CategoryFilters } from './components/CategoryFilters';
-import { EventsGrid } from './components/EventsGrid';
-import { CableChannelsGrid } from './components/CableChannelsGrid';
+import { ProviderTabs } from './components/ProviderTabs';
+import { ProviderContent } from './components/ProviderContent';
 import { VideoPlayer } from './components/VideoPlayer';
 import styles from './LiveTV.module.css';
 
 export default function LiveTVRefactored() {
   const {
+    selectedProvider,
+    setSelectedProvider,
     events,
-    dlhdChannels,
+    channels,
     categories,
     loading,
     error,
-    selectedSource,
-    selectedCategory,
     searchQuery,
-    showLiveOnly,
-    stats,
-    setSelectedSource,
-    setSelectedCategory,
     setSearchQuery,
-    setShowLiveOnly,
+    stats,
     refresh,
   } = useLiveTVData();
 
@@ -61,6 +55,19 @@ export default function LiveTVRefactored() {
     setSelectedChannel(null);
   }, []);
 
+  // Calculate total stats for header
+  const totalStats = {
+    live: stats.dlhd.live + stats.ppv.live + stats.streamed.live + stats.cdnlive.channels,
+    total: stats.dlhd.events + stats.dlhd.channels + stats.cdnlive.channels + stats.ppv.events + stats.streamed.events,
+    sources: {
+      channels: stats.dlhd.channels,
+      dlhd: stats.dlhd.events,
+      ppv: stats.ppv.events,
+      cdnlive: stats.cdnlive.channels,
+      streamed: stats.streamed.events,
+    },
+  };
+
   return (
     <div className={styles.liveTVPage}>
       <Navigation />
@@ -68,44 +75,32 @@ export default function LiveTVRefactored() {
       <main className={styles.mainContent}>
         {/* Header Section */}
         <LiveTVHeader
-          stats={stats}
+          stats={totalStats}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           onRefresh={refresh}
           loading={loading}
         />
 
-        {/* Source Navigation */}
-        <SourceTabs
-          selectedSource={selectedSource}
-          onSourceChange={setSelectedSource}
+        {/* Provider Tabs */}
+        <ProviderTabs
+          selectedProvider={selectedProvider}
+          onProviderChange={setSelectedProvider}
           stats={stats}
+          loading={loading}
         />
 
-        {/* Category Filters */}
-        <CategoryFilters
+        {/* Provider Content */}
+        <ProviderContent
+          provider={selectedProvider}
+          events={events}
+          channels={channels}
           categories={categories}
-          selectedCategory={selectedCategory}
-          onCategoryChange={setSelectedCategory}
-          showLiveOnly={showLiveOnly}
-          onLiveOnlyChange={setShowLiveOnly}
+          onPlayEvent={handlePlayEvent}
+          onPlayChannel={handlePlayChannel}
+          loading={loading}
+          error={error}
         />
-
-        {/* Content based on selected source */}
-        {selectedSource === 'channels' ? (
-          <CableChannelsGrid
-            channels={dlhdChannels}
-            onChannelPlay={handlePlayChannel}
-            loading={loading}
-          />
-        ) : (
-          <EventsGrid
-            events={events}
-            onPlayEvent={handlePlayEvent}
-            loading={loading}
-            error={error}
-          />
-        )}
       </main>
 
       {/* Video Player Modal */}
