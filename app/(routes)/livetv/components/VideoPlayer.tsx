@@ -113,7 +113,8 @@ export const VideoPlayer = memo(function VideoPlayer({
     } else {
       stopStream();
     }
-  }, [event, channel, isOpen, loadStream, stopStream]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [event?.id, channel?.id, isOpen]);
 
   // Show/hide controls based on playing state
   useEffect(() => {
