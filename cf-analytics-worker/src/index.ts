@@ -81,12 +81,23 @@ interface PendingWatchSession {
   isCompleted: boolean;
 }
 
+interface BotDetection {
+  userId: string;
+  ipAddress: string;
+  userAgent: string;
+  confidenceScore: number;
+  reasons: string[];
+  fingerprint?: string;
+  timestamp: number;
+}
+
 // Live users map - keyed by userId
 const liveUsers = new Map<string, LiveUser>();
 
 // Pending writes queue
 const pendingPageViews: PendingPageView[] = [];
 const pendingWatchSessions = new Map<string, PendingWatchSession>();
+const pendingBotDetections = new Map<string, BotDetection>(); // Keyed by userId to avoid duplicates
 
 // Timing
 let lastFlushTime = 0;
@@ -241,6 +252,30 @@ async function flushToD1(db: D1Database, force = false): Promise<void> {
     `).bind(peakStats.date, peakStats.total, peakStats.time, peakStats.watching, peakStats.time, peakStats.livetv, peakStats.time, peakStats.browsing, peakStats.time, now, now));
   }
   
+  // 6. Insert bot detections (upsert to update if higher confidence)
+  for (const detection of pendingBotDetections.values()) {
+    // Determine status based on confidence score
+    let status = 'confirmed_human';
+    if (detection.confidenceScore >= 80) status = 'confirmed_bot';
+    else if (detection.confidenceScore >= 50) status = 'suspected';
+    else if (detection.confidenceScore >= 30) status = 'pending_review';
+    
+    batch.push(db.prepare(`
+      INSERT INTO bot_detections (user_id, ip_address, user_agent, confidence_score, detection_reasons, fingerprint, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(user_id) DO UPDATE SET
+        confidence_score = CASE WHEN excluded.confidence_score > bot_detections.confidence_score THEN excluded.confidence_score ELSE bot_detections.confidence_score END,
+        detection_reasons = CASE WHEN excluded.confidence_score > bot_detections.confidence_score THEN excluded.detection_reasons ELSE bot_detections.detection_reasons END,
+        status = CASE WHEN excluded.confidence_score > bot_detections.confidence_score THEN excluded.status ELSE bot_detections.status END,
+        updated_at = excluded.updated_at
+    `).bind(
+      detection.userId, detection.ipAddress, detection.userAgent,
+      detection.confidenceScore, JSON.stringify(detection.reasons),
+      detection.fingerprint || null, status, detection.timestamp, now
+    ));
+  }
+  pendingBotDetections.clear();
+  
   if (batch.length > 0) {
     try {
       await db.batch(batch);
@@ -283,6 +318,27 @@ async function handlePresence(request: Request, env: Env, headers: HeadersInit):
   // If user is leaving, remove them
   if (data.isLeaving) {
     liveUsers.delete(data.userId);
+  }
+  
+  // Store bot detection data if present and confidence is notable (>= 30%)
+  // This captures both suspected bots AND suspicious activity for review
+  if (data.validation && typeof data.validation.botConfidence === 'number' && data.validation.botConfidence >= 30) {
+    const userAgent = request.headers.get('User-Agent') || 'unknown';
+    const ipAddress = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
+    
+    // Only update if this detection has higher confidence than existing
+    const existingDetection = pendingBotDetections.get(data.userId);
+    if (!existingDetection || data.validation.botConfidence > existingDetection.confidenceScore) {
+      pendingBotDetections.set(data.userId, {
+        userId: data.userId,
+        ipAddress,
+        userAgent,
+        confidenceScore: data.validation.botConfidence,
+        reasons: data.validation.botReasons || [],
+        fingerprint: data.validation.fingerprint,
+        timestamp: now,
+      });
+    }
   }
   
   // Trigger flush in background (non-blocking)
@@ -563,6 +619,28 @@ async function handleInitDb(env: Env, headers: HeadersInit): Promise<Response> {
           updated_at INTEGER
         )
       `),
+      
+      // Bot detection table
+      env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS bot_detections (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id TEXT NOT NULL UNIQUE,
+          ip_address TEXT NOT NULL,
+          user_agent TEXT,
+          confidence_score INTEGER NOT NULL,
+          detection_reasons TEXT,
+          fingerprint TEXT,
+          status TEXT DEFAULT 'suspected',
+          reviewed_by TEXT,
+          reviewed_at INTEGER,
+          created_at INTEGER,
+          updated_at INTEGER
+        )
+      `),
+      env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_bot_detections_user ON bot_detections(user_id)`),
+      env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_bot_detections_confidence ON bot_detections(confidence_score)`),
+      env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_bot_detections_status ON bot_detections(status)`),
+      env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_bot_detections_created ON bot_detections(created_at)`),
     ]);
     
     return Response.json({ success: true, message: 'Database initialized' }, { headers });
@@ -597,6 +675,7 @@ export default {
         liveUsers: stats.total,
         pendingPageViews: pendingPageViews.length,
         pendingWatchSessions: pendingWatchSessions.size,
+        pendingBotDetections: pendingBotDetections.size,
         lastFlush: lastFlushTime,
         timestamp: Date.now(),
       }, { headers });
@@ -647,6 +726,11 @@ export default {
               liveUsers: Array.from(liveUsers.entries()),
               pendingPageViews: pendingPageViews.length,
               pendingWatchSessions: Array.from(pendingWatchSessions.keys()),
+              pendingBotDetections: Array.from(pendingBotDetections.entries()).map(([k, v]) => ({
+                userId: k,
+                confidence: v.confidenceScore,
+                reasons: v.reasons,
+              })),
               lastFlush: lastFlushTime,
               peak: peakStats,
             }, { headers });

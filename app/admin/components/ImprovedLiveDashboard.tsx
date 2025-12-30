@@ -1,628 +1,179 @@
 'use client';
 
 /**
- * Improved Live Dashboard
- * Clear, accurate display of real-time user activity
- * 
- * Shows:
- * - Total users on site (with heartbeat validation)
- * - Users actively watching content (VOD)
- * - Users watching Live TV
- * - Users browsing (not watching anything)
- * - Persistent peak tracking (stored in DB, updated server-side)
- * - 12-hour activity trend from server
+ * ImprovedLiveDashboard - OPTIMIZED
+ * Uses ONLY unified stats context for real-time data
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useStats } from '../context/StatsContext';
 import { getAdminAnalyticsUrl } from '../hooks/useAnalyticsApi';
+import { colors, getPercentage } from './ui';
 
-// Hook for animated number transitions
-function useAnimatedNumber(value: number, duration: number = 500): number {
+function useAnimatedNumber(value: number, duration = 400): number {
   const [displayValue, setDisplayValue] = useState(value);
-  const previousValue = useRef(value);
+  const prevValue = useRef(value);
   const animationRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (previousValue.current === value) return;
-    
-    const startValue = previousValue.current;
-    const endValue = value;
+    if (prevValue.current === value) return;
+    const start = prevValue.current;
     const startTime = performance.now();
     
     const animate = (currentTime: number) => {
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      
-      // Ease out cubic for smooth deceleration
-      const easeOut = 1 - Math.pow(1 - progress, 3);
-      const currentValue = Math.round(startValue + (endValue - startValue) * easeOut);
-      
-      setDisplayValue(currentValue);
-      
-      if (progress < 1) {
-        animationRef.current = requestAnimationFrame(animate);
-      } else {
-        previousValue.current = value;
-      }
+      const progress = Math.min((currentTime - startTime) / duration, 1);
+      setDisplayValue(Math.round(start + (value - start) * (1 - Math.pow(1 - progress, 3))));
+      if (progress < 1) animationRef.current = requestAnimationFrame(animate);
+      else prevValue.current = value;
     };
     
     animationRef.current = requestAnimationFrame(animate);
-    
-    return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-    };
+    return () => { if (animationRef.current) cancelAnimationFrame(animationRef.current); };
   }, [value, duration]);
 
   return displayValue;
 }
 
-interface HistoryPoint {
-  time: number;
-  total: number;
-  watching: number;
-  livetv: number;
-  browsing: number;
-}
+interface HistoryPoint { time: number; total: number; watching: number; livetv: number; browsing: number; }
 
 export default function ImprovedLiveDashboard() {
-  const { stats: unifiedStats, loading: statsLoading, refresh: refreshStats } = useStats();
-  
+  const { stats, loading, refresh, lastRefresh } = useStats();
   const [history, setHistory] = useState<HistoryPoint[]>([]);
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const [refreshRate, setRefreshRate] = useState(10); // seconds
 
-  // Current activity breakdown from unified stats
-  const currentActivity = {
-    watching: unifiedStats.liveWatching,
-    livetv: unifiedStats.liveTVViewers,
-    browsing: unifiedStats.liveBrowsing,
-    total: unifiedStats.liveUsers,
-  };
-  
-  // Peak stats come from unified stats (updated server-side)
-  const peakStats = unifiedStats.peakStats;
-
-  // Fetch 12-hour activity history from server
-  const fetchActivityHistory = useCallback(async () => {
+  const fetchHistory = useCallback(async () => {
     try {
-      const response = await fetch(getAdminAnalyticsUrl('activity-history', { hours: 12 }));
-      const data = await response.json();
+      const res = await fetch(getAdminAnalyticsUrl('activity-history', { hours: 12 }));
+      const data = await res.json();
       if (data.success && data.history) {
-        setHistory(data.history.map((h: any) => ({
-          time: h.time,
-          total: h.total,
-          watching: h.watching || 0,
-          browsing: h.browsing || 0,
-          livetv: h.livetv || 0,
-        })));
+        setHistory(data.history.map((h: any) => ({ time: h.time, total: h.total, watching: h.watching || 0, browsing: h.browsing || 0, livetv: h.livetv || 0 })));
       }
-    } catch (error) {
-      console.error('Failed to fetch activity history:', error);
-    }
+    } catch (e) { console.error('Failed to fetch history:', e); }
   }, []);
 
-  // Update lastUpdate when stats change
-  useEffect(() => {
-    if (!statsLoading) {
-      setLastUpdate(new Date());
-    }
-  }, [unifiedStats, statsLoading]);
+  useEffect(() => { fetchHistory(); const i = setInterval(fetchHistory, 300000); return () => clearInterval(i); }, [fetchHistory]);
 
-  // Fetch activity history on mount and every 5 minutes
-  useEffect(() => {
-    fetchActivityHistory();
-    const historyInterval = setInterval(fetchActivityHistory, 5 * 60 * 1000);
-    return () => clearInterval(historyInterval);
-  }, [fetchActivityHistory]);
-
-  // Auto-refresh stats
-  useEffect(() => {
-    const interval = setInterval(() => {
-      refreshStats();
-    }, refreshRate * 1000);
-    return () => clearInterval(interval);
-  }, [refreshRate, refreshStats]);
-
-  const formatTime = (timestamp: number) => {
-    return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
+  const activity = { total: stats.liveUsers, watching: stats.liveWatching, livetv: stats.liveTVViewers, browsing: stats.liveBrowsing };
+  const peak = stats.peakStats;
+  const formatTime = (ts: number) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Header with controls */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h2 style={{ margin: 0, color: '#f8fafc', fontSize: '20px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <h2 style={{ margin: 0, color: colors.text.primary, fontSize: '20px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '10px' }}>
             Real-Time Activity
-            <span style={{ 
-              display: 'inline-flex', 
-              alignItems: 'center', 
-              gap: '6px', 
-              padding: '4px 10px', 
-              background: 'rgba(16, 185, 129, 0.2)', 
-              borderRadius: '20px', 
-              fontSize: '11px', 
-              color: '#10b981',
-              fontWeight: '500'
-            }}>
-              <span style={{ 
-                width: '6px', 
-                height: '6px', 
-                background: '#10b981', 
-                borderRadius: '50%', 
-                animation: 'pulse 2s infinite' 
-              }} />
-              LIVE
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', background: 'rgba(16, 185, 129, 0.2)', borderRadius: '20px', fontSize: '11px', color: colors.success }}>
+              <span style={{ width: '6px', height: '6px', background: colors.success, borderRadius: '50%', animation: 'pulse 2s infinite' }} />LIVE
             </span>
           </h2>
-          <p style={{ margin: '4px 0 0 0', color: '#64748b', fontSize: '13px' }}>
-            Last updated: {lastUpdate ? lastUpdate.toLocaleTimeString() : 'Loading...'}
-          </p>
+          <p style={{ margin: '4px 0 0 0', color: colors.text.muted, fontSize: '13px' }}>Updated: {lastRefresh ? lastRefresh.toLocaleTimeString() : 'Loading...'}</p>
         </div>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <select 
-            value={refreshRate} 
-            onChange={(e) => setRefreshRate(parseInt(e.target.value))}
-            style={{ 
-              padding: '6px 10px', 
-              background: 'rgba(255, 255, 255, 0.05)', 
-              border: '1px solid rgba(255, 255, 255, 0.1)', 
-              borderRadius: '6px', 
-              color: '#f8fafc', 
-              fontSize: '13px' 
-            }}
-          >
-            <option value={5}>5s refresh</option>
-            <option value={10}>10s refresh</option>
-            <option value={30}>30s refresh</option>
-          </select>
-          <button
-            onClick={refreshStats}
-            disabled={statsLoading}
-            style={{
-              padding: '6px 12px',
-              background: 'rgba(120, 119, 198, 0.2)',
-              border: '1px solid rgba(120, 119, 198, 0.3)',
-              borderRadius: '6px',
-              color: '#7877c6',
-              fontSize: '13px',
-              cursor: statsLoading ? 'not-allowed' : 'pointer',
-              opacity: statsLoading ? 0.6 : 1,
-            }}
-          >
-            {statsLoading ? '⏳' : '🔄'} Refresh
-          </button>
-        </div>
+        <button onClick={() => { refresh(); fetchHistory(); }} disabled={loading} style={{ padding: '6px 12px', background: 'rgba(120, 119, 198, 0.2)', border: '1px solid rgba(120, 119, 198, 0.3)', borderRadius: '6px', color: colors.primary, fontSize: '13px', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1 }}>
+          {loading ? '⏳' : '🔄'} Refresh
+        </button>
       </div>
 
-      {/* Main Stats Grid - Clear breakdown */}
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(4, 1fr)', 
-        gap: '16px',
-      }}>
-        {/* Total On Site */}
-        <ActivityCard
-          title="On Site"
-          subtitle="Total users currently active"
-          value={currentActivity.total}
-          peak={Math.max(peakStats?.peakTotal || 0, currentActivity.total)}
-          peakTime={peakStats?.peakTotalTime || 0}
-          icon="👥"
-          color="#10b981"
-          isMain
-        />
-        
-        {/* Watching VOD */}
-        <ActivityCard
-          title="Watching VOD"
-          subtitle="Users watching movies/shows"
-          value={currentActivity.watching}
-          peak={Math.max(peakStats?.peakWatching || 0, currentActivity.watching)}
-          peakTime={peakStats?.peakWatchingTime || 0}
-          icon="▶️"
-          color="#7877c6"
-        />
-        
-        {/* Watching Live TV */}
-        <ActivityCard
-          title="Live TV"
-          subtitle="Users watching live channels"
-          value={currentActivity.livetv}
-          peak={Math.max(peakStats?.peakLiveTV || 0, currentActivity.livetv)}
-          peakTime={peakStats?.peakLiveTVTime || 0}
-          icon="📺"
-          color="#f59e0b"
-        />
-        
-        {/* Browsing */}
-        <ActivityCard
-          title="Browsing"
-          subtitle="Users exploring content"
-          value={currentActivity.browsing}
-          peak={Math.max(peakStats?.peakBrowsing || 0, currentActivity.browsing)}
-          peakTime={peakStats?.peakBrowsingTime || 0}
-          icon="🔍"
-          color="#3b82f6"
-        />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
+        <ActivityCard title="On Site" value={activity.total} peak={peak?.peakTotal || 0} peakTime={peak?.peakTotalTime || 0} icon="👥" color={colors.success} isMain />
+        <ActivityCard title="Watching VOD" value={activity.watching} peak={peak?.peakWatching || 0} peakTime={peak?.peakWatchingTime || 0} icon="▶️" color={colors.primary} />
+        <ActivityCard title="Live TV" value={activity.livetv} peak={peak?.peakLiveTV || 0} peakTime={peak?.peakLiveTVTime || 0} icon="📺" color={colors.warning} />
+        <ActivityCard title="Browsing" value={activity.browsing} peak={peak?.peakBrowsing || 0} peakTime={peak?.peakBrowsingTime || 0} icon="🔍" color={colors.info} />
       </div>
 
-      {/* Activity Breakdown Bar */}
-      <div style={{ 
-        background: 'rgba(255, 255, 255, 0.03)', 
-        border: '1px solid rgba(255, 255, 255, 0.1)', 
-        borderRadius: '12px', 
-        padding: '16px' 
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-          <span style={{ color: '#94a3b8', fontSize: '13px', fontWeight: '500' }}>Activity Breakdown</span>
-          <span style={{ color: '#f8fafc', fontSize: '14px', fontWeight: '600' }}>{currentActivity.total} total</span>
+      <div style={{ background: colors.bg.card, border: `1px solid ${colors.border.default}`, borderRadius: '12px', padding: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+          <span style={{ color: colors.text.secondary, fontSize: '13px' }}>Activity Breakdown</span>
+          <span style={{ color: colors.text.primary, fontWeight: '600' }}>{activity.total} total</span>
         </div>
-        
-        {currentActivity.total > 0 ? (
+        {activity.total > 0 ? (
           <>
-            <div style={{ display: 'flex', height: '24px', borderRadius: '6px', overflow: 'hidden', background: 'rgba(255, 255, 255, 0.05)' }}>
-              {currentActivity.watching > 0 && (
-                <div 
-                  style={{ 
-                    width: `${(currentActivity.watching / currentActivity.total) * 100}%`, 
-                    background: '#7877c6',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '11px',
-                    color: 'white',
-                    fontWeight: '600',
-                    minWidth: currentActivity.watching > 0 ? '30px' : '0',
-                  }}
-                  title={`Watching VOD: ${currentActivity.watching}`}
-                >
-                  {currentActivity.watching}
-                </div>
-              )}
-              {currentActivity.livetv > 0 && (
-                <div 
-                  style={{ 
-                    width: `${(currentActivity.livetv / currentActivity.total) * 100}%`, 
-                    background: '#f59e0b',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '11px',
-                    color: 'white',
-                    fontWeight: '600',
-                    minWidth: currentActivity.livetv > 0 ? '30px' : '0',
-                  }}
-                  title={`Live TV: ${currentActivity.livetv}`}
-                >
-                  {currentActivity.livetv}
-                </div>
-              )}
-              {currentActivity.browsing > 0 && (
-                <div 
-                  style={{ 
-                    width: `${(currentActivity.browsing / currentActivity.total) * 100}%`, 
-                    background: '#3b82f6',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '11px',
-                    color: 'white',
-                    fontWeight: '600',
-                    minWidth: currentActivity.browsing > 0 ? '30px' : '0',
-                  }}
-                  title={`Browsing: ${currentActivity.browsing}`}
-                >
-                  {currentActivity.browsing}
-                </div>
-              )}
+            <div style={{ display: 'flex', height: '24px', borderRadius: '6px', overflow: 'hidden', background: 'rgba(255,255,255,0.05)' }}>
+              {activity.watching > 0 && <div style={{ width: `${(activity.watching / activity.total) * 100}%`, background: colors.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', color: 'white', fontWeight: '600', minWidth: '30px' }}>{activity.watching}</div>}
+              {activity.livetv > 0 && <div style={{ width: `${(activity.livetv / activity.total) * 100}%`, background: colors.warning, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', color: 'white', fontWeight: '600', minWidth: '30px' }}>{activity.livetv}</div>}
+              {activity.browsing > 0 && <div style={{ width: `${(activity.browsing / activity.total) * 100}%`, background: colors.info, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', color: 'white', fontWeight: '600', minWidth: '30px' }}>{activity.browsing}</div>}
             </div>
-            <div style={{ display: 'flex', gap: '16px', marginTop: '10px', flexWrap: 'wrap' }}>
-              <LegendItem color="#7877c6" label="Watching VOD" value={currentActivity.watching} total={currentActivity.total} />
-              <LegendItem color="#f59e0b" label="Live TV" value={currentActivity.livetv} total={currentActivity.total} />
-              <LegendItem color="#3b82f6" label="Browsing" value={currentActivity.browsing} total={currentActivity.total} />
+            <div style={{ display: 'flex', gap: '16px', marginTop: '10px' }}>
+              <Legend color={colors.primary} label="VOD" value={activity.watching} total={activity.total} />
+              <Legend color={colors.warning} label="Live TV" value={activity.livetv} total={activity.total} />
+              <Legend color={colors.info} label="Browsing" value={activity.browsing} total={activity.total} />
             </div>
           </>
-        ) : (
-          <div style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>
-            No active users right now
-          </div>
-        )}
+        ) : <div style={{ textAlign: 'center', padding: '20px', color: colors.text.muted }}>No active users</div>}
       </div>
 
-      {/* Activity Trend Chart - 12 Hour History */}
-      <div style={{ 
-        background: 'rgba(255, 255, 255, 0.03)', 
-        border: '1px solid rgba(255, 255, 255, 0.1)', 
-        borderRadius: '12px', 
-        padding: '16px' 
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-          <span style={{ color: '#94a3b8', fontSize: '13px', fontWeight: '500' }}>
-            Activity Trend (Last 12 hours)
-          </span>
-          <div style={{ display: 'flex', gap: '12px', fontSize: '12px' }}>
-            <span style={{ color: '#10b981' }}>● Total</span>
-            <span style={{ color: '#7877c6' }}>● VOD</span>
-            <span style={{ color: '#f59e0b' }}>● Live TV</span>
-          </div>
-        </div>
-        <div style={{ position: 'relative', height: '100px' }}>
-          {/* Grid lines */}
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-            {[0, 1, 2, 3].map(i => (
-              <div key={i} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', width: '100%' }} />
-            ))}
-          </div>
-          
-          {history.length === 0 ? (
-            <div style={{ 
-              position: 'absolute', 
-              inset: 0, 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              color: '#64748b',
-              fontSize: '13px'
-            }}>
-              Collecting data... (snapshots saved every 5 min)
+      {history.length > 0 && (
+        <div style={{ background: colors.bg.card, border: `1px solid ${colors.border.default}`, borderRadius: '12px', padding: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <span style={{ color: colors.text.secondary, fontSize: '13px' }}>Activity Trend (12h)</span>
+            <div style={{ display: 'flex', gap: '12px', fontSize: '12px' }}>
+              <span style={{ color: colors.success }}>● Total</span>
+              <span style={{ color: colors.primary }}>● VOD</span>
             </div>
-          ) : (
-            /* Chart */
-            <svg width="100%" height="100%" style={{ position: 'relative' }} viewBox="0 0 100 100" preserveAspectRatio="none">
-              {/* Total line */}
-              <polyline
-                fill="none"
-                stroke="#10b981"
-                strokeWidth="2"
-                vectorEffect="non-scaling-stroke"
-                points={history.map((point, i) => {
-                  const x = history.length > 1 ? (i / (history.length - 1)) * 100 : 50;
-                  const maxVal = Math.max(...history.map(h => h.total), 1);
-                  const y = 100 - (point.total / maxVal) * 90;
-                  return `${x},${y}`;
-                }).join(' ')}
-              />
-              {/* VOD line */}
-              <polyline
-                fill="none"
-                stroke="#7877c6"
-                strokeWidth="1.5"
-                strokeDasharray="4,2"
-                vectorEffect="non-scaling-stroke"
-                points={history.map((point, i) => {
-                  const x = history.length > 1 ? (i / (history.length - 1)) * 100 : 50;
-                  const maxVal = Math.max(...history.map(h => h.total), 1);
-                  const y = 100 - (point.watching / maxVal) * 90;
-                  return `${x},${y}`;
-                }).join(' ')}
-              />
-              {/* Live TV line */}
-              <polyline
-                fill="none"
-                stroke="#f59e0b"
-                strokeWidth="1.5"
-                strokeDasharray="4,2"
-                vectorEffect="non-scaling-stroke"
-                points={history.map((point, i) => {
-                  const x = history.length > 1 ? (i / (history.length - 1)) * 100 : 50;
-                  const maxVal = Math.max(...history.map(h => h.total), 1);
-                  const y = 100 - (point.livetv / maxVal) * 90;
-                  return `${x},${y}`;
-                }).join(' ')}
-              />
-              {/* Show dots for single points */}
-              {history.length === 1 && (
-                <>
-                  <circle cx="50" cy={100 - (history[0].total / Math.max(history[0].total, 1)) * 90} r="4" fill="#10b981" />
-                  <circle cx="50" cy={100 - (history[0].watching / Math.max(history[0].total, 1)) * 90} r="3" fill="#7877c6" />
-                  <circle cx="50" cy={100 - (history[0].livetv / Math.max(history[0].total, 1)) * 90} r="3" fill="#f59e0b" />
-                </>
-              )}
+          </div>
+          <div style={{ height: '80px' }}>
+            <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
+              {['total', 'watching'].map((field, i) => {
+                const maxVal = Math.max(...history.map(h => h.total), 1);
+                const pts = history.map((p, j) => `${(j / (history.length - 1)) * 100},${100 - ((p as any)[field] / maxVal) * 90}`).join(' ');
+                return <polyline key={field} fill="none" stroke={i === 0 ? colors.success : colors.primary} strokeWidth={i === 0 ? 2 : 1.5} strokeDasharray={i === 0 ? undefined : '4,2'} vectorEffect="non-scaling-stroke" points={pts} />;
+              })}
             </svg>
-          )}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '11px', color: colors.text.muted }}>
+            <span>{formatTime(history[0].time)}</span><span>Now</span>
+          </div>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px' }}>
-          <span style={{ color: '#64748b', fontSize: '11px' }}>{history.length > 0 ? formatTime(history[0].time) : '12h ago'}</span>
-          <span style={{ color: '#64748b', fontSize: '11px' }}>{history.length > 1 ? formatTime(history[Math.floor(history.length / 2)]?.time) : ''}</span>
-          <span style={{ color: '#64748b', fontSize: '11px' }}>Now</span>
-        </div>
-      </div>
+      )}
 
-      {/* Currently Active Content */}
-      <div style={{ 
-        background: 'rgba(255, 255, 255, 0.03)', 
-        border: '1px solid rgba(255, 255, 255, 0.1)', 
-        borderRadius: '12px', 
-        padding: '16px' 
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-          <span style={{ color: '#94a3b8', fontSize: '13px', fontWeight: '500' }}>🔥 Currently Active Content</span>
-          <span style={{ color: '#64748b', fontSize: '12px' }}>Sorted by viewers</span>
-        </div>
-        
-        {unifiedStats.topContent && unifiedStats.topContent.length > 0 ? (
+      {stats.topContent?.length > 0 && (
+        <div style={{ background: colors.bg.card, border: `1px solid ${colors.border.default}`, borderRadius: '12px', padding: '16px' }}>
+          <span style={{ color: colors.text.secondary, fontSize: '13px', display: 'block', marginBottom: '12px' }}>🔥 Active Content</span>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
-            {unifiedStats.topContent.slice(0, 6).map((content, i) => (
-              <div 
-                key={content.contentId} 
-                style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '12px',
-                  padding: '12px',
-                  background: i === 0 ? 'rgba(255, 215, 0, 0.1)' : 'rgba(255, 255, 255, 0.02)',
-                  borderRadius: '8px',
-                  border: i === 0 ? '1px solid rgba(255, 215, 0, 0.2)' : '1px solid transparent',
-                }}
-              >
-                <span style={{ 
-                  width: '28px', 
-                  height: '28px', 
-                  borderRadius: '50%', 
-                  background: i < 3 ? ['#ffd700', '#c0c0c0', '#cd7f32'][i] : 'rgba(255,255,255,0.1)', 
-                  color: i < 3 ? '#000' : '#94a3b8', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center', 
-                  fontWeight: '700', 
-                  fontSize: '12px',
-                  flexShrink: 0,
-                }}>
-                  {i + 1}
-                </span>
+            {stats.topContent.slice(0, 6).map((c, i) => (
+              <div key={c.contentId} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: i === 0 ? 'rgba(255,215,0,0.1)' : 'rgba(255,255,255,0.02)', borderRadius: '8px', border: i === 0 ? '1px solid rgba(255,215,0,0.2)' : 'none' }}>
+                <span style={{ width: '28px', height: '28px', borderRadius: '50%', background: i < 3 ? ['#ffd700', '#c0c0c0', '#cd7f32'][i] : 'rgba(255,255,255,0.1)', color: i < 3 ? '#000' : colors.text.secondary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', fontSize: '12px' }}>{i + 1}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ 
-                    color: '#f8fafc', 
-                    fontSize: '13px', 
-                    fontWeight: '500',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}>
-                    {content.contentTitle || content.contentId}
-                  </div>
-                  <div style={{ color: '#64748b', fontSize: '11px', textTransform: 'capitalize' }}>
-                    {content.contentType}
-                  </div>
+                  <div style={{ color: colors.text.primary, fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.contentTitle || c.contentId}</div>
+                  <div style={{ color: colors.text.muted, fontSize: '11px' }}>{c.contentType}</div>
                 </div>
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '4px',
-                  padding: '4px 8px',
-                  background: 'rgba(16, 185, 129, 0.15)',
-                  borderRadius: '12px',
-                  flexShrink: 0,
-                }}>
-                  <span style={{ color: '#10b981', fontWeight: '600', fontSize: '13px' }}>
-                    {content.watchCount}
-                  </span>
-                  <span style={{ color: '#10b981', fontSize: '11px' }}>👁</span>
-                </div>
+                <span style={{ color: colors.success, fontWeight: '600', fontSize: '13px', padding: '4px 8px', background: 'rgba(16,185,129,0.15)', borderRadius: '12px' }}>{c.watchCount} 👁</span>
               </div>
             ))}
           </div>
-        ) : (
-          <div style={{ textAlign: 'center', padding: '24px', color: '#64748b' }}>
-            No active content right now
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      <style jsx>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
-      `}</style>
+      <style jsx>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
     </div>
   );
 }
 
-function ActivityCard({ 
-  title, 
-  subtitle, 
-  value, 
-  peak, 
-  peakTime, 
-  icon, 
-  color,
-  isMain = false 
-}: { 
-  title: string; 
-  subtitle: string; 
-  value: number; 
-  peak: number; 
-  peakTime: number; 
-  icon: string; 
-  color: string;
-  isMain?: boolean;
-}) {
+function ActivityCard({ title, value, peak, peakTime, icon, color, isMain = false }: { title: string; value: number; peak: number; peakTime: number; icon: string; color: string; isMain?: boolean }) {
   const animatedValue = useAnimatedNumber(value);
-  const animatedPeak = useAnimatedNumber(peak);
-  const [flash, setFlash] = useState(false);
-  const prevValue = useRef(value);
-
-  // Flash effect when value changes
-  useEffect(() => {
-    if (prevValue.current !== value) {
-      setFlash(true);
-      const timer = setTimeout(() => setFlash(false), 300);
-      prevValue.current = value;
-      return () => clearTimeout(timer);
-    }
-  }, [value]);
-
-  const formatPeakTime = (ts: number) => {
-    if (!ts) return '';
-    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
   return (
-    <div style={{ 
-      background: flash 
-        ? `linear-gradient(135deg, ${color}25, ${color}10)` 
-        : isMain 
-          ? `linear-gradient(135deg, ${color}15, ${color}05)` 
-          : 'rgba(255, 255, 255, 0.03)', 
-      border: `1px solid ${isMain ? color + '30' : 'rgba(255, 255, 255, 0.1)'}`, 
-      borderRadius: '12px', 
-      padding: '16px',
-      borderTop: `3px solid ${color}`,
-      transition: 'background 0.3s ease',
-    }}>
+    <div style={{ background: isMain ? `linear-gradient(135deg, ${color}15, ${color}05)` : colors.bg.card, border: `1px solid ${isMain ? color + '30' : colors.border.default}`, borderRadius: '12px', padding: '16px', borderTop: `3px solid ${color}` }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
         <span style={{ fontSize: '20px' }}>{icon}</span>
-        <div>
-          <div style={{ color: '#f8fafc', fontSize: '13px', fontWeight: '600' }}>{title}</div>
-          <div style={{ color: '#64748b', fontSize: '11px' }}>{subtitle}</div>
-        </div>
+        <span style={{ color: colors.text.primary, fontSize: '13px', fontWeight: '600' }}>{title}</span>
       </div>
-      
-      <div style={{ 
-        fontSize: isMain ? '36px' : '28px', 
-        fontWeight: '700', 
-        color: color,
-        lineHeight: '1',
-        marginBottom: '8px',
-        transition: 'transform 0.2s ease',
-        transform: flash ? 'scale(1.05)' : 'scale(1)',
-      }}>
-        {animatedValue.toLocaleString()}
-      </div>
-      
-      <div style={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        gap: '6px',
-        padding: '6px 8px',
-        background: 'rgba(255, 255, 255, 0.03)',
-        borderRadius: '6px',
-        fontSize: '11px',
-      }}>
-        <span style={{ color: '#ec4899' }}>📈</span>
-        <span style={{ color: '#94a3b8' }}>Peak today:</span>
-        <span style={{ color: '#f8fafc', fontWeight: '600' }}>{animatedPeak}</span>
-        {peakTime > 0 && (
-          <span style={{ color: '#64748b' }}>at {formatPeakTime(peakTime)}</span>
-        )}
+      <div style={{ fontSize: isMain ? '36px' : '28px', fontWeight: '700', color, marginBottom: '8px' }}>{animatedValue.toLocaleString()}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 8px', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', fontSize: '11px' }}>
+        <span style={{ color: colors.pink }}>📈</span>
+        <span style={{ color: colors.text.secondary }}>Peak:</span>
+        <span style={{ color: colors.text.primary, fontWeight: '600' }}>{peak}</span>
+        {peakTime > 0 && <span style={{ color: colors.text.muted }}>at {new Date(peakTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
       </div>
     </div>
   );
 }
 
-function LegendItem({ color, label, value, total }: { color: string; label: string; value: number; total: number }) {
-  const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+function Legend({ color, label, value, total }: { color: string; label: string; value: number; total: number }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
       <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: color }} />
-      <span style={{ color: '#94a3b8', fontSize: '12px' }}>{label}:</span>
-      <span style={{ color: '#f8fafc', fontSize: '12px', fontWeight: '600' }}>{value}</span>
-      <span style={{ color: '#64748b', fontSize: '11px' }}>({percentage}%)</span>
+      <span style={{ color: colors.text.secondary, fontSize: '12px' }}>{label}:</span>
+      <span style={{ color: colors.text.primary, fontSize: '12px', fontWeight: '600' }}>{value}</span>
+      <span style={{ color: colors.text.muted, fontSize: '11px' }}>({getPercentage(value, total)}%)</span>
     </div>
   );
 }
