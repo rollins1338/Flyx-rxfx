@@ -1,81 +1,320 @@
 'use client';
 
 /**
- * Admin Overview Page - OPTIMIZED
+ * Admin Dashboard - CONSOLIDATED
  * 
- * Uses unified stats context - no additional API calls
- * All components share the same data source
+ * Single page with tabs for:
+ * - Overview (stats, metrics)
+ * - Real-time (live users, activity)
+ * - Analytics (charts, trends)
+ * - Geographic (maps, countries)
+ * - Content (watch stats)
+ * 
+ * All data from unified StatsContext - single source of truth
  */
 
+import { useState } from 'react';
+import { useStats } from './context/StatsContext';
+import { useAdmin } from './context/AdminContext';
 import OverviewStats from './components/OverviewStats';
 import LiveActivitySummary from './components/LiveActivitySummary';
-import { useStats } from './context/StatsContext';
-import { colors, formatTimeAgo } from './components/ui';
+import ImprovedLiveDashboard from './components/ImprovedLiveDashboard';
+import { colors, formatTimeAgo, StatCard, Card, Grid, ProgressBar, gradients } from './components/ui';
 
-export default function AdminOverviewPage() {
-  const { lastRefresh, loading } = useStats();
+type TabId = 'overview' | 'realtime' | 'content' | 'geographic';
+
+export default function AdminDashboardPage() {
+  useAdmin();
+  const { stats, lastRefresh, loading, refresh, timeRange, setTimeRange } = useStats();
+  const [activeTab, setActiveTab] = useState<TabId>('overview');
+
+  const tabs = [
+    { id: 'overview' as TabId, label: '📊 Overview', description: 'Key metrics and stats' },
+    { id: 'realtime' as TabId, label: '🟢 Real-time', description: 'Live user activity' },
+    { id: 'content' as TabId, label: '🎬 Content', description: 'Watch statistics' },
+    { id: 'geographic' as TabId, label: '🌍 Geographic', description: 'User locations' },
+  ];
 
   return (
     <div>
-      <div style={{
-        marginBottom: '32px',
-        paddingBottom: '20px',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            <h2 style={{
-              margin: 0,
+      {/* Header */}
+      <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
+        <div>
+          <h1 style={{ margin: 0, color: colors.text.primary, fontSize: '24px', fontWeight: '600' }}>
+            Dashboard
+          </h1>
+          <p style={{ margin: '4px 0 0 0', color: colors.text.muted, fontSize: '14px' }}>
+            {lastRefresh ? `Updated ${formatTimeAgo(lastRefresh.getTime())}` : 'Loading...'}
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <select
+            value={timeRange}
+            onChange={(e) => setTimeRange(e.target.value)}
+            style={{
+              padding: '8px 12px',
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '8px',
               color: colors.text.primary,
-              fontSize: '24px',
-              fontWeight: '600',
-              letterSpacing: '-0.5px'
-            }}>
-              Dashboard Overview
-            </h2>
-            <p style={{
-              margin: '8px 0 0 0',
-              color: colors.text.secondary,
-              fontSize: '16px'
-            }}>
-              Monitor your platform's performance and analytics
-            </p>
-          </div>
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '8px',
-            color: colors.text.muted,
-            fontSize: '12px'
-          }}>
-            {loading && (
-              <span style={{ 
-                width: '12px', 
-                height: '12px', 
-                border: '2px solid rgba(120, 119, 198, 0.3)',
-                borderTopColor: colors.primary,
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite',
-              }} />
-            )}
-            {lastRefresh && `Updated ${formatTimeAgo(lastRefresh.getTime())}`}
-          </div>
+              fontSize: '13px',
+            }}
+          >
+            <option value="1h">Last Hour</option>
+            <option value="24h">Last 24 Hours</option>
+            <option value="7d">Last 7 Days</option>
+            <option value="30d">Last 30 Days</option>
+          </select>
+          <button
+            onClick={() => refresh()}
+            disabled={loading}
+            style={{
+              padding: '8px 16px',
+              background: loading ? 'rgba(120,119,198,0.1)' : 'rgba(120,119,198,0.2)',
+              border: '1px solid rgba(120,119,198,0.3)',
+              borderRadius: '8px',
+              color: colors.primary,
+              fontSize: '13px',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            {loading ? '⏳' : '🔄'} Refresh
+          </button>
         </div>
       </div>
 
-      {/* Live Activity Summary - prominent position */}
-      <div style={{ marginBottom: '24px' }}>
-        <LiveActivitySummary />
+      {/* Quick Stats Bar */}
+      <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
+        <QuickStat label="On Site" value={stats.liveUsers} icon="🟢" color={colors.success} pulse />
+        <QuickStat label="Today (DAU)" value={stats.activeToday} icon="📊" color={colors.primary} />
+        <QuickStat label="This Week" value={stats.activeThisWeek} icon="📈" color={colors.warning} />
+        <QuickStat label="Sessions (24h)" value={stats.totalSessions} icon="▶️" color={colors.info} />
+        <QuickStat label="Watch Time (24h)" value={`${Math.round(stats.totalWatchTime / 60)}h`} icon="⏱️" color={colors.pink} />
       </div>
 
-      {/* Overview Stats - all from unified context */}
-      <OverviewStats />
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '12px' }}>
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            style={{
+              padding: '10px 20px',
+              background: activeTab === tab.id ? colors.primary : 'transparent',
+              border: 'none',
+              borderRadius: '8px',
+              color: activeTab === tab.id ? 'white' : colors.text.secondary,
+              fontSize: '14px',
+              fontWeight: activeTab === tab.id ? '600' : '400',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-      <style jsx>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
+      {/* Tab Content */}
+      {activeTab === 'overview' && <OverviewTab />}
+      {activeTab === 'realtime' && <RealtimeTab />}
+      {activeTab === 'content' && <ContentTab />}
+      {activeTab === 'geographic' && <GeographicTab />}
+    </div>
+  );
+}
+
+function QuickStat({ label, value, icon, color, pulse }: { label: string; value: number | string; icon: string; color: string; pulse?: boolean }) {
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+      padding: '12px 16px',
+      background: 'rgba(255,255,255,0.03)',
+      border: '1px solid rgba(255,255,255,0.08)',
+      borderRadius: '10px',
+      minWidth: '140px',
+    }}>
+      <span style={{ fontSize: '20px', opacity: pulse ? 1 : 0.8 }}>{icon}</span>
+      <div>
+        <div style={{ color, fontSize: '20px', fontWeight: '700', lineHeight: 1 }}>{value}</div>
+        <div style={{ color: colors.text.muted, fontSize: '11px', marginTop: '2px' }}>{label}</div>
+      </div>
+    </div>
+  );
+}
+
+function OverviewTab() {
+  // Stats used by child components via useStats()
+  
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <LiveActivitySummary />
+      <OverviewStats />
+    </div>
+  );
+}
+
+function RealtimeTab() {
+  return <ImprovedLiveDashboard />;
+}
+
+function ContentTab() {
+  const { stats } = useStats();
+  
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {/* Content Metrics */}
+      <Grid cols="auto-fit" minWidth="180px" gap="16px">
+        <StatCard title="Total Sessions" value={stats.totalSessions} icon="📊" color={colors.primary} />
+        <StatCard title="Watch Time" value={`${stats.totalWatchTime}m`} icon="⏱️" color={colors.success} />
+        <StatCard title="Avg Duration" value={`${stats.avgSessionDuration}m`} icon="📈" color={colors.warning} />
+        <StatCard title="Completion" value={`${stats.completionRate}%`} icon="✅" color={colors.pink} />
+        <StatCard title="Movies" value={stats.movieSessions} icon="🎬" color={colors.info} />
+        <StatCard title="TV Shows" value={stats.tvSessions} icon="📺" color={colors.purple} />
+      </Grid>
+
+      {/* Top Content */}
+      <Card title="🔥 Top Content (7 days)" icon="">
+        {stats.topContent?.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {stats.topContent.slice(0, 10).map((content, i) => (
+              <div key={content.contentId} style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '12px',
+                background: i === 0 ? 'rgba(255,215,0,0.1)' : 'rgba(255,255,255,0.02)',
+                borderRadius: '8px',
+                border: i === 0 ? '1px solid rgba(255,215,0,0.2)' : 'none',
+              }}>
+                <span style={{
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '50%',
+                  background: i < 3 ? ['#ffd700', '#c0c0c0', '#cd7f32'][i] : 'rgba(255,255,255,0.1)',
+                  color: i < 3 ? '#000' : colors.text.secondary,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: '700',
+                  fontSize: '12px',
+                }}>{i + 1}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ color: colors.text.primary, fontSize: '14px', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {content.contentTitle || content.contentId}
+                  </div>
+                  <div style={{ color: colors.text.muted, fontSize: '12px' }}>{content.contentType}</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ color: colors.success, fontWeight: '600' }}>{content.watchCount} views</div>
+                  <div style={{ color: colors.text.muted, fontSize: '11px' }}>{content.totalWatchTime}m watched</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ color: colors.text.muted, textAlign: 'center', padding: '40px' }}>No content data yet</div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function GeographicTab() {
+  const { stats } = useStats();
+  
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+      {/* Countries */}
+      <Card title="🌍 Top Countries" icon="">
+        {stats.topCountries?.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {stats.topCountries.slice(0, 10).map((country) => {
+              const total = stats.topCountries.reduce((sum, c) => sum + c.count, 0);
+              const pct = total > 0 ? Math.round((country.count / total) * 100) : 0;
+              return (
+                <div key={country.country}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ color: colors.text.primary }}>{country.countryName || country.country}</span>
+                    <span style={{ color: colors.text.muted }}>{country.count} ({pct}%)</span>
+                  </div>
+                  <ProgressBar value={country.count} max={total} gradient={gradients.primary} height={6} />
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div style={{ color: colors.text.muted, textAlign: 'center', padding: '40px' }}>No geographic data</div>
+        )}
+      </Card>
+
+      {/* Cities */}
+      <Card title="🏙️ Top Cities" icon="">
+        {stats.topCities?.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {stats.topCities.slice(0, 10).map((city) => {
+              const total = stats.topCities.reduce((sum, c) => sum + c.count, 0);
+              const pct = total > 0 ? Math.round((city.count / total) * 100) : 0;
+              return (
+                <div key={`${city.city}-${city.country}`}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ color: colors.text.primary }}>{city.city} <span style={{ color: colors.text.muted, fontSize: '12px' }}>({city.countryName})</span></span>
+                    <span style={{ color: colors.text.muted }}>{city.count} ({pct}%)</span>
+                  </div>
+                  <ProgressBar value={city.count} max={total} gradient={gradients.success} height={6} />
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div style={{ color: colors.text.muted, textAlign: 'center', padding: '40px' }}>No city data</div>
+        )}
+      </Card>
+
+      {/* Real-time Geographic */}
+      <Card title="🟢 Currently Active By Location" icon="">
+        {stats.realtimeGeographic?.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {stats.realtimeGeographic.slice(0, 8).map((loc) => (
+              <div key={loc.country} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: colors.text.primary }}>{loc.countryName || loc.country}</span>
+                <span style={{ color: colors.success, fontWeight: '600' }}>{loc.count} online</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ color: colors.text.muted, textAlign: 'center', padding: '20px' }}>No active users</div>
+        )}
+      </Card>
+
+      {/* Devices */}
+      <Card title="📱 Devices" icon="">
+        {stats.deviceBreakdown?.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {stats.deviceBreakdown.map((device) => {
+              const total = stats.deviceBreakdown.reduce((sum, d) => sum + d.count, 0);
+              const pct = total > 0 ? Math.round((device.count / total) * 100) : 0;
+              const icons: Record<string, string> = { desktop: '💻', mobile: '📱', tablet: '📲', unknown: '🖥️' };
+              return (
+                <div key={device.device}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ color: colors.text.primary }}>{icons[device.device] || '🖥️'} {device.device}</span>
+                    <span style={{ color: colors.text.muted }}>{device.count} ({pct}%)</span>
+                  </div>
+                  <ProgressBar value={device.count} max={total} gradient={gradients.purple} height={6} />
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div style={{ color: colors.text.muted, textAlign: 'center', padding: '40px' }}>No device data</div>
+        )}
+      </Card>
     </div>
   );
 }

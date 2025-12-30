@@ -8,21 +8,10 @@ import {
     LayoutDashboard,
     Users,
     Film,
-    Activity,
     Settings,
     LogOut,
-    Map,
-    History,
-    BarChart3,
-    TrendingUp,
-    MessageSquare,
-    Tv,
     Database,
     Megaphone,
-    Globe,
-    Download,
-    Shield,
-    Bot
 } from 'lucide-react';
 
 export default function AdminSidebar() {
@@ -56,22 +45,11 @@ export default function AdminSidebar() {
     };
 
     const menuItems = [
-        { icon: LayoutDashboard, label: 'Dashboard', href: '/admin/dashboard' },
-        { icon: TrendingUp, label: 'Insights', href: '/admin/insights' },
-        { icon: BarChart3, label: 'Analytics', href: '/admin/analytics' },
-        { icon: Globe, label: 'Traffic', href: '/admin/traffic-unified' },
+        { icon: LayoutDashboard, label: 'Dashboard', href: '/admin' },
         { icon: Users, label: 'Users', href: '/admin/users' },
         { icon: Film, label: 'Content', href: '/admin/content' },
-        { icon: Map, label: 'Geographic', href: '/admin/geographic' },
-        { icon: History, label: 'Sessions', href: '/admin/sessions' },
-        { icon: Activity, label: 'Real-time', href: '/admin/live' },
-        { icon: Bot, label: 'Bot Detection', href: '/admin/bot-detection' },
-        { icon: Download, label: 'Export Data', href: '/admin/export' },
-        { icon: MessageSquare, label: 'Feedback', href: '/admin/feedback' },
-        { icon: Tv, label: 'IPTV Debug', href: '/admin/iptv-debug' },
         { icon: Database, label: 'IPTV Manager', href: '/admin/iptv-manager' },
         { icon: Megaphone, label: 'Site Banner', href: '/admin/banner' },
-        { icon: Shield, label: 'Security', href: '/admin/security' },
         { icon: Settings, label: 'Settings', href: '/admin/settings' },
     ];
 

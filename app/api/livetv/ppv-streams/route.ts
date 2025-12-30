@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
-export const revalidate = 300; // Cache for 5 minutes
+export const dynamic = 'force-dynamic'; // This route uses searchParams
 
 const PPV_API_BASE = 'https://api.ppvs.su/api';
 
