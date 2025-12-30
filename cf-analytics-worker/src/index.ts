@@ -459,61 +459,244 @@ async function handleGetLiveActivity(headers: HeadersInit): Promise<Response> {
 // GET /unified-stats - Get all stats (memory for realtime, D1 for historical)
 async function handleGetUnifiedStats(env: Env, headers: HeadersInit): Promise<Response> {
   const now = Date.now();
-  const { stats, peak } = getRealtimeStats();
+  const { stats, peak, users } = getRealtimeStats();
+  
+  const oneDayAgo = now - 24 * 60 * 60 * 1000;
+  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+  const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
   
   // Get historical data from cache or D1
   let historical = historicalStatsCache;
   if (!historical || now - historical.timestamp > HISTORICAL_CACHE_TTL) {
     try {
-      const oneDayAgo = now - 24 * 60 * 60 * 1000;
-      const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
-      const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
-      
-      const [userStats, contentStats, pageStats, geoStats] = await Promise.all([
+      const [userStats, contentStats, pageStats, geoStats, cityStats, deviceStats, topContentStats, botStats] = await Promise.all([
+        // User activity stats
         env.DB.prepare(`
           SELECT COUNT(DISTINCT user_id) as total,
             COUNT(DISTINCT CASE WHEN last_seen >= ? THEN user_id END) as dau,
             COUNT(DISTINCT CASE WHEN last_seen >= ? THEN user_id END) as wau,
-            COUNT(DISTINCT CASE WHEN last_seen >= ? THEN user_id END) as mau
+            COUNT(DISTINCT CASE WHEN last_seen >= ? THEN user_id END) as mau,
+            COUNT(DISTINCT CASE WHEN first_seen >= ? THEN user_id END) as new_today,
+            COUNT(DISTINCT CASE WHEN first_seen < ? AND last_seen >= ? THEN user_id END) as returning
           FROM user_activity
-        `).bind(oneDayAgo, sevenDaysAgo, thirtyDaysAgo).first(),
+        `).bind(oneDayAgo, sevenDaysAgo, thirtyDaysAgo, oneDayAgo, oneDayAgo, oneDayAgo).first(),
+        
+        // Content/watch session stats
         env.DB.prepare(`
-          SELECT COUNT(*) as sessions, COALESCE(SUM(total_watch_time), 0) as watch_time,
+          SELECT 
+            COUNT(*) as sessions, 
+            COALESCE(SUM(total_watch_time), 0) as watch_time,
+            COALESCE(AVG(total_watch_time), 0) as avg_duration,
+            COALESCE(AVG(completion_percentage), 0) as avg_completion,
+            SUM(CASE WHEN is_completed = 1 OR completion_percentage >= 90 THEN 1 ELSE 0 END) as completed,
+            SUM(CASE WHEN content_type = 'movie' THEN 1 ELSE 0 END) as movie_sessions,
+            SUM(CASE WHEN content_type = 'tv' THEN 1 ELSE 0 END) as tv_sessions,
             COUNT(DISTINCT content_id) as unique_content
           FROM watch_sessions WHERE started_at >= ?
         `).bind(oneDayAgo).first(),
+        
+        // Page view stats
         env.DB.prepare(`
           SELECT COUNT(*) as views, COUNT(DISTINCT user_id) as visitors
           FROM page_views WHERE entry_time >= ?
         `).bind(oneDayAgo).first(),
+        
+        // Geographic stats (countries)
         env.DB.prepare(`
           SELECT country, COUNT(DISTINCT user_id) as count
-          FROM user_activity WHERE last_seen >= ? AND country IS NOT NULL
-          GROUP BY country ORDER BY count DESC LIMIT 10
+          FROM user_activity WHERE last_seen >= ? AND country IS NOT NULL AND country != ''
+          GROUP BY country ORDER BY count DESC LIMIT 20
         `).bind(sevenDaysAgo).all(),
+        
+        // City stats
+        env.DB.prepare(`
+          SELECT city, country, COUNT(DISTINCT user_id) as count
+          FROM user_activity WHERE last_seen >= ? AND city IS NOT NULL AND city != '' AND country IS NOT NULL
+          GROUP BY city, country ORDER BY count DESC LIMIT 30
+        `).bind(sevenDaysAgo).all(),
+        
+        // Device stats (from live_activity since user_activity may not have device_type)
+        env.DB.prepare(`
+          SELECT 
+            CASE 
+              WHEN content_type LIKE '%mobile%' THEN 'mobile'
+              WHEN content_type LIKE '%tablet%' THEN 'tablet'
+              ELSE 'desktop'
+            END as device,
+            COUNT(DISTINCT user_id) as count
+          FROM user_activity WHERE last_seen >= ?
+          GROUP BY device ORDER BY count DESC
+        `).bind(sevenDaysAgo).all(),
+        
+        // Top content
+        env.DB.prepare(`
+          SELECT content_id, content_title, content_type, COUNT(*) as watch_count, SUM(total_watch_time) as total_watch_time
+          FROM watch_sessions WHERE started_at >= ? AND content_title IS NOT NULL
+          GROUP BY content_id, content_title, content_type
+          ORDER BY watch_count DESC LIMIT 10
+        `).bind(sevenDaysAgo).all(),
+        
+        // Bot detection stats
+        env.DB.prepare(`
+          SELECT 
+            COUNT(*) as total_detections,
+            COUNT(CASE WHEN status = 'suspected' THEN 1 END) as suspected,
+            COUNT(CASE WHEN status = 'confirmed_bot' THEN 1 END) as confirmed,
+            COUNT(CASE WHEN status = 'pending_review' THEN 1 END) as pending,
+            AVG(confidence_score) as avg_confidence
+          FROM bot_detections WHERE created_at >= ?
+        `).bind(sevenDaysAgo).first(),
       ]);
       
       historical = {
         timestamp: now,
-        data: { userStats, contentStats, pageStats, geoStats: geoStats.results || [] }
+        data: { 
+          userStats, 
+          contentStats, 
+          pageStats, 
+          geoStats: geoStats.results || [],
+          cityStats: cityStats.results || [],
+          deviceStats: deviceStats.results || [],
+          topContentStats: topContentStats.results || [],
+          botStats,
+        }
       };
       historicalStatsCache = historical;
     } catch (e) {
       console.error('[Stats] D1 error:', e);
-      historical = { timestamp: now, data: { userStats: {}, contentStats: {}, pageStats: {}, geoStats: [] } };
+      historical = { 
+        timestamp: now, 
+        data: { 
+          userStats: {}, 
+          contentStats: {}, 
+          pageStats: {}, 
+          geoStats: [],
+          cityStats: [],
+          deviceStats: [],
+          topContentStats: [],
+          botStats: {},
+        } 
+      };
     }
   }
   
   const h = historical.data;
   
+  // Build realtime geographic from live users
+  const realtimeGeoMap = new Map<string, number>();
+  for (const user of users) {
+    if (user.country) {
+      realtimeGeoMap.set(user.country, (realtimeGeoMap.get(user.country) || 0) + 1);
+    }
+  }
+  const realtimeGeographic = Array.from(realtimeGeoMap.entries())
+    .map(([country, count]) => ({ country, countryName: country, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 20);
+  
   return Response.json({
     success: true,
-    realtime: { totalActive: stats.total, watching: stats.watching, browsing: stats.browsing, livetv: stats.livetv },
-    peakStats: { date: peak.date, peakTotal: peak.total, peakWatching: peak.watching, peakLiveTV: peak.livetv, peakBrowsing: peak.browsing },
-    users: { total: h.userStats?.total || 0, dau: h.userStats?.dau || 0, wau: h.userStats?.wau || 0, mau: h.userStats?.mau || 0 },
-    content: { totalSessions: h.contentStats?.sessions || 0, totalWatchTime: Math.round((h.contentStats?.watch_time || 0) / 60), uniqueContentWatched: h.contentStats?.unique_content || 0 },
-    pageViews: { total: h.pageStats?.views || 0, uniqueVisitors: h.pageStats?.visitors || 0 },
-    geographic: h.geoStats.map((g: any) => ({ country: g.country, count: g.count })),
+    // Real-time data from memory
+    realtime: { 
+      totalActive: stats.total, 
+      trulyActive: stats.total, // Same as totalActive for now
+      watching: stats.watching, 
+      browsing: stats.browsing, 
+      livetv: stats.livetv 
+    },
+    realtimeGeographic,
+    // Peak stats
+    peakStats: { 
+      date: peak.date, 
+      peakTotal: peak.total, 
+      peakWatching: peak.watching, 
+      peakLiveTV: peak.livetv, 
+      peakBrowsing: peak.browsing,
+      peakTotalTime: peak.time,
+      peakWatchingTime: peak.time,
+      peakLiveTVTime: peak.time,
+      peakBrowsingTime: peak.time,
+    },
+    // User metrics
+    users: { 
+      total: h.userStats?.total || 0, 
+      dau: h.userStats?.dau || 0, 
+      wau: h.userStats?.wau || 0, 
+      mau: h.userStats?.mau || 0,
+      newToday: h.userStats?.new_today || 0,
+      returning: h.userStats?.returning || 0,
+    },
+    // Content metrics
+    content: { 
+      totalSessions: parseInt(h.contentStats?.sessions) || 0, 
+      totalWatchTime: Math.round((parseFloat(h.contentStats?.watch_time) || 0) / 60),
+      avgDuration: Math.round((parseFloat(h.contentStats?.avg_duration) || 0) / 60),
+      completionRate: Math.round(parseFloat(h.contentStats?.avg_completion) || 0),
+      completedSessions: parseInt(h.contentStats?.completed) || 0,
+      movieSessions: parseInt(h.contentStats?.movie_sessions) || 0,
+      tvSessions: parseInt(h.contentStats?.tv_sessions) || 0,
+      uniqueContentWatched: parseInt(h.contentStats?.unique_content) || 0,
+      allTimeWatchTime: Math.round((parseFloat(h.contentStats?.watch_time) || 0) / 60),
+      totalPauses: 0,
+      totalSeeks: 0,
+    },
+    // Top content
+    topContent: (h.topContentStats || []).map((c: any) => ({
+      contentId: c.content_id,
+      contentTitle: c.content_title || 'Unknown',
+      contentType: c.content_type || 'unknown',
+      watchCount: parseInt(c.watch_count) || 0,
+      totalWatchTime: Math.round((parseFloat(c.total_watch_time) || 0) / 60),
+    })),
+    // Page views
+    pageViews: { 
+      total: parseInt(h.pageStats?.views) || 0, 
+      uniqueVisitors: parseInt(h.pageStats?.visitors) || 0 
+    },
+    // Geographic data
+    geographic: (h.geoStats || []).map((g: any) => ({ 
+      country: g.country, 
+      countryName: g.country, // Could add country name lookup
+      count: parseInt(g.count) || 0 
+    })),
+    // Cities
+    cities: (h.cityStats || []).map((c: any) => ({
+      city: c.city,
+      country: c.country,
+      countryName: c.country,
+      count: parseInt(c.count) || 0,
+    })),
+    // Devices
+    devices: (h.deviceStats || []).length > 0 
+      ? (h.deviceStats || []).map((d: any) => ({
+          device: d.device || 'desktop',
+          count: parseInt(d.count) || 0,
+        }))
+      : [{ device: 'desktop', count: stats.total }], // Fallback
+    // Bot detection
+    botDetection: {
+      totalDetections: parseInt(h.botStats?.total_detections) || 0,
+      suspectedBots: parseInt(h.botStats?.suspected) || 0,
+      confirmedBots: parseInt(h.botStats?.confirmed) || 0,
+      pendingReview: parseInt(h.botStats?.pending) || 0,
+      avgConfidenceScore: Math.round(parseFloat(h.botStats?.avg_confidence) || 0),
+      recentDetections: [],
+    },
+    // Time ranges for transparency
+    timeRanges: {
+      realtime: '2 minutes',
+      realtimeGeographic: '2 minutes',
+      dau: '24 hours',
+      wau: '7 days',
+      mau: '30 days',
+      content: '24 hours',
+      geographic: '7 days',
+      cities: '7 days',
+      devices: '7 days',
+      pageViews: '24 hours',
+      botDetection: '7 days',
+    },
+    selectedTimeRange: '24h',
     timestamp: now,
   }, { headers });
 }
