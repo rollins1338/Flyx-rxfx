@@ -87,8 +87,6 @@ class UnifiedAnalyticsClient {
   private pageViews: PageView[] = [];
   private botDetection: BotDetectionResult | null = null;
   private syncInterval: NodeJS.Timeout | null = null;
-  private lastSyncTime: number = 0;
-  private isInitialized: boolean = false;
   private isVisible: boolean = true;
 
   constructor() {
@@ -120,7 +118,6 @@ class UnifiedAnalyticsClient {
     // Initial sync after 5 seconds (let page settle)
     setTimeout(() => this.sync(), 5000);
     
-    this.isInitialized = true;
     console.log('[Analytics] Initialized - syncing every 60s');
   }
 
@@ -215,8 +212,7 @@ class UnifiedAnalyticsClient {
 
     // Clear queued data after building batch
     this.pageViews = [];
-    // Keep watch progress for continuity, but mark as synced
-    this.lastSyncTime = now;
+    // Keep watch progress for continuity
 
     try {
       if (isLeaving && navigator.sendBeacon) {

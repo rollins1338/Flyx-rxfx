@@ -98,7 +98,7 @@ export function PresenceProvider({ children }: PresenceProviderProps) {
   }, []);
 
   // Set browsing context
-  const setBrowsingContext = useCallback((pageName: string, contentTitle?: string, contentId?: string, contentType?: 'movie' | 'tv') => {
+  const setBrowsingContext = useCallback((_pageName: string, _contentTitle?: string, _contentId?: string, _contentType?: 'movie' | 'tv') => {
     setActivity('browsing');
     // Page view is already tracked by pathname change
   }, []);
