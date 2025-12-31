@@ -101,12 +101,12 @@ const pendingBotDetections = new Map<string, BotDetection>(); // Keyed by userId
 
 // Timing
 let lastFlushTime = 0;
-const FLUSH_INTERVAL = 30000; // 30 seconds
-const USER_TIMEOUT = 120000; // 2 minutes inactive = gone
+const FLUSH_INTERVAL = 60000; // 60 seconds - matches client sync interval for efficiency
+const USER_TIMEOUT = 180000; // 3 minutes inactive = gone (allows for 2 missed syncs)
 
 // Stats cache for historical data
 let historicalStatsCache: { data: any; timestamp: number } | null = null;
-const HISTORICAL_CACHE_TTL = 30000; // 30 seconds
+const HISTORICAL_CACHE_TTL = 60000; // 60 seconds - longer cache for cost savings
 
 // Peak tracking
 let currentDate = new Date().toISOString().split('T')[0];
@@ -620,6 +620,87 @@ async function handleSync(request: Request, env: Env, headers: HeadersInit): Pro
 }
 
 
+// POST /live-activity - Handle live activity updates (combines presence + watch session)
+// This endpoint is called by the client's LiveActivityManager
+async function handleLiveActivityPost(request: Request, env: Env, headers: HeadersInit): Promise<Response> {
+  try {
+    const data = await request.json() as any;
+    if (!data.userId && !data.contentId) {
+      return Response.json({ error: 'Missing userId or contentId' }, { status: 400, headers });
+    }
+
+    const geo = getGeo(request);
+    const now = Date.now();
+    const userId = data.userId || `anon_${generateId()}`;
+
+    // Map action to activity type
+    const activityType = (data.action === 'started' || data.action === 'watching') 
+      ? 'watching' 
+      : (data.action === 'paused' ? 'browsing' : 'browsing');
+
+    // Update live user presence in memory
+    const existing = liveUsers.get(userId);
+    liveUsers.set(userId, {
+      userId,
+      sessionId: data.sessionId || existing?.sessionId || generateId(),
+      activityType,
+      contentId: data.contentId,
+      contentTitle: data.contentTitle,
+      contentType: data.contentType,
+      seasonNumber: data.season,
+      episodeNumber: data.episode,
+      country: geo.country || existing?.country,
+      city: geo.city || existing?.city,
+      lastHeartbeat: now,
+      firstSeen: existing?.firstSeen || now,
+    });
+
+    // If we have progress/duration, also track as watch session
+    if (data.contentId && (data.progress !== undefined || data.duration !== undefined)) {
+      const key = `${userId}_${data.contentId}_${data.season || 0}_${data.episode || 0}`;
+      const existingSession = pendingWatchSessions.get(key);
+      
+      const duration = data.duration || existingSession?.duration || 0;
+      const progress = data.progress || 0;
+      const lastPosition = duration > 0 ? Math.round(duration * (progress / 100)) : 0;
+      
+      pendingWatchSessions.set(key, {
+        id: existingSession?.id || `ws_${generateId()}`,
+        userId,
+        sessionId: data.sessionId,
+        contentId: data.contentId,
+        contentType: data.contentType || 'movie',
+        contentTitle: data.contentTitle,
+        seasonNumber: data.season,
+        episodeNumber: data.episode,
+        startedAt: existingSession?.startedAt || now,
+        lastUpdate: now,
+        watchTime: Math.max(lastPosition, existingSession?.watchTime || 0),
+        lastPosition,
+        duration,
+        completionPercentage: Math.max(progress, existingSession?.completionPercentage || 0),
+        isCompleted: data.action === 'completed' || progress >= 90 || existingSession?.isCompleted || false,
+      });
+    }
+
+    // Trigger D1 flush in background (non-blocking)
+    flushToD1(env.DB).catch(() => {});
+
+    return Response.json({ 
+      success: true, 
+      tracked: true,
+      userId,
+      activityType,
+      timestamp: now,
+    }, { headers });
+
+  } catch (e) {
+    console.error('[LiveActivity POST] Error:', e);
+    return Response.json({ success: false, error: String(e) }, { status: 500, headers });
+  }
+}
+
+
 // GET /live-activity - Get current live users (FROM MEMORY - instant, no D1!)
 async function handleGetLiveActivity(headers: HeadersInit): Promise<Response> {
   const { stats, users } = getRealtimeStats();
@@ -1077,6 +1158,10 @@ export default {
           case '/livetv-session':
           case '/api/livetv-session':
             return handleLiveTVSession(request, env, headers);
+          case '/live-activity':
+          case '/api/live-activity':
+            // POST to /live-activity is treated as a presence update with watch data
+            return handleLiveActivityPost(request, env, headers);
           case '/events':
           case '/api/events':
             return handleEvents(request, env, headers);

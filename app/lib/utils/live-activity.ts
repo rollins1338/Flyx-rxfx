@@ -1,9 +1,21 @@
 /**
- * Live Activity Utility
- * Helper functions for sending activity data to the live tracker
+ * Live Activity Utility - DEPRECATED
+ * 
+ * This module is kept for backwards compatibility but now delegates
+ * to the unified tracker for all operations.
+ * 
+ * NEW CODE SHOULD USE:
+ *   import { useAnalytics } from '@/lib/hooks/useAnalytics';
+ *   // or
+ *   import { startWatch, updateProgress, stopWatch } from '@/lib/analytics/unified-tracker';
  */
 
-import { getAnalyticsEndpoint } from '@/lib/utils/analytics-endpoints';
+import { 
+  startWatch as trackerStartWatch,
+  updateProgress as trackerUpdateProgress,
+  pauseWatch as trackerPauseWatch,
+  stopWatch as trackerStopWatch,
+} from '@/lib/analytics/unified-tracker';
 
 interface LiveActivityData {
   userId?: string;
@@ -17,11 +29,11 @@ interface LiveActivityData {
   duration?: number;
 }
 
+/**
+ * @deprecated Use unified tracker instead
+ */
 class LiveActivityManager {
   private static instance: LiveActivityManager;
-  private isEnabled = true;
-  private queue: LiveActivityData[] = [];
-  private isProcessing = false;
 
   static getInstance(): LiveActivityManager {
     if (!LiveActivityManager.instance) {
@@ -31,214 +43,147 @@ class LiveActivityManager {
   }
 
   /**
-   * Send activity data to the live tracker
+   * Send activity data - delegates to unified tracker
+   * @deprecated Use startWatch/updateProgress/stopWatch from unified-tracker
    */
   async sendActivity(data: LiveActivityData): Promise<void> {
-    if (!this.isEnabled) return;
-
-    // Add to queue for batch processing
-    this.queue.push({
-      ...data,
-      userId: data.userId || this.generateAnonymousUserId()
-    });
-
-    // Process queue if not already processing
-    if (!this.isProcessing) {
-      this.processQueue();
-    }
-  }
-
-  /**
-   * Process the activity queue
-   */
-  private async processQueue(): Promise<void> {
-    if (this.isProcessing || this.queue.length === 0) return;
-
-    this.isProcessing = true;
-
-    try {
-      // Process activities in batches
-      while (this.queue.length > 0) {
-        const activity = this.queue.shift();
-        if (activity) {
-          await this.sendActivityToAPI(activity);
+    switch (data.action) {
+      case 'started':
+        trackerStartWatch(
+          data.contentId,
+          data.contentType,
+          data.contentTitle,
+          data.season,
+          data.episode,
+          data.duration
+        );
+        break;
+      case 'watching':
+        if (data.progress !== undefined && data.duration !== undefined) {
+          const position = (data.progress / 100) * data.duration;
+          trackerUpdateProgress(position, data.duration);
         }
-      }
-    } catch (error) {
-      console.error('Live activity processing error:', error);
-    } finally {
-      this.isProcessing = false;
+        break;
+      case 'paused':
+        trackerPauseWatch();
+        break;
+      case 'completed':
+        trackerStopWatch();
+        break;
     }
   }
 
   /**
-   * Send individual activity to API
+   * @deprecated Use startWatch from unified-tracker
    */
-  private async sendActivityToAPI(data: LiveActivityData): Promise<void> {
-    try {
-      const response = await fetch(getAnalyticsEndpoint('live-activity'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Live activity API error: ${response.status}`);
-      }
-    } catch (error) {
-      console.error('Failed to send live activity:', error);
-      // Don't throw - we don't want to break the main app if live tracking fails
-    }
+  trackWatchStart(
+    contentId: string, 
+    contentTitle: string, 
+    contentType: 'movie' | 'tv', 
+    season?: number, 
+    episode?: number
+  ): void {
+    trackerStartWatch(contentId, contentType, contentTitle, season, episode);
   }
 
   /**
-   * Generate anonymous user ID for tracking
-   */
-  private generateAnonymousUserId(): string {
-    // Check if we already have an anonymous ID in localStorage
-    const existingId = typeof window !== 'undefined' 
-      ? localStorage.getItem('flyx_anonymous_user_id') 
-      : null;
-
-    if (existingId) {
-      return existingId;
-    }
-
-    // Generate new anonymous ID
-    const anonymousId = `anon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('flyx_anonymous_user_id', anonymousId);
-    }
-
-    return anonymousId;
-  }
-
-  /**
-   * Track watch start
-   */
-  trackWatchStart(contentId: string, contentTitle: string, contentType: 'movie' | 'tv', season?: number, episode?: number): void {
-    this.sendActivity({
-      contentId,
-      contentTitle,
-      contentType,
-      season,
-      episode,
-      action: 'started',
-      progress: 0
-    });
-  }
-
-  /**
-   * Track watch progress
+   * @deprecated Use updateProgress from unified-tracker
    */
   trackWatchProgress(
-    contentId: string, 
-    contentTitle: string, 
-    contentType: 'movie' | 'tv', 
+    _contentId: string, 
+    _contentTitle: string, 
+    _contentType: 'movie' | 'tv', 
     progress: number, 
     duration: number,
-    season?: number, 
-    episode?: number
+    _season?: number, 
+    _episode?: number
   ): void {
-    let action: 'started' | 'watching' | 'completed' = 'watching';
-    
-    if (progress < 5) {
-      action = 'started';
-    } else if (progress >= 90) {
-      action = 'completed';
-    }
-
-    this.sendActivity({
-      contentId,
-      contentTitle,
-      contentType,
-      season,
-      episode,
-      action,
-      progress: Math.round(progress),
-      duration: Math.round(duration)
-    });
+    const position = (progress / 100) * duration;
+    trackerUpdateProgress(position, duration);
   }
 
   /**
-   * Track watch pause
+   * @deprecated Use pauseWatch from unified-tracker
    */
   trackWatchPause(
-    contentId: string, 
-    contentTitle: string, 
-    contentType: 'movie' | 'tv', 
-    progress: number,
-    season?: number, 
-    episode?: number
+    _contentId: string, 
+    _contentTitle: string, 
+    _contentType: 'movie' | 'tv', 
+    _progress: number,
+    _season?: number, 
+    _episode?: number
   ): void {
-    this.sendActivity({
-      contentId,
-      contentTitle,
-      contentType,
-      season,
-      episode,
-      action: 'paused',
-      progress: Math.round(progress)
-    });
+    trackerPauseWatch();
   }
 
   /**
-   * Track watch completion
+   * @deprecated Use stopWatch from unified-tracker
    */
   trackWatchComplete(
-    contentId: string, 
-    contentTitle: string, 
-    contentType: 'movie' | 'tv', 
-    duration: number,
-    season?: number, 
-    episode?: number
+    _contentId: string, 
+    _contentTitle: string, 
+    _contentType: 'movie' | 'tv', 
+    _duration: number,
+    _season?: number, 
+    _episode?: number
   ): void {
-    this.sendActivity({
-      contentId,
-      contentTitle,
-      contentType,
-      season,
-      episode,
-      action: 'completed',
-      progress: 100,
-      duration: Math.round(duration)
-    });
+    trackerStopWatch();
   }
 
-  /**
-   * Enable/disable live activity tracking
-   */
-  setEnabled(enabled: boolean): void {
-    this.isEnabled = enabled;
+  setEnabled(_enabled: boolean): void {
+    // No-op - unified tracker is always enabled
   }
 
-  /**
-   * Clear the activity queue
-   */
   clearQueue(): void {
-    this.queue = [];
+    // No-op - unified tracker handles its own queue
   }
 }
 
-// Export singleton instance
+// Export singleton instance for backwards compatibility
 export const liveActivityManager = LiveActivityManager.getInstance();
 
-// Export convenience functions
-export const trackWatchStart = (contentId: string, contentTitle: string, contentType: 'movie' | 'tv', season?: number, episode?: number) => {
-  liveActivityManager.trackWatchStart(contentId, contentTitle, contentType, season, episode);
+// Export convenience functions (deprecated - use unified-tracker directly)
+export const trackWatchStart = (
+  contentId: string, 
+  contentTitle: string, 
+  contentType: 'movie' | 'tv', 
+  season?: number, 
+  episode?: number
+) => {
+  trackerStartWatch(contentId, contentType, contentTitle, season, episode);
 };
 
-export const trackWatchProgress = (contentId: string, contentTitle: string, contentType: 'movie' | 'tv', progress: number, duration: number, season?: number, episode?: number) => {
-  liveActivityManager.trackWatchProgress(contentId, contentTitle, contentType, progress, duration, season, episode);
+export const trackWatchProgress = (
+  _contentId: string, 
+  _contentTitle: string, 
+  _contentType: 'movie' | 'tv', 
+  progress: number, 
+  duration: number, 
+  _season?: number, 
+  _episode?: number
+) => {
+  const position = (progress / 100) * duration;
+  trackerUpdateProgress(position, duration);
 };
 
-export const trackWatchPause = (contentId: string, contentTitle: string, contentType: 'movie' | 'tv', progress: number, season?: number, episode?: number) => {
-  liveActivityManager.trackWatchPause(contentId, contentTitle, contentType, progress, season, episode);
+export const trackWatchPause = (
+  _contentId: string, 
+  _contentTitle: string, 
+  _contentType: 'movie' | 'tv', 
+  _progress: number, 
+  _season?: number, 
+  _episode?: number
+) => {
+  trackerPauseWatch();
 };
 
-export const trackWatchComplete = (contentId: string, contentTitle: string, contentType: 'movie' | 'tv', duration: number, season?: number, episode?: number) => {
-  liveActivityManager.trackWatchComplete(contentId, contentTitle, contentType, duration, season, episode);
+export const trackWatchComplete = (
+  _contentId: string, 
+  _contentTitle: string, 
+  _contentType: 'movie' | 'tv', 
+  _duration: number, 
+  _season?: number, 
+  _episode?: number
+) => {
+  trackerStopWatch();
 };
