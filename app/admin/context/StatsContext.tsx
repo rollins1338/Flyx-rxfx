@@ -7,7 +7,6 @@
  */
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { getAdminAnalyticsUrl } from '../hooks/useAnalyticsApi';
 
 // Peak stats interface
 interface PeakStats {
@@ -269,18 +268,11 @@ export function StatsProvider({ children }: { children: ReactNode }) {
     setError(null);
     
     try {
-      // Build query parameters for bot filtering and time range
-      const params = new URLSearchParams();
-      if (!botFilterOptions.includeBots) {
-        params.set('excludeBots', 'true');
-        params.set('botThreshold', botFilterOptions.confidenceThreshold.toString());
-      }
-      // Add time range parameter
-      params.set('timeRange', timeRange);
+      // Fetch from CF Worker's /admin/stats endpoint (source of truth)
+      const CF_WORKER_URL = process.env.NEXT_PUBLIC_CF_ANALYTICS_WORKER_URL || 'https://flyx-analytics.vynx.workers.dev';
+      const url = `${CF_WORKER_URL}/admin/stats`;
+      console.log('[StatsContext] Fetching from CF Worker:', url);
       
-      // Fetch all data in parallel from a single unified endpoint
-      const url = `${getAdminAnalyticsUrl('unified-stats')}${params.toString() ? '?' + params.toString() : ''}`;
-      console.log('[StatsContext] Fetching from:', url);
       const response = await fetch(url);
       
       if (!response.ok) {
@@ -291,82 +283,112 @@ export function StatsProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
       console.log('[StatsContext] Response data:', { 
         success: data.success, 
-        realtime: data.realtime,
-        liveUsers: data.realtime?.totalActive 
+        liveUsers: data.stats?.liveUsers 
       });
       
-      if (data.success) {
+      if (data.success && data.stats) {
+        const s = data.stats;
         setStats({
-          // Real-time (from live_activity table - HEARTBEAT BASED)
-          // Same source as /api/analytics/live-activity for consistency
-          liveUsers: data.realtime?.totalActive || 0,
-          trulyActiveUsers: data.realtime?.trulyActive || 0,
-          liveWatching: data.realtime?.watching || 0,
-          liveBrowsing: data.realtime?.browsing || 0,
-          liveTVViewers: data.realtime?.livetv || 0,
+          // Real-time from DO
+          liveUsers: s.liveUsers || 0,
+          trulyActiveUsers: s.liveUsers || 0, // DO doesn't track this separately
+          liveWatching: s.watching || 0,
+          liveBrowsing: s.browsing || 0,
+          liveTVViewers: s.livetv || 0,
           
-          // Real-time geographic distribution
-          realtimeGeographic: data.realtimeGeographic || [],
+          // Real-time geographic from DO
+          realtimeGeographic: (s.topCountries || []).map((c: any) => ({
+            country: c.code || c.country,
+            countryName: c.country,
+            count: c.count || 0,
+          })),
           
-          // Peak stats (from DB, updated server-side)
-          peakStats: data.peakStats || null,
-          
-          // User metrics (all unique user counts)
-          totalUsers: data.users?.total || 0,
-          activeToday: data.users?.dau || 0,
-          activeThisWeek: data.users?.wau || 0,
-          activeThisMonth: data.users?.mau || 0,
-          newUsersToday: data.users?.newToday || 0,
-          returningUsers: data.users?.returning || 0,
-          
-          // Content metrics (last 24h)
-          totalSessions: data.content?.totalSessions || 0,
-          totalWatchTime: data.content?.totalWatchTime || 0,
-          allTimeWatchTime: data.content?.allTimeWatchTime || 0,
-          avgSessionDuration: data.content?.avgDuration || 0,
-          completionRate: data.content?.completionRate || 0,
-          completedSessions: data.content?.completedSessions || 0,
-          totalPauses: data.content?.totalPauses || 0,
-          totalSeeks: data.content?.totalSeeks || 0,
-          movieSessions: data.content?.movieSessions || 0,
-          tvSessions: data.content?.tvSessions || 0,
-          uniqueContentWatched: data.content?.uniqueContentWatched || 0,
-          
-          // Top content (last 7 days)
-          topContent: data.topContent || [],
-          
-          // Page views (last 24h)
-          pageViews: data.pageViews?.total || 0,
-          uniqueVisitors: data.pageViews?.uniqueVisitors || 0,
-          
-          // Geographic (unique users per country, last 7 days)
-          topCountries: data.geographic || [],
-          
-          // Cities (unique users per city, last 7 days)
-          topCities: data.cities || [],
-          
-          // Devices (unique users per device, last 7 days)
-          deviceBreakdown: data.devices || [],
-          
-          // Bot detection metrics
-          botDetection: {
-            totalDetections: data.botDetection?.totalDetections || 0,
-            suspectedBots: data.botDetection?.suspectedBots || 0,
-            confirmedBots: data.botDetection?.confirmedBots || 0,
-            pendingReview: data.botDetection?.pendingReview || 0,
-            avgConfidenceScore: data.botDetection?.avgConfidenceScore || 0,
-            recentDetections: data.botDetection?.recentDetections || [],
+          // Peak stats
+          peakStats: {
+            date: new Date().toISOString().split('T')[0],
+            peakTotal: s.peakToday || 0,
+            peakWatching: 0,
+            peakLiveTV: 0,
+            peakBrowsing: 0,
+            peakTotalTime: s.peakTime ? new Date(s.peakTime).getTime() : 0,
+            peakWatchingTime: 0,
+            peakLiveTVTime: 0,
+            peakBrowsingTime: 0,
           },
           
-          // Time ranges for transparency
-          timeRanges: data.timeRanges || {
-            ...defaultStats.timeRanges,
+          // User metrics from DO (D1 queries)
+          totalUsers: s.totalUsers || 0,
+          activeToday: s.dau || 0,
+          activeThisWeek: s.wau || 0,
+          activeThisMonth: s.mau || 0,
+          newUsersToday: s.newToday || 0,
+          returningUsers: 0, // Not tracked by DO
+          
+          // Content metrics from DO
+          totalSessions: s.totalSessions || 0,
+          totalWatchTime: s.totalWatchTimeMinutes || 0,
+          allTimeWatchTime: s.totalWatchTimeMinutes || 0,
+          avgSessionDuration: s.avgSessionMinutes || 0,
+          completionRate: s.completionRate || 0,
+          completedSessions: 0,
+          totalPauses: 0,
+          totalSeeks: 0,
+          movieSessions: 0,
+          tvSessions: 0,
+          uniqueContentWatched: 0,
+          
+          // Top content from DO
+          topContent: (s.topContent || []).map((c: any) => ({
+            contentId: c.id,
+            contentTitle: c.title,
+            contentType: c.type,
+            watchCount: c.viewers || 0,
+            totalWatchTime: 0,
+          })),
+          
+          // Page views (not tracked by DO)
+          pageViews: 0,
+          uniqueVisitors: 0,
+          
+          // Geographic from DO
+          topCountries: (s.topCountries || []).map((c: any) => ({
+            country: c.code || c.country,
+            countryName: c.country,
+            count: c.count || 0,
+          })),
+          
+          // Cities (not tracked by DO)
+          topCities: [],
+          
+          // Devices (not tracked by DO)
+          deviceBreakdown: [{ device: 'desktop', count: s.liveUsers || 0 }],
+          
+          // Bot detection (not tracked by DO)
+          botDetection: {
+            totalDetections: 0,
+            suspectedBots: 0,
+            confirmedBots: 0,
+            pendingReview: 0,
+            avgConfidenceScore: 0,
+            recentDetections: [],
+          },
+          
+          // Time ranges
+          timeRanges: {
+            realtime: '5 minutes',
+            dau: '24 hours',
+            wau: '7 days',
+            mau: '30 days',
+            content: '24 hours',
+            geographic: 'real-time',
+            devices: 'real-time',
+            pageViews: '24 hours',
             botDetection: '7 days',
           },
           
           // Meta
           lastUpdated: Date.now(),
-          dataSource: 'unified-api',
+          dataSource: 'cf-worker-do',
         });
         
         setLastRefresh(new Date());

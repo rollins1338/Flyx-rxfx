@@ -108,7 +108,7 @@ const USER_TIMEOUT = 180000; // 3 minutes inactive = gone (allows for 2 missed s
 
 // Stats cache for historical data
 let historicalStatsCache: { data: any; timestamp: number } | null = null;
-const HISTORICAL_CACHE_TTL = 60000; // 60 seconds - longer cache for cost savings
+const HISTORICAL_CACHE_TTL = 30000; // 30 seconds
 
 // Peak tracking
 let currentDate = new Date().toISOString().split('T')[0];
@@ -415,9 +415,37 @@ async function handleLiveTVSession(request: Request, env: Env, headers: HeadersI
   const data = await request.json() as any;
   if (!data.userId || !data.channelId) return Response.json({ error: 'Missing fields' }, { status: 400, headers });
   
+  const geo = getGeo(request);
+  const now = Date.now();
+  
+  // Update live user with activityType: 'livetv' - THIS IS THE KEY FIX
+  const existingUser = liveUsers.get(data.userId);
+  if (data.action !== 'stop') {
+    liveUsers.set(data.userId, {
+      userId: data.userId,
+      sessionId: data.sessionId || existingUser?.sessionId || generateId(),
+      activityType: 'livetv',
+      contentId: data.channelId,
+      contentTitle: data.channelName,
+      contentType: 'livetv',
+      country: geo.country || existingUser?.country,
+      city: geo.city || existingUser?.city,
+      lastHeartbeat: now,
+      firstSeen: existingUser?.firstSeen || now,
+    });
+  } else {
+    // On stop, set back to browsing
+    if (existingUser) {
+      existingUser.activityType = 'browsing';
+      existingUser.contentId = undefined;
+      existingUser.contentTitle = undefined;
+      existingUser.lastHeartbeat = now;
+    }
+  }
+  
+  // Also track as watch session for historical data
   const key = `${data.userId}_livetv_${data.channelId}`;
   const existing = pendingWatchSessions.get(key);
-  const now = Date.now();
   
   pendingWatchSessions.set(key, {
     id: `ltv_${generateId()}`,
@@ -434,6 +462,29 @@ async function handleLiveTVSession(request: Request, env: Env, headers: HeadersI
     completionPercentage: 0,
     isCompleted: false,
   });
+  
+  // IMPORTANT: Also send heartbeat to Durable Object for accurate live user count
+  try {
+    const doStub = getAnalyticsDO(env);
+    const doRequest = new Request(new URL('/heartbeat', request.url).toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: data.userId,
+        sessionId: data.sessionId,
+        activity: data.action === 'stop' ? 'browsing' : 'livetv',
+        activityType: data.action === 'stop' ? 'browsing' : 'livetv',
+        contentId: data.channelId,
+        contentTitle: data.channelName,
+        contentType: 'livetv',
+        country: geo.country,
+        city: geo.city,
+      }),
+    });
+    await doStub.fetch(doRequest);
+  } catch (e) {
+    console.error('[LiveTV] Failed to update DO:', e);
+  }
   
   flushToD1(env.DB).catch(() => {});
   return Response.json({ success: true }, { headers });
@@ -1003,12 +1054,12 @@ async function handleGetUnifiedStats(env: Env, headers: HeadersInit): Promise<Re
     },
     // User metrics
     users: { 
-      total: h.userStats?.total || 0, 
-      dau: h.userStats?.dau || 0, 
-      wau: h.userStats?.wau || 0, 
-      mau: h.userStats?.mau || 0,
-      newToday: h.userStats?.new_today || 0,
-      returning: h.userStats?.returning || 0,
+      total: parseInt(String(h.userStats?.total)) || 0, 
+      dau: parseInt(String(h.userStats?.dau)) || 0, 
+      wau: parseInt(String(h.userStats?.wau)) || 0, 
+      mau: parseInt(String(h.userStats?.mau)) || 0,
+      newToday: parseInt(String(h.userStats?.new_today)) || 0,
+      returning: parseInt(String(h.userStats?.returning)) || 0,
     },
     // Content metrics
     content: { 
@@ -1320,20 +1371,77 @@ export default {
           case '/sync':
           case '/api/sync': {
             // Route sync to Durable Object for accurate counting
-            const doStub = getAnalyticsDO(env);
             const body = await request.text();
             const geo = getGeo(request);
-            const parsed = JSON.parse(body);
+            let parsed: any;
             
-            // Also handle in local memory for page views and watch sessions
-            // (DO handles presence, we handle the rest)
-            if (parsed.pageViews?.length || parsed.watchProgress?.length) {
-              await handleSync(request.clone(), env, headers);
+            try {
+              parsed = JSON.parse(body);
+            } catch (e) {
+              return Response.json({ error: 'Invalid JSON' }, { status: 400, headers });
             }
             
+            // Handle page views and watch sessions locally
+            if (parsed.pageViews?.length || parsed.watchProgress?.length) {
+              const now = Date.now();
+              const userId = parsed.userId;
+              const sessionId = parsed.sessionId;
+              
+              // Queue page views
+              if (parsed.pageViews && Array.isArray(parsed.pageViews)) {
+                for (const pv of parsed.pageViews) {
+                  pendingPageViews.push({
+                    id: `pv_${generateId()}`,
+                    userId,
+                    sessionId,
+                    pagePath: pv.path || '/',
+                    pageTitle: pv.title,
+                    referrer: pv.referrer,
+                    entryTime: pv.timestamp || now,
+                    country: geo.country,
+                    deviceType: parsed.device?.type,
+                  });
+                }
+              }
+              
+              // Queue watch progress
+              if (parsed.watchProgress && Array.isArray(parsed.watchProgress)) {
+                for (const wp of parsed.watchProgress) {
+                  if (!wp.contentId) continue;
+                  const key = `${userId}_${wp.contentId}_${wp.seasonNumber || 0}_${wp.episodeNumber || 0}`;
+                  const existingSession = pendingWatchSessions.get(key);
+                  const watchTime = wp.position || 0;
+                  const completion = wp.duration > 0 ? Math.round((wp.position / wp.duration) * 100) : 0;
+                  
+                  pendingWatchSessions.set(key, {
+                    id: existingSession?.id || `ws_${generateId()}`,
+                    userId,
+                    sessionId,
+                    contentId: wp.contentId,
+                    contentType: wp.contentType || 'movie',
+                    contentTitle: wp.contentTitle,
+                    seasonNumber: wp.seasonNumber,
+                    episodeNumber: wp.episodeNumber,
+                    startedAt: existingSession?.startedAt || wp.startedAt || now,
+                    lastUpdate: now,
+                    watchTime: Math.max(watchTime, existingSession?.watchTime || 0),
+                    lastPosition: wp.position || 0,
+                    duration: wp.duration || existingSession?.duration || 0,
+                    completionPercentage: Math.max(completion, existingSession?.completionPercentage || 0),
+                    isCompleted: completion >= 90 || existingSession?.isCompleted || false,
+                  });
+                }
+              }
+              
+              // Trigger flush
+              flushToD1(env.DB).catch(() => {});
+            }
+            
+            // Route presence to Durable Object
+            const doStub = getAnalyticsDO(env);
             const doRequest = new Request(new URL('/heartbeat', request.url).toString(), {
               method: 'POST',
-              headers: request.headers,
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 userId: parsed.userId,
                 sessionId: parsed.sessionId,
@@ -1379,6 +1487,42 @@ export default {
           case '/unified-stats':
           case '/api/unified-stats':
             return handleGetUnifiedStats(env, headers);
+          case '/activity-history':
+          case '/api/activity-history': {
+            // Return hourly activity history for the last N hours
+            const url = new URL(request.url);
+            const hours = parseInt(url.searchParams.get('hours') || '12');
+            const hoursAgo = Date.now() - (hours * 60 * 60 * 1000);
+            
+            try {
+              const result = await env.DB.prepare(`
+                SELECT 
+                  strftime('%Y-%m-%d %H:00', datetime(last_heartbeat/1000, 'unixepoch')) as hour,
+                  COUNT(DISTINCT user_id) as users,
+                  SUM(CASE WHEN activity_type = 'watching' THEN 1 ELSE 0 END) as watching,
+                  SUM(CASE WHEN activity_type = 'browsing' THEN 1 ELSE 0 END) as browsing,
+                  SUM(CASE WHEN activity_type = 'livetv' THEN 1 ELSE 0 END) as livetv
+                FROM live_activity
+                WHERE last_heartbeat >= ?
+                GROUP BY hour
+                ORDER BY hour DESC
+                LIMIT ?
+              `).bind(hoursAgo, hours).all();
+              
+              const history = (result.results || []).map((row: any) => ({
+                hour: row.hour,
+                users: parseInt(row.users) || 0,
+                watching: parseInt(row.watching) || 0,
+                browsing: parseInt(row.browsing) || 0,
+                livetv: parseInt(row.livetv) || 0,
+              }));
+              
+              return Response.json({ success: true, history }, { headers });
+            } catch (e) {
+              console.error('[ActivityHistory] Error:', e);
+              return Response.json({ success: true, history: [] }, { headers });
+            }
+          }
           case '/debug':
             return Response.json({
               liveUsers: Array.from(liveUsers.entries()),
