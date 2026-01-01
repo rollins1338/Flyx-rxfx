@@ -64,25 +64,85 @@ export const Navigation: React.FC<NavigationProps> = ({
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch Discord stats
+  // Fetch Discord stats from invite API with proper caching
   useEffect(() => {
-    const fetchDiscordStats = async () => {
+    const CACHE_KEY = 'discord_stats_cache';
+    const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+    const getCachedStats = () => {
       try {
-        // Discord server ID for discord.vynx.cc - using widget API
-        const response = await fetch('https://discord.com/api/guilds/1320893445923049543/widget.json');
-        if (response.ok) {
-          const data = await response.json();
-          setDiscordStats({
-            memberCount: data.presence_count || 0,
-          });
+        const cached = localStorage.getItem(CACHE_KEY);
+        if (cached) {
+          const { data, timestamp } = JSON.parse(cached);
+          if (Date.now() - timestamp < CACHE_DURATION) {
+            return data;
+          }
         }
-      } catch {
-        // Silently fail
+      } catch (error) {
+        console.error('Error reading Discord cache:', error);
+      }
+      return null;
+    };
+
+    const setCachedStats = (data: DiscordStats) => {
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify({
+          data,
+          timestamp: Date.now()
+        }));
+      } catch (error) {
+        console.error('Error setting Discord cache:', error);
       }
     };
-    
+
+    const fetchDiscordStats = async () => {
+      try {
+        // First try to use cached data
+        const cachedStats = getCachedStats();
+        if (cachedStats) {
+          setDiscordStats(cachedStats);
+        }
+
+        // Fetch fresh data from Discord invite API
+        const response = await fetch(`https://discordapp.com/api/invites/CUG5p8B3vq?with_counts=true`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const stats = {
+            memberCount: data.approximate_presence_count || 0,
+          };
+          
+          setDiscordStats(stats);
+          setCachedStats(stats);
+        } else {
+          console.warn('Discord API returned:', response.status, response.statusText);
+          // If API fails but we have cached data, keep using it
+          const cachedStats = getCachedStats();
+          if (cachedStats) {
+            setDiscordStats(cachedStats);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch Discord stats:', error);
+        // Fallback to cached data on network error
+        const cachedStats = getCachedStats();
+        if (cachedStats) {
+          setDiscordStats(cachedStats);
+        }
+      }
+    };
+
+    // Initial fetch
     fetchDiscordStats();
-    const interval = setInterval(fetchDiscordStats, 5 * 60 * 1000);
+    
+    // Set up interval for periodic updates
+    const interval = setInterval(fetchDiscordStats, CACHE_DURATION);
+    
     return () => clearInterval(interval);
   }, []);
 
@@ -334,7 +394,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                   )}
                 </a>
                 <a
-                  href="https://discord.gg/58DVFk6mmK"
+                  href="https://discord.gg/CUG5p8B3vq"
                   target="_blank"
                   rel="noopener noreferrer"
                   className={styles.discordButton}
@@ -455,7 +515,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                   )}
                 </a>
                 <a
-                  href="https://discord.gg/58DVFk6mmK"
+                  href="https://discord.gg/CUG5p8B3vq"
                   target="_blank"
                   rel="noopener noreferrer"
                   className={`${styles.mobileActionButton} ${styles.discord}`}
