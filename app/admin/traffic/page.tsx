@@ -10,7 +10,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAdmin } from '../context/AdminContext';
 import { useStats } from '../context/StatsContext';
 import { getAdminAnalyticsUrl } from '../hooks/useAnalyticsApi';
-import BotFilterControls from '../components/BotFilterControls';
 
 interface SourceStats {
   source_type: string;
@@ -84,27 +83,32 @@ interface PresenceStats {
 }
 
 export default function TrafficSourcesPage() {
-  useAdmin();
-  const { stats, botFilterOptions, timeRange: globalTimeRange, setTimeRange: setGlobalTimeRange } = useStats();
+  const { dateRange } = useAdmin();
+  const { stats, botFilterOptions } = useStats();
   
   const [trafficData, setTrafficData] = useState<TrafficData | null>(null);
   const [presenceStats, setPresenceStats] = useState<PresenceStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'sources' | 'referrers' | 'bots' | 'presence'>('overview');
-  const [timeRange, setTimeRange] = useState('7d');
   const [referrerLimit, setReferrerLimit] = useState(100);
 
-  // Sync local time range with global time range
-  useEffect(() => {
-    if (globalTimeRange) {
-      setTimeRange(globalTimeRange);
+  // Convert AdminContext dateRange to days
+  const getDaysFromPeriod = (period: string) => {
+    switch (period) {
+      case 'day': return 1;
+      case 'week': return 7;
+      case 'month': return 30;
+      case 'year': return 365;
+      default: return 7;
     }
-  }, [globalTimeRange]);
+  };
+  
+  const timeRange = dateRange.period === 'day' ? '24h' : dateRange.period === 'week' ? '7d' : dateRange.period === 'month' ? '30d' : '365d';
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const days = timeRange === '24h' ? 1 : timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : 365;
+      const days = getDaysFromPeriod(dateRange.period);
       
       // Build query parameters for bot filtering
       const params = new URLSearchParams();
@@ -135,19 +139,13 @@ export default function TrafficSourcesPage() {
     } finally {
       setLoading(false);
     }
-  }, [timeRange, referrerLimit, botFilterOptions]);
+  }, [dateRange.period, referrerLimit, botFilterOptions]);
 
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
   }, [fetchData]);
-
-  // Handle time range change - update both local and global
-  const handleTimeRangeChange = (range: string) => {
-    setTimeRange(range);
-    setGlobalTimeRange(range);
-  };
 
   const formatNumber = (num: number) => num?.toLocaleString() || '0';
   
@@ -182,44 +180,15 @@ export default function TrafficSourcesPage() {
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ marginBottom: '32px', paddingBottom: '20px', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
-          <div>
-            <h2 style={{ margin: 0, color: '#f8fafc', fontSize: '28px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontSize: '32px' }}>🚦</span>
-              Traffic Sources & Presence
-            </h2>
-            <p style={{ margin: '8px 0 0 0', color: '#94a3b8', fontSize: '16px' }}>
-              Analyze where your traffic comes from, detect bots, and monitor real-time presence
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {['24h', '7d', '30d'].map((range) => (
-              <button 
-                key={range} 
-                onClick={() => handleTimeRangeChange(range)} 
-                style={{ 
-                  padding: '8px 16px', 
-                  background: timeRange === range ? '#7877c6' : 'rgba(255, 255, 255, 0.05)', 
-                  border: '1px solid', 
-                  borderColor: timeRange === range ? '#7877c6' : 'rgba(255, 255, 255, 0.1)', 
-                  borderRadius: '8px', 
-                  color: timeRange === range ? 'white' : '#94a3b8', 
-                  cursor: 'pointer', 
-                  fontSize: '13px' 
-                }}
-              >
-                {range === '24h' ? '24 Hours' : range === '7d' ? '7 Days' : '30 Days'}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Bot Filter Controls */}
-      <div style={{ marginBottom: '24px' }}>
-        <BotFilterControls />
+      {/* Header - simplified, time range is in AdminHeader */}
+      <div style={{ marginBottom: '24px', paddingBottom: '20px', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
+        <h2 style={{ margin: 0, color: '#f8fafc', fontSize: '28px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span style={{ fontSize: '32px' }}>🚦</span>
+          Traffic Sources & Presence
+        </h2>
+        <p style={{ margin: '8px 0 0 0', color: '#94a3b8', fontSize: '16px' }}>
+          Analyze where your traffic comes from, detect bots, and monitor real-time presence
+        </p>
       </div>
 
       {/* Tab Selector */}

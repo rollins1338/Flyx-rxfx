@@ -302,7 +302,9 @@ export class AnalyticsDO {
       
       // GET /stats - Get all stats for admin dashboard
       if (request.method === 'GET' && path === '/stats') {
-        return this.handleGetStats(headers);
+        // Parse time range from query params (default: 7d)
+        const range = url.searchParams.get('range') || '7d';
+        return this.handleGetStats(headers, range);
       }
       
       // GET /live - Get live users list
@@ -354,7 +356,7 @@ export class AnalyticsDO {
     }, { headers });
   }
   
-  private async handleGetStats(headers: HeadersInit): Promise<Response> {
+  private async handleGetStats(headers: HeadersInit, range: string = '7d'): Promise<Response> {
     this.cleanupUsers();
     
     const stats = this.getStats();
@@ -404,11 +406,11 @@ export class AnalyticsDO {
       .slice(0, 10);
     
     // Get historical stats from D1
-    let dau = 0, wau = 0, mau = 0, totalUsers = 0, newToday = 0;
-    let totalSessions = 0, totalWatchTime = 0;
+    let dau = 0, wau = 0, mau = 0, totalUsers = 0, newToday = 0, returningUsers = 0;
+    let totalSessions = 0, totalWatchTime = 0, avgSessionDuration = 0, completionRate = 0;
+    let pageViews = 0, uniqueVisitors = 0;
     
     // Historical peak - we know from D1 analysis the peak was ~425 on Dec 30
-    // The peak_stats table wasn't being updated properly before DO was deployed
     const allTimePeak = 425;
     const allTimePeakDate = '2025-12-30';
     
@@ -437,40 +439,109 @@ export class AnalyticsDO {
       console.error('[AnalyticsDO] Daily peaks query error:', e);
     }
     
+    // Calculate time bounds based on range parameter
+    const oneDayAgo = now - 24 * 60 * 60 * 1000;
+    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+    const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+    const yearAgo = now - 365 * 24 * 60 * 60 * 1000;
+    
+    // Determine the time window for session/watch stats based on range
+    let rangeStart: number;
+    let rangeLabel: string;
+    switch (range) {
+      case '24h':
+        rangeStart = oneDayAgo;
+        rangeLabel = '24 hours';
+        break;
+      case '30d':
+        rangeStart = thirtyDaysAgo;
+        rangeLabel = '30 days';
+        break;
+      case '365d':
+        rangeStart = yearAgo;
+        rangeLabel = '1 year';
+        break;
+      case '7d':
+      default:
+        rangeStart = sevenDaysAgo;
+        rangeLabel = '7 days';
+        break;
+    }
+    
+    console.log('[AnalyticsDO] Time bounds:', { range, rangeStart, rangeLabel });
+    
+    // User activity stats - split into simple queries for reliability
     try {
-      const oneDayAgo = now - 24 * 60 * 60 * 1000;
-      const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
-      const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+      console.log('[AnalyticsDO] Querying user_activity with bounds:', { oneDayAgo, sevenDaysAgo, thirtyDaysAgo });
       
-      const userStats = await this.env.DB.prepare(`
+      // Total users (no time filter)
+      const totalResult = await this.env.DB.prepare(`SELECT COUNT(DISTINCT user_id) as cnt FROM user_activity`).first();
+      totalUsers = totalResult ? parseInt(String(totalResult.cnt)) || 0 : 0;
+      
+      // DAU - users active in last 24h
+      const dauResult = await this.env.DB.prepare(`SELECT COUNT(DISTINCT user_id) as cnt FROM user_activity WHERE last_seen >= ?`).bind(oneDayAgo).first();
+      dau = dauResult ? parseInt(String(dauResult.cnt)) || 0 : 0;
+      
+      // WAU - users active in last 7 days
+      const wauResult = await this.env.DB.prepare(`SELECT COUNT(DISTINCT user_id) as cnt FROM user_activity WHERE last_seen >= ?`).bind(sevenDaysAgo).first();
+      wau = wauResult ? parseInt(String(wauResult.cnt)) || 0 : 0;
+      
+      // MAU - users active in last 30 days
+      const mauResult = await this.env.DB.prepare(`SELECT COUNT(DISTINCT user_id) as cnt FROM user_activity WHERE last_seen >= ?`).bind(thirtyDaysAgo).first();
+      mau = mauResult ? parseInt(String(mauResult.cnt)) || 0 : 0;
+      
+      // New users today
+      const newResult = await this.env.DB.prepare(`SELECT COUNT(DISTINCT user_id) as cnt FROM user_activity WHERE first_seen >= ?`).bind(oneDayAgo).first();
+      newToday = newResult ? parseInt(String(newResult.cnt)) || 0 : 0;
+      
+      // Returning users (first seen before today, but active today)
+      const returningResult = await this.env.DB.prepare(`SELECT COUNT(DISTINCT user_id) as cnt FROM user_activity WHERE first_seen < ? AND last_seen >= ?`).bind(oneDayAgo, oneDayAgo).first();
+      returningUsers = returningResult ? parseInt(String(returningResult.cnt)) || 0 : 0;
+      
+      console.log('[AnalyticsDO] User stats:', { totalUsers, dau, wau, mau, newToday, returningUsers });
+    } catch (e) {
+      console.error('[AnalyticsDO] User stats query error:', e);
+    }
+    
+    // Watch sessions stats - use selected time range
+    try {
+      // Total sessions
+      const sessionsResult = await this.env.DB.prepare(`SELECT COUNT(*) as cnt FROM watch_sessions WHERE started_at >= ?`).bind(rangeStart).first();
+      totalSessions = sessionsResult ? parseInt(String(sessionsResult.cnt)) || 0 : 0;
+      
+      // Total watch time (last_position is in seconds, cap at 10 hours to filter bad data)
+      const watchTimeResult = await this.env.DB.prepare(`SELECT SUM(last_position) as total FROM watch_sessions WHERE started_at >= ? AND last_position > 0 AND last_position < 36000`).bind(rangeStart).first();
+      totalWatchTime = watchTimeResult ? parseInt(String(watchTimeResult.total)) || 0 : 0;
+      
+      // Average session duration
+      const avgResult = await this.env.DB.prepare(`SELECT AVG(last_position) as avg FROM watch_sessions WHERE started_at >= ? AND last_position > 0 AND last_position < 36000`).bind(rangeStart).first();
+      avgSessionDuration = avgResult ? parseInt(String(avgResult.avg)) || 0 : 0;
+      
+      // Average completion rate
+      const completionResult = await this.env.DB.prepare(`SELECT AVG(completion_percentage) as avg FROM watch_sessions WHERE started_at >= ? AND completion_percentage >= 0 AND completion_percentage <= 100`).bind(rangeStart).first();
+      completionRate = completionResult ? Math.round(parseFloat(String(completionResult.avg)) || 0) : 0;
+      
+      console.log('[AnalyticsDO] Watch stats:', { range, totalSessions, totalWatchTime, avgSessionDuration, completionRate });
+    } catch (e) {
+      console.error('[AnalyticsDO] Watch stats query error:', e);
+    }
+    
+    // Page views stats - use selected time range
+    try {
+      const pageStats = await this.env.DB.prepare(`
         SELECT 
-          COUNT(DISTINCT user_id) as total,
-          COUNT(DISTINCT CASE WHEN last_seen >= ? THEN user_id END) as dau,
-          COUNT(DISTINCT CASE WHEN last_seen >= ? THEN user_id END) as wau,
-          COUNT(DISTINCT CASE WHEN last_seen >= ? THEN user_id END) as mau,
-          COUNT(DISTINCT CASE WHEN first_seen >= ? THEN user_id END) as new_today
-        FROM user_activity
-      `).bind(oneDayAgo, sevenDaysAgo, thirtyDaysAgo, oneDayAgo).first();
+          COUNT(*) as total,
+          COUNT(DISTINCT user_id) as unique_visitors
+        FROM page_views 
+        WHERE entry_time >= ?
+      `).bind(rangeStart).first();
       
-      if (userStats) {
-        totalUsers = parseInt(String(userStats.total)) || 0;
-        dau = parseInt(String(userStats.dau)) || 0;
-        wau = parseInt(String(userStats.wau)) || 0;
-        mau = parseInt(String(userStats.mau)) || 0;
-        newToday = parseInt(String(userStats.new_today)) || 0;
-      }
-      
-      const watchStats = await this.env.DB.prepare(`
-        SELECT COUNT(*) as sessions, COALESCE(SUM(total_watch_time), 0) as watch_time
-        FROM watch_sessions WHERE started_at >= ?
-      `).bind(oneDayAgo).first();
-      
-      if (watchStats) {
-        totalSessions = parseInt(String(watchStats.sessions)) || 0;
-        totalWatchTime = parseInt(String(watchStats.watch_time)) || 0;
+      if (pageStats) {
+        pageViews = parseInt(String(pageStats.total)) || 0;
+        uniqueVisitors = parseInt(String(pageStats.unique_visitors)) || 0;
       }
     } catch (e) {
-      console.error('[AnalyticsDO] D1 query error:', e);
+      console.error('[AnalyticsDO] Page views query error:', e);
     }
     
     return Response.json({
@@ -499,12 +570,17 @@ export class AnalyticsDO {
         mau,
         totalUsers,
         newToday,
+        returningUsers,
         
-        // Content metrics
+        // Content metrics (watch time in minutes)
         totalSessions,
         totalWatchTimeMinutes: Math.round(totalWatchTime / 60),
-        avgSessionMinutes: totalSessions > 0 ? Math.round(totalWatchTime / 60 / totalSessions) : 0,
-        completionRate: 0, // TODO
+        avgSessionMinutes: Math.round(avgSessionDuration / 60),
+        completionRate,
+        
+        // Page views
+        pageViews,
+        uniqueVisitors,
         
         // Geographic
         topCountries,

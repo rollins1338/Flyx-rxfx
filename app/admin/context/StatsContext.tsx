@@ -7,6 +7,7 @@
  */
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { useAdmin } from './AdminContext';
 
 // Peak stats interface
 interface PeakStats {
@@ -239,15 +240,28 @@ const saveBotFilterOptions = (options: BotFilterOptions) => {
 };
 
 export function StatsProvider({ children }: { children: ReactNode }) {
+  const { dateRange } = useAdmin();
   const [stats, setStats] = useState<UnifiedStats>(defaultStats);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [botFilterOptions, setBotFilterOptionsState] = useState<BotFilterOptions>(defaultBotFilterOptions);
-  const [timeRange, setTimeRange] = useState<string>('24h');
+  const [timeRange, setTimeRange] = useState<string>('7d');
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Load bot filter options from localStorage on mount
+  // Sync timeRange with AdminContext's dateRange
+  useEffect(() => {
+    const periodToRange: Record<string, string> = {
+      'day': '24h',
+      'week': '7d',
+      'month': '30d',
+      'year': '365d',
+    };
+    const newRange = periodToRange[dateRange.period] || '7d';
+    if (newRange !== timeRange) {
+      setTimeRange(newRange);
+    }
+  }, [dateRange.period]);  // Load bot filter options from localStorage on mount
   useEffect(() => {
     const savedOptions = loadBotFilterOptions();
     setBotFilterOptionsState(savedOptions);
@@ -270,8 +284,8 @@ export function StatsProvider({ children }: { children: ReactNode }) {
     try {
       // Fetch from CF Worker's /admin/stats endpoint (source of truth)
       const CF_WORKER_URL = process.env.NEXT_PUBLIC_CF_ANALYTICS_WORKER_URL || 'https://flyx-analytics.vynx.workers.dev';
-      const url = `${CF_WORKER_URL}/admin/stats`;
-      console.log('[StatsContext] Fetching from CF Worker:', url);
+      const url = `${CF_WORKER_URL}/admin/stats?range=${timeRange}`;
+      console.log('[StatsContext] Fetching from CF Worker:', url, 'timeRange:', timeRange);
       
       const response = await fetch(url);
       
@@ -322,7 +336,7 @@ export function StatsProvider({ children }: { children: ReactNode }) {
           activeThisWeek: s.wau || 0,
           activeThisMonth: s.mau || 0,
           newUsersToday: s.newToday || 0,
-          returningUsers: 0, // Not tracked by DO
+          returningUsers: s.returningUsers || 0,
           
           // Content metrics from DO
           totalSessions: s.totalSessions || 0,
@@ -346,9 +360,9 @@ export function StatsProvider({ children }: { children: ReactNode }) {
             totalWatchTime: 0,
           })),
           
-          // Page views (not tracked by DO)
-          pageViews: 0,
-          uniqueVisitors: 0,
+          // Page views from DO
+          pageViews: s.pageViews || 0,
+          uniqueVisitors: s.uniqueVisitors || 0,
           
           // Geographic from DO
           topCountries: (s.topCountries || []).map((c: any) => ({

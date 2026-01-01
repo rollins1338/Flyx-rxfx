@@ -334,7 +334,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                   )}
                 </a>
                 <a
-                  href="https://discord.vynx.cc"
+                  href="https://discord.gg/58DVFk6mmK"
                   target="_blank"
                   rel="noopener noreferrer"
                   className={styles.discordButton}
@@ -455,7 +455,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                   )}
                 </a>
                 <a
-                  href="https://discord.vynx.cc"
+                  href="https://discord.gg/58DVFk6mmK"
                   target="_blank"
                   rel="noopener noreferrer"
                   className={`${styles.mobileActionButton} ${styles.discord}`}

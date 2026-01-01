@@ -16,7 +16,7 @@ import { useAdmin } from '../context/AdminContext';
 
 export default function DashboardPage() {
   useAdmin();
-  const { stats, loading, lastRefresh, refresh } = useStats();
+  const { stats, loading } = useStats();
 
   const formatNumber = (n: number) => n?.toLocaleString() || '0';
   
@@ -42,29 +42,12 @@ export default function DashboardPage() {
 
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <div>
-          <h1 style={{ margin: 0, color: '#f8fafc', fontSize: '24px' }}>Dashboard</h1>
-          <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '13px' }}>
-            {lastRefresh ? `Updated ${lastRefresh.toLocaleTimeString()}` : 'Loading...'}
-          </p>
-        </div>
-        <button
-          onClick={() => refresh()}
-          disabled={loading}
-          style={{
-            padding: '8px 16px',
-            background: 'rgba(120, 119, 198, 0.2)',
-            border: '1px solid rgba(120, 119, 198, 0.3)',
-            borderRadius: '8px',
-            color: '#7877c6',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            fontSize: '13px',
-          }}
-        >
-          🔄 Refresh
-        </button>
+      {/* Header - minimal since UnifiedStatsBar handles refresh */}
+      <div style={{ marginBottom: '24px' }}>
+        <h1 style={{ margin: 0, color: '#f8fafc', fontSize: '24px' }}>Dashboard Overview</h1>
+        <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '13px' }}>
+          Real-time analytics and user activity
+        </p>
       </div>
 
       {/* Live Activity Card */}
