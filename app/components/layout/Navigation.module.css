@@ -273,6 +273,48 @@
   border-color: rgba(88, 101, 242, 0.5);
 }
 
+.discordStats {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-left: 0.5rem;
+  border-left: 1px solid rgba(88, 101, 242, 0.3);
+  margin-left: 0.25rem;
+}
+
+.onlineCount {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #23a55a;
+}
+
+.onlineDot {
+  width: 6px;
+  height: 6px;
+  background: #23a55a;
+  border-radius: 50%;
+  box-shadow: 0 0 4px rgba(35, 165, 90, 0.4);
+}
+
+.totalCount {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.totalDot {
+  width: 6px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+}
+
 .discordCount {
   display: flex;
   align-items: center;
@@ -286,10 +328,20 @@
 }
 
 .mobileDiscordStats {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   margin-left: auto;
   font-size: 0.75rem;
-  color: #23a55a;
   font-weight: 500;
+}
+
+.mobileOnlineCount {
+  color: #23a55a;
+}
+
+.mobileTotalCount {
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .supportButton {

@@ -20,6 +20,7 @@ interface GitHubStats {
 
 interface DiscordStats {
   memberCount: number;
+  totalMembers: number;
 }
 
 export const Navigation: React.FC<NavigationProps> = ({ 
@@ -115,6 +116,7 @@ export const Navigation: React.FC<NavigationProps> = ({
           const data = await response.json();
           const stats = {
             memberCount: data.approximate_presence_count || 0,
+            totalMembers: data.approximate_member_count || 0,
           };
           
           setDiscordStats(stats);
@@ -402,10 +404,21 @@ export const Navigation: React.FC<NavigationProps> = ({
                 >
                   <DiscordIcon />
                   <span>Discord</span>
-                  {discordStats && discordStats.memberCount > 0 && (
-                    <span className={styles.discordCount}>
-                      {formatNumber(discordStats.memberCount)} online
-                    </span>
+                  {discordStats && (discordStats.memberCount > 0 || discordStats.totalMembers > 0) && (
+                    <div className={styles.discordStats}>
+                      {discordStats.memberCount > 0 && (
+                        <span className={styles.onlineCount}>
+                          <span className={styles.onlineDot}></span>
+                          {formatNumber(discordStats.memberCount)}
+                        </span>
+                      )}
+                      {discordStats.totalMembers > 0 && (
+                        <span className={styles.totalCount}>
+                          <span className={styles.totalDot}></span>
+                          {formatNumber(discordStats.totalMembers)}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </a>
                 <a
@@ -523,10 +536,19 @@ export const Navigation: React.FC<NavigationProps> = ({
                 >
                   <DiscordIcon />
                   <span>Join Discord</span>
-                  {discordStats && discordStats.memberCount > 0 && (
-                    <span className={styles.mobileDiscordStats}>
-                      🟢 {formatNumber(discordStats.memberCount)}
-                    </span>
+                  {discordStats && (discordStats.memberCount > 0 || discordStats.totalMembers > 0) && (
+                    <div className={styles.mobileDiscordStats}>
+                      {discordStats.memberCount > 0 && (
+                        <span className={styles.mobileOnlineCount}>
+                          🟢 {formatNumber(discordStats.memberCount)}
+                        </span>
+                      )}
+                      {discordStats.totalMembers > 0 && (
+                        <span className={styles.mobileTotalCount}>
+                          ⚫ {formatNumber(discordStats.totalMembers)}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </a>
                 <a
