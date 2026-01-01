@@ -9,12 +9,12 @@
 
 import { NextRequest } from 'next/server';
 import { neon } from '@neondatabase/serverless';
-import { verifyAdminAuth } from '@/lib/utils/admin-auth';
+import { verifyAdminAuth } from '../../../lib/utils/admin-auth';
 import {
   successResponse,
   unauthorizedResponse,
   internalErrorResponse,
-} from '@/app/lib/utils/api-response';
+} from '../../../lib/utils/api-response';
 
 const sql = neon(process.env.DATABASE_URL!);
 
