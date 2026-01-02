@@ -8,8 +8,8 @@ datasource db {
 }
 
 model admin_users {
-  id        Int      @id @default(autoincrement())
-  username  String   @unique
-  password  String
-  createdAt DateTime @default(now())
+  id            Int      @id @default(autoincrement())
+  username      String   @unique
+  password_hash String   // <--- CHANGED THIS LINE
+  createdAt     DateTime @default(now())
 }
