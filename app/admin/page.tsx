@@ -22,7 +22,7 @@ import ImprovedLiveDashboard from './components/ImprovedLiveDashboard';
 import DetailedRealtimeAnalytics from './components/DetailedRealtimeAnalytics';
 import DetailedContentAnalytics from './components/DetailedContentAnalytics';
 import ContentPerformanceBreakdown from './components/ContentPerformanceBreakdown';
-import { colors, formatTimeAgo, StatCard, Card, Grid, ProgressBar, gradients } from './components/ui';
+import { colors, formatTimeAgo, Card, Grid, ProgressBar, gradients } from './components/ui';
 
 type TabId = 'overview' | 'realtime' | 'content' | 'geographic';
 
