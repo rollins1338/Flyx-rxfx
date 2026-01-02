@@ -8,8 +8,8 @@ datasource db {
 }
 
 model admin_users {
-  id            Int      @id @default(autoincrement())
+  id            String   @id    // <--- CHANGED TO STRING, REMOVED AUTOINCREMENT
   username      String   @unique
   password_hash String
-  created_at    DateTime @default(now())   // <--- CHANGED THIS TO SNAKE_CASE
+  created_at    DateTime @default(now())
 }
