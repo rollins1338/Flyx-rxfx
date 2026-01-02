@@ -330,3 +330,4 @@ npm run admin:create     # Create admin user
 ## License
 
 MIT License - see [LICENSE](LICENSE)
+fix vercel
