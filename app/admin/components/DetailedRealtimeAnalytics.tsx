@@ -483,7 +483,7 @@ export default function DetailedRealtimeAnalytics() {
                 <div style={{ color: colors.text.secondary, fontSize: '12px', marginBottom: '4px' }}>
                   Top Bot Sources (24h)
                 </div>
-                {trafficData.botStats.slice(0, 8).map((bot, i) => (
+                {trafficData.botStats.slice(0, 8).map((bot) => (
                   <div key={bot.source_name} style={{
                     display: 'flex',
                     justifyContent: 'space-between',
