@@ -1,9 +1,7 @@
-/**
- * Check if content is anime
- * Uses TMDB to check if content has Animation genre (16) and is Japanese origin
- */
-
 import { NextRequest, NextResponse } from 'next/server';
+
+// 1. ADD THIS LINE (Fixes static build errors)
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -15,14 +13,16 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY;
+    // 2. FIXED THIS LINE (Removed 'NEXT_PUBLIC_' to match your Vercel settings)
+    const apiKey = process.env.TMDB_API_KEY; 
+    
     if (!apiKey) {
       return NextResponse.json({ isAnime: false, error: 'TMDB API key not configured' });
     }
 
     const url = `https://api.themoviedb.org/3/${type}/${tmdbId}?api_key=${apiKey}`;
     const response = await fetch(url, {
-      next: { revalidate: 86400 }, // Cache for 24 hours
+      next: { revalidate: 86400 },
     });
 
     if (!response.ok) {
@@ -31,9 +31,6 @@ export async function GET(request: NextRequest) {
 
     const data = await response.json();
 
-    // Check if it's anime:
-    // 1. Has Animation genre (16)
-    // 2. Origin country is Japan (JP) OR original language is Japanese (ja)
     const hasAnimationGenre = data.genres?.some((g: { id: number }) => g.id === 16) || false;
     const isJapaneseOrigin = data.origin_country?.includes('JP') || data.original_language === 'ja';
 
