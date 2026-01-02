@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npx prisma db push && next build",
     "build:bun": "bun --bun next build",
     "build:analyze": "ANALYZE=true next build",
     "build:cloudflare": "npx opennextjs-cloudflare build",
