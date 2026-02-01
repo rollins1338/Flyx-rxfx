@@ -1178,22 +1178,6 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
           }
         });
 
-        // Handle fragment loading progress for debugging slow segments
-        hls.on(Hls.Events.FRAG_LOAD_PROGRESS, (_event, data) => {
-          // Log if a fragment is taking too long (> 5 seconds)
-          if (data.stats && data.stats.loading && data.stats.loading.start) {
-            const loadTime = performance.now() - data.stats.loading.start;
-            if (loadTime > 5000) {
-              console.warn('[HLS] Slow fragment load:', {
-                sn: data.frag?.sn,
-                loadTime: Math.round(loadTime) + 'ms',
-                loaded: data.stats.loaded,
-                total: data.stats.total,
-              });
-            }
-          }
-        });
-
         hls.on(Hls.Events.ERROR, async (_event, data) => {
           console.error('[HLS] Error:', {
             type: data.type,
