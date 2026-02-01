@@ -1178,11 +1178,6 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
           }
         });
 
-        // Handle buffer stalling - log for debugging
-        hls.on(Hls.Events.BUFFER_STALLED_ERROR, () => {
-          console.warn('[HLS] Buffer stalled - playback may pause');
-        });
-
         // Handle fragment loading progress for debugging slow segments
         hls.on(Hls.Events.FRAG_LOAD_PROGRESS, (_event, data) => {
           // Log if a fragment is taking too long (> 5 seconds)
