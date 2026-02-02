@@ -388,7 +388,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Check cache - use original episode number for cache key
-    const cacheKey = `${tmdbId}-${type}-${season || ''}-${originalEpisode || ''}-${provider}`;
+    // IMPORTANT: Include malId in cache key for MAL-direct anime (tmdbId=0)
+    const cacheKey = malId 
+      ? `mal-${malId}-${type}-${originalEpisode || ''}-${provider}`
+      : `${tmdbId}-${type}-${season || ''}-${originalEpisode || ''}-${provider}`;
     let cached = cache.get(cacheKey);
 
     // TEMPORARY: Force clear cache for animekai to pick up new proxy routing

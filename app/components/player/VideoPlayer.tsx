@@ -520,7 +520,10 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
       return sourcesCache[providerName];
     }
 
-    const currentKey = `${tmdbId}-${mediaType}-${season}-${episode}-${providerName}`;
+    // Include malId in key for MAL-direct anime (tmdbId=0)
+    const currentKey = malId 
+      ? `mal-${malId}-${mediaType}-${episode}-${providerName}`
+      : `${tmdbId}-${mediaType}-${season}-${episode}-${providerName}`;
 
     // Prevent duplicate fetches in StrictMode if not forcing
     // But allow fetches for different providers even if lastFetchedKey matches a previous provider
@@ -991,7 +994,10 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
       }
       
       setCurrentSourceIndex(selectedSourceIndex);
-      lastFetchedKey.current = `${tmdbId}-${mediaType}-${season}-${episode}-${successfulProvider}`;
+      // Include malId in key for MAL-direct anime
+      lastFetchedKey.current = malId 
+        ? `mal-${malId}-${mediaType}-${episode}-${successfulProvider}`
+        : `${tmdbId}-${mediaType}-${season}-${episode}-${successfulProvider}`;
 
       // Setup initial stream URL
       const initialSource = sources[selectedSourceIndex] || sources[0];
@@ -1033,7 +1039,9 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     };
 
     initializePlayer();
-  }, [tmdbId, mediaType, season, episode]);
+  // IMPORTANT: Include malId in dependencies for MAL-direct anime (tmdbId=0)
+  // Without this, switching between different MAL anime won't trigger a re-fetch
+  }, [tmdbId, mediaType, season, episode, malId]);
 
   // Initialize HLS
   useEffect(() => {

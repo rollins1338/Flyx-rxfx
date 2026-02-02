@@ -524,7 +524,7 @@ async function searchAnimeKaiByMalId(malId: number, searchQuery: string): Promis
         
         if (syncMatch) {
           const syncData = JSON.parse(syncMatch[1]);
-          const pageMalId = syncData.mal_id;
+          const pageMalId = parseInt(syncData.mal_id);
           const animeId = syncData.anime_id;
           
           console.log(`[AnimeKai]   - "${result.enTitle}" → mal_id: ${pageMalId}, anime_id: ${animeId}`);
