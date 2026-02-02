@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import type { MALAnime, MALSeason } from '@/lib/services/mal';
 import { GlassPanel } from '@/components/ui/GlassPanel';
 import { FluidButton } from '@/components/ui/FluidButton';
 import styles from './AnimeDetails.module.css';
+
+const EPISODES_PER_PAGE = 50;
 
 interface EpisodeData {
   number: number;
@@ -29,6 +31,7 @@ export default function AnimeDetailsClient({ anime, allSeasons, totalEpisodes }:
   const [selectedSeason, setSelectedSeason] = useState(0);
   const [episodeData, setEpisodeData] = useState<Record<number, EpisodeData[]>>({});
   const [loadingEpisodes, setLoadingEpisodes] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   
   const currentSeason = allSeasons[selectedSeason] || allSeasons[0];
   
@@ -40,6 +43,9 @@ export default function AnimeDetailsClient({ anime, allSeasons, totalEpisodes }:
     if (!currentSeason || isMovie) return;
     
     const malId = currentSeason.malId;
+    
+    // Reset to page 1 when season changes
+    setCurrentPage(1);
     
     // Check if we already have data for this season
     if (episodeData[malId]) return;
@@ -85,6 +91,24 @@ export default function AnimeDetailsClient({ anime, allSeasons, totalEpisodes }:
     filler: false,
     recap: false,
   })) : []);
+
+  // Pagination
+  const totalPages = Math.ceil(episodes.length / EPISODES_PER_PAGE);
+  const paginatedEpisodes = useMemo(() => {
+    const startIndex = (currentPage - 1) * EPISODES_PER_PAGE;
+    return episodes.slice(startIndex, startIndex + EPISODES_PER_PAGE);
+  }, [episodes, currentPage]);
+
+  // Generate page range options (for dropdown)
+  const pageRanges = useMemo(() => {
+    const ranges: { page: number; label: string }[] = [];
+    for (let i = 1; i <= totalPages; i++) {
+      const start = (i - 1) * EPISODES_PER_PAGE + 1;
+      const end = Math.min(i * EPISODES_PER_PAGE, episodes.length);
+      ranges.push({ page: i, label: `${start} - ${end}` });
+    }
+    return ranges;
+  }, [totalPages, episodes.length]);
 
   // Get thumbnail for current season (use the season's image or main anime image)
   const getSeasonThumbnail = () => {
@@ -245,9 +269,46 @@ export default function AnimeDetailsClient({ anime, allSeasons, totalEpisodes }:
             </div>
           )}
 
+          {/* Pagination Controls - Top */}
+          {episodes.length > EPISODES_PER_PAGE && (
+            <div className={styles.pagination}>
+              <button 
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className={styles.paginationButton}
+              >
+                ← Prev
+              </button>
+              
+              <select 
+                value={currentPage}
+                onChange={(e) => setCurrentPage(Number(e.target.value))}
+                className={styles.paginationSelect}
+              >
+                {pageRanges.map(({ page, label }) => (
+                  <option key={page} value={page}>
+                    Episodes {label}
+                  </option>
+                ))}
+              </select>
+              
+              <button 
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className={styles.paginationButton}
+              >
+                Next →
+              </button>
+              
+              <span className={styles.paginationInfo}>
+                {episodes.length} total episodes
+              </span>
+            </div>
+          )}
+
           {/* Episode Grid */}
           <div className={styles.episodeGrid}>
-            {episodes.map((ep) => {
+            {paginatedEpisodes.map((ep) => {
               const airDate = formatAirDate(ep.aired);
               const isFuture = ep.aired ? new Date(ep.aired) > new Date() : false;
               
