@@ -352,7 +352,15 @@ async function fetchDirectFromCF(
     
     // Add referer if provided or auto-detect
     // IMPORTANT: MegaUp CDN blocks requests with Referer header, so don't add it for megaup domains
-    const isMegaUpDomain = url.includes('megaup') || url.includes('hub26link') || url.includes('app28base');
+    // AnimeKai CDN domains rotate frequently, so check for common patterns
+    const isMegaUpDomain = url.includes('megaup') || 
+                           url.includes('hub26link') || 
+                           url.includes('app28base') ||
+                           url.includes('dev23app') ||
+                           url.includes('net22lab') ||
+                           url.includes('pro25zone') ||
+                           url.includes('tech20hub') ||
+                           url.includes('code29wave');
     
     if (isMegaUpDomain) {
       // MegaUp CDN - do NOT send Referer header (they block it)

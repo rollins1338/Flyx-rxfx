@@ -1100,9 +1100,15 @@ async function getStreamFromServer(lid: string, serverName: string): Promise<Str
       } catch {}
       
       // MegaUp CDN URLs MUST be proxied
+      // AnimeKai CDN domains rotate frequently, check for common patterns
       const isMegaUpCdn = streamUrl.includes('megaup') || 
                           streamUrl.includes('hub26link') || 
-                          streamUrl.includes('app28base');
+                          streamUrl.includes('app28base') ||
+                          streamUrl.includes('dev23app') ||
+                          streamUrl.includes('net22lab') ||
+                          streamUrl.includes('pro25zone') ||
+                          streamUrl.includes('tech20hub') ||
+                          streamUrl.includes('code29wave');
       
       return {
         quality: 'auto',
@@ -1219,9 +1225,15 @@ async function getStreamFromServerLocal(_lid: string, serverName: string, encryp
       referer = streamOrigin + '/';
     } catch {}
 
+    // AnimeKai CDN domains rotate frequently, check for common patterns
     const isMegaUpCdn = streamUrl.includes('megaup') || 
                         streamUrl.includes('hub26link') || 
-                        streamUrl.includes('app28base');
+                        streamUrl.includes('app28base') ||
+                        streamUrl.includes('dev23app') ||
+                        streamUrl.includes('net22lab') ||
+                        streamUrl.includes('pro25zone') ||
+                        streamUrl.includes('tech20hub') ||
+                        streamUrl.includes('code29wave');
 
     return {
       quality: 'auto',
@@ -1293,14 +1305,17 @@ async function extractAnimeKaiStreamsLocal(
 
   try {
     // *** HARDCODED OVERRIDE FOR JJK SEASON 3 (CULLING GAME) ***
-    // TMDB ID 95479 + MAL ID 57658 = The Culling Game Part 1
-    // AnimeKai URL: https://anikai.to/watch/jujutsu-kaisen-the-culling-game-part-1-792m
-    // The API route already converts episode 48 → malId 57658, episode 1
+    // MAL ID 57658 = The Culling Game Part 1
+    // AnimeKai URL: https://animekai.to/watch/jujutsu-kaisen-the-culling-game-part-1-792m
+    // Works with both:
+    //   - TMDB route: tmdbId=95479, malId=57658
+    //   - MAL-direct route: tmdbId=0, malId=57658
     
-    // CRITICAL: Check both string and number comparison for malId
-    const isJJKCullingGame = tmdbId === '95479' && (malId === 57658 || String(malId) === '57658') && episode;
+    // CRITICAL: Check MAL ID 57658 regardless of TMDB ID (supports both routes)
+    const malIdNum = typeof malId === 'string' ? parseInt(malId) : malId;
+    const isJJKCullingGame = malIdNum === 57658 && episode;
     
-    console.log(`[AnimeKai] Checking JJK override: tmdbId=${tmdbId}, malId=${malId} (type: ${typeof malId}), episode=${episode}, isMatch=${isJJKCullingGame}`);
+    console.log(`[AnimeKai] Checking JJK override: tmdbId=${tmdbId}, malId=${malId} (parsed: ${malIdNum}), episode=${episode}, isMatch=${isJJKCullingGame}`);
     
     if (isJJKCullingGame) {
       console.log(`[AnimeKai] *** HARDCODED OVERRIDE: JJK Culling Game Episode ${episode} (MAL ID ${malId}) ***`);
