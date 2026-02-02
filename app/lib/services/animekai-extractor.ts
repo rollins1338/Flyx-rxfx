@@ -2,17 +2,24 @@
  * AnimeKai Extractor
  * Primary source for anime content
  * 
+ * *** MAL ID FOCUSED APPROACH ***
+ * The extractor now prioritizes MAL ID matching over title-based search.
+ * This is more reliable because:
+ * - AnimeKai stores MAL IDs in their syncData
+ * - MAL IDs are unique identifiers that don't change
+ * - Avoids issues with title variations (e.g., "JJK" vs "Jujutsu Kaisen")
+ * 
  * *** FULLY NATIVE - NO enc-dec.app DEPENDENCY! ***
  * - AnimeKai crypto: Native implementation (183 substitution tables)
  * - MegaUp decryption: Native implementation (pre-computed keystream)
  * 
  * Flow:
- * 1. Convert TMDB ID → MAL/AniList ID using ARM mapping API
- * 2. Search AnimeKai directly for the anime (get content_id/kai_id)
- * 3. Encrypt content_id (native) → fetch episodes list
- * 4. Parse HTML (native) → get episode token
- * 5. Encrypt token (native) → fetch servers list
- * 6. Parse HTML (native) → get server lid
+ * 1. Determine MAL ID (from parameter or TMDB → MAL lookup via ARM API)
+ * 2. Search AnimeKai with title, check each result's syncData.mal_id
+ * 3. Return the anime that matches the MAL ID
+ * 4. Encrypt content_id (native) → fetch episodes list
+ * 5. Find episode token (episode number is relative to MAL entry)
+ * 6. Encrypt token (native) → fetch servers list
  * 7. Encrypt lid (native) → fetch embed (encrypted)
  * 8. Decrypt (native) → get stream URL
  * 
@@ -382,92 +389,6 @@ async function getTmdbAnimeInfo(tmdbId: string, type: 'movie' | 'tv'): Promise<{
 }
 
 /**
- * Get season name from TMDB
- * This is crucial for anime like Bleach where Season 2 is "Thousand-Year Blood War"
- */
-async function getTmdbSeasonName(tmdbId: string, seasonNumber: number): Promise<string | null> {
-  try {
-    const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY;
-    if (!apiKey) return null;
-
-    const url = `https://api.themoviedb.org/3/tv/${tmdbId}/season/${seasonNumber}?api_key=${apiKey}`;
-    
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-    const response = await fetch(url, {
-      signal: controller.signal,
-      next: { revalidate: 86400 },
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) return null;
-
-    const data = await response.json();
-    
-    // TMDB returns season name in the "name" field
-    // e.g., "Thousand-Year Blood War" for Bleach Season 2
-    const seasonName = data.name;
-    
-    // Skip generic names like "Season 2", "Specials", etc.
-    if (seasonName && 
-        !seasonName.toLowerCase().startsWith('season ') && 
-        !seasonName.toLowerCase().startsWith('specials') &&
-        seasonName.toLowerCase() !== `season ${seasonNumber}`) {
-      console.log(`[AnimeKai] TMDB Season ${seasonNumber} name: "${seasonName}"`);
-      return seasonName;
-    }
-    
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Get episode counts for all seasons from TMDB
- * Used to calculate absolute episode numbers for anime with multiple TMDB seasons
- * but single AnimeKai entry (e.g., Dragon Ball Z has 9 TMDB seasons but 1 AnimeKai entry)
- */
-async function getTmdbSeasonEpisodeCounts(tmdbId: string): Promise<Record<number, number> | null> {
-  try {
-    const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY;
-    if (!apiKey) return null;
-
-    const url = `https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${apiKey}`;
-    
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-    const response = await fetch(url, {
-      signal: controller.signal,
-      next: { revalidate: 86400 },
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) return null;
-
-    const data = await response.json();
-    
-    if (!data.seasons || !Array.isArray(data.seasons)) return null;
-    
-    const counts: Record<number, number> = {};
-    for (const season of data.seasons) {
-      if (season.season_number > 0) { // Skip specials (season 0)
-        counts[season.season_number] = season.episode_count || 0;
-      }
-    }
-    
-    console.log(`[AnimeKai] TMDB season episode counts:`, counts);
-    return counts;
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Helper to normalize title for comparison
  * Removes special characters, normalizes spaces, and handles common variations
  */
@@ -478,50 +399,6 @@ function normalizeTitle(title: string): string {
     .replace(/\bpart\s+(\d+)\b/g, 'part$1') // "Part 1" → "part1" for consistent matching
     .replace(/\bseason\s+(\d+)\b/g, 'season$1') // "Season 2" → "season2"
     .trim();
-}
-
-/**
- * Convert number to Roman numeral (for anime season naming)
- */
-function toRomanNumeral(num: number): string {
-  const romanNumerals: [number, string][] = [
-    [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']
-  ];
-  let result = '';
-  for (const [value, numeral] of romanNumerals) {
-    while (num >= value) {
-      result += numeral;
-      num -= value;
-    }
-  }
-  return result;
-}
-
-/**
- * Generate season search variants for a title
- * Anime sites use various naming conventions: "Title Season 2", "Title II", "Title 2nd Season", etc.
- */
-function getSeasonSearchVariants(baseTitle: string, seasonNum: number): string[] {
-  if (seasonNum <= 1) return [];
-  
-  const variants: string[] = [];
-  
-  // Roman numeral variants (most common for anime)
-  const roman = toRomanNumeral(seasonNum);
-  variants.push(`${baseTitle} ${roman}`);
-  
-  // Standard naming
-  variants.push(`${baseTitle} Season ${seasonNum}`);
-  variants.push(`${baseTitle} ${seasonNum}`);
-  
-  // Ordinal suffixes
-  const ordinal = seasonNum === 2 ? '2nd' : seasonNum === 3 ? '3rd' : `${seasonNum}th`;
-  variants.push(`${baseTitle} ${ordinal} Season`);
-  
-  // Part naming
-  variants.push(`${baseTitle} Part ${seasonNum}`);
-  
-  return variants;
 }
 
 /**
@@ -576,16 +453,115 @@ function scoreMatch(resultTitle: string, query: string): number {
 }
 
 /**
- * Search AnimeKai directly (no enc-dec.app dependency)
+ * Search AnimeKai by MAL ID (PRIMARY METHOD)
  * 
- * Flow:
- * 1. Search via AJAX endpoint → get watch URLs
- * 2. Fetch watch page → extract kai_id from data-id attribute
+ * This is the MAL ID focused approach:
+ * 1. Search AnimeKai with the title
+ * 2. For each result, fetch the watch page and check syncData.mal_id
+ * 3. Return the one that matches the provided MAL ID
+ * 
+ * This is more reliable than title matching because:
+ * - AnimeKai stores MAL IDs in their syncData
+ * - MAL IDs are unique identifiers that don't change
+ * - Avoids issues with title variations (e.g., "JJK" vs "Jujutsu Kaisen")
  */
-async function searchAnimeKai(query: string, malId?: number | null): Promise<{ content_id: string; title: string; episodes?: ParsedEpisodes } | null> {
+async function searchAnimeKaiByMalId(malId: number, searchQuery: string): Promise<{ content_id: string; title: string } | null> {
   try {
-    // Search AnimeKai directly
-    console.log(`[AnimeKai] Searching directly for: "${query}"${malId ? ` (MAL ID: ${malId})` : ''}`);
+    console.log(`[AnimeKai] MAL ID SEARCH: Looking for MAL ID ${malId} using query "${searchQuery}"`);
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    const searchResponse = await fetch(`${KAI_AJAX}/anime/search?keyword=${encodeURIComponent(searchQuery)}`, {
+      headers: HEADERS,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!searchResponse.ok) {
+      console.log(`[AnimeKai] Search failed: HTTP ${searchResponse.status}`);
+      return null;
+    }
+
+    const searchData = await searchResponse.json();
+    const searchHtml = searchData.result?.html;
+    
+    if (!searchHtml) {
+      console.log(`[AnimeKai] No search results HTML`);
+      return null;
+    }
+
+    // Parse search results - extract slug and title
+    const animeRegex = /<a[^>]*href="\/watch\/([^"]+)"[^>]*>[\s\S]*?<h6[^>]*class="title"[^>]*(?:data-jp="([^"]*)")?[^>]*>([^<]*)<\/h6>/gi;
+    const results: Array<{ slug: string; jpTitle: string; enTitle: string }> = [];
+    
+    let match;
+    while ((match = animeRegex.exec(searchHtml)) !== null) {
+      const [, slug, jpTitle, enTitle] = match;
+      results.push({ slug, jpTitle: jpTitle || '', enTitle: enTitle.trim() });
+    }
+
+    if (results.length === 0) {
+      console.log(`[AnimeKai] No results found for "${searchQuery}"`);
+      return null;
+    }
+
+    console.log(`[AnimeKai] Found ${results.length} results, checking MAL IDs...`);
+
+    // Check each result's syncData for MAL ID match
+    for (const result of results) {
+      try {
+        const watchResp = await fetch(`https://animekai.to/watch/${result.slug}`, {
+          headers: HEADERS,
+          signal: AbortSignal.timeout(8000),
+        });
+        
+        if (!watchResp.ok) continue;
+        
+        const watchHtml = await watchResp.text();
+        const syncMatch = watchHtml.match(/<script[^>]*id="syncData"[^>]*>([\s\S]*?)<\/script>/);
+        
+        if (syncMatch) {
+          const syncData = JSON.parse(syncMatch[1]);
+          const pageMalId = syncData.mal_id;
+          const animeId = syncData.anime_id;
+          
+          console.log(`[AnimeKai]   - "${result.enTitle}" → mal_id: ${pageMalId}, anime_id: ${animeId}`);
+          
+          if (pageMalId === malId) {
+            console.log(`[AnimeKai] ✓ MAL ID ${malId} MATCH! content_id: ${animeId}`);
+            return {
+              content_id: animeId,
+              title: result.enTitle || result.jpTitle,
+            };
+          }
+        }
+      } catch (e) {
+        // Continue to next result
+      }
+    }
+    
+    console.log(`[AnimeKai] ✗ MAL ID ${malId} not found in ${results.length} results`);
+    return null;
+  } catch (error) {
+    console.log(`[AnimeKai] MAL ID search error:`, error);
+    return null;
+  }
+}
+
+/**
+ * Search AnimeKai by title (FALLBACK METHOD)
+ * 
+ * Used when:
+ * - No MAL ID is available
+ * - MAL ID search failed
+ * 
+ * Uses title scoring to find the best match.
+ */
+async function searchAnimeKaiByTitle(query: string): Promise<{ content_id: string; title: string } | null> {
+  try {
+    console.log(`[AnimeKai] TITLE SEARCH: Looking for "${query}"`);
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -625,8 +601,8 @@ async function searchAnimeKai(query: string, malId?: number | null): Promise<{ c
       return null;
     }
 
-    console.log(`[AnimeKai] Found ${results.length} results, scoring matches...`);
-
+    console.log(`[AnimeKai] Found ${results.length} results, scoring by title...`);
+    
     // Score results and pick best match
     let bestResult = results[0];
     let bestScore = -1;
@@ -636,7 +612,7 @@ async function searchAnimeKai(query: string, malId?: number | null): Promise<{ c
       const jpScore = result.jpTitle ? scoreMatch(result.jpTitle, query) : 0;
       const finalScore = Math.max(score, jpScore);
       
-      console.log(`[AnimeKai]   - "${result.enTitle}" (EN score: ${score}, JP score: ${jpScore}, final: ${finalScore})`);
+      console.log(`[AnimeKai]   - "${result.enTitle}" (score: ${finalScore})`);
       
       if (finalScore > bestScore) {
         bestScore = finalScore;
@@ -644,27 +620,22 @@ async function searchAnimeKai(query: string, malId?: number | null): Promise<{ c
       }
     }
 
-    console.log(`[AnimeKai] Best match: "${bestResult.enTitle}" (score: ${bestScore})`);
+    console.log(`[AnimeKai] Best title match: "${bestResult.enTitle}" (score: ${bestScore})`);
     
     // If score is too low, reject the match
     if (bestScore < 30) {
       console.log(`[AnimeKai] Score too low (${bestScore} < 30), rejecting match`);
       return null;
-    };
+    }
 
     // Fetch the watch page to get kai_id
     const watchUrl = `https://animekai.to/watch/${bestResult.slug}`;
     console.log(`[AnimeKai] Fetching watch page: ${watchUrl}`);
 
-    const watchController = new AbortController();
-    const watchTimeoutId = setTimeout(() => watchController.abort(), 10000);
-
     const watchResponse = await fetch(watchUrl, {
       headers: HEADERS,
-      signal: watchController.signal,
+      signal: AbortSignal.timeout(10000),
     });
-
-    clearTimeout(watchTimeoutId);
 
     if (!watchResponse.ok) {
       console.log(`[AnimeKai] Watch page fetch failed: HTTP ${watchResponse.status}`);
@@ -673,7 +644,7 @@ async function searchAnimeKai(query: string, malId?: number | null): Promise<{ c
 
     const watchHtml = await watchResponse.text();
 
-    // First try to extract anime_id from syncData script (most reliable)
+    // Extract anime_id from syncData
     let kaiId: string | null = null;
     const syncDataMatch = watchHtml.match(/<script[^>]*id="syncData"[^>]*type="application\/json"[^>]*>([\s\S]*?)<\/script>/i);
     if (syncDataMatch) {
@@ -688,7 +659,7 @@ async function searchAnimeKai(query: string, malId?: number | null): Promise<{ c
       }
     }
 
-    // Fallback: Extract kai_id from data-id attribute (filter out common IDs)
+    // Fallback: Extract kai_id from data-id attribute
     if (!kaiId) {
       const dataIdMatches = watchHtml.match(/data-id="([a-zA-Z0-9_-]{4,10})"/g) || [];
       const reservedIds = ['signin', 'report', 'request', 'anime', 'episode', 'sub', 'dub'];
@@ -707,26 +678,97 @@ async function searchAnimeKai(query: string, malId?: number | null): Promise<{ c
       return null;
     }
 
-    // Optionally verify MAL ID matches if provided
-    if (malId) {
-      const malIdMatch = watchHtml.match(/data-mal-id="(\d+)"/);
-      const pageMalId = malIdMatch ? parseInt(malIdMatch[1], 10) : 0;
-      if (pageMalId && pageMalId !== malId) {
-        console.log(`[AnimeKai] MAL ID mismatch: expected ${malId}, got ${pageMalId}`);
-        // Continue anyway - the title match might still be correct
-      }
-    }
-
     console.log(`[AnimeKai] Found: "${bestResult.enTitle}" (kai_id: ${kaiId})`);
     return {
       content_id: kaiId,
       title: bestResult.enTitle || bestResult.jpTitle,
     };
   } catch (error) {
-    console.log(`[AnimeKai] Search error:`, error);
+    console.log(`[AnimeKai] Title search error:`, error);
     return null;
   }
+}
 
+/**
+ * Search AnimeKai - MAL ID focused with title fallback
+ * 
+ * Priority:
+ * 1. If MAL ID provided → searchAnimeKaiByMalId (checks syncData.mal_id)
+ * 2. If no MAL ID or MAL search fails → searchAnimeKaiByTitle (title scoring)
+ */
+async function searchAnimeKai(query: string, malId?: number | null): Promise<{ content_id: string; title: string; episodes?: ParsedEpisodes } | null> {
+  // MAL ID FOCUSED: If we have a MAL ID, use it as the primary search method
+  if (malId) {
+    const malResult = await searchAnimeKaiByMalId(malId, query);
+    if (malResult) {
+      return malResult;
+    }
+    
+    // Try alternative search queries if the first one failed
+    // This handles cases where the title doesn't match AnimeKai's naming
+    const alternativeQueries = generateAlternativeSearchQueries(query);
+    for (const altQuery of alternativeQueries) {
+      console.log(`[AnimeKai] Trying alternative query: "${altQuery}"`);
+      const altResult = await searchAnimeKaiByMalId(malId, altQuery);
+      if (altResult) {
+        return altResult;
+      }
+    }
+    
+    console.log(`[AnimeKai] MAL ID search exhausted, falling back to title search...`);
+  }
+  
+  // FALLBACK: Title-based search
+  return searchAnimeKaiByTitle(query);
+}
+
+/**
+ * Generate alternative search queries for MAL ID search
+ * Handles common naming variations between MAL and AnimeKai
+ */
+function generateAlternativeSearchQueries(originalQuery: string): string[] {
+  const alternatives: string[] = [];
+  
+  // Remove common suffixes/prefixes
+  const cleaned = originalQuery
+    .replace(/:\s*Part\s*\d+/gi, '') // "Title: Part 1" → "Title"
+    .replace(/\s*-\s*Part\s*\d+/gi, '') // "Title - Part 1" → "Title"
+    .replace(/\s*Part\s*\d+$/gi, '') // "Title Part 1" → "Title"
+    .trim();
+  
+  if (cleaned !== originalQuery) {
+    alternatives.push(cleaned);
+  }
+  
+  // Try just the first part before colon
+  const colonSplit = originalQuery.split(':')[0].trim();
+  if (colonSplit !== originalQuery && colonSplit.length > 3) {
+    alternatives.push(colonSplit);
+  }
+  
+  // Try removing "The" prefix
+  if (originalQuery.toLowerCase().startsWith('the ')) {
+    alternatives.push(originalQuery.substring(4));
+  }
+  
+  // Try common title variations
+  const variations: Record<string, string[]> = {
+    'jujutsu kaisen': ['jjk', 'sorcery fight'],
+    'attack on titan': ['shingeki no kyojin', 'aot'],
+    'my hero academia': ['boku no hero academia', 'bnha'],
+    'demon slayer': ['kimetsu no yaiba'],
+    'spy x family': ['spy family'],
+  };
+  
+  const lowerQuery = originalQuery.toLowerCase();
+  for (const [key, alts] of Object.entries(variations)) {
+    if (lowerQuery.includes(key)) {
+      alternatives.push(...alts);
+    }
+  }
+  
+  // Remove duplicates and the original query
+  return [...new Set(alternatives)].filter(q => q !== originalQuery);
 }
 
 
@@ -1258,43 +1300,42 @@ async function getStreamFromServerLocal(_lid: string, serverName: string, encryp
  * 
  * @param tmdbId - TMDB ID of the content
  * @param type - 'movie' or 'tv'
- * @param season - Season number (TMDB)
- * @param episode - Episode number (TMDB - may need conversion for MAL split seasons)
+ * @param _season - Season number (TMDB) - unused in MAL ID focused approach, kept for API compatibility
+ * @param episode - Episode number (relative to MAL entry)
  * @param malId - Optional MAL ID for direct lookup (used when TMDB season is split into multiple MAL entries)
  * @param malTitle - Optional MAL title for the specific entry
  */
 export async function extractAnimeKaiStreams(
   tmdbId: string,
   type: 'movie' | 'tv',
-  season?: number,
+  _season?: number,
   episode?: number,
   malId?: number,
   malTitle?: string
 ): Promise<ExtractionResult> {
-  console.log(`[AnimeKai] Extracting streams for ${type} TMDB ID ${tmdbId}, S${season || 1}E${episode || 1}...`);
+  console.log(`[AnimeKai] Extracting streams for ${type} TMDB ID ${tmdbId}, E${episode || 1}...`);
   if (malId) {
-    console.log(`[AnimeKai] MAL override: ID=${malId}, Title="${malTitle}"`);
+    console.log(`[AnimeKai] MAL ID: ${malId}, Title: "${malTitle}"`);
   }
   
   // Local extraction with MegaUp /media/ calls routed through CF → RPI residential proxy
   // The extractMegaUpSourcesManually function handles the proxy routing
-  return extractAnimeKaiStreamsLocal(tmdbId, type, season, episode, malId, malTitle);
+  return extractAnimeKaiStreamsLocal(tmdbId, type, episode, malId, malTitle);
 }
 
 /**
- * Local extraction (fallback) - may fail due to datacenter IP blocking
+ * Local extraction - MAL ID focused approach
  * 
- * ⚠️ CONTAINS HARDCODED OVERRIDE FOR JJK SEASON 3 (EPISODES 48-59)
- * See: JJK_HARDCODED_OVERRIDE.md for details and removal instructions
- * Location: Lines ~1276-1393 (search for "HARDCODED OVERRIDE FOR JJK SEASON 3")
- * 
- * This is a TEMPORARY workaround to bypass MAL search issues.
- * Remove when AnimeKai search can reliably find "The Culling Game - Part 1".
+ * Flow:
+ * 1. Determine MAL ID (from parameter or TMDB lookup)
+ * 2. Search AnimeKai with title, match by syncData.mal_id
+ * 3. Get episodes for the matched anime
+ * 4. Find episode token (episode number is relative to MAL entry)
+ * 5. Get servers and extract streams
  */
 async function extractAnimeKaiStreamsLocal(
   tmdbId: string,
   type: 'movie' | 'tv',
-  season?: number,
   episode?: number,
   malId?: number,
   malTitle?: string
@@ -1304,282 +1345,84 @@ async function extractAnimeKaiStreamsLocal(
   console.log(`[AnimeKai] Local extraction - Proxy config: CF_STREAM_PROXY_URL=${cfProxyUrl ? cfProxyUrl.substring(0, 50) + '...' : 'NOT SET'}`);
 
   try {
-    // *** HARDCODED OVERRIDE FOR JJK SEASON 3 (CULLING GAME) ***
-    // MAL ID 57658 = The Culling Game Part 1
-    // AnimeKai URL: https://animekai.to/watch/jujutsu-kaisen-the-culling-game-part-1-792m
-    // Works with both:
-    //   - TMDB route: tmdbId=95479, malId=57658
-    //   - MAL-direct route: tmdbId=0, malId=57658
+    // =============================================================================
+    // MAL ID FOCUSED EXTRACTION
+    // =============================================================================
+    // Priority:
+    // 1. If MAL ID provided → search AnimeKai by MAL ID (most reliable)
+    // 2. If no MAL ID → look up from TMDB, then search by MAL ID
+    // 3. Fallback → title-based search
+    // =============================================================================
     
-    // CRITICAL: Check MAL ID 57658 regardless of TMDB ID (supports both routes)
-    const malIdNum = typeof malId === 'string' ? parseInt(malId) : malId;
-    const isJJKCullingGame = malIdNum === 57658 && episode;
+    const effectiveMalId = malId || null;
+    const searchTitle = malTitle || '';
     
-    console.log(`[AnimeKai] Checking JJK override: tmdbId=${tmdbId}, malId=${malId} (parsed: ${malIdNum}), episode=${episode}, isMatch=${isJJKCullingGame}`);
+    // Step 1: Determine MAL ID
+    // If MAL ID is provided directly, use it. Otherwise, look it up from TMDB.
+    let finalMalId: number | null = effectiveMalId;
     
-    if (isJJKCullingGame) {
-      console.log(`[AnimeKai] *** HARDCODED OVERRIDE: JJK Culling Game Episode ${episode} (MAL ID ${malId}) ***`);
-      console.log(`[AnimeKai] *** THIS WILL BYPASS ALL SEARCH LOGIC AND USE DIRECT CONTENT_ID ***`);
-      
-      // Force the correct content_id from the AnimeKai URL
-      const cullingGameContentId = '792m'; // From: jujutsu-kaisen-the-culling-game-part-1-792m
-      
-      console.log(`[AnimeKai] Using hardcoded content_id: ${cullingGameContentId}, episode: ${episode}`);
-      
-      // Get episodes list for the Culling Game entry
-      const episodes = await getEpisodes(cullingGameContentId);
-      if (!episodes) {
-        console.log(`[AnimeKai] ❌ CRITICAL: Failed to get episodes for hardcoded Culling Game entry`);
-        return {
-          success: false,
-          sources: [],
-          error: 'Failed to fetch JJK Culling Game episodes from AnimeKai',
-        };
-      }
-      
-      console.log(`[AnimeKai] ✓ Got episodes for Culling Game, looking for episode ${episode}...`);
-      
-      // Get the episode token
-      const episodeKey = String(episode);
-      let episodeToken: string | null = null;
-      
-      // Try season 1 (AnimeKai lists each season as separate anime)
-      const season1 = episodes["1"];
-      if (season1 && season1[episodeKey]) {
-        const epData = season1[episodeKey];
-        if (epData && typeof epData === 'object' && 'token' in epData) {
-          episodeToken = epData.token;
-          console.log(`[AnimeKai] ✓ Found hardcoded episode token for Culling Game E${episode}`);
-        }
-      }
-      
-      if (!episodeToken) {
-        console.log(`[AnimeKai] ❌ CRITICAL: Episode ${episode} not found in Culling Game episodes`);
-        console.log(`[AnimeKai] Available episodes:`, Object.keys(season1 || {}));
-        return {
-          success: false,
-          sources: [],
-          error: `JJK Culling Game episode ${episode} not available on AnimeKai`,
-        };
-      }
-      
-      // Get servers and extract streams
-      const servers = await getServers(episodeToken);
-      if (!servers) {
-        console.log(`[AnimeKai] ❌ CRITICAL: Failed to get servers for Culling Game episode ${episode}`);
-        return {
-          success: false,
-          sources: [],
-          error: 'Failed to fetch servers for JJK Culling Game episode',
-        };
-      }
-      
-      const allSources: StreamSource[] = [];
-      const subSources: StreamSource[] = [];
-      const dubSources: StreamSource[] = [];
-      
-      // Collect all server tasks
-      const serverTasks: Array<{
-        lid: string;
-        displayName: string;
-        type: 'sub' | 'dub';
-      }> = [];
-      
-      // Add sub servers
-      if (servers.sub) {
-        for (const [serverKey, serverData] of Object.entries(servers.sub)) {
-          const server = serverData as any;
-          if (!server.lid) continue;
-          const serverName = server.name || `Server ${serverKey}`;
-          serverTasks.push({
-            lid: server.lid,
-            displayName: `${serverName} (sub)`,
-            type: 'sub',
-          });
-        }
-      }
-      
-      // Add dub servers
-      if (servers.dub) {
-        for (const [serverKey, serverData] of Object.entries(servers.dub)) {
-          const server = serverData as any;
-          if (!server.lid) continue;
-          const serverName = server.name || `Server ${serverKey}`;
-          serverTasks.push({
-            lid: server.lid,
-            displayName: `${serverName} (dub)`,
-            type: 'dub',
-          });
-        }
-      }
-      
-      // Process all servers in parallel
-      console.log(`[AnimeKai] Processing ${serverTasks.length} servers for hardcoded Culling Game...`);
-      const results = await Promise.allSettled(
-        serverTasks.map(async (task) => {
-          const source = await getStreamFromServer(task.lid, task.displayName);
-          if (source) {
-            source.title = task.displayName;
-            source.language = task.type === 'dub' ? 'en' : 'ja';
-            return { source, type: task.type };
-          }
-          return null;
-        })
-      );
-      
-      // Collect successful results
-      for (const result of results) {
-        if (result.status === 'fulfilled' && result.value) {
-          const { source, type } = result.value;
-          if (type === 'sub' && subSources.length < 2) {
-            subSources.push(source);
-            console.log(`[AnimeKai] ✓ Got SUB source from ${source.title}`);
-          } else if (type === 'dub' && dubSources.length < 1) {
-            dubSources.push(source);
-            console.log(`[AnimeKai] ✓ Got DUB source from ${source.title}`);
-          }
-        }
-      }
-      
-      // Combine: sub sources first, then dub
-      allSources.push(...subSources, ...dubSources);
-      
-      if (allSources.length === 0) {
-        console.log(`[AnimeKai] ❌ CRITICAL: All servers failed for Culling Game episode ${episode}`);
-        return {
-          success: false,
-          sources: [],
-          error: 'All servers failed for JJK Culling Game episode',
-        };
-      }
-      
-      console.log(`[AnimeKai] *** HARDCODED OVERRIDE SUCCESS: Returning ${allSources.length} sources for JJK Culling Game E${episode} ***`);
-      return {
-        success: true,
-        sources: allSources,
-      };
+    if (!finalMalId && tmdbId && tmdbId !== '0') {
+      console.log(`[AnimeKai] No MAL ID provided, looking up from TMDB ID ${tmdbId}...`);
+      const animeIds = await getAnimeIds(tmdbId, type);
+      finalMalId = animeIds.mal_id;
+      console.log(`[AnimeKai] TMDB → MAL lookup result: ${finalMalId || 'not found'}`);
     }
     
-    // *** END HARDCODED OVERRIDE FOR JJK SEASON 3 ***
+    // Step 2: Get search title
+    // Priority: malTitle > TMDB title
+    let finalSearchTitle = searchTitle;
     
-    // Step 1: Get anime IDs (MAL/AniList) from TMDB ID
-    // IMPORTANT: If malId is already provided (from /anime/[malId] route), use it directly!
-    let animeIds: { mal_id: number | null; anilist_id: number | null };
-    
-    if (malId) {
-      // MAL ID was provided directly - skip TMDB lookup
-      console.log(`[AnimeKai] Using provided MAL ID directly: ${malId} (skipping TMDB lookup)`);
-      animeIds = { mal_id: malId, anilist_id: null };
-    } else {
-      // No MAL ID provided - look it up from TMDB
-      animeIds = await getAnimeIds(tmdbId, type);
+    if (!finalSearchTitle && tmdbId && tmdbId !== '0') {
+      const tmdbInfo = await getTmdbAnimeInfo(tmdbId, type);
+      finalSearchTitle = tmdbInfo?.title || '';
     }
     
-    // Step 2: Get title from TMDB for fallback search
-    // If malTitle is provided, use it instead of fetching from TMDB
-    let tmdbInfo: { title: string } | null = null;
-    
-    if (malTitle) {
-      console.log(`[AnimeKai] Using provided MAL title: "${malTitle}" (skipping TMDB lookup)`);
-      tmdbInfo = { title: malTitle };
-    } else {
-      tmdbInfo = await getTmdbAnimeInfo(tmdbId, type);
-    }
-    
-    if (!animeIds.mal_id && !animeIds.anilist_id && !tmdbInfo) {
-      console.log('[AnimeKai] Could not identify anime');
+    if (!finalMalId && !finalSearchTitle) {
+      console.log('[AnimeKai] Could not identify anime - no MAL ID or title');
       return {
         success: false,
         sources: [],
-        error: 'Could not identify anime - no MAL/AniList ID or title found',
+        error: 'Could not identify anime - no MAL ID or title found',
       };
     }
-
-    // Step 3: Search AnimeKai database to get content_id (and episodes if available)
-    // IMPORTANT: Anime sites typically list each season as a SEPARATE anime entry
-    // So we need to search for "Title Season X" for seasons > 1
-    const seasonNum = season || 1;
-    const baseTitle = tmdbInfo?.title || '';
     
-    // For seasons > 1, get the TMDB season name first (e.g., "Thousand-Year Blood War" for Bleach S2)
-    let tmdbSeasonName: string | null = null;
-    if (seasonNum > 1 && type === 'tv') {
-      tmdbSeasonName = await getTmdbSeasonName(tmdbId, seasonNum);
-    }
+    console.log(`[AnimeKai] ========================================`);
+    console.log(`[AnimeKai] MAL ID FOCUSED SEARCH`);
+    console.log(`[AnimeKai] MAL ID: ${finalMalId || 'none'}`);
+    console.log(`[AnimeKai] Search Title: "${finalSearchTitle}"`);
+    console.log(`[AnimeKai] Episode: ${episode || 1}`);
+    console.log(`[AnimeKai] ========================================`);
     
-    // Build search variants - prioritize TMDB season name if available
-    const seasonSearchVariants: string[] = [];
-    
-    if (tmdbSeasonName) {
-      // Try the full title with season name: "Bleach: Thousand-Year Blood War"
-      seasonSearchVariants.push(`${baseTitle}: ${tmdbSeasonName}`);
-      seasonSearchVariants.push(`${baseTitle} ${tmdbSeasonName}`);
-      // Also try just the season name alone (some anime are listed this way)
-      seasonSearchVariants.push(tmdbSeasonName);
-      // Try without hyphens (some databases don't use them)
-      const noHyphens = tmdbSeasonName.replace(/-/g, ' ');
-      if (noHyphens !== tmdbSeasonName) {
-        seasonSearchVariants.push(`${baseTitle} ${noHyphens}`);
-        seasonSearchVariants.push(noHyphens);
-      }
-    }
-    
-    // Add standard season variants
-    seasonSearchVariants.push(...getSeasonSearchVariants(baseTitle, seasonNum));
-    
-    console.log(`[AnimeKai] Searching with: title="${baseTitle}", MAL ID=${animeIds.mal_id}, season=${seasonNum}`);
-    if (tmdbSeasonName) {
-      console.log(`[AnimeKai] TMDB Season name: "${tmdbSeasonName}"`);
-    }
-    if (seasonSearchVariants.length > 0) {
-      console.log(`[AnimeKai] Season search variants:`, seasonSearchVariants);
-    }
-    
+    // Step 3: Search AnimeKai
+    // The searchAnimeKai function is now MAL ID focused - it will:
+    // 1. Search with the title
+    // 2. Check each result's syncData.mal_id
+    // 3. Return the one that matches our MAL ID
     let animeResult: { content_id: string; title: string; episodes?: ParsedEpisodes } | null = null;
     
-    // If we have a specific MAL title (from MAL split), search for it FIRST
-    // This handles cases like Bleach TYBW where TMDB S2 is split into 3 MAL entries
-    if (malTitle) {
-      console.log(`[AnimeKai] MAL title provided - searching for: "${malTitle}"`);
-      
-      // Try the MAL title directly
-      animeResult = await searchAnimeKai(malTitle, malId || null);
+    // Primary search: Use MAL ID if available
+    if (finalMalId) {
+      console.log(`[AnimeKai] Searching by MAL ID ${finalMalId}...`);
+      animeResult = await searchAnimeKai(finalSearchTitle, finalMalId);
       
       if (!animeResult) {
-        // Try variations of the MAL title
-        const malTitleVariants: (string | null)[] = [
-          malTitle.replace(/:/g, ''), // Remove colons
-          malTitle.replace(/-/g, ' '), // Replace hyphens with spaces
-          malTitle.split(':').pop()?.trim() || malTitle, // Just the subtitle
-          // Handle "X 2nd Season" -> "X Season 2"
-          malTitle.replace(/(\w+)\s+2nd\s+Season/i, '$1 Season 2'),
-          malTitle.replace(/(\w+)\s+3rd\s+Season/i, '$1 Season 3'),
-          malTitle.replace(/(\w+)\s+3rd\s+Season/i, '$1 3'),
-          // Handle "X Season 2: Subtitle" -> "X Season 2"
-          malTitle.replace(/:\s*[^:]+$/, '').trim(),
-          // Handle "Solo Leveling Season 2: Arise from the Shadow" -> "Solo Leveling Season 2"
-          malTitle.replace(/Season\s+(\d+):\s*.+$/i, 'Season $1'),
-          // Just the base title + season number
-          `${baseTitle} Season ${seasonNum}`,
-          `${baseTitle} S${seasonNum}`,
-          `${baseTitle} ${seasonNum}`,
-          // Handle "X: The Culling Game" -> "X Season 3", "X 3rd Season"
-          `${baseTitle} ${seasonNum}${seasonNum === 2 ? 'nd' : seasonNum === 3 ? 'rd' : 'th'} Season`,
-          // Try Roman numerals
-          `${baseTitle} ${toRomanNumeral(seasonNum)}`,
-          // For JJK Season 3 specifically - try "Culling Game"
-          malTitle.includes('Culling Game') ? `${baseTitle} Culling Game` : null,
-          malTitle.includes('Culling Game') ? `${baseTitle}: Culling Game` : null,
-        ];
+        // Try alternative search queries
+        const alternativeQueries = [
+          // Try just the base title (before colon)
+          finalSearchTitle.split(':')[0].trim(),
+          // Try without "Season X" suffix
+          finalSearchTitle.replace(/\s*Season\s*\d+.*$/i, '').trim(),
+          // Try without "Part X" suffix
+          finalSearchTitle.replace(/\s*Part\s*\d+.*$/i, '').trim(),
+          // Try the subtitle only (after colon)
+          finalSearchTitle.includes(':') ? finalSearchTitle.split(':').pop()?.trim() : null,
+        ].filter((q): q is string => q !== null && q !== '' && q !== finalSearchTitle);
         
-        // Remove duplicates, null values, and empty strings
-        const uniqueVariants = [...new Set(malTitleVariants.filter((v): v is string => v !== null && v !== '' && v !== malTitle))];
-        
-        for (const variant of uniqueVariants) {
-          console.log(`[AnimeKai] Trying MAL title variant: "${variant}"`);
-          animeResult = await searchAnimeKai(variant, null);
+        for (const altQuery of alternativeQueries) {
+          console.log(`[AnimeKai] Trying alternative: "${altQuery}"`);
+          animeResult = await searchAnimeKai(altQuery, finalMalId);
           if (animeResult) {
-            console.log(`[AnimeKai] ✓ Found with MAL title variant: "${animeResult.title}"`);
+            console.log(`[AnimeKai] ✓ Found with alternative query`);
             break;
           }
         }
@@ -1588,37 +1431,10 @@ async function extractAnimeKaiStreamsLocal(
       }
     }
     
-    // For seasons > 1, ALWAYS try season-specific search FIRST (if MAL title didn't work)
-    // This is because anime sites list each season as a separate entry
-    if (!animeResult && seasonNum > 1 && seasonSearchVariants.length > 0) {
-      console.log(`[AnimeKai] Season ${seasonNum} requested - trying season-specific search first...`);
-      
-      for (const variant of seasonSearchVariants) {
-        console.log(`[AnimeKai] Trying: "${variant}"`);
-        const variantResult = await searchAnimeKai(variant, null);
-        if (variantResult) {
-          console.log(`[AnimeKai] ✓ Found season-specific entry: "${variantResult.title}"`);
-          animeResult = variantResult;
-          break;
-        }
-      }
-      
-      // If no season-specific entry found, fall back to base title search
-      // (in case the anime uses absolute episode numbering)
-      // NOTE: Don't use MAL ID first because it maps to the original anime, not the season
-      if (!animeResult) {
-        console.log(`[AnimeKai] No season-specific entry found, trying base title (without MAL ID)...`);
-        animeResult = await searchAnimeKai(baseTitle, null);
-        
-        // If still not found and we have a MAL ID, try with it as last resort
-        if (!animeResult && animeIds.mal_id) {
-          console.log(`[AnimeKai] Still not found, trying with MAL ID as last resort...`);
-          animeResult = await searchAnimeKai(baseTitle, animeIds.mal_id);
-        }
-      }
-    } else {
-      // Season 1 or no season specified - search normally
-      animeResult = await searchAnimeKai(baseTitle, animeIds.mal_id);
+    // Fallback: Title-only search (no MAL ID)
+    if (!animeResult && finalSearchTitle) {
+      console.log(`[AnimeKai] Falling back to title-only search...`);
+      animeResult = await searchAnimeKai(finalSearchTitle, null);
     }
 
     if (!animeResult) {
@@ -1630,63 +1446,15 @@ async function extractAnimeKaiStreamsLocal(
       };
     }
 
-    // IMPORTANT: Log what we found to verify it's the right anime!
-    console.log(`[AnimeKai] *** FOUND ANIME: "${animeResult.title}" (content_id: ${animeResult.content_id}) ***`);
-    console.log(`[AnimeKai] *** EXPECTED: "${tmdbInfo?.title}" ***`);
-    
-    // Warn if titles don't match (might be wrong anime!)
-    if (tmdbInfo?.title && !animeResult.title.toLowerCase().includes(tmdbInfo.title.toLowerCase().split(' ')[0])) {
-      console.warn(`[AnimeKai] ⚠️ WARNING: Found title "${animeResult.title}" doesn't match expected "${tmdbInfo.title}"!`);
-    }
-    
-    // IMPORTANT: Check if we found a season-specific entry
-    // If so, we should use season 1 and the episode number directly
-    // because the season-specific anime is a separate entry with its own episode numbering
-    let foundSeasonSpecificEntry = false;
-    
-    // If MAL title was provided and we found the anime, ALWAYS treat as season-specific
-    // because the episode number is already relative to that MAL entry
-    if (malTitle && animeResult) {
-      foundSeasonSpecificEntry = true;
-      console.log(`[AnimeKai] MAL title provided - treating as season-specific entry (episode ${episode || 1} is MAL-relative)`);
-    } else if (seasonNum > 1 && animeResult.title !== baseTitle) {
-      // Check if the found title contains season indicators
-      const seasonIndicators = [
-        `season ${seasonNum}`,
-        `${seasonNum}nd season`, `${seasonNum}rd season`, `${seasonNum}th season`,
-        `part ${seasonNum}`,
-        toRomanNumeral(seasonNum).toLowerCase(),
-        // Also check for specific sequel titles
-        'thousand-year blood war', 'tybw', // Bleach
-        'shippuden', // Naruto
-        'brotherhood', // FMA
-      ];
-      
-      // Also add the TMDB season name if available
-      if (tmdbSeasonName) {
-        seasonIndicators.push(tmdbSeasonName.toLowerCase());
-      }
-      
-      const lowerTitle = animeResult.title.toLowerCase();
-      foundSeasonSpecificEntry = seasonIndicators.some(indicator => lowerTitle.includes(indicator));
-      
-      // Also check if the found title is different from the base title
-      // This catches cases where the anime is listed under a completely different name
-      if (!foundSeasonSpecificEntry && animeResult.title.toLowerCase() !== baseTitle.toLowerCase()) {
-        // If we searched with season variants and found something different, it's likely season-specific
-        foundSeasonSpecificEntry = true;
-        console.log(`[AnimeKai] Found different title "${animeResult.title}" vs base "${baseTitle}" - treating as season-specific`);
-      }
-      
-      if (foundSeasonSpecificEntry) {
-        console.log(`[AnimeKai] ✓ Found season-specific entry "${animeResult.title}" - will use episode ${episode || 1} directly`);
-      }
-    }
+    console.log(`[AnimeKai] ========================================`);
+    console.log(`[AnimeKai] ✓ FOUND: "${animeResult.title}"`);
+    console.log(`[AnimeKai] content_id: ${animeResult.content_id}`);
+    console.log(`[AnimeKai] ========================================`);
 
-    // Step 4: Get episodes - use from search result if available, otherwise fetch
+    // Step 4: Get episodes
     let episodes: ParsedEpisodes | null = animeResult.episodes || null;
     if (!episodes) {
-      console.log(`[AnimeKai] Episodes not in search result, fetching separately...`);
+      console.log(`[AnimeKai] Fetching episodes...`);
       episodes = await getEpisodes(animeResult.content_id);
     }
     
@@ -1699,100 +1467,38 @@ async function extractAnimeKaiStreamsLocal(
     }
 
     // Step 5: Find the episode token
-    // IMPORTANT: If we found a season-specific entry, use season 1 with the episode number
-    // because the anime site treats each season as a separate anime with its own episode list
-    const seasonNumber = type === 'movie' ? 1 : (foundSeasonSpecificEntry ? 1 : (season || 1));
+    // MAL ID focused: Episode number is ALWAYS relative to the MAL entry
+    // AnimeKai stores each MAL entry as a separate anime with episodes starting from 1
     const episodeNumber = type === 'movie' ? 1 : (episode || 1);
-    const seasonKey = String(seasonNumber);
     const episodeKey = String(episodeNumber);
     
-    if (foundSeasonSpecificEntry) {
-      console.log(`[AnimeKai] Using season 1 (season-specific entry) with episode ${episodeNumber}`);
-    }
-    
-    // Episodes structure from API: { "1": { "1": { token: "..." }, "2": { token: "..." }, ... } }
-    // The first key is the season, the second key is the episode number
-    // NOTE: Some anime use absolute episode numbers (all episodes in season "1")
-    // while others use per-season numbering
-    let episodeToken: string | null = null;
-    
-    console.log(`[AnimeKai] Looking for S${seasonNumber}E${episodeNumber}...`);
+    console.log(`[AnimeKai] Looking for episode ${episodeNumber}...`);
     console.log(`[AnimeKai] Available seasons:`, Object.keys(episodes));
     
-    // Log episode count in season 1 (for absolute numbering detection)
+    // Log episode count in season 1
     const season1EpCount = episodes["1"] ? Object.keys(episodes["1"]).length : 0;
     console.log(`[AnimeKai] Season 1 has ${season1EpCount} episodes in AnimeKai`);
     
-    // Strategy 1: Try the exact season/episode combination
-    const targetSeason = episodes[seasonKey];
-    if (targetSeason && targetSeason[episodeKey]) {
-      const epData = targetSeason[episodeKey];
+    // MAL ID FOCUSED: Episode number is relative to the MAL entry
+    // AnimeKai stores each MAL entry as season "1" with episodes starting from 1
+    let episodeToken: string | null = null;
+    
+    // Strategy 1: Try season "1" with the episode number (most common)
+    const season1 = episodes["1"];
+    if (season1 && season1[episodeKey]) {
+      const epData = season1[episodeKey];
       if (epData && typeof epData === 'object' && 'token' in epData) {
         episodeToken = epData.token;
-        console.log(`[AnimeKai] Found episode in season ${seasonNumber}`);
+        console.log(`[AnimeKai] ✓ Found episode ${episodeNumber} in season 1`);
       }
     }
     
-    // Strategy 2: If season > 1 and not found, try absolute episode number
-    // Calculate absolute episode by summing previous seasons' episodes from TMDB
-    if (!episodeToken && seasonNumber > 1) {
-      console.log(`[AnimeKai] Episode not found in season ${seasonNumber}, trying absolute numbering...`);
-      
-      // Check if all episodes are in season "1" (absolute numbering)
-      const season1 = episodes["1"];
-      if (season1) {
-        // Get TMDB season episode counts to calculate absolute number
-        const tmdbSeasonCounts = await getTmdbSeasonEpisodeCounts(tmdbId);
-        
-        let absoluteEpisode = episodeNumber;
-        
-        if (tmdbSeasonCounts) {
-          // Use TMDB episode counts for accurate calculation
-          for (let s = 1; s < seasonNumber; s++) {
-            const seasonEpCount = tmdbSeasonCounts[s] || 0;
-            absoluteEpisode += seasonEpCount;
-            console.log(`[AnimeKai] Season ${s} has ${seasonEpCount} episodes (TMDB)`);
-          }
-        } else {
-          // Fallback: Try to calculate based on available seasons in episodes object
-          for (let s = 1; s < seasonNumber; s++) {
-            const prevSeason = episodes[String(s)];
-            if (prevSeason) {
-              absoluteEpisode += Object.keys(prevSeason).length;
-            }
-          }
-        }
-        
-        const absoluteKey = String(absoluteEpisode);
-        console.log(`[AnimeKai] Trying absolute episode ${absoluteEpisode} (S${seasonNumber}E${episodeNumber})...`);
-        
-        if (season1[absoluteKey]) {
-          const epData = season1[absoluteKey];
-          if (epData && typeof epData === 'object' && 'token' in epData) {
-            episodeToken = epData.token;
-            console.log(`[AnimeKai] ✓ Found episode using absolute numbering: ${absoluteEpisode}`);
-          }
-        }
-      }
-    }
-    
-    // Strategy 3: Try season "1" with the episode number directly (fallback)
-    if (!episodeToken) {
-      const season1 = episodes["1"];
-      if (season1 && season1[episodeKey]) {
-        const epData = season1[episodeKey];
-        if (epData && typeof epData === 'object' && 'token' in epData) {
-          episodeToken = epData.token;
-          console.log(`[AnimeKai] Found episode in season 1 (fallback)`);
-        }
-      }
-    }
-    
-    // Strategy 4: Try direct access (in case structure is different)
+    // Strategy 2: Try direct access (in case structure is different)
     if (!episodeToken && episodes[episodeKey]) {
       const episodeData = episodes[episodeKey];
       if (typeof episodeData === 'object' && 'token' in episodeData) {
         episodeToken = (episodeData as any).token;
+        console.log(`[AnimeKai] ✓ Found episode ${episodeNumber} via direct access`);
       } else {
         // Get the first sub-entry
         const subKeys = Object.keys(episodeData);
@@ -1800,6 +1506,7 @@ async function extractAnimeKaiStreamsLocal(
           const firstEntry = episodeData[subKeys[0]];
           if (firstEntry && typeof firstEntry === 'object' && 'token' in firstEntry) {
             episodeToken = firstEntry.token;
+            console.log(`[AnimeKai] ✓ Found episode ${episodeNumber} via sub-entry`);
           }
         }
       }
@@ -1809,75 +1516,20 @@ async function extractAnimeKaiStreamsLocal(
       // Log available episodes for debugging
       const allSeasons = Object.keys(episodes);
       const episodeInfo: Record<string, string[]> = {};
-      let maxEpisodeInSeason1 = 0;
       for (const s of allSeasons) {
         const seasonData = episodes[s];
         if (seasonData && typeof seasonData === 'object') {
           const epKeys = Object.keys(seasonData);
           episodeInfo[`Season ${s}`] = epKeys;
-          if (s === '1') {
-            maxEpisodeInSeason1 = Math.max(...epKeys.map(k => parseInt(k) || 0));
-          }
         }
       }
-      console.log(`[AnimeKai] S${seasonNumber}E${episodeNumber} not found. Available:`, episodeInfo);
+      console.log(`[AnimeKai] Episode ${episodeNumber} not found. Available:`, episodeInfo);
       
-      // Strategy 5: If episode number exceeds available episodes, this might be a multi-part anime
-      // Try to find the next part and calculate the relative episode number
-      if (episodeNumber > maxEpisodeInSeason1 && maxEpisodeInSeason1 > 0 && !malTitle) {
-        console.log(`[AnimeKai] Episode ${episodeNumber} exceeds max episode ${maxEpisodeInSeason1} - trying to find next part...`);
-        
-        // Calculate which part and episode we need
-        // For now, assume each part has roughly the same number of episodes
-        const partNumber = Math.ceil(episodeNumber / maxEpisodeInSeason1);
-        const relativeEpisode = episodeNumber - (maxEpisodeInSeason1 * (partNumber - 1));
-        
-        console.log(`[AnimeKai] Calculated: Part ${partNumber}, Episode ${relativeEpisode}`);
-        
-        // Try to find the next part by searching with part number
-        const partSearchVariants = [
-          `${baseTitle} Part ${partNumber}`,
-          `${animeResult.title} Part ${partNumber}`,
-          // For specific anime like Bleach TYBW
-          ...(animeResult.title.toLowerCase().includes('thousand-year blood war') ? [
-            partNumber === 2 ? 'Bleach: Thousand-Year Blood War - The Separation' : null,
-            partNumber === 3 ? 'Bleach: Thousand-Year Blood War - The Conflict' : null,
-          ].filter(Boolean) as string[] : []),
-        ];
-        
-        for (const variant of partSearchVariants) {
-          console.log(`[AnimeKai] Trying next part search: "${variant}"`);
-          const nextPartResult = await searchAnimeKai(variant, null);
-          if (nextPartResult && nextPartResult.content_id !== animeResult.content_id) {
-            console.log(`[AnimeKai] ✓ Found next part: "${nextPartResult.title}"`);
-            
-            // Get episodes for the next part
-            const nextPartEpisodes = nextPartResult.episodes || await getEpisodes(nextPartResult.content_id);
-            if (nextPartEpisodes) {
-              const nextPartSeason1 = nextPartEpisodes["1"];
-              if (nextPartSeason1 && nextPartSeason1[String(relativeEpisode)]) {
-                const epData = nextPartSeason1[String(relativeEpisode)];
-                if (epData && typeof epData === 'object' && 'token' in epData) {
-                  episodeToken = epData.token;
-                  console.log(`[AnimeKai] ✓ Found episode ${relativeEpisode} in next part!`);
-                  // Update animeResult for logging
-                  animeResult = nextPartResult;
-                  break;
-                }
-              }
-            }
-          }
-        }
-      }
-      
-      // If still not found, return error
-      if (!episodeToken) {
-        return {
-          success: false,
-          sources: [],
-          error: `Episode S${seasonNumber}E${episodeNumber} not found`,
-        };
-      }
+      return {
+        success: false,
+        sources: [],
+        error: `Episode ${episodeNumber} not found in AnimeKai`,
+      };
     }
 
     console.log(`[AnimeKai] Found episode token: ${episodeToken.substring(0, 20)}...`);
@@ -2003,152 +1655,63 @@ async function extractAnimeKaiStreamsLocal(
 
 /**
  * Fetch a specific AnimeKai server by name
+ * MAL ID focused approach - episode is relative to MAL entry
  */
 export async function fetchAnimeKaiSourceByName(
   serverName: string,
   tmdbId: string,
   type: 'movie' | 'tv',
-  season?: number,
+  _season?: number,
   episode?: number,
   malId?: number,
   malTitle?: string
 ): Promise<StreamSource | null> {
   console.log(`[AnimeKai] Fetching specific server: ${serverName}`);
   if (malId) {
-    console.log(`[AnimeKai] MAL override: ID=${malId}, Title="${malTitle}"`);
+    console.log(`[AnimeKai] MAL ID: ${malId}, Title: "${malTitle}"`);
   }
 
   try {
-    // Get anime info
-    const animeIds = await getAnimeIds(tmdbId, type);
-    const tmdbInfo = await getTmdbAnimeInfo(tmdbId, type);
+    // MAL ID FOCUSED: Same approach as main extraction
+    const effectiveMalId = malId || null;
+    const searchTitle = malTitle || '';
     
-    if (!animeIds.mal_id && !tmdbInfo) {
+    // Step 1: Determine MAL ID
+    let finalMalId: number | null = effectiveMalId;
+    
+    if (!finalMalId && tmdbId && tmdbId !== '0') {
+      const animeIds = await getAnimeIds(tmdbId, type);
+      finalMalId = animeIds.mal_id;
+    }
+    
+    // Step 2: Get search title
+    let finalSearchTitle = searchTitle;
+    
+    if (!finalSearchTitle && tmdbId && tmdbId !== '0') {
+      const tmdbInfo = await getTmdbAnimeInfo(tmdbId, type);
+      finalSearchTitle = tmdbInfo?.title || '';
+    }
+    
+    if (!finalMalId && !finalSearchTitle) {
       return null;
     }
-
-    // Search AnimeKai - use season-aware search for seasons > 1
-    // IMPORTANT: Anime sites list each season as a SEPARATE anime entry
-    // So for seasons > 1, we MUST try season-specific search FIRST
-    const seasonNum = season || 1;
-    const baseTitle = tmdbInfo?.title || '';
     
-    // For seasons > 1, get the TMDB season name first
-    let tmdbSeasonName: string | null = null;
-    if (seasonNum > 1 && type === 'tv') {
-      tmdbSeasonName = await getTmdbSeasonName(tmdbId, seasonNum);
-    }
-    
-    // Build search variants - prioritize TMDB season name if available
-    const seasonVariants: string[] = [];
-    if (tmdbSeasonName) {
-      seasonVariants.push(`${baseTitle}: ${tmdbSeasonName}`);
-      seasonVariants.push(`${baseTitle} ${tmdbSeasonName}`);
-      seasonVariants.push(tmdbSeasonName);
-      // Try without hyphens (some databases don't use them)
-      const noHyphens = tmdbSeasonName.replace(/-/g, ' ');
-      if (noHyphens !== tmdbSeasonName) {
-        seasonVariants.push(`${baseTitle} ${noHyphens}`);
-        seasonVariants.push(noHyphens);
-      }
-    }
-    seasonVariants.push(...getSeasonSearchVariants(baseTitle, seasonNum));
-    
+    // Step 3: Search AnimeKai by MAL ID
     let animeResult: { content_id: string; title: string; episodes?: ParsedEpisodes } | null = null;
     
-    // If we have a specific MAL title (from MAL split), search for it FIRST
-    if (malTitle) {
-      console.log(`[AnimeKai] MAL title provided - searching for: "${malTitle}"`);
-      animeResult = await searchAnimeKai(malTitle, malId || null);
-      
-      if (!animeResult) {
-        // Try variations
-        const malTitleVariants = [
-          malTitle.replace(/:/g, ''),
-          malTitle.replace(/-/g, ' '),
-          malTitle.split(':').pop()?.trim() || malTitle,
-        ];
-        for (const variant of malTitleVariants) {
-          if (variant !== malTitle) {
-            animeResult = await searchAnimeKai(variant, null);
-            if (animeResult) break;
-          }
-        }
-      }
+    if (finalMalId) {
+      animeResult = await searchAnimeKai(finalSearchTitle, finalMalId);
     }
     
-    // For seasons > 1, ALWAYS try season-specific search FIRST (if MAL title didn't work)
-    // This is critical because anime sites list each season as a separate entry
-    // e.g., "Record of Ragnarok III" is a different entry from "Record of Ragnarok"
-    if (!animeResult && seasonNum > 1 && baseTitle && seasonVariants.length > 0) {
-      console.log(`[AnimeKai] Season ${seasonNum} requested - trying season-specific search first...`);
-      if (tmdbSeasonName) {
-        console.log(`[AnimeKai] TMDB Season name: "${tmdbSeasonName}"`);
-      }
-      
-      for (const variant of seasonVariants) {
-        console.log(`[AnimeKai] Trying: "${variant}"`);
-        const variantResult = await searchAnimeKai(variant, null);
-        if (variantResult) {
-          console.log(`[AnimeKai] ✓ Found season-specific entry: "${variantResult.title}"`);
-          animeResult = variantResult;
-          break;
-        }
-      }
-      
-      // If no season-specific entry found, fall back to base title search
-      // NOTE: Don't use MAL ID first because it maps to the original anime, not the season
-      if (!animeResult) {
-        console.log(`[AnimeKai] No season-specific entry found, trying base title (without MAL ID)...`);
-        animeResult = await searchAnimeKai(baseTitle, null);
-        
-        // If still not found and we have a MAL ID, try with it as last resort
-        if (!animeResult && animeIds.mal_id) {
-          console.log(`[AnimeKai] Still not found, trying with MAL ID as last resort...`);
-          animeResult = await searchAnimeKai(baseTitle, animeIds.mal_id);
-        }
-      }
-    } else {
-      // Season 1 or no season specified - search normally
-      animeResult = await searchAnimeKai(baseTitle, animeIds.mal_id);
+    if (!animeResult && finalSearchTitle) {
+      animeResult = await searchAnimeKai(finalSearchTitle, null);
     }
     
     if (!animeResult) {
       return null;
     }
-    
-    // Check if we found a season-specific entry
-    // If so, we should use season 1 and the episode number directly
-    let foundSeasonSpecificEntry = false;
-    if (seasonNum > 1 && animeResult.title !== baseTitle) {
-      const seasonIndicators = [
-        `season ${seasonNum}`,
-        `${seasonNum}nd season`, `${seasonNum}rd season`, `${seasonNum}th season`,
-        `part ${seasonNum}`,
-        toRomanNumeral(seasonNum).toLowerCase(),
-        'thousand-year blood war', 'tybw', 'shippuden', 'brotherhood',
-      ];
-      
-      // Also add the TMDB season name if available
-      if (tmdbSeasonName) {
-        seasonIndicators.push(tmdbSeasonName.toLowerCase());
-      }
-      
-      const lowerTitle = animeResult.title.toLowerCase();
-      foundSeasonSpecificEntry = seasonIndicators.some(indicator => lowerTitle.includes(indicator));
-      
-      // Also check if the found title is different from the base title
-      if (!foundSeasonSpecificEntry && animeResult.title.toLowerCase() !== baseTitle.toLowerCase()) {
-        foundSeasonSpecificEntry = true;
-        console.log(`[AnimeKai] Found different title "${animeResult.title}" vs base "${baseTitle}" - treating as season-specific`);
-      }
-      
-      if (foundSeasonSpecificEntry) {
-        console.log(`[AnimeKai] ✓ Found season-specific entry "${animeResult.title}" - will use episode ${episode || 1} directly`);
-      }
-    }
 
-    // Get episodes - use from search result if available
+    // Step 4: Get episodes
     let episodes: ParsedEpisodes | null = animeResult.episodes || null;
     if (!episodes) {
       episodes = await getEpisodes(animeResult.content_id);
@@ -2157,88 +1720,41 @@ export async function fetchAnimeKaiSourceByName(
       return null;
     }
 
-    // Find episode token - for season-specific entries, episode is in season "1"
-    // because the anime site treats each season as a separate anime
-    const seasonNumber = type === 'movie' ? 1 : (foundSeasonSpecificEntry ? 1 : (season || 1));
+    // Step 5: Find episode token (MAL ID focused - episode is relative to MAL entry)
     const episodeNumber = type === 'movie' ? 1 : (episode || 1);
-    const seasonKey = String(seasonNumber);
     const episodeKey = String(episodeNumber);
-    
-    if (foundSeasonSpecificEntry) {
-      console.log(`[AnimeKai] Using season 1 (season-specific entry) with episode ${episodeNumber}`);
-    }
     
     let episodeToken: string | null = null;
     
-    // Strategy 1: Try exact season/episode
-    const targetSeason = episodes[seasonKey];
-    if (targetSeason && targetSeason[episodeKey]) {
-      const epData = targetSeason[episodeKey];
+    // Try season "1" with episode number (most common for MAL entries)
+    const season1 = episodes["1"];
+    if (season1 && season1[episodeKey]) {
+      const epData = season1[episodeKey];
       if (epData && typeof epData === 'object' && 'token' in epData) {
         episodeToken = epData.token;
       }
     }
     
-    // Strategy 2: If season > 1 and not found, try absolute episode number
-    if (!episodeToken && seasonNumber > 1) {
-      const season1 = episodes["1"];
-      if (season1) {
-        let absoluteEpisode = episodeNumber;
-        for (let s = 1; s < seasonNumber; s++) {
-          const prevSeason = episodes[String(s)];
-          if (prevSeason) {
-            absoluteEpisode += Object.keys(prevSeason).length;
-          }
-        }
-        const absoluteKey = String(absoluteEpisode);
-        if (season1[absoluteKey]) {
-          const epData = season1[absoluteKey];
-          if (epData && typeof epData === 'object' && 'token' in epData) {
-            episodeToken = epData.token;
-          }
-        }
-      }
-    }
-    
-    // Strategy 3: Try season "1" with episode number directly
-    if (!episodeToken) {
-      const season1 = episodes["1"];
-      if (season1 && season1[episodeKey]) {
-        const epData = season1[episodeKey];
-        if (epData && typeof epData === 'object' && 'token' in epData) {
-          episodeToken = epData.token;
-        }
-      }
-    }
-    
-    // Strategy 4: Fallback to direct access
+    // Fallback: direct access
     if (!episodeToken && episodes[episodeKey]) {
       const episodeData = episodes[episodeKey];
       if (typeof episodeData === 'object' && 'token' in episodeData) {
         episodeToken = (episodeData as any).token;
-      } else {
-        const subKeys = Object.keys(episodeData);
-        if (subKeys.length > 0) {
-          const firstEntry = episodeData[subKeys[0]];
-          if (firstEntry && typeof firstEntry === 'object' && 'token' in firstEntry) {
-            episodeToken = firstEntry.token;
-          }
-        }
       }
     }
 
     if (!episodeToken) {
-      console.log(`[AnimeKai] Episode S${seasonNumber}E${episodeNumber} not found for server ${serverName}`);
+      console.log(`[AnimeKai] Episode ${episodeNumber} not found for server ${serverName}`);
       return null;
     }
 
-    // Get servers
+    // Step 6: Get servers
     const servers = await getServers(episodeToken);
     if (!servers) {
       return null;
     }
 
-    // Find the specific server by name
+    // Step 7: Find the specific server by name
     const serverTypes: Array<'sub' | 'dub'> = ['sub', 'dub'];
     
     for (const serverType of serverTypes) {
