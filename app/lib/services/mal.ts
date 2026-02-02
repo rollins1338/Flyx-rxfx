@@ -773,13 +773,13 @@ export interface MALEpisode {
  * Get episodes for an anime from Jikan API
  * Episodes are paginated (100 per page)
  */
-export async function getMALAnimeEpisodes(malId: number, page: number = 1): Promise<{ episodes: MALEpisode[]; hasNextPage: boolean }> {
+export async function getMALAnimeEpisodes(malId: number, page: number = 1): Promise<{ episodes: MALEpisode[]; hasNextPage: boolean; lastPage: number }> {
   try {
     const response = await rateLimitedFetch(`${JIKAN_BASE_URL}/anime/${malId}/episodes?page=${page}`);
     
     if (!response.ok) {
       console.error(`[MAL] Episodes fetch failed for ${malId}:`, response.status);
-      return { episodes: [], hasNextPage: false };
+      return { episodes: [], hasNextPage: false, lastPage: 1 };
     }
     
     const data = await response.json();
@@ -787,10 +787,11 @@ export async function getMALAnimeEpisodes(malId: number, page: number = 1): Prom
     return {
       episodes: data.data || [],
       hasNextPage: data.pagination?.has_next_page || false,
+      lastPage: data.pagination?.last_visible_page || 1,
     };
   } catch (error) {
     console.error(`[MAL] Episodes fetch error for ${malId}:`, error);
-    return { episodes: [], hasNextPage: false };
+    return { episodes: [], hasNextPage: false, lastPage: 1 };
   }
 }
 

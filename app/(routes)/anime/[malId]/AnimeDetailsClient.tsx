@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import type { MALAnime, MALSeason } from '@/lib/services/mal';
@@ -8,7 +8,7 @@ import { GlassPanel } from '@/components/ui/GlassPanel';
 import { FluidButton } from '@/components/ui/FluidButton';
 import styles from './AnimeDetails.module.css';
 
-const EPISODES_PER_PAGE = 50;
+const EPISODES_PER_PAGE = 100; // Jikan API returns 100 per page
 
 interface EpisodeData {
   number: number;
@@ -29,38 +29,29 @@ interface Props {
 export default function AnimeDetailsClient({ anime, allSeasons, totalEpisodes }: Props) {
   const router = useRouter();
   const [selectedSeason, setSelectedSeason] = useState(0);
-  const [episodeData, setEpisodeData] = useState<Record<number, EpisodeData[]>>({});
-  const [loadingEpisodes, setLoadingEpisodes] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [episodes, setEpisodes] = useState<EpisodeData[]>([]);
+  const [loadingEpisodes, setLoadingEpisodes] = useState(false);
+  const [totalPages, setTotalPages] = useState(1);
   
   const currentSeason = allSeasons[selectedSeason] || allSeasons[0];
-  
-  // Check if this is a movie (no episode selection needed)
   const isMovie = anime.type === 'Movie';
 
-  // Fetch episode data when season changes (only for non-movies)
+  // Fetch episodes for current page when season or page changes
   useEffect(() => {
     if (!currentSeason || isMovie) return;
     
     const malId = currentSeason.malId;
     
-    // Reset to page 1 when season changes
-    setCurrentPage(1);
-    
-    // Check if we already have data for this season
-    if (episodeData[malId]) return;
-    
-    async function fetchEpisodes() {
+    async function fetchEpisodesPage() {
       setLoadingEpisodes(true);
       try {
-        const response = await fetch(`/api/content/mal-episodes?malId=${malId}`);
+        const response = await fetch(`/api/content/mal-episodes?malId=${malId}&page=${currentPage}`);
         const data = await response.json();
         
-        if (data.success && data.data?.episodes) {
-          setEpisodeData(prev => ({
-            ...prev,
-            [malId]: data.data.episodes,
-          }));
+        if (data.success && data.data) {
+          setEpisodes(data.data.episodes || []);
+          setTotalPages(data.data.totalPages || 1);
         }
       } catch (error) {
         console.error('[AnimeDetails] Failed to fetch episodes:', error);
@@ -69,59 +60,19 @@ export default function AnimeDetailsClient({ anime, allSeasons, totalEpisodes }:
       }
     }
     
-    fetchEpisodes();
-  }, [currentSeason, episodeData, isMovie]);
+    fetchEpisodesPage();
+  }, [currentSeason, currentPage, isMovie]);
 
-  // Get episodes for current season
-  const currentEpisodes = currentSeason ? episodeData[currentSeason.malId] : null;
-  const episodeCount = currentSeason?.episodes || 0;
-  
-  // For ongoing anime (episodes === null), we need to fetch the episode list from API
-  // The API will return the actual aired episodes
-  const isOngoing = currentSeason?.status === 'Currently Airing' && !currentSeason?.episodes;
-  
-  // Generate episode list - use fetched data if available, otherwise generate placeholders
-  // For ongoing anime with no episode count, show loading until API returns data
-  const episodes = currentEpisodes || (episodeCount > 0 ? Array.from({ length: episodeCount }, (_, i) => ({
-    number: i + 1,
-    title: `Episode ${i + 1}`,
-    titleJapanese: null,
-    aired: null,
-    score: null,
-    filler: false,
-    recap: false,
-  })) : []);
-
-  // Pagination
-  const totalPages = Math.ceil(episodes.length / EPISODES_PER_PAGE);
-  const paginatedEpisodes = useMemo(() => {
-    const startIndex = (currentPage - 1) * EPISODES_PER_PAGE;
-    return episodes.slice(startIndex, startIndex + EPISODES_PER_PAGE);
-  }, [episodes, currentPage]);
-
-  // Generate page range options (for dropdown)
-  const pageRanges = useMemo(() => {
-    const ranges: { page: number; label: string }[] = [];
-    for (let i = 1; i <= totalPages; i++) {
-      const start = (i - 1) * EPISODES_PER_PAGE + 1;
-      const end = Math.min(i * EPISODES_PER_PAGE, episodes.length);
-      ranges.push({ page: i, label: `${start} - ${end}` });
-    }
-    return ranges;
-  }, [totalPages, episodes.length]);
-
-  // Get thumbnail for current season (use the season's image or main anime image)
-  const getSeasonThumbnail = () => {
-    if (currentSeason?.imageUrl) return currentSeason.imageUrl;
-    return anime.images.jpg.large_image_url;
-  };
+  // Reset to page 1 when season changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedSeason]);
 
   const handleBack = () => {
     router.push('/anime');
   };
 
   const handleWatchNow = () => {
-    // For movies, go directly to watch page without episode param
     if (isMovie) {
       router.push(`/anime/${anime.mal_id}/watch`);
     } else if (currentSeason) {
@@ -145,7 +96,19 @@ export default function AnimeDetailsClient({ anime, allSeasons, totalEpisodes }:
     }
   };
 
+  const getSeasonThumbnail = () => {
+    if (currentSeason?.imageUrl) return currentSeason.imageUrl;
+    return anime.images.jpg.large_image_url;
+  };
+
   const seasonThumbnail = getSeasonThumbnail();
+  
+  // Generate page options for dropdown
+  const pageOptions = Array.from({ length: totalPages }, (_, i) => {
+    const start = i * EPISODES_PER_PAGE + 1;
+    const end = Math.min((i + 1) * EPISODES_PER_PAGE, (currentSeason?.episodes || totalPages * EPISODES_PER_PAGE));
+    return { page: i + 1, label: `${start} - ${end}` };
+  });
 
   return (
     <div className={styles.container}>
@@ -177,23 +140,18 @@ export default function AnimeDetailsClient({ anime, allSeasons, totalEpisodes }:
               <span className={styles.type}>{anime.type}</span>
               <span className={styles.separator}>•</span>
               <span className={styles.status}>{anime.status}</span>
-              {/* Only show seasons/episodes count for non-movies */}
               {!isMovie && allSeasons.length > 1 && (
                 <>
                   <span className={styles.separator}>•</span>
                   <span className={styles.seasons}>{allSeasons.length} Seasons</span>
                 </>
               )}
-              {!isMovie && totalEpisodes > 0 && (
+              {!isMovie && (currentSeason?.episodes || totalEpisodes > 0) && (
                 <>
                   <span className={styles.separator}>•</span>
-                  <span className={styles.episodes}>{totalEpisodes}+ Episodes</span>
-                </>
-              )}
-              {!isMovie && totalEpisodes === 0 && (
-                <>
-                  <span className={styles.separator}>•</span>
-                  <span className={styles.episodes}>Ongoing</span>
+                  <span className={styles.episodes}>
+                    {currentSeason?.episodes || totalEpisodes}+ Episodes
+                  </span>
                 </>
               )}
             </div>
@@ -220,145 +178,136 @@ export default function AnimeDetailsClient({ anime, allSeasons, totalEpisodes }:
         </div>
       </div>
 
-      {/* Episodes Section - Only show for non-movies */}
+      {/* Episodes Section */}
       {!isMovie && (
         <section className={styles.episodesSection}>
-        <GlassPanel className={styles.episodesPanel}>
-          <h2 className={styles.sectionTitle}>Episodes</h2>
-          
-          {/* Season Selector */}
-          {allSeasons.length > 1 && (
-            <div className={styles.seasonSelector}>
-              {allSeasons.map((season, index) => (
-                <button
-                  key={season.malId}
-                  onClick={() => setSelectedSeason(index)}
-                  className={`${styles.seasonButton} ${selectedSeason === index ? styles.active : ''}`}
-                >
-                  {season.titleEnglish || season.title}
-                  <span className={styles.episodeCount}>
-                    {season.episodes ? `${season.episodes} eps` : 'Ongoing'}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Current Season Info */}
-          {currentSeason && (
-            <div className={styles.seasonInfo}>
-              <h3>{currentSeason.titleEnglish || currentSeason.title}</h3>
-              <p className={styles.seasonMeta}>
-                ⭐ {currentSeason.score?.toFixed(2) || 'N/A'} • {currentSeason.episodes ? `${currentSeason.episodes} Episodes` : 'Ongoing'} • {currentSeason.status}
-              </p>
-            </div>
-          )}
-
-          {/* Loading indicator */}
-          {loadingEpisodes && (
-            <div className={styles.loadingEpisodes}>
-              <div className={styles.spinner} />
-              <p>Loading episode details...</p>
-            </div>
-          )}
-
-          {/* No episodes message for ongoing anime while loading */}
-          {!loadingEpisodes && episodes.length === 0 && isOngoing && (
-            <div className={styles.loadingEpisodes}>
-              <p>Episode data is being fetched...</p>
-            </div>
-          )}
-
-          {/* Pagination Controls - Top */}
-          {episodes.length > EPISODES_PER_PAGE && (
-            <div className={styles.pagination}>
-              <button 
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className={styles.paginationButton}
-              >
-                ← Prev
-              </button>
-              
-              <select 
-                value={currentPage}
-                onChange={(e) => setCurrentPage(Number(e.target.value))}
-                className={styles.paginationSelect}
-              >
-                {pageRanges.map(({ page, label }) => (
-                  <option key={page} value={page}>
-                    Episodes {label}
-                  </option>
+          <GlassPanel className={styles.episodesPanel}>
+            <h2 className={styles.sectionTitle}>Episodes</h2>
+            
+            {/* Season Selector */}
+            {allSeasons.length > 1 && (
+              <div className={styles.seasonSelector}>
+                {allSeasons.map((season, index) => (
+                  <button
+                    key={season.malId}
+                    onClick={() => setSelectedSeason(index)}
+                    className={`${styles.seasonButton} ${selectedSeason === index ? styles.active : ''}`}
+                  >
+                    {season.titleEnglish || season.title}
+                    <span className={styles.episodeCount}>
+                      {season.episodes ? `${season.episodes} eps` : 'Ongoing'}
+                    </span>
+                  </button>
                 ))}
-              </select>
-              
-              <button 
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                className={styles.paginationButton}
-              >
-                Next →
-              </button>
-              
-              <span className={styles.paginationInfo}>
-                {episodes.length} total episodes
-              </span>
-            </div>
-          )}
+              </div>
+            )}
 
-          {/* Episode Grid */}
-          <div className={styles.episodeGrid}>
-            {paginatedEpisodes.map((ep) => {
-              const airDate = formatAirDate(ep.aired);
-              const isFuture = ep.aired ? new Date(ep.aired) > new Date() : false;
-              
-              return (
-                <motion.div
-                  key={ep.number}
-                  className={`${styles.episodeCard} ${isFuture ? styles.futureEpisode : ''}`}
-                  whileHover={!isFuture ? { scale: 1.02 } : undefined}
-                  onClick={() => !isFuture && handleEpisodeSelect(ep.number)}
+            {/* Current Season Info */}
+            {currentSeason && (
+              <div className={styles.seasonInfo}>
+                <h3>{currentSeason.titleEnglish || currentSeason.title}</h3>
+                <p className={styles.seasonMeta}>
+                  ⭐ {currentSeason.score?.toFixed(2) || 'N/A'} • {currentSeason.episodes ? `${currentSeason.episodes} Episodes` : 'Ongoing'} • {currentSeason.status}
+                </p>
+              </div>
+            )}
+
+            {/* Page Selector */}
+            {totalPages > 1 && (
+              <div className={styles.pagination}>
+                <button 
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1 || loadingEpisodes}
+                  className={styles.paginationButton}
                 >
-                  <div className={styles.episodeThumbnail}>
-                    {/* Use anime poster as episode thumbnail with gradient overlay */}
-                    <img 
-                      src={seasonThumbnail} 
-                      alt={`Episode ${ep.number}`}
-                      className={styles.thumbnailImage}
-                      loading="lazy"
-                    />
-                    <div className={styles.thumbnailOverlay}>
-                      <span className={styles.episodeNumberBadge}>{ep.number}</span>
-                    </div>
-                    {!isFuture && (
-                      <div className={styles.playOverlay}>
-                        <svg fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M8 5v14l11-7z" />
-                        </svg>
+                  ← Prev
+                </button>
+                
+                <select 
+                  value={currentPage}
+                  onChange={(e) => setCurrentPage(Number(e.target.value))}
+                  className={styles.paginationSelect}
+                  disabled={loadingEpisodes}
+                >
+                  {pageOptions.map(({ page, label }) => (
+                    <option key={page} value={page}>
+                      Episodes {label}
+                    </option>
+                  ))}
+                </select>
+                
+                <button 
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages || loadingEpisodes}
+                  className={styles.paginationButton}
+                >
+                  Next →
+                </button>
+              </div>
+            )}
+
+            {/* Loading indicator */}
+            {loadingEpisodes && (
+              <div className={styles.loadingEpisodes}>
+                <div className={styles.spinner} />
+                <p>Loading episodes...</p>
+              </div>
+            )}
+
+            {/* Episode Grid */}
+            {!loadingEpisodes && (
+              <div className={styles.episodeGrid}>
+                {episodes.map((ep) => {
+                  const airDate = formatAirDate(ep.aired);
+                  const isFuture = ep.aired ? new Date(ep.aired) > new Date() : false;
+                  
+                  return (
+                    <motion.div
+                      key={ep.number}
+                      className={`${styles.episodeCard} ${isFuture ? styles.futureEpisode : ''}`}
+                      whileHover={!isFuture ? { scale: 1.02 } : undefined}
+                      onClick={() => !isFuture && handleEpisodeSelect(ep.number)}
+                    >
+                      <div className={styles.episodeThumbnail}>
+                        <img 
+                          src={seasonThumbnail} 
+                          alt={`Episode ${ep.number}`}
+                          className={styles.thumbnailImage}
+                          loading="lazy"
+                        />
+                        <div className={styles.thumbnailOverlay}>
+                          <span className={styles.episodeNumberBadge}>{ep.number}</span>
+                        </div>
+                        {!isFuture && (
+                          <div className={styles.playOverlay}>
+                            <svg fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M8 5v14l11-7z" />
+                            </svg>
+                          </div>
+                        )}
+                        {ep.filler && <span className={styles.fillerBadge}>Filler</span>}
+                        {ep.recap && <span className={styles.recapBadge}>Recap</span>}
                       </div>
-                    )}
-                    {ep.filler && <span className={styles.fillerBadge}>Filler</span>}
-                    {ep.recap && <span className={styles.recapBadge}>Recap</span>}
-                  </div>
-                  <div className={styles.episodeInfo}>
-                    <h4 className={styles.episodeTitle}>
-                      {ep.title || `Episode ${ep.number}`}
-                    </h4>
-                    {airDate && (
-                      <p className={styles.episodeAirDate}>
-                        {isFuture ? `Airs: ${airDate}` : airDate}
-                      </p>
-                    )}
-                    {ep.score && ep.score > 0 && (
-                      <p className={styles.episodeScore}>⭐ {ep.score.toFixed(2)}</p>
-                    )}
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
-        </GlassPanel>
-      </section>
+                      <div className={styles.episodeInfo}>
+                        <h4 className={styles.episodeTitle}>
+                          {ep.title || `Episode ${ep.number}`}
+                        </h4>
+                        {airDate && (
+                          <p className={styles.episodeAirDate}>
+                            {isFuture ? `Airs: ${airDate}` : airDate}
+                          </p>
+                        )}
+                        {ep.score && ep.score > 0 && (
+                          <p className={styles.episodeScore}>⭐ {ep.score.toFixed(2)}</p>
+                        )}
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )}
+          </GlassPanel>
+        </section>
       )}
     </div>
   );
