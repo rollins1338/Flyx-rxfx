@@ -2,6 +2,7 @@
 tauri-stream-extractor
 flyx-secure
 dlhd-extractor-worker
+cdn-live-extractor
 # dependencies
 /node_modules
 /.pnp
