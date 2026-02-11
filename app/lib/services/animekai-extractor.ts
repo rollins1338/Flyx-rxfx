@@ -84,13 +84,6 @@ function getKaiAjax(): string {
 }
 
 /**
- * Get the current watch base URL
- */
-function getKaiWatch(slug: string): string {
-  return `${KAI_BASE}/watch/${slug}`;
-}
-
-/**
  * Fetch a URL through Cloudflare Worker → RPI residential proxy
  * Used for MegaUp CDN which blocks datacenter IPs
  * 
