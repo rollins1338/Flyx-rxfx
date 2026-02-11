@@ -111,6 +111,7 @@ const PROVIDER_NAMES: Record<Provider, string> = {
   '1movies': '1movies',
   videasy: 'Videasy',
   animekai: 'AnimeKai',
+  hianime: 'HiAnime',
 };
 
 export default function MobileVideoPlayer({
