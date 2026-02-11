@@ -1,6 +1,7 @@
 /**
  * VidSrc Proxy Handler
  * Proxies requests to v1.2embed.stream API for VidSrc extraction.
+ * Falls back to RPI residential proxy for embed page extraction when API fails.
  */
 
 import { createLogger, type LogLevel } from './logger';
@@ -38,6 +39,80 @@ async function fetchWithHeaders(url: string, referer?: string): Promise<Response
   return fetch(url, { headers });
 }
 
+/**
+ * Extract m3u8 via RPI's dedicated /vidsrc-extract endpoint.
+ * The RPI does the entire 4-step chain locally (embed → RCP → prorcp → m3u8),
+ * using its residential IP for embed and SOCKS5 pool for cloudnestra steps.
+ * This avoids the CF Worker → RPI → SOCKS5 timeout cascade.
+ */
+async function extractViaRpiEmbed(
+  tmdbId: string,
+  type: 'movie' | 'tv',
+  env: Env,
+  season?: string,
+  episode?: string
+): Promise<{ success: boolean; m3u8_url?: string; source?: string; error?: string }> {
+  if (!env.RPI_PROXY_URL || !env.RPI_PROXY_KEY) {
+    return { success: false, error: 'RPI proxy not configured' };
+  }
+
+  const params = new URLSearchParams({ tmdbId, type });
+  if (type === 'tv' && season && episode) {
+    params.set('season', season);
+    params.set('episode', episode);
+  }
+
+  const rpiUrl = `${env.RPI_PROXY_URL}/vidsrc-extract?${params.toString()}`;
+  console.log(`[VidSrc-RPI] Calling RPI /vidsrc-extract for ${type}/${tmdbId}`);
+
+  // Retry up to 3 times for Cloudflare tunnel 502 errors (intermittent)
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) {
+      // Increasing delay between retries to let tunnel recover
+      await new Promise(r => setTimeout(r, 1000 * attempt));
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 25000);
+
+    try {
+      const resp = await fetch(rpiUrl, {
+        headers: { 'X-API-Key': env.RPI_PROXY_KEY },
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+
+      // Cloudflare tunnel sometimes returns 502 HTML — retry
+      const ct = resp.headers.get('content-type') || '';
+      if (resp.status === 502 && !ct.includes('json')) {
+        console.log(`[VidSrc-RPI] Tunnel 502, retry ${attempt + 1}`);
+        continue;
+      }
+
+      const data = await resp.json() as {
+        success: boolean;
+        m3u8_url?: string;
+        source?: string;
+        error?: string;
+        duration_ms?: number;
+      };
+
+      console.log(`[VidSrc-RPI] RPI responded: ${resp.status} success=${data.success} ${data.duration_ms || 0}ms`);
+
+      if (data.success && data.m3u8_url) {
+        return { success: true, m3u8_url: data.m3u8_url, source: data.source };
+      }
+      return { success: false, error: data.error || `RPI returned ${resp.status}` };
+    } catch (e) {
+      clearTimeout(timer);
+      const msg = e instanceof Error ? e.message : String(e);
+      console.log(`[VidSrc-RPI] Error: ${msg}`);
+      return { success: false, error: msg };
+    }
+  }
+
+  return { success: false, error: 'RPI tunnel 502 after 3 retries' };
+}
+
 async function extractFromApi(
   tmdbId: string,
   type: 'movie' | 'tv',
@@ -59,13 +134,17 @@ async function extractFromApi(
   
   const data = await response.json() as {
     success?: boolean;
+    fallback?: boolean;
     m3u8_url?: string;
     source?: string;
     error?: string;
+    message?: string;
   };
   
-  if (!data.success || !data.m3u8_url) {
-    return { success: false, error: data.error || 'No m3u8_url in response' };
+  // The API returns success:true with fallback:true when it doesn't have the content
+  // In that case m3u8_url is missing and it provides an iframe_url instead
+  if (!data.success || !data.m3u8_url || data.fallback) {
+    return { success: false, error: data.message || data.error || 'No m3u8_url in response' };
   }
   
   return { success: true, m3u8_url: data.m3u8_url, source: data.source };
@@ -74,7 +153,16 @@ async function extractFromApi(
 async function proxyStream(url: string): Promise<Response> {
   console.log('[VidSrc] Proxying stream:', url.substring(0, 80) + '...');
   
-  const response = await fetchWithHeaders(url, EMBED_API_BASE + '/');
+  // Determine correct referer based on the stream domain
+  let referer = EMBED_API_BASE + '/';
+  try {
+    const streamHost = new URL(url).hostname;
+    if (streamHost.includes('cloudnestra') || streamHost.includes('shadowlandschronicles') || streamHost.includes('embedsito')) {
+      referer = `https://${streamHost}/`;
+    }
+  } catch {}
+  
+  const response = await fetchWithHeaders(url, referer);
   
   if (!response.ok) {
     return new Response(`Upstream error: ${response.status}`, { 
@@ -89,9 +177,9 @@ async function proxyStream(url: string): Promise<Response> {
   if (contentType.includes('mpegurl') || url.includes('.m3u8')) {
     let manifest = new TextDecoder().decode(body);
     
-    // Rewrite absolute URLs from 2embed.stream
+    // Rewrite absolute URLs from 2embed.stream and cloudnestra CDN domains
     manifest = manifest.replace(
-      /https:\/\/v1\.2embed\.stream\/[^\s\n]+/g,
+      /https:\/\/(?:v1\.2embed\.stream|[^\/\s]*cloudnestra\.[a-z]+|[^\/\s]*shadowlandschronicles\.[a-z]+|[^\/\s]*embedsito\.com)\/[^\s\n]+/g,
       (match) => `/vidsrc/stream?url=${encodeURIComponent(match)}`
     );
     
@@ -182,10 +270,12 @@ export async function handleVidSrcRequest(request: Request, env: Env): Promise<R
 
     try {
       const startTime = Date.now();
+      
+      // PRIMARY: Try 2embed API first (fast, no Turnstile)
       const result = await extractFromApi(tmdbId, type, season, episode);
-      const duration = Date.now() - startTime;
-
+      
       if (result.success && result.m3u8_url) {
+        const duration = Date.now() - startTime;
         const proxiedUrl = `/vidsrc/stream?url=${encodeURIComponent(result.m3u8_url)}`;
         return jsonResponse({ 
           success: true, 
@@ -196,9 +286,28 @@ export async function handleVidSrcRequest(request: Request, env: Env): Promise<R
           timestamp: new Date().toISOString() 
         }, 200);
       }
+      
+      // FALLBACK: Try cloudnestra extraction via RPI residential proxy
+      console.log('[VidSrc] API failed, trying RPI embed extraction...');
+      const rpiResult = await extractViaRpiEmbed(tmdbId, type, env, season, episode);
+      const duration = Date.now() - startTime;
+      
+      if (rpiResult.success && rpiResult.m3u8_url) {
+        const proxiedUrl = `/vidsrc/stream?url=${encodeURIComponent(rpiResult.m3u8_url)}`;
+        return jsonResponse({ 
+          success: true, 
+          m3u8_url: rpiResult.m3u8_url, 
+          proxied_url: proxiedUrl, 
+          source: rpiResult.source, 
+          method: 'rpi-embed-fallback',
+          duration_ms: duration, 
+          timestamp: new Date().toISOString() 
+        }, 200);
+      }
+      
       return jsonResponse({ 
         success: false, 
-        error: result.error, 
+        error: `API: ${result.error}; RPI: ${rpiResult.error}`, 
         duration_ms: duration, 
         timestamp: new Date().toISOString() 
       }, 404);

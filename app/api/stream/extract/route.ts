@@ -3,10 +3,10 @@
  * 
  * Provider Priority (February 2026):
  * - For ANIME content: AnimeKai (PRIMARY) → Videasy (fallback)
- * - For other content: Videasy (PRIMARY) → VidSrc → 1movies → Flixer → SmashyStream → MultiMovies → MultiEmbed
+ * - For other content: Flixer (PRIMARY) → Videasy → VidSrc → 1movies → SmashyStream → MultiMovies → MultiEmbed
  * 
- * NOTE: Videasy is now PRIMARY - uses handrolled WASM decryption, most reliable.
- *       Flixer is currently DOWN (February 2026).
+ * NOTE: Flixer is PRIMARY - WASM-based extraction, 2-3s, most reliable.
+ *       Videasy is SECONDARY - handrolled WASM decryption, good fallback.
  *       1movies is DISABLED.
  *       VidSrc deprioritized due to Cloudflare Turnstile blocking ~80% of content.
  * 
@@ -696,28 +696,13 @@ export async function GET(request: NextRequest) {
         throw new Error(multiEmbedResult.error || 'MultiEmbed returned no sources');
       }
       
-      // Default behavior: Videasy FIRST (most reliable with WASM decryption), then VidSrc
-      // NOTE: Flixer is DOWN, 1movies is DISABLED, SmashyStream/MultiMovies/MultiEmbed are DISABLED
-      // Videasy is the primary working provider as of February 2026
+      // Default behavior: Flixer FIRST (back online, WASM-based, 2-3s), then Videasy
+      // NOTE: 1movies is DISABLED, SmashyStream/MultiMovies/MultiEmbed are DISABLED
+      // VidSrc deprioritized due to Cloudflare Turnstile
       
-      // Try Videasy FIRST (multi-language support, WASM decryption - most reliable)
-      console.log('[EXTRACT] Trying PRIMARY source: Videasy (multi-language)...');
-      try {
-        const videasyResult = await extractVideasyStreams(tmdbId, type, season, episode, true);
-        const workingVideasy = videasyResult.sources.filter(s => s.status === 'working');
-        
-        if (workingVideasy.length > 0) {
-          console.log(`[EXTRACT] ✓ Videasy succeeded with ${workingVideasy.length} working source(s)`);
-          return { sources: videasyResult.sources, provider: 'videasy' };
-        }
-        console.log(`[EXTRACT] Videasy: ${videasyResult.error || 'No working sources'}`);
-      } catch (videasyError) {
-        console.warn('[EXTRACT] Videasy failed:', videasyError instanceof Error ? videasyError.message : videasyError);
-      }
-      
-      // Try Flixer as SECOND option (currently down but keep in chain for when it comes back)
+      // Try Flixer FIRST (WASM-based extraction, most reliable, 2-3s)
       if (FLIXER_ENABLED) {
-        console.log('[EXTRACT] Trying fallback source: Flixer...');
+        console.log('[EXTRACT] Trying PRIMARY source: Flixer (WASM-based)...');
         try {
           const flixerResult = await extractFlixerStreams(tmdbId, type, season, episode);
           const workingFlixer = flixerResult.sources.filter(s => s.status === 'working');
@@ -732,6 +717,21 @@ export async function GET(request: NextRequest) {
         }
       } else {
         console.log('[EXTRACT] Flixer is DISABLED, skipping...');
+      }
+      
+      // Try Videasy as SECOND option (multi-language support, WASM decryption)
+      console.log('[EXTRACT] Trying fallback source: Videasy (multi-language)...');
+      try {
+        const videasyResult = await extractVideasyStreams(tmdbId, type, season, episode, true);
+        const workingVideasy = videasyResult.sources.filter(s => s.status === 'working');
+        
+        if (workingVideasy.length > 0) {
+          console.log(`[EXTRACT] ✓ Videasy succeeded with ${workingVideasy.length} working source(s)`);
+          return { sources: videasyResult.sources, provider: 'videasy' };
+        }
+        console.log(`[EXTRACT] Videasy: ${videasyResult.error || 'No working sources'}`);
+      } catch (videasyError) {
+        console.warn('[EXTRACT] Videasy failed:', videasyError instanceof Error ? videasyError.message : videasyError);
       }
       
       // Try 1movies as SECOND option

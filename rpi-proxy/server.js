@@ -47,8 +47,8 @@ const PROXY_POOL = {
 const PROXY_POOL_CONFIG = {
   minPoolSize: 100,
   refreshIntervalMs: 10 * 60 * 1000, // 10 minutes
-  validationTimeoutMs: 12000,
-  maxConcurrentValidations: 20,
+  validationTimeoutMs: 6000,
+  maxConcurrentValidations: 50,
   // GitHub proxy list sources
   sources: [
     'https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/socks5/data.txt',
@@ -100,14 +100,15 @@ async function fetchProxyLists() {
 }
 
 /**
- * Validate a single SOCKS5 proxy by doing a test key fetch to chevy.dvalna.ru
- * Returns true if the proxy returns a valid (non-fake, non-error) 16-byte key
+ * Validate a single SOCKS5 proxy by connecting through it to cloudnestra.com
+ * (the actual target we need these proxies for).
+ * Just checks TCP+TLS connectivity — any HTTP response means the proxy works.
  */
 function validateSocks5Proxy(proxyStr) {
   return new Promise((resolve) => {
     const [proxyHost, proxyPortStr] = proxyStr.split(':');
     const proxyPort = parseInt(proxyPortStr);
-    const targetHost = 'chevy.dvalna.ru';
+    const targetHost = 'cloudnestra.com';
     const targetPort = 443;
     
     const timer = setTimeout(() => {
@@ -122,7 +123,7 @@ function validateSocks5Proxy(proxyStr) {
       let step = 'greeting';
       
       socket.on('error', () => { clearTimeout(timer); socket.destroy(); resolve(false); });
-      socket.setTimeout(PROXY_POOL_CONFIG.validationTimeoutMs, () => { socket.destroy(); clearTimeout(timer); resolve(false); });
+      socket.setTimeout(PROXY_POOL_CONFIG.validationTimeoutMs - 500, () => { socket.destroy(); clearTimeout(timer); resolve(false); });
       
       socket.on('data', (data) => {
         if (step === 'greeting') {
@@ -144,30 +145,14 @@ function validateSocks5Proxy(proxyStr) {
             servername: targetHost,
             rejectUnauthorized: false,
           }, () => {
-            // Send a minimal HTTP request — just need to confirm the proxy can reach dvalna.ru
-            // We use a HEAD-like GET to /key/premium44/0 — we don't need a real key, just connectivity
-            const reqStr = `GET /key/premium44/0 HTTP/1.1\r\nHost: ${targetHost}\r\nUser-Agent: Mozilla/5.0\r\nAccept: */*\r\nConnection: close\r\n\r\n`;
-            tlsSocket.write(reqStr);
+            // TLS handshake succeeded — proxy can reach cloudnestra, that's all we need
+            clearTimeout(timer);
+            tlsSocket.destroy();
+            socket.destroy();
+            resolve(true);
           });
           
-          const chunks = [];
-          tlsSocket.on('data', c => chunks.push(c));
-          tlsSocket.on('end', () => {
-            clearTimeout(timer);
-            try {
-              const raw = Buffer.concat(chunks);
-              const rawStr = raw.toString('latin1');
-              const headerEnd = rawStr.indexOf('\r\n\r\n');
-              if (headerEnd === -1) { resolve(false); return; }
-              const headerPart = rawStr.substring(0, headerEnd);
-              const statusMatch = headerPart.match(/HTTP\/[\d.]+ (\d+)/);
-              const status = statusMatch ? parseInt(statusMatch[1]) : 0;
-              // Any response from dvalna.ru means the proxy works (even 403/429)
-              // We just need to confirm TCP+TLS connectivity through the proxy
-              resolve(status > 0 && status < 600);
-            } catch { resolve(false); }
-          });
-          tlsSocket.on('error', () => { clearTimeout(timer); resolve(false); });
+          tlsSocket.on('error', () => { clearTimeout(timer); socket.destroy(); resolve(false); });
         }
       });
     } catch {
@@ -376,6 +361,22 @@ const PROXY_ALLOWED_DOMAINS = [
   // Flixer
   'flixer.sh',
   'workers.dev', // Flixer CDN uses p.XXXXX.workers.dev
+  // VidSrc / 2embed (residential IP bypass for Cloudflare)
+  '2embed.stream',
+  'v1.2embed.stream',
+  '2embed.cc',
+  'vidsrc-embed.ru',
+  'vsembed.ru',
+  'vidsrc.cc',
+  'vidsrc.me',
+  'vidsrc.xyz',
+  'vidsrc.stream',
+  'cloudnestra.com',
+  'cloudnestra.net',
+  'shadowlandschronicles.com',
+  'shadowlandschronicles.net',
+  'shadowlandschronicles.org',
+  'embedsito.com',
   // CDN-Live (all resolve to 195.128.27.233, but CF Workers get 403)
   'cdn-live.tv',
   'cdn-live-tv.ru',
@@ -1918,6 +1919,390 @@ const server = http.createServer(async (req, res) => {
       error: result.error,
     }));
     return;
+  }
+
+  // ============================================================================
+  // /vidsrc-extract — Full VidSrc extraction chain done locally on RPI
+  // Does the entire 4-step flow: embed → RCP → prorcp → m3u8
+  // Uses SOCKS5 for cloudnestra steps (Turnstile bypass), residential for embed
+  // CF Worker calls this ONE endpoint instead of 4 separate /fetch-socks5 calls
+  // ============================================================================
+  if (reqUrl.pathname === '/vidsrc-extract') {
+    const tmdbId = reqUrl.searchParams.get('tmdbId');
+    const type = reqUrl.searchParams.get('type') || 'movie';
+    const season = reqUrl.searchParams.get('season');
+    const episode = reqUrl.searchParams.get('episode');
+
+    if (!tmdbId) {
+      res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ error: 'Missing tmdbId parameter' }));
+    }
+
+    const startTime = Date.now();
+    console.log(`[VidSrc-Extract] Starting extraction for ${type}/${tmdbId}${season ? ` S${season}E${episode}` : ''}`);
+
+    const embedDomains = ['vsembed.ru', 'vidsrc-embed.ru'];
+    const cdnDomains = ['cloudnestra.com', 'cloudnestra.net', 'shadowlandschronicles.com', 'shadowlandschronicles.net', 'shadowlandschronicles.org', 'embedsito.com'];
+
+    const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+    // Race N proxies in parallel — first success wins, losers get trashed
+    const PARALLEL_PROXY_COUNT = 6;
+    const SOCKS5_ATTEMPT_TIMEOUT = 8000;
+
+    function singleSocks5Attempt(target, targetPort, useTls, customHeaders, proxy) {
+      return new Promise((resolve) => {
+        let done = false;
+        const finish = (result) => { if (!done) { done = true; clearTimeout(timer); resolve(result); } };
+
+        const timer = setTimeout(() => {
+          markProxyFailed(proxy.str);
+          finish({ success: false, error: 'timeout', proxyStr: proxy.str });
+        }, SOCKS5_ATTEMPT_TIMEOUT);
+
+        try {
+          const socket = net.connect(proxy.port, proxy.host, () => {
+            socket.write(Buffer.from([0x05, 0x01, 0x00]));
+          });
+          let step = 'greeting';
+
+          socket.on('error', () => { try { socket.destroy(); } catch {} markProxyFailed(proxy.str); finish({ success: false, error: 'socket error', proxyStr: proxy.str }); });
+          socket.setTimeout(SOCKS5_ATTEMPT_TIMEOUT - 1000, () => { try { socket.destroy(); } catch {} markProxyFailed(proxy.str); finish({ success: false, error: 'socket timeout', proxyStr: proxy.str }); });
+
+          socket.on('data', (data) => {
+            if (done) return;
+            if (step === 'greeting') {
+              if (data[0] !== 0x05 || data[1] !== 0x00) { try { socket.destroy(); } catch {} markProxyFailed(proxy.str); finish({ success: false, proxyStr: proxy.str }); return; }
+              step = 'connect';
+              const hostBuf = Buffer.from(target.hostname);
+              const portBuf = Buffer.alloc(2);
+              portBuf.writeUInt16BE(targetPort);
+              socket.write(Buffer.concat([Buffer.from([0x05, 0x01, 0x00, 0x03, hostBuf.length]), hostBuf, portBuf]));
+            } else if (step === 'connect') {
+              if (data[0] !== 0x05 || data[1] !== 0x00) { try { socket.destroy(); } catch {} markProxyFailed(proxy.str); finish({ success: false, proxyStr: proxy.str }); return; }
+              step = 'connected';
+              if (useTls) {
+                const tlsSocket = tls.connect({ socket, servername: target.hostname, rejectUnauthorized: false }, () => { doRequest(tlsSocket); });
+                tlsSocket.on('error', () => { markProxyFailed(proxy.str); finish({ success: false, proxyStr: proxy.str }); });
+              } else {
+                doRequest(socket);
+              }
+            }
+          });
+
+          function decodeChunked(buf) {
+            // Decode HTTP chunked transfer encoding from raw buffer
+            const parts = [];
+            let pos = 0;
+            const str = buf.toString('latin1');
+            while (pos < str.length) {
+              const lineEnd = str.indexOf('\r\n', pos);
+              if (lineEnd === -1) break;
+              const chunkSize = parseInt(str.substring(pos, lineEnd), 16);
+              if (isNaN(chunkSize) || chunkSize === 0) break;
+              const dataStart = lineEnd + 2;
+              const dataEnd = dataStart + chunkSize;
+              if (dataEnd > buf.length) break;
+              parts.push(buf.slice(dataStart, dataEnd));
+              pos = dataEnd + 2; // skip trailing \r\n
+            }
+            return Buffer.concat(parts);
+          }
+
+          function doRequest(sock) {
+            const path = target.pathname + target.search;
+            let reqStr = `GET ${path} HTTP/1.1\r\nHost: ${target.hostname}\r\nConnection: close\r\n`;
+            for (const [k, v] of Object.entries(customHeaders)) reqStr += `${k}: ${v}\r\n`;
+            reqStr += '\r\n';
+            sock.write(reqStr);
+            const chunks = [];
+            sock.on('data', c => chunks.push(c));
+            sock.on('end', () => {
+              if (done) return;
+              try {
+                const raw = Buffer.concat(chunks);
+                const rawStr = raw.toString('latin1');
+                const headerEnd = rawStr.indexOf('\r\n\r\n');
+                if (headerEnd === -1) { finish({ success: false, error: 'no header boundary', proxyStr: proxy.str }); return; }
+                const headerPart = rawStr.substring(0, headerEnd).toLowerCase();
+                const statusLine = rawStr.substring(0, rawStr.indexOf('\r\n'));
+                const statusMatch = statusLine.match(/HTTP\/[\d.]+ (\d+)/i);
+                const status = statusMatch ? parseInt(statusMatch[1]) : 502;
+                const bodyOffset = Buffer.byteLength(rawStr.substring(0, headerEnd + 4), 'latin1');
+                let bodyBuf = raw.slice(bodyOffset);
+                // Handle chunked transfer encoding
+                if (headerPart.includes('transfer-encoding: chunked')) {
+                  bodyBuf = decodeChunked(bodyBuf);
+                }
+                const body = bodyBuf.toString('utf-8');
+                if (status >= 200 && status < 400) {
+                  finish({ success: true, status, body, proxy: proxy.str });
+                } else {
+                  markProxyFailed(proxy.str);
+                  finish({ success: false, status, error: `HTTP ${status}`, proxyStr: proxy.str });
+                }
+              } catch (e) {
+                finish({ success: false, error: 'parse error: ' + e.message, proxyStr: proxy.str });
+              }
+            });
+          }
+        } catch (e) {
+          finish({ success: false, error: 'exception: ' + e.message, proxyStr: proxy.str });
+        }
+      });
+    }
+
+    function localSocks5Fetch(targetUrl, referer) {
+      const target = new URL(targetUrl);
+      const targetPort = target.protocol === 'https:' ? 443 : 80;
+      const useTls = target.protocol === 'https:';
+
+      const customHeaders = {
+        'User-Agent': UA,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+      };
+      if (referer) {
+        customHeaders['Referer'] = referer;
+        try { customHeaders['Origin'] = new URL(referer).origin; } catch {}
+      }
+
+      // Grab N unique proxies from the pool
+      const proxies = [];
+      const seen = new Set();
+      for (let i = 0; i < PARALLEL_PROXY_COUNT * 3 && proxies.length < PARALLEL_PROXY_COUNT; i++) {
+        const p = getNextProxy();
+        if (!seen.has(p.str)) { seen.add(p.str); proxies.push(p); }
+      }
+
+      console.log(`[VidSrc-Extract] Racing ${proxies.length} SOCKS5 proxies for ${target.hostname}${target.pathname.substring(0, 40)}`);
+
+      // Launch all in parallel, use Promise.allSettled-style manual tracking
+      return new Promise((resolve) => {
+        let resolved = false;
+        let failCount = 0;
+
+        const safeResolve = (result) => {
+          if (!resolved) { resolved = true; resolve(result); }
+        };
+
+        for (const proxy of proxies) {
+          singleSocks5Attempt(target, targetPort, useTls, customHeaders, proxy)
+            .then((result) => {
+              if (resolved) return;
+              if (result.success) {
+                console.log(`[VidSrc-Extract] ✓ SOCKS5 winner: ${result.proxy} for ${target.hostname}`);
+                safeResolve(result);
+              } else {
+                failCount++;
+                if (failCount >= proxies.length) {
+                  console.log(`[VidSrc-Extract] ✗ All ${proxies.length} SOCKS5 proxies failed for ${target.hostname}`);
+                  safeResolve({ success: false, error: `All ${proxies.length} parallel proxies failed` });
+                }
+              }
+            })
+            .catch(() => {
+              failCount++;
+              if (failCount >= proxies.length && !resolved) {
+                safeResolve({ success: false, error: 'All proxies threw errors' });
+              }
+            });
+        }
+
+        // Safety net
+        setTimeout(() => safeResolve({ success: false, error: 'Parallel SOCKS5 race timeout' }), SOCKS5_ATTEMPT_TIMEOUT + 2000);
+      });
+    }
+
+    // Helper: fetch via RPI residential IP (for embed page — no Turnstile)
+    function localResidentialFetch(targetUrl, referer) {
+      return new Promise((resolve) => {
+        const u = new URL(targetUrl);
+        const headers = {
+          'User-Agent': UA,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+        };
+        if (referer) headers['Referer'] = referer;
+
+        const proxyReq = https.request({
+          hostname: u.hostname,
+          port: u.port || 443,
+          path: u.pathname + u.search,
+          method: 'GET',
+          headers,
+          family: 4,
+          timeout: 8000,
+          rejectUnauthorized: false,
+        }, (proxyRes) => {
+          const chunks = [];
+          proxyRes.on('data', c => chunks.push(c));
+          proxyRes.on('end', () => {
+            const body = Buffer.concat(chunks).toString('utf-8');
+            resolve({ success: proxyRes.statusCode >= 200 && proxyRes.statusCode < 400, status: proxyRes.statusCode, body });
+          });
+        });
+        proxyReq.on('error', (err) => resolve({ success: false, error: err.message }));
+        proxyReq.on('timeout', () => { proxyReq.destroy(); resolve({ success: false, error: 'timeout' }); });
+        proxyReq.end();
+      });
+    }
+
+    let lastError = 'All embed domains failed';
+
+    for (const embedDomain of embedDomains) {
+      try {
+        // Step 1: Fetch embed page via residential IP (fast, no Turnstile)
+        const embedPath = type === 'tv' && season && episode
+          ? `/embed/tv/${tmdbId}/${season}/${episode}`
+          : `/embed/movie/${tmdbId}`;
+        const embedUrl = `https://${embedDomain}${embedPath}`;
+        console.log(`[VidSrc-Extract] Step 1: ${embedUrl}`);
+
+        const embedResp = await localResidentialFetch(embedUrl);
+        if (!embedResp.success) {
+          console.log(`[VidSrc-Extract] Embed failed from ${embedDomain}: ${embedResp.status || embedResp.error}`);
+          lastError = `Embed ${embedDomain}: ${embedResp.error || embedResp.status}`;
+          continue;
+        }
+
+        // Step 2: Extract RCP iframe
+        const iframePatterns = [
+          /<iframe[^>]*src=["']([^"']*\/rcp\/([^"']+))["']/i,
+          /src=["']((?:https?:)?\/\/[^"']+\/rcp\/([^"']+))["']/i,
+        ];
+        let rcpHash = null, rcpDomain = 'cloudnestra.com';
+        for (const pat of iframePatterns) {
+          const m = embedResp.body.match(pat);
+          if (m) {
+            rcpHash = m[2];
+            const full = m[1].startsWith('//') ? 'https:' + m[1] : m[1];
+            try { rcpDomain = new URL(full).hostname; } catch {}
+            break;
+          }
+        }
+        if (!rcpHash) {
+          console.log(`[VidSrc-Extract] No RCP iframe in ${embedDomain}`);
+          lastError = `No RCP iframe in ${embedDomain}`;
+          continue;
+        }
+        console.log(`[VidSrc-Extract] Step 2: RCP on ${rcpDomain} (hash: ${rcpHash.substring(0, 30)}...)`);
+
+        // Step 3: Fetch RCP page via SOCKS5 (cloudnestra has Turnstile)
+        const rcpUrl = `https://${rcpDomain}/rcp/${rcpHash}`;
+        const rcpResp = await localSocks5Fetch(rcpUrl, `https://${embedDomain}/`);
+        if (!rcpResp.success) {
+          console.log(`[VidSrc-Extract] RCP failed: ${rcpResp.error}`);
+          lastError = `RCP: ${rcpResp.error}`;
+          continue;
+        }
+        if (rcpResp.body.includes('cf-turnstile') || rcpResp.body.includes('challenges.cloudflare.com')) {
+          console.log(`[VidSrc-Extract] Turnstile on RCP even via SOCKS5`);
+          lastError = 'Turnstile on RCP';
+          continue;
+        }
+
+        // Step 4: Extract prorcp/srcrcp path
+        const rcpPatterns = [
+          { regex: /src:\s*['"]\/prorcp\/([^'"]+)['"]/i, t: 'prorcp' },
+          { regex: /src:\s*['"]\/srcrcp\/([^'"]+)['"]/i, t: 'srcrcp' },
+          { regex: /['"]\/prorcp\/([A-Za-z0-9+\/=\-_]+)['"]/i, t: 'prorcp' },
+          { regex: /['"]\/srcrcp\/([A-Za-z0-9+\/=\-_]+)['"]/i, t: 'srcrcp' },
+          { regex: /prorcp\/([A-Za-z0-9+\/=\-_]+)/i, t: 'prorcp' },
+          { regex: /srcrcp\/([A-Za-z0-9+\/=\-_]+)/i, t: 'srcrcp' },
+        ];
+        let endpointPath = null, endpointType = 'prorcp';
+        for (const { regex, t } of rcpPatterns) {
+          const m = rcpResp.body.match(regex);
+          if (m) { endpointPath = m[1]; endpointType = t; break; }
+        }
+        if (!endpointPath) {
+          console.log(`[VidSrc-Extract] No prorcp/srcrcp in RCP page`);
+          lastError = 'No prorcp in RCP';
+          continue;
+        }
+        console.log(`[VidSrc-Extract] Step 3: ${endpointType}`);
+
+        // Step 5: Fetch prorcp page via SOCKS5 (same cloudnestra domain)
+        const prorcpUrl = `https://${rcpDomain}/${endpointType}/${endpointPath}`;
+        const prorcpResp = await localSocks5Fetch(prorcpUrl, `https://${rcpDomain}/`);
+        if (!prorcpResp.success) {
+          console.log(`[VidSrc-Extract] Prorcp failed: ${prorcpResp.error}`);
+          lastError = `Prorcp: ${prorcpResp.error}`;
+          continue;
+        }
+
+        // Step 6: Extract m3u8 URL
+        const filePatterns = [
+          /file:\s*["']([^"']+)["']/,
+          /file\s*=\s*["']([^"']+)["']/,
+          /"file"\s*:\s*"([^"]+)"/,
+          /sources\s*:\s*\[\s*\{\s*file\s*:\s*["']([^"']+)["']/,
+          /src\s*:\s*["']([^"']+\.m3u8[^"']*)["']/,
+        ];
+        let fileUrl = null;
+        for (const pat of filePatterns) {
+          const m = prorcpResp.body.match(pat);
+          if (m?.[1]) { fileUrl = m[1]; break; }
+        }
+        if (!fileUrl) {
+          const m3u8Match = prorcpResp.body.match(/https?:\/\/[^"'\s]+\.m3u8[^"'\s]*/);
+          if (m3u8Match) fileUrl = m3u8Match[0];
+        }
+        if (!fileUrl) {
+          console.log(`[VidSrc-Extract] No file URL in prorcp`);
+          lastError = 'No file URL in prorcp';
+          continue;
+        }
+
+        // Resolve URL alternatives (some have {v1}/{v2} placeholders)
+        const alts = fileUrl.split(' or ');
+        let resolvedUrl = null;
+        for (const alt of alts) {
+          if (alt.includes('{v')) {
+            for (const domain of cdnDomains) {
+              const resolved = alt.replace(/\{v\d+\}/g, domain);
+              if (resolved.includes('.m3u8')) { resolvedUrl = resolved; break; }
+            }
+            if (resolvedUrl) break;
+          } else if (alt.includes('.m3u8')) {
+            resolvedUrl = alt;
+            break;
+          }
+        }
+
+        if (!resolvedUrl) {
+          console.log(`[VidSrc-Extract] No valid m3u8 resolved from file URL`);
+          lastError = 'No valid m3u8 resolved';
+          continue;
+        }
+
+        const elapsed = Date.now() - startTime;
+        console.log(`[VidSrc-Extract] ✅ Success in ${elapsed}ms via ${embedDomain}`);
+
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        return res.end(JSON.stringify({
+          success: true,
+          m3u8_url: resolvedUrl,
+          source: `rpi-vidsrc-${embedDomain}`,
+          duration_ms: elapsed,
+          embed_domain: embedDomain,
+          rcp_domain: rcpDomain,
+        }));
+      } catch (e) {
+        console.log(`[VidSrc-Extract] Error with ${embedDomain}: ${e.message}`);
+        lastError = e.message;
+      }
+    }
+
+    const elapsed = Date.now() - startTime;
+    console.log(`[VidSrc-Extract] ❌ All domains failed in ${elapsed}ms`);
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+    return res.end(JSON.stringify({
+      success: false,
+      error: lastError,
+      duration_ms: elapsed,
+    }));
   }
 
   // DLHD Key V4 endpoint - simple passthrough with pre-computed auth headers
@@ -4131,10 +4516,20 @@ server.listen(PORT, () => {
 ╚═══════════════════════════════════════════════════════════╝
   `);
   
-  // Start SOCKS5 proxy pool manager
-  console.log(`[ProxyPool] Starting initial pool refresh...`);
+  // Seed pool immediately with fallback proxies so we're usable right away
+  PROXY_POOL.validated = FALLBACK_SOCKS5_PROXIES.map(p => ({
+    host: p.split(':')[0],
+    port: parseInt(p.split(':')[1]),
+    str: p,
+    lastValidated: Date.now(),
+    failures: 0,
+  }));
+  console.log(`[ProxyPool] Seeded ${PROXY_POOL.validated.length} fallback proxies immediately`);
+  
+  // Start full SOCKS5 proxy pool validation in background (replaces fallbacks with bigger pool)
+  console.log(`[ProxyPool] Starting background pool refresh...`);
   refreshProxyPool().then(() => {
-    console.log(`[ProxyPool] Initial refresh complete: ${PROXY_POOL.validated.length} proxies`);
+    console.log(`[ProxyPool] Background refresh complete: ${PROXY_POOL.validated.length} proxies`);
   });
   
   // Schedule periodic refresh every 10 minutes

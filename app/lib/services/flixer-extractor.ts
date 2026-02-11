@@ -43,9 +43,8 @@ interface FlixerApiResponse {
 const FLIXER_BASE_URL = 'https://flixer.sh';
 const SUBTITLE_API = 'https://sub.wyzie.ru';
 
-// DISABLED - Flixer is currently down (February 2026)
-// Re-enable when Flixer comes back online and CF Worker is updated with new WASM
-export const FLIXER_ENABLED = false;
+// Flixer is back online (February 2026) — PRIMARY provider for movies and TV
+export const FLIXER_ENABLED = true;
 
 const SERVER_NAMES: Record<string, string> = {
   alpha: 'Ares',
