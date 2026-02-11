@@ -342,12 +342,24 @@ const PROXY_ALLOWED_DOMAINS = [
   'dlhd.link',
   'hitsplay.fun', // JWT source for DLHD streams
   'codepcplay.fun', // Fast JWT source for DLHD streams (V5 auth primary)
-  // AnimeKai/MegaUp
+  // AnimeKai/MegaUp (domains rotate frequently)
   'megaup.net',
+  'megaup.live',
+  'megaup.cc',
+  '4spromax.site',
+  'hub26link.site',
+  'dev23app.site',
+  'net22lab.site',
+  'pro25zone.site',
+  'tech20hub.site',
+  'code29wave.site',
+  'app28base.site',
   'animekai.to',
+  'anikai.to',
   'enc-dec.app',
   // HiAnime/MegaCloud CDN (hostnames rotate: haildrop77.pro, fogtwist21.xyz, rainveil36.xyz, etc.)
   'hianime.to',
+  'hianimez.to',
   'hianime.nz',
   'hianime.sx',
   'megacloud.blog',
@@ -1102,6 +1114,74 @@ function proxyAnimeKaiStream(targetUrl, customUserAgent, customReferer, customOr
   // NO CACHING - always fetch fresh
 
   const url = new URL(targetUrl);
+  
+  // Check if this is MegaCloud CDN (uses /_v7/ or /_v8/ paths)
+  // These CDNs use Cloudflare TLS fingerprinting — Node's https module gets 403.
+  // Use fetch() (undici) instead, which has a different TLS stack that passes.
+  const isMegaCloudCdn = url.pathname.startsWith('/_v');
+  
+  if (isMegaCloudCdn) {
+    // Use fetch() for MegaCloud CDN — avoids TLS fingerprint blocking
+    const fetchUA = customUserAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
+    console.log(`[AnimeKai] MegaCloud CDN detected — using fetch() for TLS bypass: ${targetUrl.substring(0, 100)}...`);
+    
+    fetch(targetUrl, {
+      headers: {
+        'User-Agent': fetchUA,
+        'Accept': '*/*',
+      },
+      signal: AbortSignal.timeout(30000),
+    }).then(async (fetchRes) => {
+      console.log(`[AnimeKai fetch] Status: ${fetchRes.status}, Content-Type: ${fetchRes.headers.get('content-type')}`);
+      
+      if (!fetchRes.ok) {
+        const errText = await fetchRes.text();
+        console.log(`[AnimeKai fetch] Error body: ${errText.substring(0, 200)}`);
+        res.writeHead(fetchRes.status, {
+          'Content-Type': fetchRes.headers.get('content-type') || 'text/plain',
+          'Access-Control-Allow-Origin': '*',
+        });
+        res.end(errText);
+        return;
+      }
+      
+      const contentType = fetchRes.headers.get('content-type') || 'application/octet-stream';
+      const responseHeaders = {
+        'Content-Type': contentType,
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Expose-Headers': 'Content-Length, Content-Range',
+        'X-Proxied-By': 'rpi-residential-fetch',
+      };
+      
+      if (fetchRes.headers.get('content-length')) {
+        responseHeaders['Content-Length'] = fetchRes.headers.get('content-length');
+      }
+      
+      res.writeHead(200, responseHeaders);
+      
+      // Stream the response body
+      const reader = fetchRes.body.getReader();
+      const pump = async () => {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) { res.end(); return; }
+          res.write(Buffer.from(value));
+        }
+      };
+      pump().catch(err => {
+        console.error(`[AnimeKai fetch stream] Error: ${err.message}`);
+        if (!res.writableEnded) res.end();
+      });
+    }).catch(err => {
+      console.error(`[AnimeKai fetch] Error: ${err.message}`);
+      if (!res.headersSent) {
+        res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ error: 'MegaCloud CDN fetch error', details: err.message }));
+      }
+    });
+    return;
+  }
+
   const client = url.protocol === 'https:' ? https : http;
   
   // Check if this is Flixer CDN (p.XXXXX.workers.dev)
@@ -3134,7 +3214,9 @@ async function decryptMegaUpViaAPI(encryptedBase64) {
 // Fetches from AnimeKai, decrypts, fetches MegaUp, decrypts, returns stream
 // ============================================================================
 
-const KAI_AJAX = 'https://animekai.to/ajax';
+const KAI_DOMAINS = ['https://animekai.to', 'https://anikai.to'];
+let KAI_BASE = KAI_DOMAINS[0];
+function getKaiAjax() { return `${KAI_BASE}/ajax`; }
 const KAI_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
   'Accept': '*/*',
@@ -3144,6 +3226,24 @@ const KAI_HEADERS = {
  * Fetch JSON from AnimeKai
  */
 async function fetchAnimeKaiJson(url) {
+  const result = await _fetchAnimeKaiJson(url);
+  if (result.status === 0 || result.error) {
+    // Try fallback domain
+    if (url.includes(KAI_DOMAINS[0]) && KAI_DOMAINS.length > 1) {
+      const fallbackUrl = url.replace(KAI_DOMAINS[0], KAI_DOMAINS[1]);
+      console.log(`[AnimeKai] Primary domain failed, trying fallback: ${KAI_DOMAINS[1]}`);
+      const fallbackResult = await _fetchAnimeKaiJson(fallbackUrl);
+      if (fallbackResult.data) {
+        KAI_BASE = KAI_DOMAINS[1];
+        console.log(`[AnimeKai] Switched to fallback domain: ${KAI_BASE}`);
+        return fallbackResult;
+      }
+    }
+  }
+  return result;
+}
+
+async function _fetchAnimeKaiJson(url) {
   return new Promise((resolve) => {
     const urlObj = new URL(url);
     https.get({
@@ -3179,7 +3279,7 @@ async function fullAnimeKaiExtraction(kaiId, episodeNum, res) {
   try {
     // Step 1: Encrypt kai_id and fetch episodes
     const encKaiId = encryptAnimeKai(kaiId);
-    const episodesUrl = `${KAI_AJAX}/episodes/list?ani_id=${kaiId}&_=${encKaiId}`;
+    const episodesUrl = `${getKaiAjax()}/episodes/list?ani_id=${kaiId}&_=${encKaiId}`;
     console.log(`[AnimeKai Full] Fetching episodes...`);
     
     const episodesResult = await fetchAnimeKaiJson(episodesUrl);
@@ -3211,7 +3311,7 @@ async function fullAnimeKaiExtraction(kaiId, episodeNum, res) {
     
     // Step 3: Encrypt token and fetch servers
     const encToken = encryptAnimeKai(episodeToken);
-    const serversUrl = `${KAI_AJAX}/links/list?token=${episodeToken}&_=${encToken}`;
+    const serversUrl = `${getKaiAjax()}/links/list?token=${episodeToken}&_=${encToken}`;
     console.log(`[AnimeKai Full] Fetching servers...`);
     
     const serversResult = await fetchAnimeKaiJson(serversUrl);
@@ -3236,7 +3336,7 @@ async function fullAnimeKaiExtraction(kaiId, episodeNum, res) {
     
     // Step 5: Encrypt lid and fetch embed
     const encLid = encryptAnimeKai(lid);
-    const embedUrl = `${KAI_AJAX}/links/view?id=${lid}&_=${encLid}`;
+    const embedUrl = `${getKaiAjax()}/links/view?id=${lid}&_=${encLid}`;
     console.log(`[AnimeKai Full] Fetching embed...`);
     
     const embedResult = await fetchAnimeKaiJson(embedUrl);

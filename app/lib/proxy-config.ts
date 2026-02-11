@@ -270,11 +270,13 @@ export function isMegaUpCdnUrl(url: string): boolean {
   const animeKaiCdnDomains = [
     'hub26link.site',
     'dev23app.site',
-    'net22lab.site',   // This was causing 403s!
+    'net22lab.site',
     'pro25zone.site',
     'tech20hub.site',
     'code29wave.site',
     'app28base.site',
+    '4spromax.site',
+    'megaup.live',
   ];
   
   for (const domain of animeKaiCdnDomains) {
@@ -327,6 +329,7 @@ export function is1moviesCdnUrl(url: string): boolean {
 export function isAnimeKaiSource(source: { title?: string; referer?: string }): boolean {
   if (source.title?.toLowerCase().includes('animekai')) return true;
   if (source.referer?.includes('animekai.to')) return true;
+  if (source.referer?.includes('anikai.to')) return true;
   return false;
 }
 

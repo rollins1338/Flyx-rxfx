@@ -132,7 +132,7 @@ function decryptSrc2(src, clientKey, megacloudKey) {
 
 async function getMegaCloudClientKey(sourceId) {
   const res = await fetch(`https://megacloud.blog/embed-2/v3/e-1/${sourceId}`, {
-    headers: { 'User-Agent': UA, 'Referer': 'https://hianime.to/' },
+    headers: { 'User-Agent': UA, 'Referer': `https://${HIANIME_DOMAIN}/` },
   });
   const text = await res.text();
 
@@ -181,16 +181,30 @@ async function getMegaCloudClientKey(sourceId) {
 // ============================================================================
 
 async function getMegaCloudKey() {
-  const res = await fetch('https://raw.githubusercontent.com/yogesh-hacker/MegacloudKeys/refs/heads/main/keys.json');
-  const keys = await res.json();
-  return keys.mega;
+  const urls = [
+    'https://raw.githubusercontent.com/yogesh-hacker/MegacloudKeys/refs/heads/main/keys.json',
+    'https://raw.githubusercontent.com/CattoFish/MegacloudKeys/refs/heads/main/keys.json',
+    'https://raw.githubusercontent.com/ghoshRitesh12/aniwatch/refs/heads/main/src/extractors/megacloud-keys.json',
+  ];
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) continue;
+      const keys = await res.json();
+      const key = keys.mega || keys.key || Object.values(keys)[0];
+      if (key && typeof key === 'string' && key.length > 0) return key;
+    } catch (e) {
+      console.log(`  Key source failed: ${url} — ${e.message}`);
+    }
+  }
+  throw new Error('Failed to fetch MegaCloud key from all sources');
 }
 
 // ============================================================================
 // HIANIME API (pure fetch, regex HTML parsing)
 // ============================================================================
 
-const HIANIME_DOMAIN = 'hianime.to';
+const HIANIME_DOMAIN = 'hianimez.to';
 
 async function hianimeSearch(query) {
   const res = await fetch(`https://${HIANIME_DOMAIN}/search?keyword=${encodeURIComponent(query)}`, {

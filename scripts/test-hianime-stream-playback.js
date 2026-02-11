@@ -73,7 +73,7 @@ function decryptSrc2(src, clientKey, megacloudKey) {
 
 async function getMegaCloudClientKey(sourceId) {
   const res = await fetch(`https://megacloud.blog/embed-2/v3/e-1/${sourceId}`, {
-    headers: { 'User-Agent': UA, 'Referer': 'https://hianime.to/' },
+    headers: { 'User-Agent': UA, 'Referer': 'https://hianimez.to/' },
   });
   const text = await res.text();
   const regexes = [
@@ -100,7 +100,7 @@ async function main() {
   console.log('=== HIANIME STREAM PLAYBACK TEST ===\n');
   
   const hianimeId = '18718'; // Solo Leveling
-  const domain = 'hianime.to';
+  const domain = 'hianimez.to';
   
   // Step 1: Get episode 1 servers
   console.log('[1] Getting episode list...');

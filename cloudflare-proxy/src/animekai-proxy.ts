@@ -360,7 +360,8 @@ async function fetchDirectFromCF(
                            url.includes('net22lab') ||
                            url.includes('pro25zone') ||
                            url.includes('tech20hub') ||
-                           url.includes('code29wave');
+                           url.includes('code29wave') ||
+                           url.includes('4spromax');
     
     if (isMegaUpDomain) {
       // MegaUp CDN - do NOT send Referer header (they block it)

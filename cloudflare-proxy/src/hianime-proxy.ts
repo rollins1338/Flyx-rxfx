@@ -31,8 +31,13 @@ export interface Env {
 }
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
-const HIANIME_DOMAIN = 'hianime.to';
-const MEGACLOUD_KEYS_URL = 'https://raw.githubusercontent.com/yogesh-hacker/MegacloudKeys/refs/heads/main/keys.json';
+const HIANIME_DOMAIN = 'hianimez.to';
+// Multiple key sources for resilience — try each in order
+const MEGACLOUD_KEYS_URLS = [
+  'https://raw.githubusercontent.com/yogesh-hacker/MegacloudKeys/refs/heads/main/keys.json',
+  'https://raw.githubusercontent.com/CattoFish/MegacloudKeys/refs/heads/main/keys.json',
+  'https://raw.githubusercontent.com/ghoshRitesh12/aniwatch/refs/heads/main/src/extractors/megacloud-keys.json',
+];
 
 // ============================================================================
 // MegaCloud Decryption Engine (pure JS, no dependencies)
@@ -152,9 +157,13 @@ function decryptSrc2(src: string, clientKey: string, megacloudKey: string): stri
 
 async function getMegaCloudClientKey(sourceId: string): Promise<string> {
   const res = await fetch(`https://megacloud.blog/embed-2/v3/e-1/${sourceId}`, {
-    headers: { 'User-Agent': UA, 'Referer': 'https://hianime.to/' },
+    headers: { 'User-Agent': UA, 'Referer': `https://${HIANIME_DOMAIN}/` },
   });
   const text = await res.text();
+
+  if (!res.ok) {
+    throw new Error(`MegaCloud embed page returned HTTP ${res.status} (size: ${text.length})`);
+  }
 
   const regexes = [
     /<meta name="_gg_fb" content="[a-zA-Z0-9]+">/,
@@ -197,43 +206,150 @@ async function getMegaCloudClientKey(sourceId: string): Promise<string> {
 }
 
 async function getMegaCloudKey(): Promise<string> {
-  const res = await fetch(MEGACLOUD_KEYS_URL);
-  const keys = await res.json() as Record<string, string>;
-  return keys.mega;
+  const errors: string[] = [];
+  for (const url of MEGACLOUD_KEYS_URLS) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) {
+        errors.push(`${url}: HTTP ${res.status}`);
+        continue;
+      }
+      const keys = await res.json() as Record<string, string>;
+      const key = keys.mega || keys.key || Object.values(keys)[0];
+      if (key && typeof key === 'string' && key.length > 0) {
+        return key;
+      }
+      errors.push(`${url}: no valid key in response (keys: ${Object.keys(keys).join(',')})`);
+    } catch (e) {
+      errors.push(`${url}: ${(e as Error).message}`);
+    }
+  }
+  throw new Error(`Failed to fetch MegaCloud key from all sources: ${errors.join('; ')}`);
 }
 
 // ============================================================================
-// HiAnime API (pure fetch, regex HTML parsing)
+// RPI Proxy Helper — route requests through residential IP
+// HiAnime blocks CF Worker IPs (Cloudflare challenge), so we route scraping
+// calls through the RPI proxy's /animekai endpoint which has a residential IP.
+// ============================================================================
+
+let _rpiConfig: { baseUrl: string; key: string } | null = null;
+
+function setRpiConfig(env: Env): void {
+  if (env.RPI_PROXY_URL && env.RPI_PROXY_KEY) {
+    let baseUrl = env.RPI_PROXY_URL;
+    if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+      baseUrl = `https://${baseUrl}`;
+    }
+    _rpiConfig = { baseUrl: baseUrl.replace(/\/+$/, ''), key: env.RPI_PROXY_KEY };
+  }
+}
+
+/**
+ * Fetch a URL, routing through RPI proxy if available.
+ * Falls back to direct fetch if RPI is not configured or fails.
+ */
+async function rpiFetch(url: string, headers: Record<string, string> = {}): Promise<Response> {
+  if (_rpiConfig) {
+    try {
+      const rpiParams = new URLSearchParams({
+        url,
+        key: _rpiConfig.key,
+      });
+      const rpiUrl = `${_rpiConfig.baseUrl}/animekai?${rpiParams.toString()}`;
+      console.log(`[rpiFetch] Routing through RPI: ${url.substring(0, 80)} → ${rpiUrl.substring(0, 80)}`);
+      const res = await fetch(rpiUrl, { signal: AbortSignal.timeout(20000) });
+      console.log(`[rpiFetch] RPI response: ${res.status} ${res.headers.get('content-type')}`);
+      if (res.ok) return res;
+      console.log(`[rpiFetch] RPI returned ${res.status}, falling back to direct`);
+    } catch (e) {
+      console.log(`[rpiFetch] RPI error: ${(e as Error).message}, falling back to direct`);
+    }
+  } else {
+    console.log(`[rpiFetch] No RPI config, using direct fetch for: ${url.substring(0, 80)}`);
+  }
+  // Direct fetch fallback
+  return fetch(url, { headers, signal: AbortSignal.timeout(15000) });
+}
+
+// ============================================================================
+// HiAnime API (pure fetch via RPI proxy, regex HTML parsing)
 // ============================================================================
 
 async function hianimeSearch(query: string): Promise<Array<{ id: string; name: string; hianimeId: string | null }>> {
-  const res = await fetch(`https://${HIANIME_DOMAIN}/search?keyword=${encodeURIComponent(query)}`, {
-    headers: { 'User-Agent': UA },
-  });
-  const html = await res.text();
+  // Use AJAX search suggestion endpoint — the /search page requires JS rendering
+  const searchUrl = `https://${HIANIME_DOMAIN}/ajax/search/suggest?keyword=${encodeURIComponent(query)}`;
+  console.log(`[hianimeSearch] Searching: ${searchUrl}`);
+  const res = await rpiFetch(
+    searchUrl,
+    { 'User-Agent': UA, 'X-Requested-With': 'XMLHttpRequest', 'Referer': `https://${HIANIME_DOMAIN}/` },
+  );
   const results: Array<{ id: string; name: string; hianimeId: string | null }> = [];
-  const itemRegex = /<a[^>]*href="\/([^"?]+)"[^>]*class="[^"]*dynamic-name[^"]*"[^>]*data-jname="([^"]*)"[^>]*>([^<]*)<\/a>/g;
-  let match;
-  while ((match = itemRegex.exec(html)) !== null) {
-    const id = match[1];
-    const name = match[3].trim();
-    const numId = id.match(/-(\d+)$/)?.[1] || null;
-    results.push({ id, name, hianimeId: numId });
+
+  try {
+    const json = await res.json() as { status: boolean; html: string };
+    console.log(`[hianimeSearch] JSON status: ${json.status}, html length: ${json.html?.length || 0}`);
+    if (!json.status || !json.html) return results;
+
+    // Parse suggestion results — links like <a href="/solo-leveling-18718">
+    const itemRegex = /<a[^>]*href="\/([^"?]+)"[^>]*class="[^"]*nav-item[^"]*"[^>]*>/g;
+    const nameRegex = /<h3[^>]*class="[^"]*film-name[^"]*"[^>]*>([^<]*)<\/h3>/g;
+    
+    // Extract all links first
+    const links: string[] = [];
+    let linkMatch;
+    while ((linkMatch = itemRegex.exec(json.html)) !== null) {
+      links.push(linkMatch[1]);
+    }
+    
+    // Extract all names
+    const names: string[] = [];
+    let nameMatch;
+    while ((nameMatch = nameRegex.exec(json.html)) !== null) {
+      names.push(nameMatch[1].trim());
+    }
+
+    for (let i = 0; i < links.length; i++) {
+      const id = links[i];
+      const name = names[i] || id;
+      const numId = id.match(/-(\d+)$/)?.[1] || null;
+      results.push({ id, name, hianimeId: numId });
+    }
+  } catch {
+    // Fallback: try parsing as HTML search page
+    const html = typeof res.body === 'string' ? res.body : '';
+    const itemRegex = /<a[^>]*href="\/([^"?]+)"[^>]*class="[^"]*dynamic-name[^"]*"[^>]*data-jname="([^"]*)"[^>]*>([^<]*)<\/a>/g;
+    let match;
+    while ((match = itemRegex.exec(html)) !== null) {
+      const id = match[1];
+      const name = match[3].trim();
+      const numId = id.match(/-(\d+)$/)?.[1] || null;
+      results.push({ id, name, hianimeId: numId });
+    }
   }
   return results;
 }
 
 async function getHiAnimeMalId(animeSlug: string): Promise<number | null> {
-  const res = await fetch(`https://${HIANIME_DOMAIN}/${animeSlug}`, {
-    headers: { 'User-Agent': UA },
-  });
+  const res = await rpiFetch(
+    `https://${HIANIME_DOMAIN}/${animeSlug}`,
+    { 'User-Agent': UA },
+  );
   const html = await res.text();
-  const syncMatch = html.match(/<div[^>]*id="syncData"[^>]*>([^<]*)<\/div>/);
-  if (!syncMatch) return null;
+  console.log(`[getHiAnimeMalId] ${animeSlug}: status=${res.status}, size=${html.length}, hasSyncData=${html.includes('syncData')}`);
+  // Try both <script> (current) and <div> (legacy) patterns for syncData
+  const syncMatch = html.match(/<script[^>]*id="syncData"[^>]*>([\s\S]*?)<\/script>/) ||
+                    html.match(/<div[^>]*id="syncData"[^>]*>([^<]*)<\/div>/);
+  if (!syncMatch) {
+    console.log(`[getHiAnimeMalId] ${animeSlug}: No syncData found`);
+    return null;
+  }
   try {
     const syncData = JSON.parse(syncMatch[1]);
+    console.log(`[getHiAnimeMalId] ${animeSlug}: mal_id=${syncData.mal_id}`);
     return syncData.mal_id ? parseInt(syncData.mal_id) : null;
-  } catch {
+  } catch (e) {
+    console.log(`[getHiAnimeMalId] ${animeSlug}: JSON parse error: ${(e as Error).message}`);
     return null;
   }
 }
@@ -242,9 +358,10 @@ interface HiAnimeEpisode { number: number; dataId: string; href: string; }
 interface HiAnimeServer { dataId: string; type: 'sub' | 'dub' | 'raw'; serverId: string; }
 
 async function getEpisodeList(animeId: string): Promise<HiAnimeEpisode[]> {
-  const res = await fetch(`https://${HIANIME_DOMAIN}/ajax/v2/episode/list/${animeId}`, {
-    headers: { 'User-Agent': UA, 'X-Requested-With': 'XMLHttpRequest', 'Referer': `https://${HIANIME_DOMAIN}/` },
-  });
+  const res = await rpiFetch(
+    `https://${HIANIME_DOMAIN}/ajax/v2/episode/list/${animeId}`,
+    { 'User-Agent': UA, 'X-Requested-With': 'XMLHttpRequest', 'Referer': `https://${HIANIME_DOMAIN}/` },
+  );
   const json = await res.json() as { html: string };
   const episodes: HiAnimeEpisode[] = [];
   const epRegex = /<a[^>]*data-number="(\d+)"[^>]*data-id="(\d+)"[^>]*href="([^"]*)"[^>]*>/g;
@@ -256,9 +373,10 @@ async function getEpisodeList(animeId: string): Promise<HiAnimeEpisode[]> {
 }
 
 async function getServers(episodeId: string): Promise<HiAnimeServer[]> {
-  const res = await fetch(`https://${HIANIME_DOMAIN}/ajax/v2/episode/servers?episodeId=${episodeId}`, {
-    headers: { 'User-Agent': UA, 'X-Requested-With': 'XMLHttpRequest', 'Referer': `https://${HIANIME_DOMAIN}/` },
-  });
+  const res = await rpiFetch(
+    `https://${HIANIME_DOMAIN}/ajax/v2/episode/servers?episodeId=${episodeId}`,
+    { 'User-Agent': UA, 'X-Requested-With': 'XMLHttpRequest', 'Referer': `https://${HIANIME_DOMAIN}/` },
+  );
   const json = await res.json() as { html: string };
   const servers: HiAnimeServer[] = [];
   // Attributes span multiple lines — use [\s\S] to match across newlines
@@ -275,9 +393,10 @@ async function getServers(episodeId: string): Promise<HiAnimeServer[]> {
 }
 
 async function getSourceLink(serverId: string): Promise<string | null> {
-  const res = await fetch(`https://${HIANIME_DOMAIN}/ajax/v2/episode/sources?id=${serverId}`, {
-    headers: { 'User-Agent': UA, 'X-Requested-With': 'XMLHttpRequest', 'Referer': `https://${HIANIME_DOMAIN}/` },
-  });
+  const res = await rpiFetch(
+    `https://${HIANIME_DOMAIN}/ajax/v2/episode/sources?id=${serverId}`,
+    { 'User-Agent': UA, 'X-Requested-With': 'XMLHttpRequest', 'Referer': `https://${HIANIME_DOMAIN}/` },
+  );
   const json = await res.json() as { link?: string };
   return json.link || null;
 }
@@ -344,10 +463,28 @@ async function findHiAnimeByMalId(
   malId: number,
   title: string,
 ): Promise<{ hianimeId: string; slug: string } | null> {
-  const results = await hianimeSearch(title);
+  // Try original title first
+  let results = await hianimeSearch(title);
+  console.log(`[findHiAnimeByMalId] Search "${title}" returned ${results.length} results`);
+  
+  // If no results, try with common title variations
+  if (results.length === 0) {
+    const cleanTitle = title
+      .replace(/\s*\(TV\)\s*/gi, '')
+      .replace(/\s*Season\s*\d+\s*/gi, '')
+      .replace(/\s*\d+(?:st|nd|rd|th)\s+Season\s*/gi, '')
+      .trim();
+    if (cleanTitle !== title) {
+      results = await hianimeSearch(cleanTitle);
+      console.log(`[findHiAnimeByMalId] Clean search "${cleanTitle}" returned ${results.length} results`);
+    }
+  }
+
   // Check each result's syncData for MAL ID match
-  for (const result of results.slice(0, 5)) {
+  for (const result of results.slice(0, 8)) {
+    console.log(`[findHiAnimeByMalId] Checking ${result.id} (hianimeId: ${result.hianimeId})...`);
     const malIdFromPage = await getHiAnimeMalId(result.id);
+    console.log(`[findHiAnimeByMalId] ${result.id} → MAL ID: ${malIdFromPage} (looking for ${malId})`);
     if (malIdFromPage === malId) {
       return { hianimeId: result.hianimeId!, slug: result.id };
     }
@@ -425,6 +562,9 @@ export async function handleHiAnimeRequest(request: Request, env: Env): Promise<
   const logLevel = (env.LOG_LEVEL || 'info') as LogLevel;
   const logger = createLogger(request, logLevel);
 
+  // Initialize RPI proxy config for this request
+  setRpiConfig(env);
+
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders() });
   }
@@ -439,8 +579,33 @@ export async function handleHiAnimeRequest(request: Request, env: Env): Promise<
         configured: hasRpi,
         url: env.RPI_PROXY_URL ? env.RPI_PROXY_URL.substring(0, 30) + '...' : 'not set',
       },
+      rpiConfigSet: !!_rpiConfig,
       timestamp: new Date().toISOString(),
     }, 200);
+  }
+
+  // Debug endpoint — test rpiFetch directly
+  if (path === '/hianime/debug') {
+    setRpiConfig(env);
+    const testUrl = `https://${HIANIME_DOMAIN}/ajax/search/suggest?keyword=Solo+Leveling`;
+    try {
+      const res = await rpiFetch(testUrl, { 'User-Agent': UA });
+      const text = await res.text();
+      let parsed: unknown = null;
+      try { parsed = JSON.parse(text); } catch { /* not json */ }
+      return jsonResponse({
+        rpiConfigSet: !!_rpiConfig,
+        fetchStatus: res.status,
+        contentType: res.headers.get('content-type'),
+        size: text.length,
+        isJson: parsed !== null,
+        hasHtml: typeof (parsed as { html?: string })?.html === 'string',
+        htmlLength: (parsed as { html?: string })?.html?.length || 0,
+        first200: text.substring(0, 200),
+      }, 200);
+    } catch (e) {
+      return jsonResponse({ error: (e as Error).message, rpiConfigSet: !!_rpiConfig }, 500);
+    }
   }
 
   // ── EXTRACT endpoint ──────────────────────────────────────────────
@@ -461,37 +626,76 @@ export async function handleHiAnimeRequest(request: Request, env: Env): Promise<
 
     try {
       // Step 1: Find anime
+      logger.info('Step 1: Searching HiAnime', { malId, title });
       const anime = await findHiAnimeByMalId(parseInt(malId), title);
       if (!anime) {
-        return jsonResponse({ success: false, error: 'Anime not found on HiAnime' }, 404);
+        // Debug: also return search results for troubleshooting
+        const debugResults = await hianimeSearch(title);
+        return jsonResponse({ 
+          success: false, 
+          error: `Anime not found on HiAnime (searched: "${title}", malId: ${malId})`,
+          debug: {
+            searchResults: debugResults.map(r => ({ id: r.id, name: r.name, hianimeId: r.hianimeId })),
+            rpiConfigured: !!_rpiConfig,
+          },
+        }, 404);
       }
       logger.info('Found anime', { hianimeId: anime.hianimeId, slug: anime.slug });
 
       // Step 2: Get episodes
+      logger.info('Step 2: Getting episode list', { hianimeId: anime.hianimeId });
       const episodes = await getEpisodeList(anime.hianimeId);
       const targetEp = episode ? parseInt(episode) : 1;
       const ep = episodes.find(e => e.number === targetEp);
       if (!ep) {
         return jsonResponse({
           success: false,
-          error: `Episode ${targetEp} not found (${episodes.length} available)`,
+          error: `Episode ${targetEp} not found (${episodes.length} episodes available)`,
         }, 404);
       }
+      logger.info('Found episode', { targetEp, dataId: ep.dataId, totalEpisodes: episodes.length });
 
       // Step 3: Get servers
+      logger.info('Step 3: Getting servers', { episodeDataId: ep.dataId });
       const servers = await getServers(ep.dataId);
+      logger.info('Found servers', { 
+        count: servers.length, 
+        types: servers.map(s => `${s.type}:srv${s.serverId}`).join(', ') 
+      });
+      
       const subServer = servers.find(s => s.type === 'sub' && s.serverId === '4')
         || servers.find(s => s.type === 'sub');
       const dubServer = servers.find(s => s.type === 'dub' && s.serverId === '4')
         || servers.find(s => s.type === 'dub');
 
+      if (!subServer && !dubServer) {
+        return jsonResponse({
+          success: false,
+          error: `No sub or dub servers found (${servers.length} servers: ${servers.map(s => `${s.type}:srv${s.serverId}`).join(', ')})`,
+        }, 404);
+      }
+
       // Step 4: Extract streams (sub + dub in parallel)
+      logger.info('Step 4: Extracting streams', { 
+        sub: subServer ? `srv${subServer.serverId}` : 'none',
+        dub: dubServer ? `srv${dubServer.serverId}` : 'none',
+      });
       const extractStream = async (server: HiAnimeServer | undefined, label: string) => {
         if (!server) return null;
-        const link = await getSourceLink(server.dataId);
-        if (!link) return null;
-        const result = await extractMegaCloudStream(link);
-        return { label, ...result };
+        try {
+          const link = await getSourceLink(server.dataId);
+          if (!link) {
+            logger.warn(`No source link for ${label} server`, { dataId: server.dataId });
+            return null;
+          }
+          logger.info(`Extracting ${label} stream from MegaCloud`, { embedUrl: link.substring(0, 80) });
+          const result = await extractMegaCloudStream(link);
+          logger.info(`${label} extraction success`, { sources: result.sources.length, subtitles: result.subtitles.length });
+          return { label, ...result };
+        } catch (e) {
+          logger.error(`${label} extraction failed`, e as Error);
+          return null;
+        }
       };
 
       const [subResult, dubResult] = await Promise.all([
@@ -559,9 +763,10 @@ export async function handleHiAnimeRequest(request: Request, env: Env): Promise<
   }
 
   // ── STREAM proxy endpoint ─────────────────────────────────────────
-  // MegaCloud CDN blocks datacenter IPs (403 Cloudflare challenge).
-  // Route ALL stream requests through RPI residential proxy.
-  // Flow: Client → CF Worker → RPI Proxy (residential IP) → MegaCloud CDN
+  // MegaCloud CDN is behind Cloudflare. CF Workers can often fetch
+  // Cloudflare-protected sites directly (intra-network). Try direct first,
+  // then fall back to RPI residential proxy.
+  // Flow: Client → CF Worker → MegaCloud CDN (direct) or → RPI → CDN
   if (path === '/hianime/stream') {
     const targetUrl = url.searchParams.get('url');
     if (!targetUrl) {
@@ -573,7 +778,61 @@ export async function handleHiAnimeRequest(request: Request, env: Env): Promise<
 
     const hasRpi = !!(env.RPI_PROXY_URL && env.RPI_PROXY_KEY);
 
-    // Strategy 1: Try RPI residential proxy (required for MegaCloud CDN)
+    // Strategy 1: Direct fetch from CF Worker (intra-Cloudflare, often bypasses challenges)
+    try {
+      const response = await fetch(decodedUrl, {
+        headers: {
+          'User-Agent': UA,
+          'Accept': '*/*',
+          'Accept-Encoding': 'identity',
+        },
+        signal: AbortSignal.timeout(15000),
+      });
+
+      if (response.ok) {
+        const contentType = response.headers.get('content-type') || '';
+
+        if (contentType.includes('mpegurl') || decodedUrl.includes('.m3u8')) {
+          const text = await response.text();
+          const rewritten = rewritePlaylistUrls(text, decodedUrl, url.origin);
+          return new Response(rewritten, {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/vnd.apple.mpegurl',
+              'Cache-Control': 'public, max-age=5',
+              'X-Proxied-Via': 'cf-direct',
+              ...corsHeaders(),
+            },
+          });
+        }
+
+        const body = await response.arrayBuffer();
+        const firstBytes = new Uint8Array(body.slice(0, 4));
+        const isMpegTs = firstBytes[0] === 0x47;
+        const isFmp4 = firstBytes[0] === 0x00 && firstBytes[1] === 0x00 && firstBytes[2] === 0x00;
+        let actualContentType = contentType;
+        if (isMpegTs) actualContentType = 'video/mp2t';
+        else if (isFmp4) actualContentType = 'video/mp4';
+        else if (!actualContentType) actualContentType = 'application/octet-stream';
+
+        return new Response(body, {
+          status: 200,
+          headers: {
+            'Content-Type': actualContentType,
+            'Content-Length': body.byteLength.toString(),
+            'Cache-Control': 'public, max-age=3600',
+            'X-Proxied-Via': 'cf-direct',
+            ...corsHeaders(),
+          },
+        });
+      }
+      logger.warn('Direct fetch failed', { status: response.status });
+      // Fall through to RPI
+    } catch (error) {
+      logger.warn('Direct fetch error, trying RPI', { error: (error as Error).message });
+    }
+
+    // Strategy 2: RPI residential proxy fallback
     if (hasRpi) {
       try {
         let rpiBaseUrl = env.RPI_PROXY_URL!;
@@ -582,7 +841,6 @@ export async function handleHiAnimeRequest(request: Request, env: Env): Promise<
         }
         rpiBaseUrl = rpiBaseUrl.replace(/\/+$/, '');
 
-        // Use the /animekai endpoint on RPI — it handles CDN streams without Origin/Referer
         const rpiParams = new URLSearchParams({
           url: decodedUrl,
           key: env.RPI_PROXY_KEY!,
@@ -594,13 +852,9 @@ export async function handleHiAnimeRequest(request: Request, env: Env): Promise<
           signal: AbortSignal.timeout(20000),
         });
 
-        if (!rpiResponse.ok) {
-          logger.warn('RPI proxy returned error', { status: rpiResponse.status });
-          // Fall through to direct attempt
-        } else {
+        if (rpiResponse.ok) {
           const contentType = rpiResponse.headers.get('content-type') || '';
 
-          // Playlist — rewrite URLs to route back through this proxy
           if (contentType.includes('mpegurl') || decodedUrl.includes('.m3u8')) {
             const text = await rpiResponse.text();
             const rewritten = rewritePlaylistUrls(text, decodedUrl, url.origin);
@@ -615,7 +869,6 @@ export async function handleHiAnimeRequest(request: Request, env: Env): Promise<
             });
           }
 
-          // Segment — pass through
           const body = await rpiResponse.arrayBuffer();
           const firstBytes = new Uint8Array(body.slice(0, 4));
           const isMpegTs = firstBytes[0] === 0x47;
@@ -636,69 +889,16 @@ export async function handleHiAnimeRequest(request: Request, env: Env): Promise<
             },
           });
         }
+        logger.warn('RPI proxy returned error', { status: rpiResponse.status });
       } catch (error) {
-        logger.warn('RPI proxy error, falling back to direct', { error: (error as Error).message });
+        logger.warn('RPI proxy error', { error: (error as Error).message });
       }
     }
 
-    // Strategy 2: Direct fetch (will likely 403 on MegaCloud CDN but try anyway)
-    try {
-      const response = await fetch(decodedUrl, {
-        headers: {
-          'User-Agent': UA,
-          'Accept': '*/*',
-          'Accept-Encoding': 'identity',
-        },
-        signal: AbortSignal.timeout(15000),
-      });
-
-      if (!response.ok) {
-        return jsonResponse({
-          error: `Stream fetch failed (${response.status})`,
-          hint: hasRpi ? 'RPI proxy also failed' : 'RPI proxy not configured — MegaCloud CDN blocks datacenter IPs',
-        }, response.status);
-      }
-
-      const contentType = response.headers.get('content-type') || '';
-
-      if (contentType.includes('mpegurl') || decodedUrl.includes('.m3u8')) {
-        const text = await response.text();
-        const rewritten = rewritePlaylistUrls(text, decodedUrl, url.origin);
-        return new Response(rewritten, {
-          status: 200,
-          headers: {
-            'Content-Type': 'application/vnd.apple.mpegurl',
-            'Cache-Control': 'public, max-age=5',
-            'X-Proxied-Via': 'cf-direct',
-            ...corsHeaders(),
-          },
-        });
-      }
-
-      const body = await response.arrayBuffer();
-      const firstBytes = new Uint8Array(body.slice(0, 4));
-      const isMpegTs = firstBytes[0] === 0x47;
-      const isFmp4 = firstBytes[0] === 0x00 && firstBytes[1] === 0x00 && firstBytes[2] === 0x00;
-      let actualContentType = contentType;
-      if (isMpegTs) actualContentType = 'video/mp2t';
-      else if (isFmp4) actualContentType = 'video/mp4';
-      else if (!actualContentType) actualContentType = 'application/octet-stream';
-
-      return new Response(body, {
-        status: 200,
-        headers: {
-          'Content-Type': actualContentType,
-          'Content-Length': body.byteLength.toString(),
-          'Cache-Control': 'public, max-age=3600',
-          'X-Proxied-Via': 'cf-direct',
-          ...corsHeaders(),
-        },
-      });
-    } catch (error) {
-      const err = error as Error;
-      logger.error('HiAnime stream proxy error (all strategies failed)', err);
-      return jsonResponse({ error: err.message || 'Stream proxy error' }, 502);
-    }
+    return jsonResponse({
+      error: 'Stream fetch failed from all sources',
+      hint: hasRpi ? 'Both direct and RPI proxy failed' : 'RPI proxy not configured',
+    }, 502);
   }
 
   return jsonResponse({ error: 'Unknown HiAnime route', path }, 404);

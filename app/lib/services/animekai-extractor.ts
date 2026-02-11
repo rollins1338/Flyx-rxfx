@@ -71,8 +71,24 @@ interface ParsedServers {
 
 // API Configuration
 // All crypto is native - no external API dependencies!
-const KAI_AJAX = 'https://animekai.to/ajax';
+// Support both animekai.to and anikai.to (domain migration)
+const KAI_DOMAINS = ['https://animekai.to', 'https://anikai.to'];
+let KAI_BASE = KAI_DOMAINS[0];
 const ARM_API = 'https://arm.haglund.dev/api/v2/ids';
+
+/**
+ * Get the current AJAX base URL (supports domain fallback)
+ */
+function getKaiAjax(): string {
+  return `${KAI_BASE}/ajax`;
+}
+
+/**
+ * Get the current watch base URL
+ */
+function getKaiWatch(slug: string): string {
+  return `${KAI_BASE}/watch/${slug}`;
+}
 
 /**
  * Fetch a URL through Cloudflare Worker → RPI residential proxy
@@ -275,9 +291,30 @@ function parseServerGroup(html: string): Record<string, ParsedServerEntry> {
 }
 
 /**
- * Fetch JSON from AnimeKai AJAX endpoint
+ * Fetch JSON from AnimeKai AJAX endpoint with domain fallback
  */
 async function getJson(url: string): Promise<any | null> {
+  // Try current domain first
+  const result = await _fetchJson(url);
+  if (result !== null) return result;
+  
+  // If failed and we're on the primary domain, try fallback
+  if (KAI_BASE === KAI_DOMAINS[0] && KAI_DOMAINS.length > 1) {
+    const fallbackUrl = url.replace(KAI_DOMAINS[0], KAI_DOMAINS[1]);
+    console.log(`[AnimeKai] Primary domain failed, trying fallback: ${KAI_DOMAINS[1]}`);
+    const fallbackResult = await _fetchJson(fallbackUrl);
+    if (fallbackResult !== null) {
+      // Switch to working domain for subsequent requests
+      KAI_BASE = KAI_DOMAINS[1];
+      console.log(`[AnimeKai] Switched to fallback domain: ${KAI_BASE}`);
+      return fallbackResult;
+    }
+  }
+  
+  return null;
+}
+
+async function _fetchJson(url: string): Promise<any | null> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -472,7 +509,7 @@ async function searchAnimeKaiByMalId(malId: number, searchQuery: string): Promis
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-    const searchResponse = await fetch(`${KAI_AJAX}/anime/search?keyword=${encodeURIComponent(searchQuery)}`, {
+    const searchResponse = await fetch(`${getKaiAjax()}/anime/search?keyword=${encodeURIComponent(searchQuery)}`, {
       headers: HEADERS,
       signal: controller.signal,
     });
@@ -481,6 +518,55 @@ async function searchAnimeKaiByMalId(malId: number, searchQuery: string): Promis
 
     if (!searchResponse.ok) {
       console.log(`[AnimeKai] Search failed: HTTP ${searchResponse.status}`);
+      
+      // Try fallback domain
+      if (KAI_BASE === KAI_DOMAINS[0] && KAI_DOMAINS.length > 1) {
+        console.log(`[AnimeKai] Trying fallback domain for search...`);
+        const fallbackResp = await fetch(`${KAI_DOMAINS[1]}/ajax/anime/search?keyword=${encodeURIComponent(searchQuery)}`, {
+          headers: HEADERS,
+          signal: AbortSignal.timeout(10000),
+        });
+        if (fallbackResp.ok) {
+          KAI_BASE = KAI_DOMAINS[1];
+          console.log(`[AnimeKai] Switched to fallback domain: ${KAI_BASE}`);
+          const fallbackData = await fallbackResp.json();
+          // Continue with fallback data
+          const searchHtml = fallbackData.result?.html;
+          if (!searchHtml) {
+            console.log(`[AnimeKai] No search results HTML from fallback`);
+            return null;
+          }
+          // Re-parse with fallback data
+          const animeRegex2 = /<a[^>]*href="\/watch\/([^"]+)"[^>]*>[\s\S]*?<h6[^>]*class="title"[^>]*(?:data-jp="([^"]*)")?[^>]*>([^<]*)<\/h6>/gi;
+          const results2: Array<{ slug: string; jpTitle: string; enTitle: string }> = [];
+          let match2;
+          while ((match2 = animeRegex2.exec(searchHtml)) !== null) {
+            const [, slug, jpTitle, enTitle] = match2;
+            results2.push({ slug, jpTitle: jpTitle || '', enTitle: enTitle.trim() });
+          }
+          // Continue checking MAL IDs with fallback results
+          for (const result of results2) {
+            try {
+              const watchResp = await fetch(`${KAI_BASE}/watch/${result.slug}`, {
+                headers: HEADERS,
+                signal: AbortSignal.timeout(8000),
+              });
+              if (!watchResp.ok) continue;
+              const watchHtml = await watchResp.text();
+              const syncMatch = watchHtml.match(/<script[^>]*id="syncData"[^>]*>([\s\S]*?)<\/script>/);
+              if (syncMatch) {
+                const syncData = JSON.parse(syncMatch[1]);
+                const pageMalId = parseInt(syncData.mal_id);
+                const animeId = syncData.anime_id;
+                if (pageMalId === malId) {
+                  return { content_id: animeId, title: result.enTitle || result.jpTitle };
+                }
+              }
+            } catch { /* continue */ }
+          }
+          return null;
+        }
+      }
       return null;
     }
 
@@ -512,7 +598,7 @@ async function searchAnimeKaiByMalId(malId: number, searchQuery: string): Promis
     // Check each result's syncData for MAL ID match
     for (const result of results) {
       try {
-        const watchResp = await fetch(`https://animekai.to/watch/${result.slug}`, {
+        const watchResp = await fetch(`${KAI_BASE}/watch/${result.slug}`, {
           headers: HEADERS,
           signal: AbortSignal.timeout(8000),
         });
@@ -566,19 +652,43 @@ async function searchAnimeKaiByTitle(query: string): Promise<{ content_id: strin
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-    const searchResponse = await fetch(`${KAI_AJAX}/anime/search?keyword=${encodeURIComponent(query)}`, {
+    const searchResponse = await fetch(`${getKaiAjax()}/anime/search?keyword=${encodeURIComponent(query)}`, {
       headers: HEADERS,
       signal: controller.signal,
     });
 
     clearTimeout(timeoutId);
 
+    let searchData: any;
+    
     if (!searchResponse.ok) {
       console.log(`[AnimeKai] Search failed: HTTP ${searchResponse.status}`);
-      return null;
+      
+      // Try fallback domain
+      if (KAI_BASE === KAI_DOMAINS[0] && KAI_DOMAINS.length > 1) {
+        console.log(`[AnimeKai] Trying fallback domain for title search...`);
+        try {
+          const fallbackResp = await fetch(`${KAI_DOMAINS[1]}/ajax/anime/search?keyword=${encodeURIComponent(query)}`, {
+            headers: HEADERS,
+            signal: AbortSignal.timeout(10000),
+          });
+          if (fallbackResp.ok) {
+            KAI_BASE = KAI_DOMAINS[1];
+            console.log(`[AnimeKai] Switched to fallback domain: ${KAI_BASE}`);
+            searchData = await fallbackResp.json();
+          } else {
+            return null;
+          }
+        } catch {
+          return null;
+        }
+      } else {
+        return null;
+      }
+    } else {
+      searchData = await searchResponse.json();
     }
 
-    const searchData = await searchResponse.json();
     const searchHtml = searchData.result?.html;
     
     if (!searchHtml) {
@@ -629,7 +739,7 @@ async function searchAnimeKaiByTitle(query: string): Promise<{ content_id: strin
     }
 
     // Fetch the watch page to get kai_id
-    const watchUrl = `https://animekai.to/watch/${bestResult.slug}`;
+    const watchUrl = `${KAI_BASE}/watch/${bestResult.slug}`;
     console.log(`[AnimeKai] Fetching watch page: ${watchUrl}`);
 
     const watchResponse = await fetch(watchUrl, {
@@ -787,7 +897,7 @@ async function getEpisodes(contentId: string): Promise<ParsedEpisodes | null> {
     }
 
     // Fetch episodes list
-    const url = `${KAI_AJAX}/episodes/list?ani_id=${contentId}&_=${encId}`;
+    const url = `${getKaiAjax()}/episodes/list?ani_id=${contentId}&_=${encId}`;
     const response = await getJson(url);
     
     if (!response || !response.result) {
@@ -825,7 +935,7 @@ async function getServers(token: string): Promise<ParsedServers | null> {
     }
 
     // Fetch servers list
-    const url = `${KAI_AJAX}/links/list?token=${token}&_=${encToken}`;
+    const url = `${getKaiAjax()}/links/list?token=${token}&_=${encToken}`;
     const response = await getJson(url);
     
     if (!response || !response.result) {
@@ -1082,7 +1192,7 @@ async function getStreamFromServer(lid: string, serverName: string): Promise<Str
     }
 
     // Fetch encrypted embed data from AnimeKai
-    const url = `${KAI_AJAX}/links/view?id=${lid}&_=${encLid}`;
+    const url = `${getKaiAjax()}/links/view?id=${lid}&_=${encLid}`;
     const response = await getJson(url);
     
     if (!response || !response.result) {
@@ -1135,7 +1245,7 @@ async function getStreamFromServer(lid: string, serverName: string): Promise<Str
       }
       
       // Extract the proper referer from the stream URL's origin
-      let referer = 'https://animekai.to/';
+      let referer = `${KAI_BASE}/`;
       try {
         const streamOrigin = new URL(streamUrl).origin;
         referer = streamOrigin + '/';
@@ -1150,7 +1260,8 @@ async function getStreamFromServer(lid: string, serverName: string): Promise<Str
                           streamUrl.includes('net22lab') ||
                           streamUrl.includes('pro25zone') ||
                           streamUrl.includes('tech20hub') ||
-                          streamUrl.includes('code29wave');
+                          streamUrl.includes('code29wave') ||
+                          streamUrl.includes('4spromax');
       
       return {
         quality: 'auto',
@@ -1261,7 +1372,7 @@ async function getStreamFromServerLocal(_lid: string, serverName: string, encryp
       }
     }
 
-    let referer = 'https://animekai.to/';
+    let referer = `${KAI_BASE}/`;
     try {
       const streamOrigin = new URL(streamUrl).origin;
       referer = streamOrigin + '/';
@@ -1275,7 +1386,8 @@ async function getStreamFromServerLocal(_lid: string, serverName: string, encryp
                         streamUrl.includes('net22lab') ||
                         streamUrl.includes('pro25zone') ||
                         streamUrl.includes('tech20hub') ||
-                        streamUrl.includes('code29wave');
+                        streamUrl.includes('code29wave') ||
+                        streamUrl.includes('4spromax');
 
     return {
       quality: 'auto',
