@@ -4301,7 +4301,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                 }
                 
                 // Find a source matching the new preference
-                const sources = sourcesCache['animekai'] || availableSources;
+                const sources = sourcesCache[provider] || sourcesCache['animekai'] || sourcesCache['hianime'] || availableSources;
                 const matchingSource = sources.find((s: any) => 
                   s.title && sourceMatchesAudioPreference(s.title, newPref)
                 );
@@ -4317,7 +4317,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                       const params = new URLSearchParams({
                         tmdbId,
                         type: mediaType,
-                        provider: 'animekai',
+                        provider: provider, // Use current provider (animekai or hianime)
                         source: sourceName,
                       });
                       if (mediaType === 'tv' && season && episode) {
@@ -4534,24 +4534,31 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                       Loading sources...
                     </div>
                   ) : sourcesCache[menuProvider] && sourcesCache[menuProvider].length > 0 ? (
-                    sourcesCache[menuProvider]
-                      .filter(s => s != null)
-                      .filter(s => {
-                        // For AnimeKai, filter by dub/sub preference
-                        if (menuProvider === 'animekai' && s.title) {
-                          return sourceMatchesAudioPreference(s.title, animeAudioPref);
-                        }
-                        // For Videasy, filter by language preference
-                        if (menuProvider === 'videasy' && videasyLanguageFilter !== 'all') {
-                          return s.language === videasyLanguageFilter;
-                        }
-                        return true;
-                      })
-                      .map((source, index) => (
+                    (() => {
+                      // Tag each source with its original index in the unfiltered cache
+                      const allSources = sourcesCache[menuProvider]
+                        .map((s: any, i: number) => s != null ? { ...s, _origIdx: i } : null)
+                        .filter((s: any) => s != null);
+                      const isAnimeProvider = menuProvider === 'animekai' || menuProvider === 'hianime';
+                      
+                      if (isAnimeProvider) {
+                        // Filter by dub/sub preference for anime providers
+                        const filtered = allSources.filter((s: any) => s.title && sourceMatchesAudioPreference(s.title, animeAudioPref));
+                        // If filter removes everything, show all sources (don't leave empty)
+                        return filtered.length > 0 ? filtered : allSources;
+                      }
+                      if (menuProvider === 'videasy' && videasyLanguageFilter !== 'all') {
+                        return allSources.filter((s: any) => s.language === videasyLanguageFilter);
+                      }
+                      return allSources;
+                    })()
+                      .map((source: any) => {
+                      const origIdx = source._origIdx as number;
+                      return (
                       <button
-                        key={index}
-                        className={`${styles.settingsOption} ${provider === menuProvider && currentSourceIndex === index ? styles.active : ''}`}
-                        data-server-source={index}
+                        key={origIdx}
+                        className={`${styles.settingsOption} ${provider === menuProvider && currentSourceIndex === origIdx ? styles.active : ''}`}
+                        data-server-source={origIdx}
                         onClick={async () => {
                           // Save current playback position before switching sources
                           if (videoRef.current && videoRef.current.currentTime > 0) {
@@ -4560,7 +4567,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                           }
                           
                           // If source has "unknown" status (not yet fetched), fetch it first
-                          if (source.status === 'unknown' && (menuProvider === 'videasy' || menuProvider === 'animekai')) {
+                          if (source.status === 'unknown' && (menuProvider === 'videasy' || menuProvider === 'animekai' || menuProvider === 'hianime')) {
                             console.log(`[VideoPlayer] Fetching unknown source: ${source.title} from ${menuProvider}`);
                             setIsLoading(true);
                             setShowServerMenu(false);
@@ -4585,26 +4592,26 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                               
                               if (data.success && data.sources && data.sources.length > 0) {
                                 const fetchedSource = data.sources[0];
-                                // Update the source in cache with the fetched URL
+                                // Update the source in cache at the ORIGINAL index
                                 const updatedSources = [...sourcesCache[menuProvider]];
-                                updatedSources[index] = { ...source, ...fetchedSource, status: 'working' };
+                                updatedSources[origIdx] = { ...source, ...fetchedSource, status: 'working' };
                                 setSourcesCache(prev => ({ ...prev, [menuProvider]: updatedSources }));
                                 setAvailableSources(updatedSources);
                                 
                                 // Save preferred AnimeKai server
-                                if (menuProvider === 'animekai') {
+                                if (menuProvider === 'animekai' || menuProvider === 'hianime') {
                                   setPreferredAnimeKaiServer(sourceName);
                                 }
                                 
                                 // Set the stream URL
                                 setStreamUrl(fetchedSource.url);
-                                setCurrentSourceIndex(index);
+                                setCurrentSourceIndex(origIdx);
                                 setProvider(menuProvider);
                               } else {
                                 // Mark as failed - clear pending seek since we're not switching
                                 pendingSeekTimeRef.current = null;
                                 const updatedSources = [...sourcesCache[menuProvider]];
-                                updatedSources[index] = { ...source, status: 'down' };
+                                updatedSources[origIdx] = { ...source, status: 'down' };
                                 setSourcesCache(prev => ({ ...prev, [menuProvider]: updatedSources }));
                                 setError(`Source "${sourceName}" is not available`);
                               }
@@ -4625,7 +4632,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                           }
                           
                           // Save preferred AnimeKai server
-                          if (menuProvider === 'animekai' && source.title) {
+                          if ((menuProvider === 'animekai' || menuProvider === 'hianime') && source.title) {
                             const serverName = source.title.split(' (')[0];
                             setPreferredAnimeKaiServer(serverName);
                           }
@@ -4633,7 +4640,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                           // Set the stream URL directly
                           if (source.url) {
                             setStreamUrl(source.url);
-                            setCurrentSourceIndex(index);
+                            setCurrentSourceIndex(origIdx);
                             setShowServerMenu(false);
                           }
                         }}
@@ -4679,7 +4686,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                           />
                         )}
                       </button>
-                    ))
+                      );})
                   ) : (
                     <div style={{ padding: '1rem', textAlign: 'center', color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem' }}>
                       {loadingProviders[menuProvider] ? 'Loading sources...' : 
