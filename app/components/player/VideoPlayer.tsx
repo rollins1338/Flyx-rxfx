@@ -863,7 +863,6 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
       
       // Check if user has a last successful provider for this content
       const contentKey = `${tmdbId}-${mediaType}${season ? `-s${season}` : ''}${episode ? `-e${episode}` : ''}`;
-      const lastSuccessful = getLastSuccessfulProvider(contentKey);
       
       const providerOrder: string[] = [];
       const animeOnlyProviders = ['animekai', 'hianime'];
