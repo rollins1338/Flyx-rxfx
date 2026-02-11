@@ -812,6 +812,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
         '1movies': true,
         videasy: true,
         animekai: true,
+        hianime: true,
       };
 
       try {
@@ -823,6 +824,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
           '1movies': data.providers?.['1movies']?.enabled ?? true,
           videasy: data.providers?.videasy?.enabled ?? true,
           animekai: data.providers?.animekai?.enabled ?? true,
+          hianime: data.providers?.hianime?.enabled ?? true,
         };
         setProviderAvailability(availability);
       } catch (err) {
@@ -959,9 +961,9 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
         setSkipOutro(null);
       }
       
-      // For AnimeKai, try to find preferred server and match dub/sub preference
+      // For AnimeKai/HiAnime, try to find preferred server and match dub/sub preference
       let selectedSourceIndex = 0;
-      if (successfulProvider === 'animekai') {
+      if (successfulProvider === 'animekai' || successfulProvider === 'hianime') {
         const audioPref = getProviderSettings().animeAudioPreference;
         const preferredServer = getPreferredAnimeKaiServer();
         
@@ -1014,6 +1016,18 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
         status: initialSource.status,
         requiresSegmentProxy: initialSource.requiresSegmentProxy,
       });
+      
+      // Sync the sub/dub toggle to match what's actually playing
+      if (isAnime && initialSource.title) {
+        const actuallyDub = sourceMatchesAudioPreference(initialSource.title, 'dub');
+        const actualPref = actuallyDub ? 'dub' : 'sub';
+        const savedPref = getProviderSettings().animeAudioPreference;
+        if (actualPref !== savedPref) {
+          console.log(`[VideoPlayer] Toggle sync: saved="${savedPref}" but playing="${actualPref}" (${initialSource.title}) — updating toggle`);
+          setAnimeAudioPref(actualPref as AnimeAudioPreference);
+          saveProviderSettings({ animeAudioPreference: actualPref });
+        }
+      }
       
       // Check if the source has a valid URL
       if (!initialSource.url) {
@@ -1260,6 +1274,14 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                       console.log(`[VideoPlayer] Trying source ${i}: ${nextSource.title} (has URL)`);
                       setCurrentSourceIndex(i);
                       setStreamUrl(nextSource.url);
+                      // Sync toggle if switching to a different sub/dub source
+                      if (isAnimeContent && nextSource.title) {
+                        const actualPref = sourceMatchesAudioPreference(nextSource.title, 'dub') ? 'dub' : 'sub';
+                        if (actualPref !== animeAudioPref) {
+                          setAnimeAudioPref(actualPref as AnimeAudioPreference);
+                          saveProviderSettings({ animeAudioPreference: actualPref });
+                        }
+                      }
                       return true;
                     }
                     
@@ -1321,6 +1343,11 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                   console.log(`[VideoPlayer] All ${provider} sources exhausted, trying other providers...`);
                   
                   const fallbackProviders: string[] = [];
+                  // For anime providers, try the other anime provider first
+                  if ((provider === 'animekai' || provider === 'hianime') && isAnimeContent) {
+                    if (provider !== 'hianime' && providerAvailability.hianime) fallbackProviders.push('hianime');
+                    if (provider !== 'animekai' && providerAvailability.animekai) fallbackProviders.push('animekai');
+                  }
                   if (provider !== 'vidsrc' && providerAvailability.vidsrc) fallbackProviders.push('vidsrc');
                   if (provider !== 'flixer' && providerAvailability.flixer) fallbackProviders.push('flixer');
                   if (provider !== '1movies' && providerAvailability['1movies']) fallbackProviders.push('1movies');
@@ -1341,6 +1368,14 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                       setAvailableSources(result.sources);
                       setCurrentSourceIndex(0);
                       setStreamUrl(result.sources[0].url);
+                      // Sync toggle to match what's actually playing after fallback
+                      if (isAnimeContent && result.sources[0].title) {
+                        const actualPref = sourceMatchesAudioPreference(result.sources[0].title, 'dub') ? 'dub' : 'sub';
+                        if (actualPref !== animeAudioPref) {
+                          setAnimeAudioPref(actualPref as AnimeAudioPreference);
+                          saveProviderSettings({ animeAudioPreference: actualPref });
+                        }
+                      }
                       return true;
                     }
                   }
@@ -4274,8 +4309,12 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
           gap: '12px',
           pointerEvents: 'auto',
         }}>
-          {/* Dub/Sub toggle - only show for anime content using AnimeKai */}
-          {isAnimeContent && (provider === 'animekai' || provider === 'hianime') && (
+          {/* Dub/Sub toggle - show for anime content when anime sources exist */}
+          {isAnimeContent && (
+            provider === 'animekai' || provider === 'hianime' ||
+            (sourcesCache['animekai'] && sourcesCache['animekai'].length > 0) ||
+            (sourcesCache['hianime'] && sourcesCache['hianime'].length > 0)
+          ) && (
             <button 
               data-player-top-control="subdub"
               style={{
@@ -4300,8 +4339,9 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                   pendingSeekTimeRef.current = videoRef.current.currentTime;
                 }
                 
-                // Find a source matching the new preference
-                const sources = sourcesCache[provider] || sourcesCache['animekai'] || sourcesCache['hianime'] || availableSources;
+                // Find a source matching the new preference - prefer anime provider caches
+                const animeProvider = sourcesCache['hianime']?.length ? 'hianime' : sourcesCache['animekai']?.length ? 'animekai' : provider;
+                const sources = sourcesCache[animeProvider] || sourcesCache[provider] || availableSources;
                 const matchingSource = sources.find((s: any) => 
                   s.title && sourceMatchesAudioPreference(s.title, newPref)
                 );
@@ -4317,7 +4357,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                       const params = new URLSearchParams({
                         tmdbId,
                         type: mediaType,
-                        provider: provider, // Use current provider (animekai or hianime)
+                        provider: animeProvider,
                         source: sourceName,
                       });
                       if (mediaType === 'tv' && season && episode) {
@@ -4330,6 +4370,8 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                         const newIndex = sources.findIndex((s: any) => s.title === matchingSource.title);
                         setCurrentSourceIndex(newIndex >= 0 ? newIndex : 0);
                         setStreamUrl(data.sources[0].url);
+                        setProvider(animeProvider);
+                        setMenuProvider(animeProvider);
                         setPreferredAnimeKaiServer(sourceName);
                       }
                     } catch (err) {
@@ -4343,6 +4385,8 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                     const newIndex = sources.findIndex((s: any) => s.title === matchingSource.title);
                     setCurrentSourceIndex(newIndex >= 0 ? newIndex : 0);
                     setStreamUrl(matchingSource.url);
+                    setProvider(animeProvider);
+                    setMenuProvider(animeProvider);
                     const serverName = matchingSource.title?.split(' (')[0];
                     if (serverName) setPreferredAnimeKaiServer(serverName);
                   }
@@ -4399,8 +4443,14 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
               setShowSubtitles(false);
               setHighlightServerButton(false); // Clear highlight when clicked
               // Initialize menu provider to current provider when opening
+              // For anime content, prefer anime provider even if currently on a fallback
               if (!showServerMenu) {
-                setMenuProvider(provider);
+                if (isAnimeContent) {
+                  const animeP = sourcesCache['hianime']?.length ? 'hianime' : sourcesCache['animekai']?.length ? 'animekai' : provider;
+                  setMenuProvider(animeP);
+                } else {
+                  setMenuProvider(provider);
+                }
               }
             }}
             className={`${styles.btn} ${highlightServerButton ? styles.serverButtonHighlight : ''}`}
@@ -4607,6 +4657,14 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                                 setStreamUrl(fetchedSource.url);
                                 setCurrentSourceIndex(origIdx);
                                 setProvider(menuProvider);
+                                // Sync toggle to match what's actually playing
+                                if (source.title && (menuProvider === 'animekai' || menuProvider === 'hianime')) {
+                                  const actualPref = sourceMatchesAudioPreference(source.title, 'dub') ? 'dub' : 'sub';
+                                  if (actualPref !== animeAudioPref) {
+                                    setAnimeAudioPref(actualPref as AnimeAudioPreference);
+                                    saveProviderSettings({ animeAudioPreference: actualPref });
+                                  }
+                                }
                               } else {
                                 // Mark as failed - clear pending seek since we're not switching
                                 pendingSeekTimeRef.current = null;
@@ -4642,6 +4700,14 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                             setStreamUrl(source.url);
                             setCurrentSourceIndex(origIdx);
                             setShowServerMenu(false);
+                            // Sync toggle to match what's actually playing
+                            if (source.title && (menuProvider === 'animekai' || menuProvider === 'hianime')) {
+                              const actualPref = sourceMatchesAudioPreference(source.title, 'dub') ? 'dub' : 'sub';
+                              if (actualPref !== animeAudioPref) {
+                                setAnimeAudioPref(actualPref as AnimeAudioPreference);
+                                saveProviderSettings({ animeAudioPreference: actualPref });
+                              }
+                            }
                           }
                         }}
                         style={{
