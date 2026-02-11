@@ -109,68 +109,62 @@ export async function extractFlixerStreams(
     return { success: false, sources: [], error: 'Season and episode required for TV shows' };
   }
 
-  const sources: StreamSource[] = [];
-
-  // Fetch ALL servers in parallel for maximum source availability
-  console.log(`[Flixer] Fetching all ${NATO_ORDER.length} servers in parallel...`);
+  // Race top 3 servers — first success wins, don't wait for all 6
+  const TOP_SERVERS = NATO_ORDER.slice(0, 3); // alpha, bravo, charlie
+  console.log(`[Flixer] Racing ${TOP_SERVERS.length} servers: ${TOP_SERVERS.join(', ')}...`);
   
-  const serverPromises = NATO_ORDER.map(async (server) => {
-    try {
-      const extractUrl = getFlixerExtractUrl(tmdbId, type, server, season, episode);
-      console.log(`[Flixer] Server ${server} URL: ${extractUrl}`);
-      
-      const response = await fetch(extractUrl, {
-        signal: AbortSignal.timeout(20000),
-      });
-      
-      console.log(`[Flixer] Server ${server} response: ${response.status} ${response.ok}`);
-      
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => 'Unable to read error');
-        console.log(`[Flixer] Server ${server} error body: ${errorText.substring(0, 200)}`);
-        return null;
-      }
-      
-      const data: FlixerApiResponse = await response.json();
-      console.log(`[Flixer] Server ${server} data:`, { success: data.success, sourcesCount: data.sources?.length, error: data.error });
-      
-      if (data.success && data.sources && data.sources.length > 0) {
-        // Add server name to each source for identification
-        const serverDisplayName = SERVER_NAMES[server] || server;
-        return data.sources.map(src => ({
-          ...src,
-          title: `Flixer ${serverDisplayName}`,
-          server: server,
-          status: 'working' as const,
-        }));
-      } else {
-        console.log(`[Flixer] Server ${server}: ${data.error || 'No sources'}`);
-        return null;
-      }
-    } catch (e) {
-      console.log(`[Flixer] Server ${server} failed:`, e instanceof Error ? e.message : e);
-      return null;
+  const result = await new Promise<StreamSource[] | null>((resolve) => {
+    let resolved = false;
+    let failCount = 0;
+    
+    for (const server of TOP_SERVERS) {
+      (async () => {
+        try {
+          const extractUrl = getFlixerExtractUrl(tmdbId, type, server, season, episode);
+          const response = await fetch(extractUrl, { signal: AbortSignal.timeout(12000) });
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          
+          const data: FlixerApiResponse = await response.json();
+          
+          if (data.success && data.sources && data.sources.length > 0) {
+            if (!resolved) {
+              resolved = true;
+              const serverDisplayName = SERVER_NAMES[server] || server;
+              console.log(`[Flixer] ✓ Server ${server} (${serverDisplayName}) won the race`);
+              resolve(data.sources.map(src => ({
+                ...src,
+                title: `Flixer ${serverDisplayName}`,
+                server: server,
+                status: 'working' as const,
+              })));
+            }
+            return;
+          }
+          throw new Error(data.error || 'No sources');
+        } catch (e) {
+          console.log(`[Flixer] Server ${server} failed: ${e instanceof Error ? e.message : e}`);
+          failCount++;
+          if (failCount >= TOP_SERVERS.length && !resolved) {
+            resolved = true;
+            resolve(null);
+          }
+        }
+      })();
     }
+    
+    // Safety timeout
+    setTimeout(() => { if (!resolved) { resolved = true; resolve(null); } }, 13000);
   });
 
-  // Wait for all servers to respond
-  const results = await Promise.allSettled(serverPromises);
-  
-  // Collect all successful sources
-  for (const result of results) {
-    if (result.status === 'fulfilled' && result.value) {
-      sources.push(...result.value);
-    }
-  }
-
-  console.log(`[Flixer] Got ${sources.length} sources from ${results.filter(r => r.status === 'fulfilled' && r.value).length} servers`);
-
-  if (sources.length === 0) {
+  if (!result || result.length === 0) {
     return { success: false, sources: [], error: 'No working sources available from Flixer' };
   }
 
   const subtitles = await fetchSubtitles(tmdbId, type, season, episode);
-  return { success: true, sources, subtitles: subtitles.length > 0 ? subtitles : undefined };
+  return { success: true, sources: result, subtitles: subtitles.length > 0 ? subtitles : undefined };
 }
 
 /**

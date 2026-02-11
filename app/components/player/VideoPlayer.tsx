@@ -831,32 +831,32 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
         console.warn('[VideoPlayer] Failed to fetch provider availability:', err);
       }
 
-      // Check if this is anime content by calling the API
-      // OR if malId is provided (we already know it's anime from the /anime/[malId] route)
-      let isAnime = !!malId; // If malId is provided, it's definitely anime
+      // Check if this is anime content
+      // If malId is provided, it's definitely anime — skip the API check
+      // For non-anime: DON'T block on the anime check — start Flixer immediately
+      // The anime check runs in the background and only matters if we need AnimeKai
+      let isAnime = !!malId;
+      
+      // Non-blocking anime check — we'll start loading Flixer while this runs
+      let animeCheckPromise: Promise<boolean> | null = null;
       if (!isAnime) {
-        try {
-          const animeCheckRes = await fetch(`/api/content/check-anime?tmdbId=${tmdbId}&type=${mediaType}`);
-          if (animeCheckRes.ok) {
-            const animeData = await animeCheckRes.json();
-            isAnime = animeData.isAnime === true;
-            console.log(`[VideoPlayer] Anime check result:`, animeData);
-          } else {
-            console.warn(`[VideoPlayer] Anime check failed: HTTP ${animeCheckRes.status}`);
-          }
-        } catch (err) {
-          console.warn('[VideoPlayer] Failed to check anime status:', err);
-        }
+        animeCheckPromise = (async () => {
+          try {
+            const animeCheckRes = await fetch(`/api/content/check-anime?tmdbId=${tmdbId}&type=${mediaType}`);
+            if (animeCheckRes.ok) {
+              const animeData = await animeCheckRes.json();
+              return animeData.isAnime === true;
+            }
+          } catch {}
+          return false;
+        })();
       } else {
-        console.log(`[VideoPlayer] malId=${malId} provided - skipping anime check, this is anime content`);
+        console.log(`[VideoPlayer] malId=${malId} provided - this is anime content`);
       }
       setIsAnimeContent(isAnime);
-      console.log(`[VideoPlayer] Content type: ${isAnime ? 'ANIME' : 'regular'}, AnimeKai available: ${availability.animekai}, malId: ${malId || 'none'}`);
-
-      // Build provider priority list based on content type and user preferences
-      // For ANIME: AnimeKai FIRST (MANDATORY when malId is provided), then Videasy as fallback
-      // For non-anime: VidSrc (primary), Flixer, 1movies, Videasy
-      // User can customize order via Settings > Providers
+      // Build provider priority list based on content type
+      // For ANIME: HiAnime/AnimeKai first
+      // For non-anime: Flixer (PRIMARY), Videasy, then others
       const userProviderSettings = getProviderSettings();
       const userOrder = userProviderSettings.providerOrder || [];
       const disabledProviders = new Set(userProviderSettings.disabledProviders || []);
@@ -866,6 +866,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
       const lastSuccessful = getLastSuccessfulProvider(contentKey);
       
       const providerOrder: string[] = [];
+      const animeOnlyProviders = ['animekai', 'hianime'];
       
       // For ANIME content: HiAnime FIRST (primary), AnimeKai as fallback
       // This ensures the sub/dub toggle works properly
@@ -878,19 +879,23 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
         console.log(`[VideoPlayer] ✓ AnimeKai is FALLBACK for anime content`);
       }
       
-      // For non-anime content, prioritize last successful provider
-      // BUT never use anime-only providers (animekai, hianime) for non-anime content
-      const animeOnlyProviders = ['animekai', 'hianime'];
-      if (!isAnime && lastSuccessful && !animeOnlyProviders.includes(lastSuccessful) && availability[lastSuccessful as keyof typeof availability] && !disabledProviders.has(lastSuccessful)) {
-        providerOrder.push(lastSuccessful);
-        console.log(`[VideoPlayer] Prioritizing last successful provider: ${lastSuccessful}`);
+      // For non-anime content: ALWAYS Flixer first (fastest, most reliable)
+      // Ignore user's saved order — Flixer is the hardcoded primary
+      if (!isAnime && availability.flixer && !disabledProviders.has('flixer')) {
+        providerOrder.push('flixer');
+        console.log(`[VideoPlayer] ✓ Flixer is PRIMARY for non-anime content`);
+      }
+      if (!isAnime && !disabledProviders.has('videasy')) {
+        providerOrder.push('videasy');
       }
       
-      // Add providers in user's preferred order
+      // Add remaining providers from user's preferred order (skipping already-added ones)
       for (const providerName of userOrder) {
-        if (providerOrder.includes(providerName)) continue; // Already added
-        if (disabledProviders.has(providerName)) continue; // User disabled this provider
-        if (!availability[providerName as keyof typeof availability]) continue; // Not available
+        if (providerOrder.includes(providerName)) continue;
+        if (disabledProviders.has(providerName)) continue;
+        if (!availability[providerName as keyof typeof availability]) continue;
+        // Skip anime-only providers for non-anime content
+        if (!isAnime && animeOnlyProviders.includes(providerName)) continue;
         providerOrder.push(providerName);
       }
       
@@ -899,7 +904,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
       // For non-anime: vidsrc is primary
       const allProviders = isAnime 
         ? ['hianime', 'animekai', 'videasy', 'flixer', 'vidsrc', '1movies']
-        : ['flixer', 'videasy', 'vidsrc', '1movies', 'animekai', 'hianime'];
+        : ['flixer', 'videasy', 'vidsrc', '1movies'];
       for (const providerName of allProviders) {
         if (providerOrder.includes(providerName)) continue;
         if (disabledProviders.has(providerName)) continue;
@@ -933,6 +938,16 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
 
       // Record successful provider for this content (helps with future playback)
       recordSuccessfulProvider(contentKey, successfulProvider);
+      
+      // Resolve background anime check (non-blocking — player already loaded)
+      if (animeCheckPromise) {
+        animeCheckPromise.then(detectedAnime => {
+          if (detectedAnime) {
+            console.log(`[VideoPlayer] Background anime check: this IS anime content`);
+            setIsAnimeContent(true);
+          }
+        });
+      }
 
       // Update state with successful provider
       setProvider(successfulProvider);
