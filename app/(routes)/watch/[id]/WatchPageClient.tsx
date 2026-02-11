@@ -393,7 +393,7 @@ function WatchContent() {
       
       // Build provider order matching desktop player:
       // For ANIME: AnimeKai MUST be first (ensures sub/dub toggle works)
-      // For non-anime: VidSrc, Flixer, 1movies, Videasy
+      // For non-anime: Flixer (PRIMARY), Videasy, VidSrc, 1movies
       const providerOrder: Array<'vidsrc' | '1movies' | 'flixer' | 'videasy' | 'animekai'> = [];
       
       // Determine if this is anime content - use malId OR previously detected anime
@@ -405,18 +405,18 @@ function WatchContent() {
         console.log('[WatchPage] ✓ AnimeKai is PRIMARY for anime content (mobile)');
       }
       
-      // Add remaining providers
-      if (providerAvailability.vidsrc) {
-        providerOrder.push('vidsrc');
-      }
+      // Add remaining providers — Flixer first for non-anime
       if (providerAvailability.flixer) {
         providerOrder.push('flixer');
       }
-      if (providerAvailability['1movies']) {
-        providerOrder.push('1movies');
-      }
       if (providerAvailability.videasy) {
         providerOrder.push('videasy');
+      }
+      if (providerAvailability.vidsrc) {
+        providerOrder.push('vidsrc');
+      }
+      if (providerAvailability['1movies']) {
+        providerOrder.push('1movies');
       }
       
       // Set available providers for the mobile player tabs

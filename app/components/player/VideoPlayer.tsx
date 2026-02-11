@@ -879,7 +879,9 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
       }
       
       // For non-anime content, prioritize last successful provider
-      if (!isAnime && lastSuccessful && availability[lastSuccessful as keyof typeof availability] && !disabledProviders.has(lastSuccessful)) {
+      // BUT never use anime-only providers (animekai, hianime) for non-anime content
+      const animeOnlyProviders = ['animekai', 'hianime'];
+      if (!isAnime && lastSuccessful && !animeOnlyProviders.includes(lastSuccessful) && availability[lastSuccessful as keyof typeof availability] && !disabledProviders.has(lastSuccessful)) {
         providerOrder.push(lastSuccessful);
         console.log(`[VideoPlayer] Prioritizing last successful provider: ${lastSuccessful}`);
       }
@@ -896,8 +898,8 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
       // For anime: prioritize videasy as fallback (other providers don't work well for anime)
       // For non-anime: vidsrc is primary
       const allProviders = isAnime 
-        ? ['hianime', 'animekai', 'videasy', 'vidsrc', 'flixer', '1movies']
-        : ['vidsrc', 'flixer', '1movies', 'videasy', 'animekai', 'hianime'];
+        ? ['hianime', 'animekai', 'videasy', 'flixer', 'vidsrc', '1movies']
+        : ['flixer', 'videasy', 'vidsrc', '1movies', 'animekai', 'hianime'];
       for (const providerName of allProviders) {
         if (providerOrder.includes(providerName)) continue;
         if (disabledProviders.has(providerName)) continue;

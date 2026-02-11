@@ -3,11 +3,11 @@
  * Returns which stream providers are enabled/available
  * 
  * Provider Priority:
- * - VidSrc: PRIMARY provider
- * - Flixer: 2nd fallback (flixer.sh / Hexa)
- * - 1movies: 3rd fallback (111movies.com)
- * - Videasy: Final fallback with multi-language support
- * - AnimeKai: PRIMARY for anime content only (auto-detected)
+ * - Flixer: PRIMARY provider (WASM-based extraction, 2-3s)
+ * - Videasy: 2nd fallback (multi-language WASM decryption)
+ * - VidSrc: 3rd fallback (Turnstile issues)
+ * - 1movies: DISABLED
+ * - AnimeKai: PRIMARY for anime content only (auto-detected via MAL ID)
  */
 
 import { NextResponse } from 'next/server';
@@ -19,29 +19,29 @@ import { FLIXER_ENABLED } from '@/app/lib/services/flixer-extractor';
 export async function GET() {
   return NextResponse.json({
     providers: {
-      vidsrc: {
-        enabled: VIDSRC_ENABLED,
-        name: 'VidSrc',
-        primary: true,
-        description: 'Primary streaming source',
-      },
       flixer: {
         enabled: FLIXER_ENABLED,
         name: 'Flixer',
-        primary: false,
-        description: 'Flixer/Hexa - TV shows and movies streaming',
-      },
-      '1movies': {
-        enabled: ONEMOVIES_ENABLED,
-        name: '1movies',
-        primary: false,
-        description: '111movies.com - Multiple servers with HLS streams',
+        primary: true,
+        description: 'Primary streaming source (WASM-based extraction)',
       },
       videasy: {
         enabled: true,
         name: 'Videasy',
         primary: false,
         description: 'Multi-language streaming fallback',
+      },
+      vidsrc: {
+        enabled: VIDSRC_ENABLED,
+        name: 'VidSrc',
+        primary: false,
+        description: 'VidSrc streaming source',
+      },
+      '1movies': {
+        enabled: ONEMOVIES_ENABLED,
+        name: '1movies',
+        primary: false,
+        description: '111movies.com - Multiple servers with HLS streams',
       },
       animekai: {
         enabled: ANIMEKAI_ENABLED,
