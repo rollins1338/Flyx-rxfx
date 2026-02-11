@@ -109,15 +109,14 @@ export async function extractFlixerStreams(
     return { success: false, sources: [], error: 'Season and episode required for TV shows' };
   }
 
-  // Race top 3 servers — first success wins, don't wait for all 6
-  const TOP_SERVERS = NATO_ORDER.slice(0, 3); // alpha, bravo, charlie
-  console.log(`[Flixer] Racing ${TOP_SERVERS.length} servers: ${TOP_SERVERS.join(', ')}...`);
+  // Race all servers — first success wins, don't wait for all
+  console.log(`[Flixer] Racing ${NATO_ORDER.length} servers: ${NATO_ORDER.join(', ')}...`);
   
   const result = await new Promise<StreamSource[] | null>((resolve) => {
     let resolved = false;
     let failCount = 0;
     
-    for (const server of TOP_SERVERS) {
+    for (const server of NATO_ORDER) {
       (async () => {
         try {
           const extractUrl = getFlixerExtractUrl(tmdbId, type, server, season, episode);
@@ -147,7 +146,7 @@ export async function extractFlixerStreams(
         } catch (e) {
           console.log(`[Flixer] Server ${server} failed: ${e instanceof Error ? e.message : e}`);
           failCount++;
-          if (failCount >= TOP_SERVERS.length && !resolved) {
+          if (failCount >= NATO_ORDER.length && !resolved) {
             resolved = true;
             resolve(null);
           }
