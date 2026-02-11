@@ -125,8 +125,8 @@ function WatchContent() {
   const [mobileResumeTime, setMobileResumeTime] = useState(0); // Saved playback time for source/audio changes
   
   // Provider state for mobile player
-  const [currentProvider, setCurrentProvider] = useState<'vidsrc' | '1movies' | 'flixer' | 'videasy' | 'animekai' | undefined>(undefined);
-  const [availableProviders, setAvailableProviders] = useState<Array<'vidsrc' | '1movies' | 'flixer' | 'videasy' | 'animekai'>>([]);
+  const [currentProvider, setCurrentProvider] = useState<'vidsrc' | '1movies' | 'flixer' | 'videasy' | 'animekai' | 'hianime' | undefined>(undefined);
+  const [availableProviders, setAvailableProviders] = useState<Array<'vidsrc' | '1movies' | 'flixer' | 'videasy' | 'animekai' | 'hianime'>>([]);
   const [loadingProvider, setLoadingProvider] = useState(false);
   
   // Anime state for mobile player
