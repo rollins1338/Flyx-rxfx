@@ -4365,15 +4365,19 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                   pendingSeekTimeRef.current = videoRef.current.currentTime;
                 }
                 
-                // Find a source matching the new preference - prefer anime provider caches
-                const animeProvider = sourcesCache['hianime']?.length ? 'hianime' : sourcesCache['animekai']?.length ? 'animekai' : provider;
-                const sources = sourcesCache[animeProvider] || sourcesCache[provider] || availableSources;
+                // Find a matching source within the CURRENT provider first.
+                // The sub/dub toggle should NOT jump between provider tabs —
+                // each provider tab (AnimeKai, HiAnime) has its own sub+dub sources,
+                // and the toggle just filters which ones are shown/played.
+                const currentAnimeProvider = (provider === 'animekai' || provider === 'hianime') ? provider : 
+                  (sourcesCache['animekai']?.length ? 'animekai' : sourcesCache['hianime']?.length ? 'hianime' : provider);
+                const sources = sourcesCache[currentAnimeProvider] || availableSources;
                 const matchingSource = sources.find((s: any) => 
                   s.title && sourceMatchesAudioPreference(s.title, newPref)
                 );
                 
                 if (matchingSource) {
-                  console.log(`[VideoPlayer] Switching to ${newPref}:`, matchingSource.title);
+                  console.log(`[VideoPlayer] Switching to ${newPref} on ${currentAnimeProvider}:`, matchingSource.title);
                   
                   // If source needs fetching (or was previously marked down), fetch it
                   if (matchingSource.status === 'unknown' || matchingSource.status === 'down' || !matchingSource.url) {
@@ -4383,7 +4387,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                       const params = new URLSearchParams({
                         tmdbId,
                         type: mediaType,
-                        provider: animeProvider,
+                        provider: currentAnimeProvider,
                         source: sourceName,
                       });
                       if (mediaType === 'tv' && season && episode) {
@@ -4396,8 +4400,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                         const newIndex = sources.findIndex((s: any) => s.title === matchingSource.title);
                         setCurrentSourceIndex(newIndex >= 0 ? newIndex : 0);
                         setStreamUrl(data.sources[0].url);
-                        setProvider(animeProvider);
-                        setMenuProvider(animeProvider);
+                        setProvider(currentAnimeProvider);
                         setPreferredAnimeKaiServer(sourceName);
                       }
                     } catch (err) {
@@ -4411,13 +4414,12 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                     const newIndex = sources.findIndex((s: any) => s.title === matchingSource.title);
                     setCurrentSourceIndex(newIndex >= 0 ? newIndex : 0);
                     setStreamUrl(matchingSource.url);
-                    setProvider(animeProvider);
-                    setMenuProvider(animeProvider);
+                    setProvider(currentAnimeProvider);
                     const serverName = matchingSource.title?.split(' (')[0];
                     if (serverName) setPreferredAnimeKaiServer(serverName);
                   }
                 } else {
-                  console.log(`[VideoPlayer] No ${newPref} sources available`);
+                  console.log(`[VideoPlayer] No ${newPref} sources available on ${currentAnimeProvider}`);
                 }
               }}
               title={`Switch to ${animeAudioPref === 'sub' ? 'Dubbed' : 'Subbed'}`}
