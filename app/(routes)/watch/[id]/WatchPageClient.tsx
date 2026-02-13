@@ -376,7 +376,7 @@ function WatchContent() {
       }
       
       // Check provider availability first
-      let providerAvailability = { vidsrc: true, flixer: true, '1movies': true, videasy: true, animekai: true };
+      let providerAvailability = { vidsrc: true, flixer: true, '1movies': true, videasy: true, animekai: true, hianime: true };
       try {
         const providerRes = await fetch('/api/providers');
         const providerData = await providerRes.json();
@@ -386,23 +386,25 @@ function WatchContent() {
           '1movies': providerData.providers?.['1movies']?.enabled ?? true,
           videasy: providerData.providers?.videasy?.enabled ?? true,
           animekai: providerData.providers?.animekai?.enabled ?? true,
+          hianime: providerData.providers?.hianime?.enabled ?? true,
         };
       } catch (e) {
         console.warn('[WatchPage] Failed to fetch provider availability, using defaults');
       }
       
       // Build provider order matching desktop player:
-      // For ANIME: AnimeKai MUST be first (ensures sub/dub toggle works)
+      // For ANIME: HiAnime first, then AnimeKai (both have sub+dub sources)
       // For non-anime: Flixer (PRIMARY), Videasy, VidSrc, 1movies
-      const providerOrder: Array<'vidsrc' | '1movies' | 'flixer' | 'videasy' | 'animekai'> = [];
+      const providerOrder: Array<'vidsrc' | '1movies' | 'flixer' | 'videasy' | 'animekai' | 'hianime'> = [];
       
       // Determine if this is anime content - use malId OR previously detected anime
       const isAnime = !!(malId || isAnimeDetectedRef.current);
       
-      // For ANIME content: AnimeKai MUST be first to ensure sub/dub toggle works
-      if (isAnime && providerAvailability.animekai) {
-        providerOrder.push('animekai');
-        console.log('[WatchPage] ✓ AnimeKai is PRIMARY for anime content (mobile)');
+      // For ANIME content: HiAnime + AnimeKai as provider tabs
+      if (isAnime) {
+        if (providerAvailability.hianime) providerOrder.push('hianime');
+        if (providerAvailability.animekai) providerOrder.push('animekai');
+        console.log('[WatchPage] ✓ Anime providers for mobile:', providerOrder.join(', '));
       }
       
       // Add remaining providers — Flixer first for non-anime
@@ -463,9 +465,9 @@ function WatchContent() {
               
               // For anime, try to find a source matching the audio preference
               let selectedIndex = 0;
-              if (provider === 'animekai') {
-                // If we're using animekai, this is anime content
-                console.log('[WatchPage] AnimeKai succeeded - setting isAnimeContent to TRUE');
+              if (provider === 'animekai' || provider === 'hianime') {
+                // If we're using an anime provider, this is anime content
+                console.log(`[WatchPage] ${provider} succeeded - setting isAnimeContent to TRUE`);
                 isAnimeDetectedRef.current = true;
                 setIsAnimeContent(true);
                 const matchingIndex = sources.findIndex((s: any) => 
@@ -567,7 +569,7 @@ function WatchContent() {
           setMobileStreamUrl(sources[0].url);
           setMobileSourceIndex(0);
           
-          if (provider === 'animekai') {
+          if (provider === 'animekai' || provider === 'hianime') {
             isAnimeDetectedRef.current = true;
             setIsAnimeContent(true);
           }

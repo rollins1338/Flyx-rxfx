@@ -2015,17 +2015,18 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
           }
           // If server menu is open, navigate tabs left
           if (showServerMenu) {
-            // For anime content, only AnimeKai is available (no tabs to navigate)
-            if (isAnimeContent) {
-              // No tab navigation for anime - just stay on AnimeKai
-              return;
-            }
-            // For non-anime content, navigate between VidSrc, Flixer, 1movies, and Videasy
             const availableProviders: string[] = [];
-            if (providerAvailability.vidsrc) availableProviders.push('vidsrc');
-            if (providerAvailability.flixer) availableProviders.push('flixer');
-            if (providerAvailability['1movies']) availableProviders.push('1movies');
-            availableProviders.push('videasy');
+            if (isAnimeContent) {
+              // Anime content: navigate between HiAnime and AnimeKai
+              if (providerAvailability.hianime) availableProviders.push('hianime');
+              if (providerAvailability.animekai) availableProviders.push('animekai');
+            } else {
+              // Non-anime content: navigate between VidSrc, Flixer, 1movies, and Videasy
+              if (providerAvailability.vidsrc) availableProviders.push('vidsrc');
+              if (providerAvailability.flixer) availableProviders.push('flixer');
+              if (providerAvailability['1movies']) availableProviders.push('1movies');
+              availableProviders.push('videasy');
+            }
             
             const currentTabIndex = availableProviders.indexOf(menuProvider);
             if (currentTabIndex > 0) {
@@ -2081,17 +2082,18 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
           }
           // If server menu is open, navigate tabs right
           if (showServerMenu) {
-            // For anime content, only AnimeKai is available (no tabs to navigate)
-            if (isAnimeContent) {
-              // No tab navigation for anime - just stay on AnimeKai
-              return;
-            }
-            // For non-anime content, navigate between VidSrc, Flixer, 1movies, and Videasy
             const availableProviders: string[] = [];
-            if (providerAvailability.vidsrc) availableProviders.push('vidsrc');
-            if (providerAvailability.flixer) availableProviders.push('flixer');
-            if (providerAvailability['1movies']) availableProviders.push('1movies');
-            availableProviders.push('videasy');
+            if (isAnimeContent) {
+              // Anime content: navigate between HiAnime and AnimeKai
+              if (providerAvailability.hianime) availableProviders.push('hianime');
+              if (providerAvailability.animekai) availableProviders.push('animekai');
+            } else {
+              // Non-anime content: navigate between VidSrc, Flixer, 1movies, and Videasy
+              if (providerAvailability.vidsrc) availableProviders.push('vidsrc');
+              if (providerAvailability.flixer) availableProviders.push('flixer');
+              if (providerAvailability['1movies']) availableProviders.push('1movies');
+              availableProviders.push('videasy');
+            }
             
             const currentTabIndex = availableProviders.indexOf(menuProvider);
             if (currentTabIndex < availableProviders.length - 1) {
@@ -4514,7 +4516,37 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                   </button>
                 </div>
 
-                {/* Only show tabs for non-anime content (anime only uses AnimeKai) */}
+                {/* Provider tabs for anime content (AnimeKai + HiAnime) */}
+                {isAnimeContent && (
+                  <div className={styles.tabsContainer} data-server-tabs="true">
+                    {providerAvailability.hianime && (
+                      <button
+                        className={`${styles.tab} ${menuProvider === 'hianime' ? styles.active : ''}`}
+                        data-server-tab="hianime"
+                        onClick={() => {
+                          setMenuProvider('hianime');
+                          fetchSources('hianime');
+                        }}
+                      >
+                        HiAnime
+                      </button>
+                    )}
+                    {providerAvailability.animekai && (
+                      <button
+                        className={`${styles.tab} ${menuProvider === 'animekai' ? styles.active : ''}`}
+                        data-server-tab="animekai"
+                        onClick={() => {
+                          setMenuProvider('animekai');
+                          fetchSources('animekai');
+                        }}
+                      >
+                        AnimeKai
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Provider tabs for non-anime content */}
                 {!isAnimeContent && (
                   <div className={styles.tabsContainer} data-server-tabs="true">
                     {providerAvailability.vidsrc && (
