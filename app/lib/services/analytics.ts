@@ -550,15 +550,6 @@ class AnalyticsService {
   }
 
   /**
-   * Schedule event flush - DISABLED
-   * Network syncing is now handled by UnifiedAnalyticsClient's 60s batch.
-   * Events are kept locally for the AnalyticsProvider context API only.
-   */
-  private scheduleFlush(): void {
-    // No-op: UnifiedAnalyticsClient handles all network syncing
-  }
-
-  /**
    * Flush events - DISABLED
    * Kept as no-op for any remaining callers (e.g. clearUserData).
    */
