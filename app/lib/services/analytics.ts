@@ -51,7 +51,6 @@ export interface InteractionEvent {
 class AnalyticsService {
   private userSession: UserSession | null = null;
   private eventQueue: AnalyticsEvent[] = [];
-  private flushTimeout: NodeJS.Timeout | null = null;
   private isInitialized = false;
   // liveActivityInterval removed - PresenceProvider handles live activity now
   private watchTimeSyncInterval: NodeJS.Timeout | null = null;
