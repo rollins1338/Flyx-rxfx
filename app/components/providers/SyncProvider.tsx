@@ -14,8 +14,8 @@ import { getSyncEndpoint, isUsingCloudflareSyncWorker } from '@/lib/utils/sync-e
 // Minimum time between syncs (prevent spam on rapid navigation)
 const MIN_SYNC_INTERVAL_MS = 2000; // 2 seconds
 
-// Periodic sync interval - heartbeat every 10 seconds
-const PERIODIC_SYNC_INTERVAL_MS = 10000; // 10 seconds
+// Periodic sync interval - sync every 5 minutes (was 10 seconds - massively reduced CF Worker usage)
+const PERIODIC_SYNC_INTERVAL_MS = 300000; // 5 minutes
 
 // Context to expose sync state and manual refresh
 interface SyncContextType {
@@ -170,10 +170,13 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    // Periodic sync heartbeat - runs every 10 seconds to keep data in sync
+    // Periodic sync heartbeat - runs every 5 minutes to keep data in sync
+    // Visibility change handler above handles immediate sync when tab becomes visible
     const periodicSyncInterval = setInterval(() => {
-      console.log('[SyncProvider] Heartbeat sync...');
-      performAutoSync(true, false); // Force pull to get latest from server
+      // Only sync when tab is visible to avoid wasting requests
+      if (document.visibilityState === 'visible') {
+        performAutoSync(false, false);
+      }
     }, PERIODIC_SYNC_INTERVAL_MS);
 
     document.addEventListener('visibilitychange', handleVisibilityChange);

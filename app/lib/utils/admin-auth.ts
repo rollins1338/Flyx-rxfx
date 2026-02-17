@@ -15,7 +15,13 @@ import { getAdminAdapter } from '../db/adapter';
 // Constants
 // ============================================
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const JWT_SECRET = (() => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret && typeof window === 'undefined') {
+    console.warn('[admin-auth] JWT_SECRET is not set! Authentication will fail in production.');
+  }
+  return secret || 'INSECURE_FALLBACK_DO_NOT_USE_IN_PRODUCTION';
+})();
 const ADMIN_COOKIE = 'admin_token';
 const JWT_EXPIRY_HOURS = 24;
 

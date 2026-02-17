@@ -75,21 +75,21 @@ export function initGlobalBehavioralTracking(): void {
     (e) => {
       const now = performance.now();
       
-      // Throttle mouse position recording to every 50ms
-      if (now - lastMouseTime < 50) {
+      // Throttle mouse position recording to every 100ms (was 50ms)
+      if (now - lastMouseTime < 100) {
         return;
       }
       lastMouseTime = now;
       
       mousePositions.push({ x: e.clientX, y: e.clientY, t: now });
 
-      // Keep last 500 positions (reduced from 1000)
-      if (mousePositions.length > 500) {
-        mousePositions.shift();
+      // Keep last 200 positions (reduced from 500)
+      if (mousePositions.length > 200) {
+        mousePositions = mousePositions.slice(-200);
       }
 
-      // Recalculate entropy every 500ms (increased from 100ms)
-      if (now - lastEntropyCalculation > 500) {
+      // Recalculate entropy every 2 seconds (was 500ms - reduces CPU)
+      if (now - lastEntropyCalculation > 2000) {
         mouseEntropy = calculateMouseEntropy(mousePositions);
         lastEntropyCalculation = now;
 
@@ -103,12 +103,18 @@ export function initGlobalBehavioralTracking(): void {
   );
 
   // Scroll tracking
+  let lastScrollTime = 0;
   window.addEventListener(
     'scroll',
     () => {
-      scrollEvents.push({ y: window.scrollY, t: performance.now() });
-      if (scrollEvents.length > 200) {
-        scrollEvents.shift();
+      const now = performance.now();
+      // Throttle scroll tracking to every 200ms
+      if (now - lastScrollTime < 200) return;
+      lastScrollTime = now;
+      
+      scrollEvents.push({ y: window.scrollY, t: now });
+      if (scrollEvents.length > 100) {
+        scrollEvents = scrollEvents.slice(-100);
       }
     },
     { passive: true }
@@ -121,8 +127,8 @@ export function initGlobalBehavioralTracking(): void {
       const now = performance.now();
       if (lastKeyTime > 0) {
         keystrokeIntervals.push(now - lastKeyTime);
-        if (keystrokeIntervals.length > 100) {
-          keystrokeIntervals.shift();
+        if (keystrokeIntervals.length > 50) {
+          keystrokeIntervals = keystrokeIntervals.slice(-50);
         }
       }
       lastKeyTime = now;

@@ -257,7 +257,8 @@ class UserTrackingService {
   }
 
   /**
-   * Update watch progress
+   * Update watch progress (with network sync)
+   * Use this for significant events: pause, seek, complete, navigation away
    */
   updateWatchProgress(progress: WatchProgress): void {
     if (!this.preferences) return;
@@ -278,6 +279,27 @@ class UserTrackingService {
       queueImmediateSync();
     } catch (error) {
       console.error('Failed to save watch progress:', error);
+    }
+  }
+
+  /**
+   * Update watch progress locally only (no network sync)
+   * Use this for periodic progress saves during playback.
+   * Network sync happens on pause/seek/complete/exit instead.
+   */
+  updateWatchProgressLocal(progress: WatchProgress): void {
+    if (!this.preferences) return;
+
+    const key = this.getStorageKey(progress.contentId, progress.seasonNumber, progress.episodeNumber);
+    this.preferences.watchProgress[key] = progress;
+
+    try {
+      localStorage.setItem(
+        UserTrackingService.WATCH_PROGRESS_KEY,
+        JSON.stringify(this.preferences.watchProgress)
+      );
+    } catch (error) {
+      console.error('Failed to save watch progress locally:', error);
     }
   }
 

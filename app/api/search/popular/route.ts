@@ -2,11 +2,37 @@
  * Popular Searches API
  * GET /api/search/popular - Get popular search terms
  * POST /api/search/popular - Track a search query
+ * 
+ * NOTE: This uses local SQLite which is only available in local dev.
+ * On Cloudflare Pages deployment, this gracefully returns empty results.
+ * For production, popular searches should be migrated to the CF Analytics Worker's D1.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { initializeDB, getDB } from '@/lib/db/connection';
-import { TABLES } from '@/lib/db/schema';
+
+// Lazy-load DB to avoid crashes on Cloudflare where better-sqlite3 isn't available
+let dbAvailable: boolean | null = null;
+let initializeDB: (() => Promise<any>) | null = null;
+let getDB: (() => any) | null = null;
+let TABLES: Record<string, string> = {};
+
+async function ensureDB(): Promise<boolean> {
+  if (dbAvailable !== null) return dbAvailable;
+  
+  try {
+    const dbModule = await import('@/lib/db/connection');
+    const schemaModule = await import('@/lib/db/schema');
+    initializeDB = dbModule.initializeDB;
+    getDB = dbModule.getDB;
+    TABLES = schemaModule.TABLES;
+    await initializeDB();
+    dbAvailable = true;
+  } catch {
+    console.warn('[Popular Searches] SQLite not available in this environment - returning empty results');
+    dbAvailable = false;
+  }
+  return dbAvailable;
+}
 
 // Normalize search query for consistent tracking
 function normalizeQuery(query: string): string {
@@ -17,20 +43,21 @@ function normalizeQuery(query: string): string {
 function calculateTrendingScore(searchCount: number, lastSearched: number): number {
   const now = Date.now();
   const daysSinceLastSearch = (now - lastSearched) / (1000 * 60 * 60 * 24);
-  
-  // Decay factor: searches lose relevance over time
-  const decayFactor = Math.exp(-daysSinceLastSearch / 7); // 7-day half-life
-  
-  // Trending score combines frequency with recency
+  const decayFactor = Math.exp(-daysSinceLastSearch / 7);
   return searchCount * decayFactor;
 }
 
 export async function GET() {
   try {
-    await initializeDB();
+    if (!(await ensureDB()) || !getDB) {
+      return NextResponse.json({
+        success: true,
+        data: { popular: [], trending: [] }
+      });
+    }
+
     const db = getDB();
 
-    // Get popular searches ordered by trending score
     const popularSearches = db.prepare(`
       SELECT 
         display_query,
@@ -44,7 +71,6 @@ export async function GET() {
       LIMIT 20
     `).all();
 
-    // Get recent trending searches (last 7 days)
     const recentTrending = db.prepare(`
       SELECT 
         display_query,
@@ -66,15 +92,19 @@ export async function GET() {
 
   } catch (error) {
     console.error('Popular searches API error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch popular searches' },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      success: true,
+      data: { popular: [], trending: [] }
+    });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    if (!(await ensureDB()) || !getDB) {
+      return NextResponse.json({ success: true, message: 'Tracking skipped - DB not available' });
+    }
+
     const { query, sessionId, resultsCount, clickedResult } = await request.json();
 
     if (!query || typeof query !== 'string') {
@@ -84,29 +114,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await initializeDB();
     const db = getDB();
-
     const normalizedQuery = normalizeQuery(query);
     const timestamp = Date.now();
-
-    // Generate unique ID for search query record
     const searchId = `search_${timestamp}_${Math.random().toString(36).substring(2)}`;
 
-    // Insert search query record
     db.prepare(`
       INSERT INTO ${TABLES.SEARCH_QUERIES} 
       (id, query, normalized_query, session_id, results_count, clicked_result, timestamp)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(searchId, query, normalizedQuery, sessionId, resultsCount || 0, clickedResult || false, timestamp);
 
-    // Update or insert popular search
     const existingPopular = db.prepare(`
       SELECT * FROM ${TABLES.POPULAR_SEARCHES} WHERE normalized_query = ?
     `).get(normalizedQuery) as any;
 
     if (existingPopular) {
-      // Update existing popular search
       const newSearchCount = existingPopular.search_count + 1;
       const newClickCount = existingPopular.click_count + (clickedResult ? 1 : 0);
       const newTrendingScore = calculateTrendingScore(newSearchCount, timestamp);
@@ -122,7 +145,6 @@ export async function POST(request: NextRequest) {
         WHERE normalized_query = ?
       `).run(newSearchCount, newClickCount, timestamp, newTrendingScore, timestamp, normalizedQuery);
     } else {
-      // Insert new popular search
       const trendingScore = calculateTrendingScore(1, timestamp);
       
       db.prepare(`
@@ -140,8 +162,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Track search API error:', error);
     return NextResponse.json(
-      { error: 'Failed to track search' },
-      { status: 500 }
+      { success: true, message: 'Tracking failed gracefully' }
     );
   }
 }

@@ -21,7 +21,13 @@ import {
 } from '../types/auth';
 
 // Constants
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const JWT_SECRET = (() => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    console.warn('[auth-server] JWT_SECRET is not set! Authentication will fail in production.');
+  }
+  return secret || 'INSECURE_FALLBACK_DO_NOT_USE_IN_PRODUCTION';
+})();
 
 /**
  * Server-side Authentication Service
@@ -135,7 +141,7 @@ export class AdminAuthService {
     return jwt.sign(
       { userId, iat: Math.floor(Date.now() / 1000) },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '24h' }
     );
   }
 

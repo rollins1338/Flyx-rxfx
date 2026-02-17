@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, ReactNode, useEffect, useCallback } from 'react';
+import { createContext, useContext, ReactNode, useEffect, useCallback, useMemo } from 'react';
 import { analyticsService, type WatchEvent, type SearchEvent, type InteractionEvent, type PageViewEvent } from '@/lib/services/analytics';
 import { userTrackingService, type UserSession, type UserPreferences } from '@/lib/services/user-tracking';
 import { SYNC_DATA_CHANGED_EVENT } from '@/lib/sync';
@@ -325,7 +325,7 @@ export default function AnalyticsProvider({ children }: AnalyticsProviderProps) 
     analyticsService.trackInteraction({ element, action: action as any });
   }, []);
 
-  const value = {
+  const value = useMemo(() => ({
     trackEvent,
     trackPageView,
     trackWatchProgress,
@@ -354,7 +354,15 @@ export default function AnalyticsProvider({ children }: AnalyticsProviderProps) 
     updateLiveTVQuality,
     trackScrollDepth,
     trackInteractionEvent,
-  };
+  }), [
+    trackEvent, trackPageView, trackWatchProgress, trackWatchEvent,
+    trackSearch, trackInteraction, trackContentEngagement, trackError,
+    trackPerformance, getUserSession, updateUserPreferences, clearUserData,
+    getWatchProgress, getAllWatchProgress, getViewingHistory, removeWatchProgress,
+    reloadWatchProgress, updateActivity, trackLiveTVEvent, updateWatchTime,
+    recordPause, clearWatchTime, startLiveTVSession, endLiveTVSession,
+    recordLiveTVBuffer, updateLiveTVQuality, trackScrollDepth, trackInteractionEvent,
+  ]);
 
   return (
     <AnalyticsContext.Provider value={value}>

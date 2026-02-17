@@ -31,8 +31,6 @@
  */
 
 import CryptoJS from 'crypto-js';
-import * as fs from 'fs';
-import * as path from 'path';
 
 interface StreamSource {
   quality: string;
@@ -280,8 +278,28 @@ async function getWasmInstance(): Promise<{ decrypt: Function; memory: WebAssemb
 
   // Compile module once, reuse for instantiation
   if (!wasmModule) {
-    const wasmPath = path.join(process.cwd(), 'public', 'videasy-module-patched.wasm');
-    const wasmBuffer = fs.readFileSync(wasmPath);
+    let wasmBuffer: ArrayBuffer;
+    
+    // Try fetch first (works on Cloudflare Workers and in browser)
+    // Fall back to fs.readFileSync for local Node.js/Bun dev
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL 
+        ? `https://${process.env.VERCEL_URL}` 
+        : 'http://localhost:3000';
+      const res = await fetch(`${baseUrl}/videasy-module-patched.wasm`);
+      if (!res.ok) throw new Error(`WASM fetch failed: ${res.status}`);
+      wasmBuffer = await res.arrayBuffer();
+    } catch {
+      // Fallback for local dev where fetch to self may not work
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        const wasmPath = path.join(process.cwd(), 'public', 'videasy-module-patched.wasm');
+        wasmBuffer = fs.readFileSync(wasmPath).buffer;
+      } catch {
+        throw new Error('Cannot load WASM module - neither fetch nor fs available');
+      }
+    }
     wasmModule = await WebAssembly.compile(wasmBuffer);
     console.log('[Videasy] WASM module compiled');
   }

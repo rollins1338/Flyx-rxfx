@@ -115,8 +115,12 @@ class UnifiedAnalyticsClient {
     // Start sync interval
     this.startSyncInterval();
     
-    // Initial sync after 5 seconds (let page settle)
-    setTimeout(() => this.sync(), 5000);
+    // Initial sync after 5 seconds (let page settle), but only if visible
+    setTimeout(() => {
+      if (document.visibilityState === 'visible') {
+        this.sync();
+      }
+    }, 5000);
     
     console.log('[Analytics] Initialized - syncing every 60s');
   }

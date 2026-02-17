@@ -127,6 +127,29 @@ class AnalyticsService {
   }
 
   /**
+   * Track page view locally without sending network request
+   * Network syncing is handled by UnifiedAnalyticsClient
+   */
+  private trackPageViewLocal(path: string): void {
+    this.sessionPageCount++;
+    this.currentPageView = {
+      id: `pv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      path,
+      title: document.title,
+      entryTime: Date.now(),
+      scrollDepth: 0,
+      maxScrollDepth: 0,
+      interactions: 0,
+      referrer: document.referrer,
+      isFirstPage: this.sessionPageCount === 1,
+    };
+    
+    if (!this.currentActivity || this.currentActivity.type !== 'watching') {
+      this.currentActivity = { type: 'browsing' };
+    }
+  }
+
+  /**
    * Initialize analytics service
    */
   initialize(): void {
@@ -135,24 +158,23 @@ class AnalyticsService {
     this.userSession = userTrackingService.initialize();
     this.isInitialized = true;
     
-    // Track page load with session start
-    this.trackPageView(window.location.pathname);
+    // Track page load locally (no network call - UnifiedAnalyticsClient handles page view syncing)
+    this.trackPageViewLocal(window.location.pathname);
     this.trackSessionStart();
     
-    // Set up periodic flush
-    this.scheduleFlush();
+    // NOTE: Event flushing is now handled by UnifiedAnalyticsClient's 60s batch sync.
+    // We still collect events locally for the AnalyticsProvider context API,
+    // but don't flush them independently to avoid duplicate CF Worker requests.
     
-    // NOTE: Live activity heartbeat is now handled by PresenceProvider
-    // to avoid duplicate tracking. Only start watch time sync and page tracking here.
+    // NOTE: Live activity heartbeat is now handled by PresenceProvider/UnifiedAnalyticsClient
     if (this.shouldTrackPage()) {
-      // Don't call startLiveActivityHeartbeat() - PresenceProvider handles this
       this.startWatchTimeSyncInterval();
-      this.startPageTracking();
+      // Page tracking no longer sends periodic requests - only on exit
     } else {
       console.log('[Analytics] Skipping tracking for admin page');
     }
     
-    // Track scroll depth
+    // Track scroll depth (local only, no network)
     if (typeof window !== 'undefined') {
       window.addEventListener('scroll', this.handleScroll.bind(this), { passive: true });
       document.addEventListener('click', this.handleInteraction.bind(this));
@@ -162,50 +184,21 @@ class AnalyticsService {
     // Track page visibility changes
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
-        this.flushEvents();
+        // Sync watch time on hide (user leaving tab)
         this.syncAllWatchTime();
-        // Don't call stopLiveActivity() - PresenceProvider handles this
         this.stopPageTracking();
         this.endLiveTVSession();
-        this.syncCurrentPageView();
-      } else {
-        // Don't call startLiveActivityHeartbeat() - PresenceProvider handles this
-        this.startWatchTimeSyncInterval();
-        this.startPageTracking();
       }
+      // No periodic interval to restart on visible - UnifiedAnalyticsClient handles periodic sync
     });
     
-    // Track before page unload - sync everything
+    // Track before page unload - sync watch data only
     window.addEventListener('beforeunload', () => {
-      this.trackSessionEnd();
-      this.flushEvents();
       this.syncAllWatchTime();
-      // stopLiveActivity removed - PresenceProvider handles this
-      this.stopPageTracking();
       this.endLiveTVSession();
-      this.syncCurrentPageView(true);
-      this.syncUserEngagement();
     });
     
-    // Track page navigation for SPA
-    if (typeof window !== 'undefined') {
-      const originalPushState = history.pushState;
-      const originalReplaceState = history.replaceState;
-      
-      history.pushState = (...args) => {
-        originalPushState.apply(history, args);
-        this.trackPageView(window.location.pathname);
-      };
-      
-      history.replaceState = (...args) => {
-        originalReplaceState.apply(history, args);
-        this.trackPageView(window.location.pathname);
-      };
-      
-      window.addEventListener('popstate', () => {
-        this.trackPageView(window.location.pathname);
-      });
-    }
+    // SPA page navigation tracking removed - UnifiedAnalyticsClient handles this via PresenceProvider
   }
   
   /**
@@ -253,6 +246,9 @@ class AnalyticsService {
 
   /**
    * Track a generic event
+   * NOTE: Events are stored locally for context API consumers only.
+   * Network syncing is handled by UnifiedAnalyticsClient's 60s batch.
+   * The event queue is capped to prevent memory leaks.
    */
   track(eventType: string, data?: Record<string, any>): void {
     if (!this.isInitialized) {
@@ -270,6 +266,10 @@ class AnalyticsService {
       metadata: userTrackingService.getAnalyticsMetadata(),
     };
 
+    // Cap event queue to prevent memory leaks (events are local-only now)
+    if (this.eventQueue.length >= 50) {
+      this.eventQueue = this.eventQueue.slice(-25);
+    }
     this.eventQueue.push(event);
     userTrackingService.updateLastActivity();
     
@@ -277,7 +277,7 @@ class AnalyticsService {
       console.log('Analytics Event:', event);
     }
     
-    this.scheduleFlush();
+    // NOTE: No longer calling scheduleFlush() - UnifiedAnalyticsClient handles network syncing
   }
 
   /**
@@ -369,78 +369,29 @@ class AnalyticsService {
   }
   
   /**
-   * Sync current page view to server
+   * Sync current page view - DISABLED
+   * Page view tracking is now handled by UnifiedAnalyticsClient's batch sync.
    */
   private async syncCurrentPageView(isExit: boolean = false): Promise<void> {
-    if (!this.currentPageView || !this.userSession) return;
-    
-    const timeOnPage = Math.round((Date.now() - this.currentPageView.entryTime) / 1000);
-    
-    // Only sync if meaningful time spent (at least 1 second)
-    if (timeOnPage < 1) return;
-    
-    try {
-      await fetch(getAnalyticsEndpoint('page-view'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: this.currentPageView.id,
-          userId: this.userSession.userId,
-          sessionId: this.userSession.sessionId,
-          pagePath: this.currentPageView.path,
-          pageTitle: this.currentPageView.title,
-          referrer: this.currentPageView.referrer,
-          entryTime: this.currentPageView.entryTime,
-          exitTime: isExit ? Date.now() : undefined,
-          timeOnPage,
-          scrollDepth: this.currentPageView.maxScrollDepth,
-          interactions: this.currentPageView.interactions,
-          isBounce: this.sessionPageCount === 1 && isExit,
-          isExit,
-        }),
-        keepalive: isExit,
-      });
-    } catch (error) {
-      console.error('[Analytics] Failed to sync page view:', error);
-    }
+    // No-op: UnifiedAnalyticsClient handles page view syncing via PresenceProvider
   }
   
   /**
-   * Sync user engagement metrics
+   * Sync user engagement metrics - DISABLED
+   * Engagement tracking is now handled by UnifiedAnalyticsClient's batch sync.
    */
   private async syncUserEngagement(): Promise<void> {
-    if (!this.userSession) return;
-    
-    try {
-      const sessionStart = parseInt(sessionStorage.getItem('flyx_session_start') || '0');
-      const sessionDuration = sessionStart > 0 ? Math.round((Date.now() - sessionStart) / 1000) : 0;
-      const pageViews = parseInt(sessionStorage.getItem('flyx_page_views') || '1');
-      
-      await fetch('/api/analytics/user-engagement', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: this.userSession.userId,
-          sessionId: this.userSession.sessionId,
-          sessionDuration,
-          pageViews,
-          isBounce: pageViews <= 1,
-        }),
-        keepalive: true,
-      });
-    } catch (error) {
-      console.error('[Analytics] Failed to sync user engagement:', error);
-    }
+    // No-op: UnifiedAnalyticsClient handles engagement syncing
   }
 
   /**
    * Track watch events
+   * OPTIMIZED: Only triggers network sync on meaningful events (start/pause/complete).
+   * Progress events only update local state - UnifiedAnalyticsClient handles periodic sync.
    */
   trackWatchEvent(event: WatchEvent): void {
-    this.track('watch_event', event);
-    
-    // Update watch progress in user tracking
-    if (event.action === 'progress' || event.action === 'complete') {
+    // Only save to localStorage + trigger sync on meaningful events
+    if (event.action === 'pause' || event.action === 'complete') {
       userTrackingService.updateWatchProgress({
         contentId: event.contentId,
         contentType: event.contentType,
@@ -454,7 +405,7 @@ class AnalyticsService {
       });
     }
     
-    // Track detailed watch session
+    // Track detailed watch session (only syncs to CF Worker on start/pause/complete)
     this.updateWatchSession(event);
   }
 
@@ -513,18 +464,16 @@ class AnalyticsService {
         const positionDelta = Math.abs(event.currentTime - sessionData.lastPosition);
         if (positionDelta > 10) {
           sessionData.seekCount++;
+          // Sync on seek (user explicitly changed position)
+          sessionData.lastPosition = event.currentTime;
+          this.syncWatchSession(event, sessionData);
+          sessionData.lastSyncTime = now;
         } else if (timeSinceLastUpdate > 0 && timeSinceLastUpdate < 10) {
           // Only add watch time if reasonable interval
           sessionData.totalWatchTime += timeSinceLastUpdate;
+          sessionData.lastPosition = event.currentTime;
         }
-        sessionData.lastPosition = event.currentTime;
-        
-        // Sync every 30 seconds of accumulated watch time
-        const timeSinceLastSync = now - sessionData.lastSyncTime;
-        if (timeSinceLastSync >= 30000) {
-          this.syncWatchSession(event, sessionData);
-          sessionData.lastSyncTime = now;
-        }
+        // No periodic sync on progress - UnifiedAnalyticsClient handles this
         break;
         
       case 'complete':
@@ -653,50 +602,20 @@ class AnalyticsService {
   }
 
   /**
-   * Schedule event flush
+   * Schedule event flush - DISABLED
+   * Network syncing is now handled by UnifiedAnalyticsClient's 60s batch.
+   * Events are kept locally for the AnalyticsProvider context API only.
    */
   private scheduleFlush(): void {
-    if (this.flushTimeout) {
-      clearTimeout(this.flushTimeout);
-    }
-    
-    // Flush immediately if queue is large, otherwise wait
-    const delay = this.eventQueue.length > 10 ? 0 : 5000;
-    
-    this.flushTimeout = setTimeout(() => {
-      this.flushEvents();
-    }, delay);
+    // No-op: UnifiedAnalyticsClient handles all network syncing
   }
 
   /**
-   * Flush events to server
+   * Flush events - DISABLED
+   * Kept as no-op for any remaining callers (e.g. clearUserData).
    */
   private async flushEvents(): Promise<void> {
-    if (this.eventQueue.length === 0) return;
-    
-    const events = [...this.eventQueue];
-    this.eventQueue = [];
-    
-    try {
-      const response = await fetch(getAnalyticsEndpoint('event'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ events }),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Analytics API error: ${response.status}`);
-      }
-    } catch (error) {
-      console.error('Failed to flush analytics events:', error);
-      
-      // Re-queue events on failure (with limit to prevent memory issues)
-      if (this.eventQueue.length < 100) {
-        this.eventQueue.unshift(...events.slice(0, 50));
-      }
-    }
+    // No-op: UnifiedAnalyticsClient handles all network syncing
   }
 
   /**
@@ -756,18 +675,12 @@ class AnalyticsService {
   // NOTE: Live activity heartbeat functions removed - PresenceProvider handles this now
 
   /**
-   * Start watch time sync interval
-   * OPTIMIZED: Increased to 30 minutes to reduce edge requests
-   * Watch time is still synced on pause/complete/exit for accuracy
+   * Start watch time sync interval - DISABLED
+   * Watch time is now synced via UnifiedAnalyticsClient's 60s batch.
+   * Direct syncs only happen on pause/seek/complete/exit.
    */
   private startWatchTimeSyncInterval(): void {
-    if (this.watchTimeSyncInterval) return;
-    
-    // Sync watch time every 30 minutes
-    // Critical events (pause, complete, exit) still sync immediately
-    this.watchTimeSyncInterval = setInterval(() => {
-      this.syncAllWatchTime();
-    }, 1800000);
+    // No-op: UnifiedAnalyticsClient handles periodic watch progress sync
   }
 
   /**
@@ -858,30 +771,14 @@ class AnalyticsService {
   }
   
   /**
-   * Track user activity for bounce rate and session metrics
+   * Track user activity locally
+   * NOTE: No longer sends independent network requests - UnifiedAnalyticsClient handles this
    */
   private async trackUserActivity(action: string, contentId?: string): Promise<void> {
-    if (!this.userSession) return;
-    
-    try {
-      await fetch(getAnalyticsEndpoint('event'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          events: [{
-            id: `evt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            type: 'user_activity',
-            userId: this.userSession.userId,
-            sessionId: this.userSession.sessionId,
-            deviceId: this.userSession.deviceId,
-            timestamp: Date.now(),
-            data: { action, contentId },
-            metadata: userTrackingService.getAnalyticsMetadata(),
-          }]
-        }),
-      });
-    } catch (error) {
-      console.error('[Analytics] Failed to track user activity:', error);
+    // Local tracking only - no network call
+    // UnifiedAnalyticsClient's 60s batch sync handles presence/activity reporting
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Analytics] User activity (local):', { action, contentId });
     }
   }
 
@@ -898,13 +795,22 @@ class AnalyticsService {
 
   /**
    * Sync all accumulated watch time to server
+   * Also cleans up stale entries older than 24 hours
    */
   private async syncAllWatchTime(): Promise<void> {
     if (this.watchTimeAccumulator.size === 0) return;
     
     const sessions = Array.from(this.watchTimeAccumulator.entries());
+    const now = Date.now();
+    const STALE_THRESHOLD = 24 * 60 * 60 * 1000; // 24 hours
     
     for (const [key, session] of sessions) {
+      // Clean up stale entries (older than 24h with no updates)
+      if (now - session.lastSyncedAt > STALE_THRESHOLD) {
+        this.watchTimeAccumulator.delete(key);
+        continue;
+      }
+      
       // Only sync if there's meaningful watch time (at least 3 seconds)
       if (session.totalWatchTime < 3) continue;
       
@@ -914,7 +820,6 @@ class AnalyticsService {
           : 0;
         
         const isCompleted = completionPercentage >= 90;
-        const now = Date.now();
 
         await fetch(getAnalyticsEndpoint('watch-session'), {
           method: 'POST',
@@ -939,49 +844,22 @@ class AnalyticsService {
             pauseCount: session.pauseCount,
             seekCount: session.seekCount,
           }),
-          keepalive: true, // Ensure request completes even on page unload
+          keepalive: true,
         });
         
-        // Also update user activity with watch time
-        await this.updateUserActivityWithWatchTime(session);
+        // NOTE: updateUserActivityWithWatchTime removed - UnifiedAnalyticsClient handles user metrics
         
-        console.log('[Analytics] Synced watch time:', {
-          contentId: session.contentId,
-          watchTime: Math.round(session.totalWatchTime),
-          completion: completionPercentage,
-          isCompleted,
-        });
+        // Clean up completed sessions
+        if (isCompleted) {
+          this.watchTimeAccumulator.delete(key);
+        }
       } catch (error) {
         console.error('[Analytics] Failed to sync watch time:', error);
       }
     }
   }
   
-  /**
-   * Update user activity record with accumulated watch time
-   */
-  private async updateUserActivityWithWatchTime(session: {
-    contentId: string;
-    totalWatchTime: number;
-  }): Promise<void> {
-    if (!this.userSession) return;
-    
-    try {
-      await fetch('/api/analytics/user-metrics', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: this.userSession.userId,
-          sessionId: this.userSession.sessionId,
-          watchTime: Math.round(session.totalWatchTime),
-          contentId: session.contentId,
-        }),
-        keepalive: true,
-      });
-    } catch (error) {
-      // Silently fail - this is supplementary tracking
-    }
-  }
+  // updateUserActivityWithWatchTime removed - UnifiedAnalyticsClient handles user metrics via batch sync
 
   /**
    * Clear watch time for content (on completion or navigation away)
@@ -1028,9 +906,12 @@ class AnalyticsService {
       clearInterval(this.liveTVSessionInterval);
     }
     this.liveTVSessionInterval = setInterval(() => {
-      this.updateLiveTVWatchTime();
-      this.sendLiveTVSessionUpdate('heartbeat');
-    }, 30000); // Every 30 seconds
+      // Only send heartbeat when tab is visible
+      if (document.visibilityState === 'visible') {
+        this.updateLiveTVWatchTime();
+        this.sendLiveTVSessionUpdate('heartbeat');
+      }
+    }, 60000); // Every 60 seconds (aligned with UnifiedAnalyticsClient sync interval)
     
     console.log('[Analytics] Started Live TV session:', data.channelName);
   }

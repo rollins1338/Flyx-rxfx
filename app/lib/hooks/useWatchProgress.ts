@@ -5,6 +5,7 @@
 
 import { useEffect, useCallback, useRef } from 'react';
 import { useAnalytics } from '@/components/analytics/AnalyticsProvider';
+import { userTrackingService } from '@/lib/services/user-tracking';
 
 interface WatchProgressOptions {
   contentId?: string;
@@ -16,7 +17,7 @@ interface WatchProgressOptions {
   onComplete?: () => void;
 }
 
-const SAVE_INTERVAL = 5000; // Save every 5 seconds
+const SAVE_INTERVAL = 5000; // Save to localStorage every 5 seconds
 const MIN_WATCH_THRESHOLD = 10; // Minimum 10 seconds watched to save
 const ANALYTICS_INTERVAL = 30000; // Track analytics every 30 seconds
 const COMPLETION_THRESHOLD = 0.9; // Consider 90% as completed
@@ -142,6 +143,9 @@ export function useWatchProgress(options: WatchProgressOptions) {
   }, [contentId, contentType, contentTitle, seasonNumber, episodeNumber, trackWatchEvent]);
 
   // Handle progress updates
+  // OPTIMIZED: Only saves to localStorage every SAVE_INTERVAL for local resume.
+  // Network sync only happens on pause/seek/complete/exit (not periodic).
+  // This dramatically reduces CF Worker and D1 usage.
   const handleProgress = useCallback((currentTime: number, duration: number) => {
     if (!contentId || duration <= 0) return;
 
@@ -180,33 +184,24 @@ export function useWatchProgress(options: WatchProgressOptions) {
       onComplete?.();
     }
 
-    // Save progress periodically
+    // Save progress to localStorage periodically (local only, no network)
+    // This ensures resume works even if the tab crashes
     const timeSinceLastSave = Date.now() - lastSaveTimeRef.current;
     if (timeSinceLastSave >= SAVE_INTERVAL && currentTime >= MIN_WATCH_THRESHOLD) {
-      trackWatchEvent({
+      // Save to localStorage for local resume (no network call)
+      userTrackingService.updateWatchProgressLocal({
         contentId,
         contentType: mappedContentType,
-        contentTitle,
-        action: 'progress',
+        seasonNumber,
+        episodeNumber,
         currentTime,
         duration,
-        seasonNumber,
-        episodeNumber,
+        completionPercentage: Math.round(completionPercentage * 100),
+        lastWatched: Date.now(),
+        completed: false,
       });
 
-      // Update live activity with current position
-      updateActivity({
-        type: 'watching',
-        contentId,
-        contentTitle,
-        contentType: mappedContentType,
-        seasonNumber,
-        episodeNumber,
-        currentPosition: Math.round(currentTime),
-        duration: Math.round(duration),
-      });
-
-      // Update enhanced watch time tracking - this is the key for accurate tracking
+      // Update enhanced watch time tracking in memory (no network)
       updateWatchTime({
         contentId,
         contentType: mappedContentType,
@@ -221,7 +216,7 @@ export function useWatchProgress(options: WatchProgressOptions) {
       lastSaveTimeRef.current = Date.now();
     }
 
-    // Track analytics periodically (every 30 seconds)
+    // Track analytics periodically (every 30 seconds) - local event only, no network
     const timeSinceLastAnalytics = Date.now() - lastAnalyticsTimeRef.current;
     if (timeSinceLastAnalytics >= ANALYTICS_INTERVAL) {
       trackContentEngagement(contentId, mappedContentType, 'watch_progress', {
@@ -245,7 +240,6 @@ export function useWatchProgress(options: WatchProgressOptions) {
     handleWatchStart,
     trackWatchEvent,
     trackContentEngagement,
-    updateActivity,
     updateWatchTime,
   ]);
 

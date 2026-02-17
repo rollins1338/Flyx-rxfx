@@ -173,6 +173,35 @@ export async function saveDailyMetrics(
 }
 
 /**
+ * Cleanup old data to prevent unbounded D1 table growth
+ * - page_views: delete rows older than 30 days (already aggregated into metrics_daily)
+ * - watch_sessions: delete rows older than 90 days
+ * - live_activity: delete inactive users older than 7 days
+ * - bot_detections: delete rows older than 30 days
+ */
+async function cleanupOldData(db: D1Database): Promise<void> {
+  const now = Date.now();
+  const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+  const ninetyDaysAgo = now - 90 * 24 * 60 * 60 * 1000;
+  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+
+  try {
+    const results = await db.batch([
+      db.prepare(`DELETE FROM page_views WHERE entry_time < ?`).bind(thirtyDaysAgo),
+      db.prepare(`DELETE FROM watch_sessions WHERE started_at < ?`).bind(ninetyDaysAgo),
+      db.prepare(`DELETE FROM live_activity WHERE is_active = 0 AND last_heartbeat < ?`).bind(sevenDaysAgo),
+      db.prepare(`DELETE FROM bot_detections WHERE created_at < ?`).bind(thirtyDaysAgo),
+    ]);
+
+    const changes = results.map(r => r.meta?.changes || 0);
+    console.log(`[Cron] Cleanup: page_views=${changes[0]}, watch_sessions=${changes[1]}, live_activity=${changes[2]}, bot_detections=${changes[3]}`);
+  } catch (error) {
+    console.error('[Cron] Cleanup error:', error);
+    // Don't throw - cleanup failure shouldn't fail the whole cron job
+  }
+}
+
+/**
  * Main cron handler - called by Cloudflare Workers scheduled trigger
  * Aggregates metrics for the previous day
  * 
@@ -198,6 +227,9 @@ export async function handleScheduled(
 
     // Save to metrics_daily table
     await saveDailyMetrics(env.DB, metrics);
+
+    // Cleanup old data to prevent unbounded table growth
+    await cleanupOldData(env.DB);
 
     console.log(`[Cron] Successfully aggregated metrics for ${dateStr}`);
   } catch (error) {

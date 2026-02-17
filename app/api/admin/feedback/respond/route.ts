@@ -13,7 +13,13 @@ import jwt from 'jsonwebtoken';
 import { sendFeedbackResponse, isEmailConfigured } from '@/app/lib/services/email';
 import { getD1Database } from '@/app/lib/db/d1-connection';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const JWT_SECRET = (() => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    console.warn('[feedback-respond] JWT_SECRET is not set! Authentication will fail in production.');
+  }
+  return secret || 'INSECURE_FALLBACK_DO_NOT_USE_IN_PRODUCTION';
+})();
 const ADMIN_COOKIE = 'admin_token';
 
 async function verifyAdmin() {

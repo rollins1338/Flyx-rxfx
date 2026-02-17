@@ -229,8 +229,8 @@ export class AnalyticsDO {
     
     console.log(`[AnalyticsDO] Flushing ${usersToFlush.length} dirty users (${this.liveUsers.size} total)`);
     
-    // Clear dirty set
-    this.dirtyUsers.clear();
+    // Snapshot the dirty user IDs being flushed
+    const flushedUserIds = new Set(usersToFlush.map(u => u.userId));
     
     if (usersToFlush.length === 0) return;
     
@@ -288,10 +288,18 @@ export class AnalyticsDO {
       
       await this.env.DB.batch(batch);
       console.log(`[AnalyticsDO] Flushed ${usersToFlush.length} users to D1 (${batch.length} statements)`);
+      // Only remove flushed users from dirty set after successful write
+      for (const userId of flushedUserIds) {
+        this.dirtyUsers.delete(userId);
+      }
     } catch (e) {
       // DIAGNOSTIC: Enhanced error logging for D1 flush errors
       console.error('[AnalyticsDO] D1 Flush error:', e);
       console.error('[AnalyticsDO] Error details:', JSON.stringify(e, Object.getOwnPropertyNames(e)));
+      // Re-mark users as dirty so they get retried on next flush
+      for (const userId of flushedUserIds) {
+        this.dirtyUsers.add(userId);
+      }
       if (String(e).includes('no such column') || String(e).includes('table has no column')) {
         console.error('[AnalyticsDO] SCHEMA MISMATCH DETECTED - Check schema.sql vs index.ts table definitions!');
       }
@@ -468,9 +476,22 @@ export class AnalyticsDO {
     let pageViews = 0, uniqueVisitors = 0;
     let dailyPeaks: Array<{ date: string; peak: number }> = [];
     
-    // Historical peak
-    const allTimePeak = 425;
-    const allTimePeakDate = '2025-12-30';
+    // Historical peak - query from D1 instead of hardcoding
+    let allTimePeak = 0;
+    let allTimePeakDate = '';
+    try {
+      const peakRow = await this.env.DB.prepare(`
+        SELECT peak_total, date FROM peak_stats ORDER BY peak_total DESC LIMIT 1
+      `).first();
+      if (peakRow) {
+        allTimePeak = peakRow.peak_total as number;
+        allTimePeakDate = peakRow.date as string;
+      }
+    } catch {
+      // Fallback if query fails
+      allTimePeak = this.peakToday.total;
+      allTimePeakDate = this.peakToday.date;
+    }
     
     // Calculate time bounds
     const oneDayAgo = now - 24 * 60 * 60 * 1000;

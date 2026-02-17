@@ -203,8 +203,8 @@ async function flushToD1(db: D1Database, force = false): Promise<void> {
   
   console.log(`[Flush] Starting flush: ${usersToFlush.length} dirty users (${liveUsers.size} total in memory)`);
   
-  // Clear dirty set after getting users to flush
-  dirtyUsers.clear();
+  // Snapshot the dirty user IDs being flushed, then remove only those after success
+  const flushedUserIds = new Set(usersToFlush.map(u => u.userId));
   
   const batch: D1PreparedStatement[] = [];
   
@@ -275,12 +275,18 @@ async function flushToD1(db: D1Database, force = false): Promise<void> {
   }
   
   // 6. Insert bot detections (upsert to update if higher confidence)
+  // Skip confirmed_human entries (confidence < 50) to reduce D1 writes
+  // Only persist suspected/confirmed bots that are worth reviewing
   for (const detection of pendingBotDetections.values()) {
     // Determine status based on confidence score
     let status = 'confirmed_human';
     if (detection.confidenceScore >= 80) status = 'confirmed_bot';
     else if (detection.confidenceScore >= 50) status = 'suspected';
     else if (detection.confidenceScore >= 30) status = 'pending_review';
+    
+    // Skip writing low-confidence detections (confirmed_human / pending_review)
+    // These are normal users and don't need D1 persistence
+    if (detection.confidenceScore < 50) continue;
     
     batch.push(db.prepare(`
       INSERT INTO bot_detections (user_id, ip_address, user_agent, confidence_score, detection_reasons, fingerprint, status, created_at, updated_at)
@@ -302,10 +308,19 @@ async function flushToD1(db: D1Database, force = false): Promise<void> {
     try {
       await db.batch(batch);
       console.log(`[Flush] Wrote ${batch.length} statements to D1`);
+      // Only remove flushed users from dirty set after successful write
+      // Users that received new heartbeats during flush remain dirty
+      for (const userId of flushedUserIds) {
+        dirtyUsers.delete(userId);
+      }
     } catch (e) {
       // DIAGNOSTIC: Log detailed error for schema mismatch debugging
       console.error('[Flush] D1 Batch Error:', e);
       console.error('[Flush] Error details:', JSON.stringify(e, Object.getOwnPropertyNames(e)));
+      // Re-mark users as dirty so they get retried on next flush
+      for (const userId of flushedUserIds) {
+        dirtyUsers.add(userId);
+      }
       // Check if it's a schema error
       if (String(e).includes('no such column') || String(e).includes('table has no column')) {
         console.error('[Flush] SCHEMA MISMATCH DETECTED - Missing column in watch_sessions table!');
@@ -373,8 +388,8 @@ async function handlePresence(request: Request, env: Env, headers: HeadersInit):
     }
   }
   
-  // Trigger flush in background (non-blocking)
-  flushToD1(env.DB).catch(() => {});
+  // Don't trigger flush on every presence POST - let the 2-minute interval handle it
+  // Presence updates are high-frequency and low-priority for D1 persistence
   
   return Response.json({ success: true, tracked: true }, { headers });
 }
@@ -398,8 +413,8 @@ async function handlePageView(request: Request, env: Env, headers: HeadersInit):
     deviceType: data.deviceType,
   });
   
-  // Trigger flush in background
-  flushToD1(env.DB).catch(() => {});
+  // Don't trigger flush on every page view - let the 2-minute interval handle it
+  // Page views are low-priority and can wait for the batch
   
   return Response.json({ success: true }, { headers });
 }
@@ -409,12 +424,13 @@ async function handleWatchSession(request: Request, env: Env, headers: HeadersIn
   const data = await request.json() as any;
   if (!data.userId || !data.contentId) return Response.json({ error: 'Missing fields' }, { status: 400, headers });
   
+  // Use deterministic key so /sync and /watch-session upsert the same row
   const key = `${data.userId}_${data.contentId}_${data.seasonNumber || 0}_${data.episodeNumber || 0}`;
   const existing = pendingWatchSessions.get(key);
   const now = Date.now();
   
   pendingWatchSessions.set(key, {
-    id: data.id || existing?.id || `ws_${generateId()}`,
+    id: existing?.id || data.id || `ws_${key}_${data.startedAt || now}`,
     userId: data.userId,
     sessionId: data.sessionId,
     contentId: data.contentId,
@@ -424,15 +440,15 @@ async function handleWatchSession(request: Request, env: Env, headers: HeadersIn
     episodeNumber: data.episodeNumber,
     startedAt: existing?.startedAt || data.startedAt || now,
     lastUpdate: now,
-    watchTime: data.totalWatchTime || existing?.watchTime || 0,
+    watchTime: Math.max(data.totalWatchTime || 0, existing?.watchTime || 0),
     lastPosition: data.lastPosition || existing?.lastPosition || 0,
     duration: data.duration || existing?.duration || 0,
-    completionPercentage: data.completionPercentage || existing?.completionPercentage || 0,
+    completionPercentage: Math.max(data.completionPercentage || 0, existing?.completionPercentage || 0),
     isCompleted: data.isCompleted || existing?.isCompleted || false,
   });
   
-  // Trigger flush in background
-  flushToD1(env.DB).catch(() => {});
+  // Don't trigger flush on every watch-session POST - let the 2-minute interval handle it
+  // This prevents excessive D1 writes during active watching
   
   return Response.json({ success: true }, { headers });
 }
@@ -513,7 +529,7 @@ async function handleLiveTVSession(request: Request, env: Env, headers: HeadersI
     console.error('[LiveTV] Failed to update DO:', e);
   }
   
-  flushToD1(env.DB).catch(() => {});
+  // Don't trigger flush on every LiveTV POST - let the 2-minute interval handle it
   return Response.json({ success: true }, { headers });
 }
 
@@ -562,7 +578,7 @@ async function handleEvents(request: Request, env: Env, headers: HeadersInit): P
         }
       }
       
-      flushToD1(env.DB).catch(() => {});
+      // Don't trigger flush on every events POST - let the 2-minute interval handle it
       return Response.json({ success: true, processed: data.events.length }, { headers });
     }
     
@@ -684,8 +700,8 @@ async function handleSync(request: Request, env: Env, headers: HeadersInit): Pro
       }
     }
 
-    // 5. Trigger D1 flush in background (non-blocking)
-    flushToD1(env.DB).catch(() => {});
+    // Don't trigger flush on every sync POST - let the 2-minute interval handle it
+    // This prevents excessive D1 writes when many users are syncing simultaneously
 
     return Response.json({ 
       success: true, 
@@ -767,8 +783,7 @@ async function handleLiveActivityPost(request: Request, env: Env, headers: Heade
       });
     }
 
-    // Trigger D1 flush in background (non-blocking)
-    flushToD1(env.DB).catch(() => {});
+    // Don't trigger flush on every live-activity POST - let the 2-minute interval handle it
 
     return Response.json({ 
       success: true, 
@@ -946,7 +961,7 @@ async function handleGetUnifiedStats(env: Env, headers: HeadersInit): Promise<Re
   let historical = historicalStatsCache;
   if (!historical || now - historical.timestamp > HISTORICAL_CACHE_TTL) {
     try {
-      const [userStats, contentStats, pageStats, geoStats, cityStats, deviceStats, topContentStats, botStats] = await Promise.all([
+      const [userStats, contentStats, pageStats, geoStats, topContentStats, botStats] = await Promise.all([
         // User activity stats
         env.DB.prepare(`
           SELECT COUNT(DISTINCT user_id) as total,
@@ -978,31 +993,11 @@ async function handleGetUnifiedStats(env: Env, headers: HeadersInit): Promise<Re
           FROM page_views WHERE entry_time >= ?
         `).bind(oneDayAgo).first(),
         
-        // Geographic stats (countries)
+        // Geographic stats (countries + cities combined in one query)
         env.DB.prepare(`
-          SELECT country, COUNT(DISTINCT user_id) as count
+          SELECT country, city, COUNT(DISTINCT user_id) as count
           FROM user_activity WHERE last_seen >= ? AND country IS NOT NULL AND country != ''
-          GROUP BY country ORDER BY count DESC LIMIT 20
-        `).bind(sevenDaysAgo).all(),
-        
-        // City stats
-        env.DB.prepare(`
-          SELECT city, country, COUNT(DISTINCT user_id) as count
-          FROM user_activity WHERE last_seen >= ? AND city IS NOT NULL AND city != '' AND country IS NOT NULL
-          GROUP BY city, country ORDER BY count DESC LIMIT 30
-        `).bind(sevenDaysAgo).all(),
-        
-        // Device stats (from live_activity since user_activity may not have device_type)
-        env.DB.prepare(`
-          SELECT 
-            CASE 
-              WHEN content_type LIKE '%mobile%' THEN 'mobile'
-              WHEN content_type LIKE '%tablet%' THEN 'tablet'
-              ELSE 'desktop'
-            END as device,
-            COUNT(DISTINCT user_id) as count
-          FROM user_activity WHERE last_seen >= ?
-          GROUP BY device ORDER BY count DESC
+          GROUP BY country, city ORDER BY count DESC LIMIT 50
         `).bind(sevenDaysAgo).all(),
         
         // Top content
@@ -1025,15 +1020,33 @@ async function handleGetUnifiedStats(env: Env, headers: HeadersInit): Promise<Re
         `).bind(sevenDaysAgo).first(),
       ]);
       
+      // Split geo results into country-level and city-level aggregations
+      const geoRows = geoStats.results || [];
+      const countryAgg = new Map<string, number>();
+      const cityRows: Array<{ city: string; country: string; count: number }> = [];
+      for (const row of geoRows as any[]) {
+        const country = row.country as string;
+        const city = row.city as string;
+        const count = parseInt(row.count) || 0;
+        countryAgg.set(country, (countryAgg.get(country) || 0) + count);
+        if (city) {
+          cityRows.push({ city, country, count });
+        }
+      }
+      const geoStatsAgg = Array.from(countryAgg.entries())
+        .map(([country, count]) => ({ country, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 20);
+      
       historical = {
         timestamp: now,
         data: { 
           userStats, 
           contentStats, 
           pageStats, 
-          geoStats: geoStats.results || [],
-          cityStats: cityStats.results || [],
-          deviceStats: deviceStats.results || [],
+          geoStats: geoStatsAgg,
+          cityStats: cityRows.slice(0, 30),
+          deviceStats: [],
           topContentStats: topContentStats.results || [],
           botStats,
         }
@@ -1133,15 +1146,15 @@ async function handleGetUnifiedStats(env: Env, headers: HeadersInit): Promise<Re
     // Geographic data
     geographic: (h.geoStats || []).map((g: any) => ({ 
       country: g.country, 
-      countryName: g.country, // Could add country name lookup
-      count: parseInt(g.count) || 0 
+      countryName: g.country,
+      count: g.count || 0,
     })),
     // Cities
     cities: (h.cityStats || []).map((c: any) => ({
       city: c.city,
       country: c.country,
       countryName: c.country,
-      count: parseInt(c.count) || 0,
+      count: c.count || 0,
     })),
     // Devices
     devices: (h.deviceStats || []).length > 0 
@@ -1485,8 +1498,8 @@ export default {
                 }
               }
               
-              // Trigger flush
-              flushToD1(env.DB).catch(() => {});
+              // Don't trigger flush on every sync - let the 2-minute interval handle it
+              // This prevents excessive D1 writes when many users are syncing simultaneously
             }
             
             // Route presence to Durable Object
