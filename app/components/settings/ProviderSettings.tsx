@@ -27,6 +27,12 @@ const PROVIDERS: ProviderInfo[] = [
     icon: '🌍',
   },
   {
+    id: 'hexa',
+    name: 'Hexa',
+    description: 'Multi-embed aggregator — 8 servers',
+    icon: '🔷',
+  },
+  {
     id: 'vidsrc',
     name: 'VidSrc',
     description: 'Tertiary fallback provider',

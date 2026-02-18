@@ -84,15 +84,13 @@ const SERVER_NAMES: Record<string, string> = {
   delta: 'Dionysus',
   echo: 'Eros',
   foxtrot: 'Freya',
+  golf: 'Gaia',
+  hotel: 'Hera',
+  india: 'Iris',
+  juliet: 'Juno',
+  kilo: 'Kali',
+  lima: 'Loki',
 };
-
-// NATO phonetic alphabet order for server priority
-const NATO_ORDER = [
-  'alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot', 'golf', 'hotel',
-  'india', 'juliet', 'kilo', 'lima', 'mike', 'november', 'oscar', 'papa',
-  'quebec', 'romeo', 'sierra', 'tango', 'uniform', 'victor', 'whiskey',
-  'xray', 'yankee', 'zulu'
-];
 
 /**
  * WASM Loader for Flixer decryption

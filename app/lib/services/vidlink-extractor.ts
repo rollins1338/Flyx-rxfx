@@ -138,11 +138,33 @@ async function _doInitWasm(): Promise<boolean> {
     }
     if (typeof (globalThis as any).document === 'undefined') {
       (globalThis as any).document = {
-        createElement: () => ({ style: {}, setAttribute: () => {}, appendChild: () => {} }),
-        head: { appendChild: () => {} },
-        body: { appendChild: () => {}, innerHTML: '' },
+        createElement: (tag: string) => ({ 
+          style: {}, 
+          setAttribute: () => {}, 
+          appendChild: () => {},
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          tagName: tag?.toUpperCase(),
+          src: '',
+          href: '',
+          rel: '',
+          type: '',
+          textContent: '',
+          innerHTML: '',
+          id: '',
+          className: '',
+        }),
+        head: { appendChild: () => {}, removeChild: () => {} },
+        body: { appendChild: () => {}, removeChild: () => {}, innerHTML: '' },
         getElementById: () => null,
+        querySelector: () => null,
+        querySelectorAll: () => [],
+        createTextNode: () => ({ textContent: '' }),
+        createDocumentFragment: () => ({ appendChild: () => {} }),
         domain: 'vidlink.pro',
+        readyState: 'complete',
+        addEventListener: () => {},
+        removeEventListener: () => {},
       };
     }
     if (typeof (globalThis as any).location === 'undefined') {
@@ -150,6 +172,34 @@ async function _doInitWasm(): Promise<boolean> {
         href: 'https://vidlink.pro/',
         hostname: 'vidlink.pro',
         origin: 'https://vidlink.pro',
+        protocol: 'https:',
+        host: 'vidlink.pro',
+        pathname: '/',
+        search: '',
+        hash: '',
+      };
+    }
+    
+    // Additional browser globals the Go WASM may need
+    if (typeof (globalThis as any).navigator === 'undefined') {
+      (globalThis as any).navigator = {
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+        language: 'en-US',
+        languages: ['en-US', 'en'],
+        platform: 'Win32',
+      };
+    }
+    if (typeof (globalThis as any).performance === 'undefined') {
+      (globalThis as any).performance = {
+        now: () => Date.now(),
+        timeOrigin: Date.now(),
+      };
+    }
+    if (typeof (globalThis as any).crypto === 'undefined') {
+      const nodeCrypto = require('crypto');
+      (globalThis as any).crypto = {
+        getRandomValues: (arr: Uint8Array) => nodeCrypto.randomFillSync(arr),
+        subtle: nodeCrypto.webcrypto?.subtle,
       };
     }
 

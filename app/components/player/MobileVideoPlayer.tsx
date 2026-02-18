@@ -44,7 +44,7 @@ function CopyUrlButton({ url }: { url: string }) {
 }
 
 type AudioPreference = 'sub' | 'dub';
-type Provider = 'vidsrc' | '1movies' | 'flixer' | 'vidlink' | 'animekai' | 'hianime';
+type Provider = 'vidsrc' | '1movies' | 'flixer' | 'vidlink' | 'hexa' | 'animekai' | 'hianime';
 
 interface SubtitleTrack {
   id: string;
@@ -108,6 +108,7 @@ const triggerHaptic = (type: 'light' | 'medium' | 'heavy' = 'light') => {
 const PROVIDER_NAMES: Record<Provider, string> = {
   flixer: 'Flixer',
   vidlink: 'VidLink',
+  hexa: 'Hexa',
   vidsrc: 'VidSrc',
   '1movies': '1movies',
   animekai: 'AnimeKai',

@@ -15,6 +15,7 @@ import { VIDSRC_ENABLED } from '@/app/lib/services/vidsrc-extractor';
 import { ANIMEKAI_ENABLED } from '@/app/lib/services/animekai-extractor';
 import { ONEMOVIES_ENABLED } from '@/app/lib/services/onemovies-extractor';
 import { FLIXER_ENABLED } from '@/app/lib/services/flixer-extractor';
+import { MULTI_EMBED_ENABLED } from '@/app/lib/services/multi-embed-extractor';
 
 export async function GET() {
   return NextResponse.json({
@@ -30,6 +31,12 @@ export async function GET() {
         name: 'VidLink',
         primary: false,
         description: 'Multi-language streaming fallback',
+      },
+      hexa: {
+        enabled: MULTI_EMBED_ENABLED,
+        name: 'Hexa',
+        primary: false,
+        description: 'Hexawatch multi-embed aggregator (8 servers)',
       },
       vidsrc: {
         enabled: VIDSRC_ENABLED,

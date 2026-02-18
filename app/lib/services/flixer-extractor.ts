@@ -53,9 +53,16 @@ const SERVER_NAMES: Record<string, string> = {
   delta: 'Dionysus',
   echo: 'Eros',
   foxtrot: 'Freya',
+  golf: 'Gaia',
+  hotel: 'Hera',
+  india: 'Iris',
+  juliet: 'Juno',
+  kilo: 'Kali',
+  lima: 'Loki',
 };
 
-const NATO_ORDER = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot'];
+// All 12 NATO servers — charlie/golf sometimes return E58 but the rest are solid
+const NATO_ORDER = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot', 'golf', 'hotel', 'india', 'juliet', 'kilo', 'lima'];
 
 async function fetchSubtitles(
   tmdbId: string,

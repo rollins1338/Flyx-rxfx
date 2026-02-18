@@ -238,6 +238,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
   const [providerAvailability, setProviderAvailability] = useState<Record<string, boolean>>({
     flixer: true, // Flixer is the primary provider (WASM-based, fastest)
     vidlink: true, // VidLink as secondary provider with multi-language support
+    hexa: true, // Hexa multi-embed aggregator (8 hexawatch servers)
     vidsrc: true, // VidSrc as tertiary fallback
     '1movies': true, // 1movies - fully reverse-engineered, no Puppeteer needed
     animekai: true, // Anime-specific provider - auto-selected for anime content
@@ -810,6 +811,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
       let availability: Record<string, boolean> = {
         flixer: true,
         vidlink: true,
+        hexa: true,
         vidsrc: true,
         '1movies': true,
         animekai: true,
@@ -822,6 +824,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
         availability = {
           flixer: data.providers?.flixer?.enabled ?? true,
           vidlink: data.providers?.vidlink?.enabled ?? true,
+          hexa: data.providers?.hexa?.enabled ?? true,
           vidsrc: data.providers?.vidsrc?.enabled ?? true,
           '1movies': data.providers?.['1movies']?.enabled ?? true,
           animekai: data.providers?.animekai?.enabled ?? true,
@@ -892,8 +895,8 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
       
       // Add any remaining available providers not in user's order as fallback
       const allProviders = isAnime 
-        ? ['hianime', 'animekai', 'flixer', 'vidlink', 'vidsrc', '1movies']
-        : ['flixer', 'vidlink', 'vidsrc', '1movies'];
+        ? ['hianime', 'animekai', 'flixer', 'vidlink', 'hexa', 'vidsrc', '1movies']
+        : ['flixer', 'vidlink', 'hexa', 'vidsrc', '1movies'];
       for (const providerName of allProviders) {
         if (providerOrder.includes(providerName)) continue;
         if (disabledProviders.has(providerName)) continue;
@@ -4494,6 +4497,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                       const displayNames: Record<string, string> = {
                         flixer: 'Flixer',
                         vidlink: 'VidLink',
+                        hexa: 'Hexa',
                         vidsrc: 'VidSrc',
                         '1movies': '1movies',
                         hianime: 'HiAnime',

@@ -3,11 +3,12 @@
  * 
  * Provider Priority (February 2026):
  * - For ANIME content: AnimeKai (PRIMARY) → VidLink (fallback)
- * - For other content: Flixer (PRIMARY) → VidLink → VidSrc → 1movies → SmashyStream → MultiMovies → MultiEmbed
+ * - For other content: Flixer (PRIMARY) → VidLink → 1movies → VidSrc → SmashyStream → MultiMovies → MultiEmbed/Hexa
  * 
- * NOTE: Flixer is PRIMARY - WASM-based extraction, 2-3s, most reliable.
+ * NOTE: Flixer is PRIMARY - WASM-based extraction, 12 NATO servers (alpha-lima), most reliable.
  *       VidLink is SECONDARY - Go WASM token generation + plain JSON API.
- *       VidSrc is TERTIARY - deprioritized due to Cloudflare Turnstile blocking ~80% of content.
+ *       MultiEmbed/Hexa - 8 hexawatch servers (DOG, CAT, RABBIT, DOVE, GEESE, POLARIS, GALAXY, MOON).
+ *       VidSrc is deprioritized due to Cloudflare Turnstile blocking ~80% of content.
  *       1movies is DISABLED.
  * 
  * GET /api/stream/extract?tmdbId=550&type=movie
@@ -19,6 +20,8 @@
  * GET /api/stream/extract?tmdbId=507089&type=movie&provider=1movies
  * GET /api/stream/extract?tmdbId=507089&type=movie&provider=smashystream
  * GET /api/stream/extract?tmdbId=507089&type=movie&provider=multimovies
+ * GET /api/stream/extract?tmdbId=507089&type=movie&provider=multiembed
+ * GET /api/stream/extract?tmdbId=507089&type=movie&provider=hexa
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -108,14 +111,15 @@ function maybeProxyUrl(source: any, provider: string): string {
   const is1movies = provider === '1movies';
   const isFlixer = provider === 'flixer';
   const isVidLink = provider === 'vidlink';
+  const isMultiEmbed = provider === 'multiembed' || provider === 'hexa';
   // VidLink CDN domains (storm.vodvidl.site, etc.) are behind Cloudflare and block datacenter IPs
   const isVidLinkCdn = source.url.includes('vodvidl.site') || source.url.includes('videostr.net');
   
-  console.log(`[maybeProxyUrl] provider=${provider}, isAnimeKai=${isAnimeKai}, isAnimeKaiSrc=${isAnimeKaiSrc}, isMegaUpCdn=${isMegaUpCdn}, is1moviesCdn=${is1moviesCdn}, isFlixer=${isFlixer}, isVidLink=${isVidLink}, isVidLinkCdn=${isVidLinkCdn}, url=${source.url.substring(0, 60)}`);
+  console.log(`[maybeProxyUrl] provider=${provider}, isAnimeKai=${isAnimeKai}, isAnimeKaiSrc=${isAnimeKaiSrc}, isMegaUpCdn=${isMegaUpCdn}, is1moviesCdn=${is1moviesCdn}, isFlixer=${isFlixer}, isVidLink=${isVidLink}, isMultiEmbed=${isMultiEmbed}, isVidLinkCdn=${isVidLinkCdn}, url=${source.url.substring(0, 60)}`);
   
   // Route through residential proxy for CDNs that block datacenter IPs
-  // This includes: AnimeKai, 1movies, Flixer, AND VidLink
-  if (isAnimeKai || isAnimeKaiSrc || isMegaUpCdn || is1moviesCdn || is1movies || isFlixer || isVidLink || isVidLinkCdn) {
+  // This includes: AnimeKai, 1movies, Flixer, VidLink, AND MultiEmbed/Hexa
+  if (isAnimeKai || isAnimeKaiSrc || isMegaUpCdn || is1moviesCdn || is1movies || isFlixer || isVidLink || isVidLinkCdn || isMultiEmbed) {
     const proxiedUrl = getAnimeKaiProxyUrl(source.url);
     console.log(`[maybeProxyUrl] → Using /animekai route (residential proxy): ${proxiedUrl.substring(0, 80)}...`);
     return proxiedUrl;
@@ -265,7 +269,7 @@ export async function GET(request: NextRequest) {
     }
     
     // Validate provider (whitelist)
-    const validProviders = ['auto', 'animekai', 'vidsrc', 'flixer', '1movies', 'vidlink', 'smashystream', 'multimovies', 'multiembed'];
+    const validProviders = ['auto', 'animekai', 'vidsrc', 'flixer', '1movies', 'vidlink', 'smashystream', 'multimovies', 'multiembed', 'hexa'];
     if (!validProviders.includes(provider)) {
       return NextResponse.json(
         { error: `Invalid provider. Must be one of: ${validProviders.join(', ')}` },
@@ -344,7 +348,7 @@ export async function GET(request: NextRequest) {
       } else if (provider === 'multimovies' || sourceName.includes('MultiMovies')) {
         source = await fetchMultiMoviesSourceByName(sourceName, tmdbId, type, season, episode);
         usedProvider = 'multimovies';
-      } else if (provider === 'multiembed' || ['Cloudy', 'XPrime', 'Hexa'].includes(sourceName)) {
+      } else if (provider === 'multiembed' || provider === 'hexa' || sourceName.includes('Hexa')) {
         source = await fetchMultiEmbedSourceByName(sourceName, tmdbId, type, season, episode);
         usedProvider = 'multiembed';
       } else if (provider === 'vidlink' || sourceName.includes('(')) {
@@ -671,8 +675,8 @@ export async function GET(request: NextRequest) {
         throw new Error(multiMoviesResult.error || 'MultiMovies returned no sources');
       }
       
-      // If explicitly requesting multiembed, use it directly
-      if (provider === 'multiembed') {
+      // If explicitly requesting multiembed or hexa, use it directly
+      if (provider === 'multiembed' || provider === 'hexa') {
         if (!MULTI_EMBED_ENABLED) {
           throw new Error('MultiEmbed provider is disabled');
         }
@@ -804,9 +808,9 @@ export async function GET(request: NextRequest) {
         }
       }
       
-      // Try MultiEmbed sources (Cloudy, XPrime, Hexa, Flixer)
+      // Try MultiEmbed/Hexa sources (8 hexawatch servers)
       if (MULTI_EMBED_ENABLED) {
-        console.log('[EXTRACT] Trying fallback source: MultiEmbed...');
+        console.log('[EXTRACT] Trying fallback source: MultiEmbed/Hexa...');
         try {
           const multiEmbedResult = await extractMultiEmbedStreams(tmdbId, type, season, episode);
           const workingMultiEmbed = multiEmbedResult.sources.filter(s => s.status === 'working');
