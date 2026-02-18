@@ -361,6 +361,10 @@ const PROXY_ALLOWED_DOMAINS = [
   // Flixer
   'flixer.sh',
   'workers.dev', // Flixer CDN uses p.XXXXX.workers.dev
+  // VidLink CDN (storm.vodvidl.site, videostr.net — behind Cloudflare, blocks datacenter IPs)
+  'vodvidl.site',
+  'videostr.net',
+  'vidlink.pro',
   // VidSrc / 2embed (residential IP bypass for Cloudflare)
   '2embed.stream',
   'v1.2embed.stream',
@@ -1188,6 +1192,9 @@ function proxyAnimeKaiStream(targetUrl, customUserAgent, customReferer, customOr
   // Check if this is Flixer CDN (p.XXXXX.workers.dev)
   const isFlixerCdn = url.hostname.match(/^p\.\d+\.workers\.dev$/);
   
+  // Check if this is VidLink CDN (storm.vodvidl.site, videostr.net)
+  const isVidLinkCdn = url.hostname.includes('vodvidl.site') || url.hostname.includes('videostr.net');
+  
   // Check if this is dvalna.ru (DLHD CDN)
   const isDvalnaCdn = url.hostname.includes('dvalna.ru') || url.hostname.includes('kiko2.ru') || url.hostname.includes('giokko.ru');
   
@@ -1220,6 +1227,27 @@ function proxyAnimeKaiStream(targetUrl, customUserAgent, customReferer, customOr
     // Flixer CDN needs Referer header
     headers['Referer'] = customReferer || 'https://flixer.sh/';
     console.log(`[AnimeKai] Flixer CDN detected - adding Referer: ${headers['Referer']}`);
+  } else if (isVidLinkCdn) {
+    // VidLink CDN (storm.vodvidl.site) — the m3u8 URL has embedded headers as query params
+    // e.g. ?headers={"referer":"https://videostr.net/","origin":"https://videostr.net"}&host=...
+    // Extract and use those headers if present, otherwise use defaults
+    const headersParam = url.searchParams.get('headers');
+    if (headersParam) {
+      try {
+        const parsedHeaders = JSON.parse(headersParam);
+        if (parsedHeaders.referer) headers['Referer'] = parsedHeaders.referer;
+        if (parsedHeaders.origin) headers['Origin'] = parsedHeaders.origin;
+        console.log(`[AnimeKai] VidLink CDN - using embedded headers: Referer=${headers['Referer']}, Origin=${headers['Origin']}`);
+      } catch {
+        headers['Referer'] = customReferer || 'https://videostr.net/';
+        headers['Origin'] = 'https://videostr.net';
+        console.log(`[AnimeKai] VidLink CDN - failed to parse embedded headers, using defaults`);
+      }
+    } else {
+      headers['Referer'] = customReferer || 'https://videostr.net/';
+      headers['Origin'] = customOrigin || 'https://videostr.net';
+      console.log(`[AnimeKai] VidLink CDN detected - Referer: ${headers['Referer']}, Origin: ${headers['Origin']}`);
+    }
   } else if (customReferer) {
     // Only add Referer if explicitly provided for non-Flixer CDNs
     headers['Referer'] = customReferer;

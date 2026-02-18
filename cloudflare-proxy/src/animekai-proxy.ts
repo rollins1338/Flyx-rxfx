@@ -363,9 +363,29 @@ async function fetchDirectFromCF(
                            url.includes('code29wave') ||
                            url.includes('4spromax');
     
+    // VidLink CDN domains (storm.vodvidl.site, videostr.net) — need Referer/Origin headers
+    const isVidLinkDomain = url.includes('vodvidl.site') || url.includes('videostr.net');
+    
     if (isMegaUpDomain) {
       // MegaUp CDN - do NOT send Referer header (they block it)
       // Only send User-Agent
+    } else if (isVidLinkDomain) {
+      // VidLink CDN — extract embedded headers from URL params if present
+      try {
+        const parsedUrl = new URL(url);
+        const headersParam = parsedUrl.searchParams.get('headers');
+        if (headersParam) {
+          const parsedHeaders = JSON.parse(headersParam);
+          if (parsedHeaders.referer) headers['Referer'] = parsedHeaders.referer;
+          if (parsedHeaders.origin) headers['Origin'] = parsedHeaders.origin;
+        } else {
+          headers['Referer'] = 'https://videostr.net/';
+          headers['Origin'] = 'https://videostr.net';
+        }
+      } catch {
+        headers['Referer'] = 'https://videostr.net/';
+        headers['Origin'] = 'https://videostr.net';
+      }
     } else if (customReferer) {
       headers['Referer'] = customReferer;
     } else if (url.includes('workers.dev')) {
@@ -475,6 +495,23 @@ async function fetchViaRpiProxy(
       rpiParams.set('referer', customReferer);
     } else if (decodedUrl.match(/p\.\d+\.workers\.dev/)) {
       rpiParams.set('referer', 'https://flixer.sh/');
+    } else if (decodedUrl.includes('vodvidl.site') || decodedUrl.includes('videostr.net')) {
+      // VidLink CDN — extract embedded headers from URL if present
+      try {
+        const parsedUrl = new URL(decodedUrl);
+        const headersParam = parsedUrl.searchParams.get('headers');
+        if (headersParam) {
+          const parsedHeaders = JSON.parse(headersParam);
+          if (parsedHeaders.referer) rpiParams.set('referer', parsedHeaders.referer);
+          if (parsedHeaders.origin) rpiParams.set('origin', parsedHeaders.origin);
+        } else {
+          rpiParams.set('referer', 'https://videostr.net/');
+          rpiParams.set('origin', 'https://videostr.net');
+        }
+      } catch {
+        rpiParams.set('referer', 'https://videostr.net/');
+        rpiParams.set('origin', 'https://videostr.net');
+      }
     } else if (decodedUrl.match(/\.[a-z0-9]+\.site/)) {
       rpiParams.set('referer', 'https://animekai.to/');
     }

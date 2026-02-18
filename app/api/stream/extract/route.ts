@@ -90,7 +90,7 @@ function checkRateLimit(ip: string): { allowed: boolean; remaining: number; rese
 }
 
 // Helper to conditionally proxy URLs based on requiresSegmentProxy flag
-// AnimeKai sources use the /animekai route which goes through RPI residential proxy
+// Sources that need residential proxy use /animekai route -> RPI proxy
 // Other sources use the /stream route with optional noreferer mode
 function maybeProxyUrl(source: any, provider: string): string {
   if (!source.url) return '';
@@ -99,27 +99,23 @@ function maybeProxyUrl(source: any, provider: string): string {
     return source.url; // Return direct URL - browser will fetch directly
   }
   
-  // ALL AnimeKai sources need to go through /animekai route -> RPI residential proxy
-  // This is because ALL AnimeKai CDNs block:
-  //   1. Datacenter IPs (Cloudflare, AWS, Vercel, etc.)
-  //   2. Requests with Origin header (browser XHR always adds this)
-  // 
-  // The RPI proxy fetches from a residential IP without Origin header
+  // These providers/CDNs block datacenter IPs (Cloudflare, AWS, Vercel, etc.)
+  // They MUST go through /animekai route -> RPI residential proxy
   const isAnimeKai = provider === 'animekai';
   const isAnimeKaiSrc = isAnimeKaiSource(source);
   const isMegaUpCdn = isMegaUpCdnUrl(source.url);
-  
-  // 1movies and Flixer CDN (p.XXXXX.workers.dev) also blocks datacenter IPs
-  // Route through /animekai -> RPI residential proxy
   const is1moviesCdn = is1moviesCdnUrl(source.url);
   const is1movies = provider === '1movies';
   const isFlixer = provider === 'flixer';
+  const isVidLink = provider === 'vidlink';
+  // VidLink CDN domains (storm.vodvidl.site, etc.) are behind Cloudflare and block datacenter IPs
+  const isVidLinkCdn = source.url.includes('vodvidl.site') || source.url.includes('videostr.net');
   
-  console.log(`[maybeProxyUrl] provider=${provider}, isAnimeKai=${isAnimeKai}, isAnimeKaiSrc=${isAnimeKaiSrc}, isMegaUpCdn=${isMegaUpCdn}, is1moviesCdn=${is1moviesCdn}, isFlixer=${isFlixer}, url=${source.url.substring(0, 60)}`);
+  console.log(`[maybeProxyUrl] provider=${provider}, isAnimeKai=${isAnimeKai}, isAnimeKaiSrc=${isAnimeKaiSrc}, isMegaUpCdn=${isMegaUpCdn}, is1moviesCdn=${is1moviesCdn}, isFlixer=${isFlixer}, isVidLink=${isVidLink}, isVidLinkCdn=${isVidLinkCdn}, url=${source.url.substring(0, 60)}`);
   
   // Route through residential proxy for CDNs that block datacenter IPs
-  // This includes: AnimeKai, 1movies, AND Flixer (all use p.XXXXX.workers.dev CDN)
-  if (isAnimeKai || isAnimeKaiSrc || isMegaUpCdn || is1moviesCdn || is1movies || isFlixer) {
+  // This includes: AnimeKai, 1movies, Flixer, AND VidLink
+  if (isAnimeKai || isAnimeKaiSrc || isMegaUpCdn || is1moviesCdn || is1movies || isFlixer || isVidLink || isVidLinkCdn) {
     const proxiedUrl = getAnimeKaiProxyUrl(source.url);
     console.log(`[maybeProxyUrl] → Using /animekai route (residential proxy): ${proxiedUrl.substring(0, 80)}...`);
     return proxiedUrl;
