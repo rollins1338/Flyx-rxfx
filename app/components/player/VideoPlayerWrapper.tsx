@@ -104,10 +104,10 @@ export default function VideoPlayerWrapper(props: VideoPlayerWrapperProps) {
       const providersData = await providersRes.json();
       
       const availability = {
-        vidsrc: providersData.providers?.vidsrc?.enabled ?? true,
         flixer: providersData.providers?.flixer?.enabled ?? true,
-        '1movies': providersData.providers?.['1movies']?.enabled ?? true,
         vidlink: providersData.providers?.vidlink?.enabled ?? true,
+        vidsrc: providersData.providers?.vidsrc?.enabled ?? true,
+        '1movies': providersData.providers?.['1movies']?.enabled ?? true,
         animekai: providersData.providers?.animekai?.enabled ?? true,
       };
 
@@ -147,7 +147,7 @@ export default function VideoPlayerWrapper(props: VideoPlayerWrapperProps) {
 
       // Add any remaining available providers as fallback
       const allProviders = isAnime
-        ? ['animekai', 'vidlink', 'flixer', 'vidsrc', '1movies']
+        ? ['animekai', 'flixer', 'vidlink', 'vidsrc', '1movies']
         : ['flixer', 'vidlink', 'vidsrc', '1movies'];
       for (const p of allProviders) {
         if (providerOrder.includes(p)) continue;

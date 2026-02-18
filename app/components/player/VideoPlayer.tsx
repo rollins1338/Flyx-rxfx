@@ -226,8 +226,8 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     return () => window.removeEventListener(SYNC_DATA_CHANGED_EVENT, handleSyncDataChanged);
   }, []);
   
-  const [provider, setProvider] = useState('vidsrc'); // Default to VidSrc (primary provider)
-  const [menuProvider, setMenuProvider] = useState('vidsrc');
+  const [provider, setProvider] = useState('flixer'); // Default to Flixer (primary provider)
+  const [menuProvider, setMenuProvider] = useState('flixer');
   const [showServerMenu, setShowServerMenu] = useState(false);
   const [sourcesCache, setSourcesCache] = useState<Record<string, any[]>>({});
   const [loadingProviders, setLoadingProviders] = useState<Record<string, boolean>>({});
@@ -236,10 +236,10 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
   const [showCastTips, setShowCastTips] = useState(false); // Cast Tips modal
   const castErrorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [providerAvailability, setProviderAvailability] = useState<Record<string, boolean>>({
-    vidsrc: true, // VidSrc is the primary provider for movies and TV shows
-    flixer: true, // Flixer as secondary fallback (via RPI residential proxy)
+    flixer: true, // Flixer is the primary provider (WASM-based, fastest)
+    vidlink: true, // VidLink as secondary provider with multi-language support
+    vidsrc: true, // VidSrc as tertiary fallback
     '1movies': true, // 1movies - fully reverse-engineered, no Puppeteer needed
-    vidlink: true, // VidLink as fallback provider with multi-language support
     animekai: true, // Anime-specific provider - auto-selected for anime content
     hianime: true, // HiAnime - primary anime provider (MegaCloud extraction)
   });
@@ -806,12 +806,12 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
 
     const initializePlayer = async () => {
       // First fetch provider availability
-      // NOTE: VidSrc is the primary provider
+      // NOTE: Flixer is the primary provider, VidLink secondary, VidSrc tertiary
       let availability: Record<string, boolean> = {
-        vidsrc: true,
         flixer: true,
-        '1movies': true,
         vidlink: true,
+        vidsrc: true,
+        '1movies': true,
         animekai: true,
         hianime: true,
       };
@@ -820,10 +820,10 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
         const res = await fetch('/api/providers');
         const data = await res.json();
         availability = {
-          vidsrc: data.providers?.vidsrc?.enabled ?? true,
           flixer: data.providers?.flixer?.enabled ?? true,
-          '1movies': data.providers?.['1movies']?.enabled ?? true,
           vidlink: data.providers?.vidlink?.enabled ?? true,
+          vidsrc: data.providers?.vidsrc?.enabled ?? true,
+          '1movies': data.providers?.['1movies']?.enabled ?? true,
           animekai: data.providers?.animekai?.enabled ?? true,
           hianime: data.providers?.hianime?.enabled ?? true,
         };
@@ -892,7 +892,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
       
       // Add any remaining available providers not in user's order as fallback
       const allProviders = isAnime 
-        ? ['hianime', 'animekai', 'vidlink', 'flixer', 'vidsrc', '1movies']
+        ? ['hianime', 'animekai', 'flixer', 'vidlink', 'vidsrc', '1movies']
         : ['flixer', 'vidlink', 'vidsrc', '1movies'];
       for (const providerName of allProviders) {
         if (providerOrder.includes(providerName)) continue;
@@ -4492,12 +4492,12 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                     .filter(p => providerAvailability[p])
                     .map(p => {
                       const displayNames: Record<string, string> = {
-                        hianime: 'HiAnime',
-                        animekai: 'AnimeKai',
-                        vidsrc: 'VidSrc',
-                        '1movies': '1movies',
                         flixer: 'Flixer',
                         vidlink: 'VidLink',
+                        vidsrc: 'VidSrc',
+                        '1movies': '1movies',
+                        hianime: 'HiAnime',
+                        animekai: 'AnimeKai',
                       };
                       return (
                         <button

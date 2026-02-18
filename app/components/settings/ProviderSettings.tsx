@@ -15,28 +15,28 @@ interface ProviderInfo {
 
 const PROVIDERS: ProviderInfo[] = [
   {
-    id: 'vidsrc',
-    name: 'VidSrc',
-    description: 'Primary provider for movies & TV shows',
-    icon: '🎬',
-  },
-  {
     id: 'flixer',
     name: 'Flixer',
-    description: 'Secondary fallback provider',
+    description: 'Primary provider — WASM-based, fastest',
     icon: '📺',
+  },
+  {
+    id: 'vidlink',
+    name: 'VidLink',
+    description: 'Secondary provider — multi-language support',
+    icon: '🌍',
+  },
+  {
+    id: 'vidsrc',
+    name: 'VidSrc',
+    description: 'Tertiary fallback provider',
+    icon: '🎬',
   },
   {
     id: '1movies',
     name: '1movies',
     description: 'Alternative provider',
     icon: '🎥',
-  },
-  {
-    id: 'vidlink',
-    name: 'VidLink',
-    description: 'Multi-language support',
-    icon: '🌍',
   },
   {
     id: 'animekai',

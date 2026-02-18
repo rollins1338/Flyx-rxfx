@@ -6,9 +6,9 @@
  * - For other content: Flixer (PRIMARY) → VidLink → VidSrc → 1movies → SmashyStream → MultiMovies → MultiEmbed
  * 
  * NOTE: Flixer is PRIMARY - WASM-based extraction, 2-3s, most reliable.
- *       VidLink is SECONDARY - AES-256-CBC decryption, good fallback.
+ *       VidLink is SECONDARY - Go WASM token generation + plain JSON API.
+ *       VidSrc is TERTIARY - deprioritized due to Cloudflare Turnstile blocking ~80% of content.
  *       1movies is DISABLED.
- *       VidSrc deprioritized due to Cloudflare Turnstile blocking ~80% of content.
  * 
  * GET /api/stream/extract?tmdbId=550&type=movie
  * GET /api/stream/extract?tmdbId=1396&type=tv&season=1&episode=1
@@ -719,8 +719,8 @@ export async function GET(request: NextRequest) {
         console.log('[EXTRACT] Flixer is DISABLED, skipping...');
       }
       
-      // Try VidLink as SECOND option (multi-language support, AES-256 decryption)
-      console.log('[EXTRACT] Trying fallback source: VidLink (multi-language)...');
+      // Try VidLink as SECOND option (Go WASM token generation, multi-language support)
+      console.log('[EXTRACT] Trying secondary source: VidLink (multi-language)...');
       try {
         const vidlinkResult = await extractVidLinkStreams(tmdbId, type, season, episode, true);
         const workingVidLink = vidlinkResult.sources.filter(s => s.status === 'working');
@@ -734,7 +734,7 @@ export async function GET(request: NextRequest) {
         console.warn('[EXTRACT] VidLink failed:', vidlinkError instanceof Error ? vidlinkError.message : vidlinkError);
       }
       
-      // Try 1movies as SECOND option
+      // Try 1movies as THIRD option
       if (ONEMOVIES_ENABLED) {
         console.log('[EXTRACT] Trying fallback source: 1movies...');
         try {
