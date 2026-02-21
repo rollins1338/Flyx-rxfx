@@ -47,43 +47,86 @@ export async function GET(request: NextRequest) {
     const title = anime.title_english || anime.title;
     console.log(`[ANIME-STREAM] Found anime: ${title} (type: ${anime.type}, episodes: ${anime.episodes})`);
 
-    // Try requested provider first, then fallback
-    const providerOrder: Provider[] = requestedProvider === 'hianime'
-      ? ['hianime', 'animekai']
-      : ['animekai', 'hianime'];
+    // TRY BOTH PROVIDERS IN PARALLEL - Get sub/dub from both HiAnime AND AnimeKai!
+    console.log(`[ANIME-STREAM] Extracting from BOTH providers in parallel...`);
+    
+    const [hianimeResult, animekaiResult] = await Promise.allSettled([
+      extractFromProvider('hianime', malId, title, anime, isMovie, episode),
+      extractFromProvider('animekai', malId, title, anime, isMovie, episode),
+    ]);
 
-    for (const provider of providerOrder) {
-      try {
-        console.log(`[ANIME-STREAM] Trying provider: ${provider}`);
-        const result = await extractFromProvider(provider, malId, title, anime, isMovie, episode);
+    // Collect all sources from both providers
+    const allSources: Array<{
+      quality: string;
+      title: string;
+      url: string;
+      type: string;
+      referer: string;
+      requiresSegmentProxy: boolean;
+      skipOrigin?: boolean;
+      language?: string;
+      skipIntro?: [number, number];
+      skipOutro?: [number, number];
+    }> = [];
+    const allSubtitles: Array<{ label: string; url: string; language: string }> = [];
+    const providersUsed: string[] = [];
 
-        if (result && result.success && result.sources.length > 0) {
-          const executionTime = Date.now() - startTime;
-
-          // AnimeKai sources need residential proxy; HiAnime sources play direct
-          const sources = result.sources.map(source => ({
-            ...source,
-            url: provider === 'animekai' ? getAnimeKaiProxyUrl(source.url) : source.url,
-          }));
-
-          return NextResponse.json({
-            success: true,
-            sources,
-            subtitles: result.subtitles || [],
-            provider,
-            anime: {
-              malId: anime.mal_id,
-              title: anime.title,
-              titleEnglish: anime.title_english,
-              episodes: anime.episodes,
-              type: anime.type,
-            },
-            executionTime,
-          });
-        }
-      } catch (e: any) {
-        console.error(`[ANIME-STREAM] Provider ${provider} failed:`, e.message);
+    // Process HiAnime results
+    if (hianimeResult.status === 'fulfilled' && hianimeResult.value?.success && hianimeResult.value.sources.length > 0) {
+      console.log(`[ANIME-STREAM] ✅ HiAnime: ${hianimeResult.value.sources.length} sources`);
+      hianimeResult.value.sources.forEach(source => {
+        allSources.push({
+          ...source,
+          title: `${source.title} [HiAnime]`,
+        });
+      });
+      if (hianimeResult.value.subtitles) {
+        allSubtitles.push(...hianimeResult.value.subtitles);
       }
+      providersUsed.push('hianime');
+    } else {
+      const error = hianimeResult.status === 'rejected' ? hianimeResult.reason?.message : hianimeResult.value?.error;
+      console.log(`[ANIME-STREAM] ❌ HiAnime failed: ${error || 'No sources'}`);
+    }
+
+    // Process AnimeKai results
+    if (animekaiResult.status === 'fulfilled' && animekaiResult.value?.success && animekaiResult.value.sources.length > 0) {
+      console.log(`[ANIME-STREAM] ✅ AnimeKai: ${animekaiResult.value.sources.length} sources`);
+      animekaiResult.value.sources.forEach(source => {
+        allSources.push({
+          ...source,
+          url: getAnimeKaiProxyUrl(source.url), // AnimeKai needs residential proxy
+          title: `${source.title} [AnimeKai]`,
+        });
+      });
+      if (animekaiResult.value.subtitles) {
+        allSubtitles.push(...animekaiResult.value.subtitles);
+      }
+      providersUsed.push('animekai');
+    } else {
+      const error = animekaiResult.status === 'rejected' ? animekaiResult.reason?.message : animekaiResult.value?.error;
+      console.log(`[ANIME-STREAM] ❌ AnimeKai failed: ${error || 'No sources'}`);
+    }
+
+    // Return all sources from both providers
+    if (allSources.length > 0) {
+      const executionTime = Date.now() - startTime;
+      console.log(`[ANIME-STREAM] ✅ SUCCESS: ${allSources.length} total sources from ${providersUsed.join(' + ')}`);
+      
+      return NextResponse.json({
+        success: true,
+        sources: allSources,
+        subtitles: allSubtitles,
+        providers: providersUsed,
+        anime: {
+          malId: anime.mal_id,
+          title: anime.title,
+          titleEnglish: anime.title_english,
+          episodes: anime.episodes,
+          type: anime.type,
+        },
+        executionTime,
+      });
     }
 
     return NextResponse.json(

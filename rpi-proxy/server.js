@@ -325,8 +325,9 @@ const PROXY_ALLOWED_DOMAINS = [
   'topembed.pw',
   'epicplayplay.cfd',
   'dlhd.link',
-  'hitsplay.fun', // JWT source for DLHD streams
-  'codepcplay.fun', // Fast JWT source for DLHD streams (V5 auth primary)
+  'lefttoplay.xyz', // Current primary player domain (Feb 2026)
+  'hitsplay.fun', // JWT source for DLHD streams (slow fallback)
+  'codepcplay.fun', // Dead but kept for reference
   // AnimeKai/MegaUp (domains rotate frequently)
   'megaup.net',
   'megaup.live',
