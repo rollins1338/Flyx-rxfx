@@ -1,0 +1,44 @@
+# Dependencies
+node_modules
+*/node_modules
+
+# Build outputs
+.next
+.open-next
+.wrangler
+*/.wrangler
+
+# Git
+.git
+.github
+
+# Development files
+*.md
+!README.md
+docs/
+scripts/
+tests/
+private/
+
+# Worker subprojects (not needed for main app build)
+cdn-live-extractor/
+cf-analytics-worker/
+cf-sync-worker/
+dlhd-extractor-worker/
+rpi-proxy/
+
+# IDE
+.vscode
+.kiro
+
+# Env files (injected via docker-compose)
+.env
+.env.local
+docker/.env
+
+# Misc
+*.exe
+*.log
+failed-channels.json
+tsconfig.tsbuildinfo
+bun.lockb

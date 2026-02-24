@@ -40,6 +40,43 @@ const MEGACLOUD_KEYS_URLS = [
 ];
 
 // ============================================================================
+// Retry Utility
+// ============================================================================
+
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries: number = 3,
+  baseDelay: number = 1000
+): Promise<Response> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      if (response.ok) return response;
+      
+      // Don't retry on 4xx errors (client errors)
+      if (response.status >= 400 && response.status < 500) {
+        return response;
+      }
+      
+      lastError = new Error(`HTTP ${response.status}`);
+    } catch (error) {
+      lastError = error as Error;
+    }
+    
+    // Exponential backoff: 1s, 2s, 4s
+    if (attempt < maxRetries - 1) {
+      const delay = baseDelay * Math.pow(2, attempt);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  throw lastError || new Error('Fetch failed after retries');
+}
+
+// ============================================================================
 // MegaCloud Decryption Engine (pure JS, no dependencies)
 // ============================================================================
 
@@ -780,14 +817,14 @@ export async function handleHiAnimeRequest(request: Request, env: Env): Promise<
 
     // Strategy 1: Direct fetch from CF Worker (intra-Cloudflare, often bypasses challenges)
     try {
-      const response = await fetch(decodedUrl, {
+      const response = await fetchWithRetry(decodedUrl, {
         headers: {
           'User-Agent': UA,
           'Accept': '*/*',
           'Accept-Encoding': 'identity',
         },
         signal: AbortSignal.timeout(15000),
-      });
+      }, 3, 1000); // 3 retries with 1s, 2s, 4s delays
 
       if (response.ok) {
         const contentType = response.headers.get('content-type') || '';
@@ -841,16 +878,34 @@ export async function handleHiAnimeRequest(request: Request, env: Env): Promise<
         }
         rpiBaseUrl = rpiBaseUrl.replace(/\/+$/, '');
 
-        const rpiParams = new URLSearchParams({
-          url: decodedUrl,
-          key: env.RPI_PROXY_KEY!,
-        });
-        const rpiUrl = `${rpiBaseUrl}/animekai?${rpiParams.toString()}`;
-        logger.debug('Forwarding to RPI proxy', { rpiUrl: rpiUrl.substring(0, 80) });
+        // Check if this is a MegaCloud CDN URL (/_v7/ or /_v8/ paths)
+        // MegaCloud uses aggressive Cloudflare TLS fingerprinting
+        // Use curl-impersonate endpoint which mimics Chrome's EXACT TLS fingerprint
+        const isMegaCloudCdn = decodedUrl.includes('/_v7/') || decodedUrl.includes('/_v8/');
+        
+        let rpiUrl: string;
+        if (isMegaCloudCdn) {
+          // Use Rust fetch endpoint for MegaCloud CDN (JS execution + TLS mimicry)
+          const rpiParams = new URLSearchParams({
+            url: decodedUrl,
+            key: env.RPI_PROXY_KEY!,
+            solve: 'true', // Enable JS challenge solving
+          });
+          rpiUrl = `${rpiBaseUrl}/fetch-rust?${rpiParams.toString()}`;
+          logger.debug('Using Rust fetch for MegaCloud CDN', { rpiUrl: rpiUrl.substring(0, 80) });
+        } else {
+          // Use regular AnimeKai endpoint for other URLs
+          const rpiParams = new URLSearchParams({
+            url: decodedUrl,
+            key: env.RPI_PROXY_KEY!,
+          });
+          rpiUrl = `${rpiBaseUrl}/animekai?${rpiParams.toString()}`;
+          logger.debug('Forwarding to RPI proxy', { rpiUrl: rpiUrl.substring(0, 80) });
+        }
 
-        const rpiResponse = await fetch(rpiUrl, {
-          signal: AbortSignal.timeout(20000),
-        });
+        const rpiResponse = await fetchWithRetry(rpiUrl, {
+          signal: AbortSignal.timeout(45000), // Increased to 45s for curl-impersonate
+        }, 3, 1000); // 3 retries with 1s, 2s, 4s delays
 
         if (rpiResponse.ok) {
           const contentType = rpiResponse.headers.get('content-type') || '';

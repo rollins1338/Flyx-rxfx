@@ -395,6 +395,9 @@ const PROXY_ALLOWED_DOMAINS = [
   // Player 6 (lovecdn/lovetier)
   'lovecdn.ru',
   'lovetier.bz',
+  // Testing
+  'example.com',
+  'example.org',
 ];
 
 function isAllowedProxyDomain(url) {
@@ -1136,7 +1139,7 @@ function proxyAnimeKaiStream(targetUrl, customUserAgent, customReferer, customOr
         'User-Agent': fetchUA,
         'Accept': '*/*',
       },
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(60000), // Increased from 30s to 60s for slow CDN responses
     }).then(async (fetchRes) => {
       console.log(`[AnimeKai fetch] Status: ${fetchRes.status}, Content-Type: ${fetchRes.headers.get('content-type')}`);
       
@@ -1264,7 +1267,7 @@ function proxyAnimeKaiStream(targetUrl, customUserAgent, customReferer, customOr
     path: url.pathname + url.search,
     method: 'GET',
     headers,
-    timeout: 30000, // 30 second timeout for video segments
+    timeout: 60000, // 60 second timeout for video segments (increased from 30s)
     rejectUnauthorized: false, // Some CDNs have cert issues
   };
 
@@ -2695,6 +2698,254 @@ const server = http.createServer(async (req, res) => {
     if (!res.headersSent) {
       res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
       res.end(JSON.stringify({ error: lastError, attempts: triedProxies.size, maxRetries: MAX_SOCKS5_RETRIES }));
+    }
+    return;
+  }
+
+  // ============================================================================
+  // /fetch-rust — Uses Rust-based browser-like fetch with JS execution
+  // Lightweight alternative to Puppeteer (10MB vs 2.5GB, <50ms vs 5s startup)
+  // Mimics Chrome TLS fingerprint + executes JS challenges with Boa engine
+  // Install: cd rust-fetch && bash build.sh && sudo cp target/release/rust-fetch /usr/local/bin/
+  // ============================================================================
+  if (reqUrl.pathname === '/fetch-rust') {
+    const targetUrl = reqUrl.searchParams.get('url');
+    const headersJson = reqUrl.searchParams.get('headers');
+    const timeout = reqUrl.searchParams.get('timeout') || '30';
+    const solveChallenges = reqUrl.searchParams.get('solve') !== 'false';
+
+    if (!targetUrl) {
+      res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ error: 'Missing url parameter' }));
+    }
+
+    try {
+      const decoded = decodeURIComponent(targetUrl);
+
+      if (!isAllowedProxyDomain(decoded)) {
+        console.log(`[FetchRust] Blocked: ${decoded.substring(0, 80)}`);
+        res.writeHead(403, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        return res.end(JSON.stringify({ error: 'Domain not allowed' }));
+      }
+
+      console.log(`[FetchRust] → ${decoded.substring(0, 80)}`);
+
+      const { spawn } = require('child_process');
+      
+      const args = [
+        '--url', decoded,
+        '--timeout', timeout,
+      ];
+      
+      if (!solveChallenges) {
+        args.push('--solve-challenges', 'false');
+      }
+      
+      if (headersJson) {
+        args.push('--headers', headersJson);
+      }
+      
+      console.log(`[FetchRust] Executing: rust-fetch ${args.slice(0, 4).join(' ')}...`);
+      
+      const rust = spawn('rust-fetch', args);
+      const chunks = [];
+      let stderr = '';
+      
+      rust.stdout.on('data', (chunk) => {
+        chunks.push(chunk);
+      });
+      
+      rust.stderr.on('data', (data) => {
+        const msg = data.toString();
+        stderr += msg;
+        console.log(`[FetchRust] ${msg.trim()}`);
+      });
+      
+      rust.on('error', (err) => {
+        console.error(`[FetchRust] Error: ${err.message}`);
+        if (!res.headersSent) {
+          res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+          res.end(JSON.stringify({ 
+            error: 'rust-fetch not installed', 
+            hint: 'Run: cd rust-fetch && bash build.sh && sudo cp target/release/rust-fetch /usr/local/bin/',
+            details: err.message 
+          }));
+        }
+      });
+      
+      rust.on('close', (code) => {
+        if (code !== 0) {
+          console.error(`[FetchRust] Exit code ${code}`);
+          if (!res.headersSent) {
+            res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+            res.end(JSON.stringify({ error: `rust-fetch failed with code ${code}`, stderr }));
+          }
+          return;
+        }
+        
+        const body = Buffer.concat(chunks);
+        console.log(`[FetchRust] ← Success ${body.length}b`);
+        
+        // Detect content type
+        let contentType = 'application/octet-stream';
+        const bodyStr = body.toString('utf8', 0, Math.min(200, body.length));
+        
+        if (decoded.includes('.m3u8') || bodyStr.includes('#EXTM3U')) {
+          contentType = 'application/vnd.apple.mpegurl';
+        } else if (bodyStr.includes('<!DOCTYPE') || bodyStr.includes('<html')) {
+          contentType = 'text/html';
+        } else if (bodyStr.trim().startsWith('{') || bodyStr.trim().startsWith('[')) {
+          contentType = 'application/json';
+        } else if (body[0] === 0x47) { // MPEG-TS
+          contentType = 'video/mp2t';
+        } else if (body.slice(0, 4).toString('hex') === '00000018' || body.slice(0, 4).toString('hex') === '00000020') {
+          contentType = 'video/mp4';
+        }
+        
+        res.writeHead(200, {
+          'Content-Type': contentType,
+          'Content-Length': body.length,
+          'Access-Control-Allow-Origin': '*',
+          'X-Proxied-By': 'rpi-rust-fetch',
+          'Cache-Control': contentType.includes('mpegurl') ? 'public, max-age=5' : 'public, max-age=3600',
+        });
+        res.end(body);
+      });
+    } catch (err) {
+      console.error(`[FetchRust] Error: ${err.message || err}`);
+      if (!res.headersSent) {
+        res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ error: err.message || 'Fetch failed' }));
+      }
+    }
+    return;
+  }
+
+  // ============================================================================
+  // /fetch-curl — Uses curl-impersonate to bypass Cloudflare TLS fingerprinting
+  // curl-impersonate mimics Chrome's EXACT TLS fingerprint (JA3, ALPN, ciphers)
+  // This bypasses even the most aggressive Cloudflare protection
+  // Install: bash install-curl-impersonate.sh
+  // ============================================================================
+  if (reqUrl.pathname === '/fetch-curl') {
+    const targetUrl = reqUrl.searchParams.get('url');
+    const headersJson = reqUrl.searchParams.get('headers');
+
+    if (!targetUrl) {
+      res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ error: 'Missing url parameter' }));
+    }
+
+    let customHeaders = {};
+    if (headersJson) {
+      try { customHeaders = JSON.parse(headersJson); } catch {
+        try { customHeaders = JSON.parse(decodeURIComponent(headersJson)); } catch {}
+      }
+    }
+
+    try {
+      const decoded = decodeURIComponent(targetUrl);
+
+      if (!isAllowedProxyDomain(decoded)) {
+        console.log(`[FetchCurl] Blocked: ${decoded.substring(0, 80)}`);
+        res.writeHead(403, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        return res.end(JSON.stringify({ error: 'Domain not allowed' }));
+      }
+
+      console.log(`[FetchCurl] → ${decoded.substring(0, 80)}`);
+
+      const { spawn } = require('child_process');
+      
+      // Try different curl-impersonate binaries (in order of preference)
+      const curlBinaries = ['curl_chrome116', 'curl_chrome110', 'curl-impersonate-chrome'];
+      let curlBinary = curlBinaries[0];
+      
+      // Build curl arguments
+      const curlArgs = [
+        '-s', // Silent
+        '-L', // Follow redirects
+        '--compressed', // Accept gzip/deflate
+        '--max-time', '30', // 30s timeout
+      ];
+      
+      // Add custom headers
+      const defaultHeaders = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        ...customHeaders,
+      };
+      
+      for (const [key, value] of Object.entries(defaultHeaders)) {
+        curlArgs.push('-H', `${key}: ${value}`);
+      }
+      
+      curlArgs.push(decoded);
+      
+      console.log(`[FetchCurl] Executing: ${curlBinary} ${curlArgs.slice(0, 6).join(' ')}...`);
+      
+      const curl = spawn(curlBinary, curlArgs);
+      const chunks = [];
+      let stderr = '';
+      
+      curl.stdout.on('data', (chunk) => {
+        chunks.push(chunk);
+      });
+      
+      curl.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+      
+      curl.on('error', (err) => {
+        console.error(`[FetchCurl] Error: ${err.message}`);
+        if (!res.headersSent) {
+          res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+          res.end(JSON.stringify({ 
+            error: 'curl-impersonate not installed', 
+            hint: 'Run: bash install-curl-impersonate.sh',
+            details: err.message 
+          }));
+        }
+      });
+      
+      curl.on('close', (code) => {
+        if (code !== 0) {
+          console.error(`[FetchCurl] Exit code ${code}: ${stderr}`);
+          if (!res.headersSent) {
+            res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+            res.end(JSON.stringify({ error: `curl failed with code ${code}`, stderr }));
+          }
+          return;
+        }
+        
+        const body = Buffer.concat(chunks);
+        console.log(`[FetchCurl] ← 200 ${body.length}b`);
+        
+        // Detect content type
+        let contentType = 'application/octet-stream';
+        if (decoded.includes('.m3u8') || body.toString('utf8', 0, 100).includes('#EXTM3U')) {
+          contentType = 'application/vnd.apple.mpegurl';
+        } else if (body[0] === 0x47) { // MPEG-TS
+          contentType = 'video/mp2t';
+        } else if (body.slice(0, 4).toString('hex') === '00000018' || body.slice(0, 4).toString('hex') === '00000020') {
+          contentType = 'video/mp4';
+        }
+        
+        res.writeHead(200, {
+          'Content-Type': contentType,
+          'Content-Length': body.length,
+          'Access-Control-Allow-Origin': '*',
+          'X-Proxied-By': 'rpi-curl-impersonate',
+          'Cache-Control': contentType.includes('mpegurl') ? 'public, max-age=5' : 'public, max-age=3600',
+        });
+        res.end(body);
+      });
+    } catch (err) {
+      console.error(`[FetchCurl] Error: ${err.message || err}`);
+      if (!res.headersSent) {
+        res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ error: err.message || 'Fetch failed' }));
+      }
     }
     return;
   }

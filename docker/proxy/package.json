@@ -1,0 +1,10 @@
+{
+  "name": "flyx-local-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local stream proxy for self-hosted Flyx (replaces Cloudflare Workers)",
+  "main": "index.js",
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  }
+}

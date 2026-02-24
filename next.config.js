@@ -1,5 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Enable standalone output for Docker deployments
+  ...(process.env.FLYX_SELF_HOSTED === 'true' || process.env.DOCKER_BUILD === 'true'
+    ? { output: 'standalone' }
+    : {}),
+
   // Image optimization
   images: {
     remotePatterns: [
