@@ -61,8 +61,8 @@ const SERVER_NAMES: Record<string, string> = {
   lima: 'Loki',
 };
 
-// All 12 NATO servers — charlie/golf sometimes return E58 but the rest are solid
-const NATO_ORDER = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot', 'golf', 'hotel', 'india', 'juliet', 'kilo', 'lima'];
+// Fast servers for per-server fallback (don't overwhelm RPI with all 12)
+const FAST_SERVERS = ['alpha', 'bravo', 'delta', 'echo'];
 
 async function fetchSubtitles(
   tmdbId: string,
@@ -142,7 +142,6 @@ export async function extractFlixerStreams(
   }
 
   // Fallback: race a small subset of servers (don't overwhelm RPI with 12 concurrent requests)
-  const FAST_SERVERS = ['alpha', 'bravo', 'delta', 'echo'];
   console.log(`[Flixer] Per-server race: ${FAST_SERVERS.join(', ')}...`);
   const sources: StreamSource[] = [];
 
