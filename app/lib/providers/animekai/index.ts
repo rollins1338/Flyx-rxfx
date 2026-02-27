@@ -104,7 +104,7 @@ export class AnimeKaiProvider implements Provider {
       language: s.language,
       server: s.server,
       referer: s.referer,
-      requiresSegmentProxy: s.requiresSegmentProxy ?? false,
+      requiresSegmentProxy: s.requiresSegmentProxy ?? true,
       skipOrigin: s.skipOrigin,
     };
   }
