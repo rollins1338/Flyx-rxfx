@@ -33,15 +33,8 @@ import { getAnimeKaiProxyUrl } from '@/app/lib/proxy-config';
 // These hooks encapsulate HLS management, subtitle handling, progress tracking, and source switching.
 // The desktop player integrates these hooks for shared functionality while retaining
 // desktop-specific UI controls (keyboard shortcuts, timeline preview, cast, transcript, etc.)
-import {
-  usePlayerState,
-  useSubtitles,
-  usePlaybackProgress,
-  useSourceSwitcher,
-  type PlayerSource,
-  type PlayerSubtitleTrack,
-  PLAYBACK_SPEED_OPTIONS,
-} from './core';
+// TODO: Integrate core hooks (usePlayerState, useSubtitles, usePlaybackProgress, useSourceSwitcher)
+// to replace inline implementations. See ./core for shared player logic.
 import styles from './VideoPlayer.module.css';
 
 // Copy URL button with feedback for external players
