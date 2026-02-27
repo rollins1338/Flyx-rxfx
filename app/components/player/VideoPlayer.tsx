@@ -12,7 +12,6 @@ import {
   setAutoPlayNextEpisode, 
   setAutoPlayCountdown, 
   setShowNextEpisodeBeforeEnd, 
-  getPreferredAnimeKaiServer,
   setPreferredAnimeKaiServer,
   sourceMatchesAudioPreference,
   getSavedVolume,
