@@ -11,7 +11,7 @@
  * - WASM must be bundled with CF Worker, not fetched at runtime
  */
 
-import { getFlixerExtractUrl, getFlixerExtractAllUrl } from '../proxy-config';
+import { getFlixerExtractUrl } from '../proxy-config';
 import { cfFetch } from '../utils/cf-fetch';
 
 interface StreamSource {
@@ -97,9 +97,10 @@ async function fetchSubtitles(
 /**
  * Extract streams from Flixer via Cloudflare Worker
  * 
- * Fires all 12 servers in parallel through the CF Worker.
- * Returns as soon as the first source resolves — doesn't wait for all 12.
- * Remaining sources are collected during a short grace period.
+ * Strategy: fire 4 servers in parallel through RPI, return the FIRST one that
+ * resolves successfully. Don't wait for the rest — the player needs one source
+ * to start playback. Additional sources are collected during a short grace period
+ * so the user has alternatives in the source picker.
  */
 export async function extractFlixerStreams(
   tmdbId: string,
@@ -120,63 +121,44 @@ export async function extractFlixerStreams(
   // Subtitles in parallel (don't block)
   const subtitlePromise = fetchSubtitles(tmdbId, type, season, episode);
 
-  // Try batch endpoint first (1 RPI hop, CF Worker races 12 servers internally)
-  const extractAllUrl = getFlixerExtractAllUrl(tmdbId, type, season, episode);
-  try {
-    const response = await cfFetch(extractAllUrl, { signal: AbortSignal.timeout(20000) });
-    if (response.ok) {
-      const data = await response.json() as any;
-      if (data.success && data.sources?.length > 0) {
-        console.log(`[Flixer] Batch: ${data.sources.length} sources in ${data.elapsed_ms}ms`);
-        const subtitles = await subtitlePromise;
-        return {
-          success: true,
-          sources: data.sources.map((s: any) => ({ ...s, status: 'working' as const })),
-          subtitles: subtitles.length > 0 ? subtitles : undefined,
-        };
-      }
-    }
-    console.log(`[Flixer] Batch returned no sources, falling back to per-server`);
-  } catch (e) {
-    console.log(`[Flixer] Batch failed: ${e instanceof Error ? e.message : e}`);
-  }
-
-  // Fallback: race a small subset of servers (don't overwhelm RPI with 12 concurrent requests)
-  console.log(`[Flixer] Per-server race: ${FAST_SERVERS.join(', ')}...`);
+  // Race servers — return as soon as the first one works
   const sources: StreamSource[] = [];
 
-  const serverPromises = FAST_SERVERS.map(async (server) => {
+  const serverPromises = FAST_SERVERS.map(async (server): Promise<StreamSource | null> => {
     try {
       const extractUrl = getFlixerExtractUrl(tmdbId, type, server, season, episode);
       const response = await cfFetch(extractUrl, { signal: AbortSignal.timeout(10000) });
       if (!response.ok) return null;
       const data: FlixerApiResponse = await response.json();
       if (data.success && data.sources?.length) {
-        const mapped = data.sources.map(src => ({
-          ...src,
+        const src: StreamSource = {
+          ...data.sources[0],
           title: `Flixer ${SERVER_NAMES[server] || server}`,
           server,
           status: 'working' as const,
-        }));
-        sources.push(...mapped);
-        return mapped[0];
+        };
+        sources.push(src);
+        return src;
       }
     } catch (_) {}
     return null;
   });
 
-  // Wait for first success, then 1.5s grace for more
+  // Wait for first success
   const first = await Promise.any(serverPromises).catch(() => null);
+
   if (first) {
+    // Got one — give 1s for more to trickle in, then return
     await Promise.race([
       Promise.allSettled(serverPromises),
-      new Promise(r => setTimeout(r, 1500)),
+      new Promise(r => setTimeout(r, 1000)),
     ]);
   } else {
+    // None from fast servers — wait for all to settle
     await Promise.allSettled(serverPromises);
   }
 
-  console.log(`[Flixer] Total: ${sources.length} source(s)`);
+  console.log(`[Flixer] ${sources.length} source(s)`);
 
   if (sources.length === 0) {
     return { success: false, sources: [], error: 'No working sources from Flixer' };

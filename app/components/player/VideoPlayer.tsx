@@ -554,6 +554,42 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     }
 
     try {
+      // FLIXER: Use per-server parallel fetching for progressive loading
+      if (providerName === 'flixer') {
+        const FLIXER_SERVERS = ['alpha', 'bravo', 'delta', 'echo'];
+        const baseParams = new URLSearchParams({ tmdbId, type: mediaType });
+        if (mediaType === 'tv' && season && episode) {
+          baseParams.append('season', season.toString());
+          baseParams.append('episode', episode.toString());
+        }
+
+        const serverFetches = FLIXER_SERVERS.map(async (server) => {
+          const p = new URLSearchParams(baseParams);
+          p.set('server', server);
+          try {
+            const res = await fetch(`/api/stream/flixer-server?${p}`, { priority: 'high' as RequestPriority, cache: 'no-store' });
+            const data = await res.json();
+            if (data.success && data.source?.url) return data.source;
+          } catch {}
+          return null;
+        });
+
+        // Collect all results
+        const results = await Promise.allSettled(serverFetches);
+        const sources = results
+          .map(r => r.status === 'fulfilled' ? r.value : null)
+          .filter((s): s is NonNullable<typeof s> => s !== null);
+
+        if (sources.length > 0) {
+          setSourcesCache(prev => ({ ...prev, flixer: sources }));
+          if (providerName === provider) {
+            setAvailableSources(sources);
+          }
+          return sources;
+        }
+        throw new Error('No Flixer sources available');
+      }
+
       const params = new URLSearchParams({
         tmdbId,
         type: mediaType,
@@ -703,7 +739,74 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
       }
     }
     
-    // For non-anime or fallback providers, use the generic extract API
+    // FLIXER: Progressive per-server loading
+    // Fire 4 parallel requests to individual servers, return the FIRST one that works.
+    // Additional servers trickle in via background promises and get added to availableSources.
+    if (providerName === 'flixer') {
+      const FLIXER_SERVERS = ['alpha', 'bravo', 'delta', 'echo'];
+      console.log(`[VideoPlayer] Flixer: racing ${FLIXER_SERVERS.length} servers in parallel...`);
+
+      const baseParams = new URLSearchParams({ tmdbId, type: mediaType });
+      if (mediaType === 'tv' && season && episode) {
+        baseParams.append('season', season.toString());
+        baseParams.append('episode', episode.toString());
+      }
+
+      // Create per-server fetch promises
+      const serverFetches = FLIXER_SERVERS.map(async (server) => {
+        const params = new URLSearchParams(baseParams);
+        params.set('server', server);
+        try {
+          const res = await fetch(`/api/stream/flixer-server?${params}`, {
+            priority: 'high' as RequestPriority,
+            cache: 'no-store',
+          });
+          const data = await res.json();
+          if (data.success && data.source?.url) {
+            console.log(`[VideoPlayer] ✓ Flixer ${server} ready (${data.executionTime}ms)`);
+            return data.source;
+          }
+        } catch {}
+        return null;
+      });
+
+      // Wait for the FIRST server to succeed
+      const firstSource = await Promise.any(
+        serverFetches.map(p => p.then(s => { if (!s) throw new Error('no source'); return s; }))
+      ).catch(() => null);
+
+      if (!firstSource) {
+        console.warn('[VideoPlayer] ✗ All Flixer servers failed');
+        return null;
+      }
+
+      // Return immediately with the first source so playback starts
+      const result = { sources: [firstSource], provider: 'flixer' };
+
+      // Background: collect remaining servers and add them to availableSources
+      Promise.allSettled(serverFetches).then(results => {
+        const extraSources = results
+          .map(r => r.status === 'fulfilled' ? r.value : null)
+          .filter((s): s is NonNullable<typeof s> => s !== null && s.server !== firstSource.server);
+
+        if (extraSources.length > 0) {
+          console.log(`[VideoPlayer] Flixer: +${extraSources.length} additional server(s) ready`);
+          setAvailableSources(prev => {
+            // Deduplicate by server name
+            const existing = new Set(prev.map((s: any) => s.server));
+            const newSources = extraSources.filter(s => !existing.has(s.server));
+            if (newSources.length === 0) return prev;
+            const updated = [...prev, ...newSources];
+            setSourcesCache(prevCache => ({ ...prevCache, flixer: updated }));
+            return updated;
+          });
+        }
+      });
+
+      return result;
+    }
+
+    // For non-flixer providers, use the generic extract API
     const params = new URLSearchParams({
       tmdbId,
       type: mediaType,
