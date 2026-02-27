@@ -930,8 +930,8 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     }
 
     const initializePlayer = async () => {
-      // First fetch provider availability
-      // NOTE: Flixer is the primary provider, VidLink secondary, VidSrc tertiary
+      // Provider availability — use defaults immediately, fetch in background
+      // This saves ~200-500ms of blocking on /api/providers before extraction starts
       let availability: Record<string, boolean> = {
         flixer: true,
         vidlink: true,
@@ -942,22 +942,23 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
         hianime: true,
       };
 
-      try {
-        const res = await fetch('/api/providers');
-        const data = await res.json();
-        availability = {
-          flixer: data.providers?.flixer?.enabled ?? true,
-          vidlink: data.providers?.vidlink?.enabled ?? true,
-          hexa: false, // Hexa disabled — most servers require JS execution
-          vidsrc: data.providers?.vidsrc?.enabled ?? true,
-          '1movies': data.providers?.['1movies']?.enabled ?? true,
-          animekai: data.providers?.animekai?.enabled ?? true,
-          hianime: data.providers?.hianime?.enabled ?? true,
-        };
-        setProviderAvailability(availability);
-      } catch (err) {
-        console.warn('[VideoPlayer] Failed to fetch provider availability:', err);
-      }
+      // Non-blocking provider availability fetch (fire-and-forget)
+      fetch('/api/providers').then(async res => {
+        try {
+          const data = await res.json();
+          const updated = {
+            flixer: data.providers?.flixer?.enabled ?? true,
+            vidlink: data.providers?.vidlink?.enabled ?? true,
+            hexa: false,
+            vidsrc: data.providers?.vidsrc?.enabled ?? true,
+            '1movies': data.providers?.['1movies']?.enabled ?? true,
+            animekai: data.providers?.animekai?.enabled ?? true,
+            hianime: data.providers?.hianime?.enabled ?? true,
+          };
+          setProviderAvailability(updated);
+          return updated;
+        } catch { return availability; }
+      }).catch(() => availability);
 
       // Check if this is anime content
       // If malId is provided, it's definitely anime — skip the API check

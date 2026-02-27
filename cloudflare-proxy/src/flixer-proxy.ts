@@ -511,6 +511,40 @@ let cachedWasmLoader: FlixerWasmLoader | null = null;
 let cachedApiKey: string | null = null;
 let serverTimeOffset = 0;
 
+// WASM init lock — prevents 4 parallel requests from all initializing WASM
+let wasmInitPromise: Promise<void> | null = null;
+
+async function ensureWasmInitialized(logger: ReturnType<typeof createLogger>): Promise<void> {
+  if (cachedWasmLoader && cachedApiKey) return;
+  if (wasmInitPromise) return wasmInitPromise;
+  wasmInitPromise = (async () => {
+    if (cachedWasmLoader && cachedApiKey) return; // double-check after await
+    logger.info('Initializing Flixer WASM...');
+    await syncServerTime();
+    cachedWasmLoader = new FlixerWasmLoader();
+    await cachedWasmLoader.initialize(FLIXER_WASM);
+    cachedApiKey = cachedWasmLoader.getImgKey();
+    logger.info('Flixer WASM initialized', { keyPrefix: cachedApiKey.slice(0, 16) });
+  })();
+  wasmInitPromise.catch(() => { wasmInitPromise = null; });
+  return wasmInitPromise;
+}
+
+// Warm-up cache: deduplicates warm-up requests for the same content
+// When 4 parallel /flixer/extract requests arrive, only the first one does the warm-up.
+let warmupCache: { key: string; promise: Promise<void>; timestamp: number } | null = null;
+const WARMUP_TTL = 30_000; // 30s — warm-up is valid for a short window
+
+function getOrCreateWarmup(apiKey: string, warmupPath: string): Promise<void> {
+  const now = Date.now();
+  if (warmupCache && warmupCache.key === warmupPath && (now - warmupCache.timestamp) < WARMUP_TTL) {
+    return warmupCache.promise;
+  }
+  const promise = makeFlixerRequest(apiKey, warmupPath, {}).then(() => {}).catch(() => {});
+  warmupCache = { key: warmupPath, promise, timestamp: now };
+  return promise;
+}
+
 /**
  * Sync with Flixer server time
  */
@@ -720,27 +754,18 @@ async function extractAllServers(
   const startTime = Date.now();
 
   try {
-    // Initialize WASM if not cached
-    if (!cachedWasmLoader || !cachedApiKey) {
-      logger.info('Initializing Flixer WASM...');
-      await syncServerTime();
-      cachedWasmLoader = new FlixerWasmLoader();
-      await cachedWasmLoader.initialize(FLIXER_WASM);
-      cachedApiKey = cachedWasmLoader.getImgKey();
-      logger.info('Flixer WASM initialized', { keyPrefix: cachedApiKey.slice(0, 16) });
-    }
+    // Initialize WASM if not cached (deduplicated across parallel requests)
+    await ensureWasmInitialized(logger);
 
     const allServers = Object.keys(SERVER_NAMES);
-    const apiKey = cachedApiKey;
-    const loader = cachedWasmLoader;
+    const apiKey = cachedApiKey!;
+    const loader = cachedWasmLoader!;
 
-    // Single warm-up request (shared across all servers)
+    // Single warm-up request (shared/deduplicated across concurrent requests)
     const warmupPath = type === 'movie'
       ? `/api/tmdb/movie/${tmdbId}/images`
       : `/api/tmdb/tv/${tmdbId}/season/${season}/episode/${episode}/images`;
-    try {
-      await makeFlixerRequest(apiKey, warmupPath, {});
-    } catch (_) {}
+    await getOrCreateWarmup(apiKey, warmupPath);
 
     logger.info(`Racing ${allServers.length} servers for ${type}/${tmdbId}`);
 
@@ -805,6 +830,7 @@ async function extractAllServers(
     logger.error('extract-all error', error as Error);
     cachedWasmLoader = null;
     cachedApiKey = null;
+    wasmInitPromise = null;
     return jsonResponse({
       success: false,
       error: error instanceof Error ? error.message : String(error),
@@ -874,32 +900,14 @@ export async function handleFlixerRequest(request: Request, env: Env): Promise<R
     }
 
     try {
-      // Initialize WASM if not cached
-      if (!cachedWasmLoader || !cachedApiKey) {
-        logger.info('Initializing Flixer WASM...');
-        
-        // Use bundled WASM module (imported at top of file)
-        // This avoids the "Wasm code generation disallowed by embedder" error
-        // that occurs when trying to fetch and instantiate WASM at runtime
-        
-        // Sync server time
-        await syncServerTime();
-        
-        // Initialize loader with bundled WASM
-        cachedWasmLoader = new FlixerWasmLoader();
-        await cachedWasmLoader.initialize(FLIXER_WASM);
-        cachedApiKey = cachedWasmLoader.getImgKey();
-        
-        logger.info('Flixer WASM initialized', { keyPrefix: cachedApiKey.slice(0, 16) });
-      }
+      // Initialize WASM if not cached (deduplicated across parallel requests)
+      await ensureWasmInitialized(logger);
 
-      // Warm-up request before actual extraction
+      // Shared warm-up — deduplicated across parallel requests for same content
       const warmupPath = type === 'movie'
         ? `/api/tmdb/movie/${tmdbId}/images`
         : `/api/tmdb/tv/${tmdbId}/season/${season}/episode/${episode}/images`;
-      try {
-        await makeFlixerRequest(cachedApiKey, warmupPath, {});
-      } catch (_) {}
+      await getOrCreateWarmup(cachedApiKey, warmupPath);
 
       // Get source from server
       const result = await getSourceFromServer(
@@ -945,6 +953,7 @@ export async function handleFlixerRequest(request: Request, env: Env): Promise<R
       // Reset cache on error
       cachedWasmLoader = null;
       cachedApiKey = null;
+      wasmInitPromise = null;
       
       return jsonResponse({
         success: false,
