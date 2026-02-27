@@ -637,7 +637,7 @@ async function makeFlixerRequest(
   
   const response = await fetch(`${FLIXER_API_BASE}${path}`, {
     headers,
-    signal: AbortSignal.timeout(15000),
+    signal: AbortSignal.timeout(8000),
   });
   
   if (!response.ok) {
@@ -648,7 +648,8 @@ async function makeFlixerRequest(
 }
 
 /**
- * Get source URL from a specific server with retries
+ * Get source URL from a specific server (single attempt, no warm-up).
+ * Warm-up is done once before calling this in parallel.
  */
 async function getSourceFromServer(
   loader: FlixerWasmLoader,
@@ -658,22 +659,12 @@ async function getSourceFromServer(
   server: string,
   seasonId?: string,
   episodeId?: string,
-  retries = 5
 ): Promise<{ url: string | null; raw: any }> {
   const path = type === 'movie'
     ? `/api/tmdb/movie/${tmdbId}/images`
     : `/api/tmdb/tv/${tmdbId}/season/${seasonId}/episode/${episodeId}/images`;
 
-  // Make a "warm-up" request without X-Server header
   try {
-    await makeFlixerRequest(apiKey, path, {});
-  } catch (e) {
-    // Expected to fail sometimes
-  }
-  
-  await new Promise(r => setTimeout(r, 100));
-
-  for (let attempt = 1; attempt <= retries; attempt++) {
     const encrypted = await makeFlixerRequest(apiKey, path, {
       'X-Only-Sources': '1',
       'X-Server': server,
@@ -708,10 +699,8 @@ async function getSourceFromServer(
     if (url && url.trim() !== '') {
       return { url, raw: data };
     }
-    
-    if (attempt < retries) {
-      await new Promise(r => setTimeout(r, 200));
-    }
+  } catch (e) {
+    // Single attempt failed, move on
   }
 
   return { url: null, raw: null };
@@ -719,8 +708,8 @@ async function getSourceFromServer(
 
 /**
  * Extract ALL servers in parallel and return all working sources.
- * This avoids 12 separate round-trips through RPI → CF Worker.
- * One request comes in, CF Worker fans out to all 12 servers directly.
+ * One warm-up request, then all 12 servers fire simultaneously.
+ * No retries per server — with 12 servers we don't need them.
  */
 async function extractAllServers(
   tmdbId: string,
@@ -743,14 +732,27 @@ async function extractAllServers(
     }
 
     const allServers = Object.keys(SERVER_NAMES);
-    logger.info(`Extracting all ${allServers.length} servers in parallel for ${type}/${tmdbId}`);
+    const apiKey = cachedApiKey;
+    const loader = cachedWasmLoader;
 
-    // Fan out to all servers in parallel
+    // Single warm-up request (shared across all servers)
+    const warmupPath = type === 'movie'
+      ? `/api/tmdb/movie/${tmdbId}/images`
+      : `/api/tmdb/tv/${tmdbId}/season/${season}/episode/${episode}/images`;
+    try {
+      await makeFlixerRequest(apiKey, warmupPath, {});
+    } catch (_) {
+      // Expected to fail sometimes
+    }
+
+    logger.info(`Extracting ${allServers.length} servers in parallel for ${type}/${tmdbId}`);
+
+    // Fan out ALL servers simultaneously — no retries, no delays
     const results = await Promise.allSettled(
       allServers.map(async (server) => {
         const result = await getSourceFromServer(
-          cachedWasmLoader!,
-          cachedApiKey!,
+          loader,
+          apiKey,
           type,
           tmdbId,
           server,
@@ -785,7 +787,7 @@ async function extractAllServers(
     }
 
     const elapsed = Date.now() - startTime;
-    logger.info(`extract-all done: ${sources.length} sources, ${failures.length} failures in ${elapsed}ms`);
+    logger.info(`extract-all: ${sources.length}/${allServers.length} sources in ${elapsed}ms`);
 
     return jsonResponse({
       success: sources.length > 0,
@@ -888,6 +890,14 @@ export async function handleFlixerRequest(request: Request, env: Env): Promise<R
         
         logger.info('Flixer WASM initialized', { keyPrefix: cachedApiKey.slice(0, 16) });
       }
+
+      // Warm-up request before actual extraction
+      const warmupPath = type === 'movie'
+        ? `/api/tmdb/movie/${tmdbId}/images`
+        : `/api/tmdb/tv/${tmdbId}/season/${season}/episode/${episode}/images`;
+      try {
+        await makeFlixerRequest(cachedApiKey, warmupPath, {});
+      } catch (_) {}
 
       // Get source from server
       const result = await getSourceFromServer(
