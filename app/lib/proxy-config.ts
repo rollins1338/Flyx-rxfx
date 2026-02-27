@@ -371,14 +371,7 @@ export function getFlixerExtractUrl(
   season?: number,
   episode?: number
 ): string {
-  // Try both NEXT_PUBLIC_ (available at build time) and server-side env var
-  // Fallback to hardcoded URL for production if env vars aren't set
-  const cfProxyUrl = process.env.NEXT_PUBLIC_CF_STREAM_PROXY_URL || 
-                     process.env.CF_STREAM_PROXY_URL || 
-                     'https://media-proxy.vynx.workers.dev/stream';
-  
-  // Strip /stream suffix if present
-  const baseUrl = cfProxyUrl.replace(/\/stream\/?$/, '');
+  const baseUrl = getFlixerProxyBaseUrl();
   
   const params = new URLSearchParams({
     tmdbId,
@@ -394,6 +387,36 @@ export function getFlixerExtractUrl(
   console.log(`[Flixer] Extract URL: ${baseUrl}/flixer/extract?${params.toString()}`);
   
   return `${baseUrl}/flixer/extract?${params.toString()}`;
+}
+
+/**
+ * Get Flixer batch extraction URL — fetches ALL servers in one request.
+ * The CF Worker fans out to all 12 servers in parallel internally,
+ * avoiding 12 separate round-trips through RPI.
+ */
+export function getFlixerExtractAllUrl(
+  tmdbId: string,
+  type: 'movie' | 'tv',
+  season?: number,
+  episode?: number
+): string {
+  const baseUrl = getFlixerProxyBaseUrl();
+  
+  const params = new URLSearchParams({ tmdbId, type });
+  
+  if (type === 'tv' && season && episode) {
+    params.set('season', season.toString());
+    params.set('episode', episode.toString());
+  }
+  
+  return `${baseUrl}/flixer/extract-all?${params.toString()}`;
+}
+
+function getFlixerProxyBaseUrl(): string {
+  const cfProxyUrl = process.env.NEXT_PUBLIC_CF_STREAM_PROXY_URL || 
+                     process.env.CF_STREAM_PROXY_URL || 
+                     'https://media-proxy.vynx.workers.dev/stream';
+  return cfProxyUrl.replace(/\/stream\/?$/, '');
 }
 
 /**

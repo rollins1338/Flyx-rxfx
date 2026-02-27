@@ -717,6 +717,97 @@ async function getSourceFromServer(
 }
 
 /**
+ * Extract ALL servers in parallel and return all working sources.
+ * This avoids 12 separate round-trips through RPI → CF Worker.
+ * One request comes in, CF Worker fans out to all 12 servers directly.
+ */
+async function extractAllServers(
+  tmdbId: string,
+  type: string,
+  season: string | undefined,
+  episode: string | undefined,
+  logger: ReturnType<typeof createLogger>
+): Promise<Response> {
+  const startTime = Date.now();
+
+  try {
+    // Initialize WASM if not cached
+    if (!cachedWasmLoader || !cachedApiKey) {
+      logger.info('Initializing Flixer WASM...');
+      await syncServerTime();
+      cachedWasmLoader = new FlixerWasmLoader();
+      await cachedWasmLoader.initialize(FLIXER_WASM);
+      cachedApiKey = cachedWasmLoader.getImgKey();
+      logger.info('Flixer WASM initialized', { keyPrefix: cachedApiKey.slice(0, 16) });
+    }
+
+    const allServers = Object.keys(SERVER_NAMES);
+    logger.info(`Extracting all ${allServers.length} servers in parallel for ${type}/${tmdbId}`);
+
+    // Fan out to all servers in parallel
+    const results = await Promise.allSettled(
+      allServers.map(async (server) => {
+        const result = await getSourceFromServer(
+          cachedWasmLoader!,
+          cachedApiKey!,
+          type,
+          tmdbId,
+          server,
+          season || undefined,
+          episode || undefined
+        );
+        if (!result.url) throw new Error('No stream URL');
+        const displayName = SERVER_NAMES[server] || server;
+        return {
+          quality: 'auto',
+          title: `Flixer ${displayName}`,
+          url: result.url,
+          type: 'hls' as const,
+          referer: 'https://flixer.sh/',
+          requiresSegmentProxy: true,
+          status: 'working' as const,
+          language: 'en',
+          server,
+        };
+      })
+    );
+
+    const sources: any[] = [];
+    const failures: string[] = [];
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      if (r.status === 'fulfilled') {
+        sources.push(r.value);
+      } else {
+        failures.push(`${allServers[i]}: ${r.reason?.message || r.reason}`);
+      }
+    }
+
+    const elapsed = Date.now() - startTime;
+    logger.info(`extract-all done: ${sources.length} sources, ${failures.length} failures in ${elapsed}ms`);
+
+    return jsonResponse({
+      success: sources.length > 0,
+      sources,
+      failures: failures.length > 0 ? failures : undefined,
+      serverCount: allServers.length,
+      successCount: sources.length,
+      elapsed_ms: elapsed,
+      timestamp: new Date().toISOString(),
+    }, sources.length > 0 ? 200 : 404);
+
+  } catch (error) {
+    logger.error('extract-all error', error as Error);
+    cachedWasmLoader = null;
+    cachedApiKey = null;
+    return jsonResponse({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    }, 500);
+  }
+}
+
+/**
  * Main handler for Flixer proxy requests
  */
 export async function handleFlixerRequest(request: Request, env: Env): Promise<Response> {
@@ -724,6 +815,9 @@ export async function handleFlixerRequest(request: Request, env: Env): Promise<R
   const path = url.pathname;
   const logLevel = (env.LOG_LEVEL || 'info') as LogLevel;
   const logger = createLogger(request, logLevel);
+
+  // Store env for RPI proxy access
+  globalEnv = env;
 
   // CORS preflight
   if (request.method === 'OPTIONS') {
@@ -741,7 +835,24 @@ export async function handleFlixerRequest(request: Request, env: Env): Promise<R
     }, 200);
   }
 
-  // Extract endpoint
+  // Batch extract ALL servers in one request
+  if (path === '/flixer/extract-all') {
+    const tmdbId = url.searchParams.get('tmdbId');
+    const type = url.searchParams.get('type') || 'movie';
+    const season = url.searchParams.get('season') || undefined;
+    const episode = url.searchParams.get('episode') || undefined;
+
+    if (!tmdbId) {
+      return jsonResponse({ error: 'Missing tmdbId parameter' }, 400);
+    }
+    if (type === 'tv' && (!season || !episode)) {
+      return jsonResponse({ error: 'Season and episode required for TV shows' }, 400);
+    }
+
+    return extractAllServers(tmdbId, type, season, episode, logger);
+  }
+
+  // Single server extract endpoint (kept for backwards compatibility)
   if (path === '/flixer/extract' || path === '/flixer') {
     const tmdbId = url.searchParams.get('tmdbId');
     const type = url.searchParams.get('type') || 'movie';

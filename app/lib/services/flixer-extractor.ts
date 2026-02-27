@@ -11,7 +11,7 @@
  * - WASM must be bundled with CF Worker, not fetched at runtime
  */
 
-import { getFlixerExtractUrl } from '../proxy-config';
+import { getFlixerExtractUrl, getFlixerExtractAllUrl } from '../proxy-config';
 import { cfFetch } from '../utils/cf-fetch';
 
 interface StreamSource {
@@ -98,8 +98,10 @@ async function fetchSubtitles(
  * Extract streams from Flixer via Cloudflare Worker
  * The CF Worker handles WASM-based encryption/decryption
  * 
- * Updated: Fetches ALL servers in parallel and returns all working sources.
- * Each server returns as a separate source so users can switch between them.
+ * Updated: Uses /flixer/extract-all to fetch ALL servers in a single request.
+ * The CF Worker fans out to all 12 servers in parallel internally,
+ * avoiding 12 separate round-trips through RPI proxy.
+ * Falls back to per-server requests if batch endpoint fails.
  */
 export async function extractFlixerStreams(
   tmdbId: string,
@@ -117,56 +119,78 @@ export async function extractFlixerStreams(
     return { success: false, sources: [], error: 'Season and episode required for TV shows' };
   }
 
-  // Fetch ALL servers in parallel and collect all working sources
-  console.log(`[Flixer] Fetching ${NATO_ORDER.length} servers in parallel: ${NATO_ORDER.join(', ')}...`);
+  // Start subtitle fetch in parallel with extraction (don't wait for it)
+  const subtitlePromise = fetchSubtitles(tmdbId, type, season, episode);
 
-  const serverResults = await Promise.allSettled(
-    NATO_ORDER.map(async (server) => {
-      const extractUrl = getFlixerExtractUrl(tmdbId, type, server, season, episode);
-      console.log(`[Flixer] Fetching server ${server}: ${extractUrl.substring(0, 80)}...`);
-      // Use cfFetch to route through RPI when on CF Pages — CF Pages can't directly
-      // fetch other CF Workers on the same account (silent failure / instant rejection)
-      const response = await cfFetch(extractUrl, { signal: AbortSignal.timeout(15000) });
+  // Try batch endpoint first — one request instead of 12
+  let allSources: StreamSource[] = [];
+  try {
+    const extractAllUrl = getFlixerExtractAllUrl(tmdbId, type, season, episode);
+    console.log(`[Flixer] Using batch extract-all endpoint...`);
+    const response = await cfFetch(extractAllUrl, { signal: AbortSignal.timeout(30000) });
 
-      if (!response.ok) {
-        const body = await response.text().catch(() => '');
-        throw new Error(`HTTP ${response.status}: ${body.substring(0, 100)}`);
-      }
-
-      const data: FlixerApiResponse = await response.json();
-
+    if (response.ok) {
+      const data: FlixerApiResponse & { successCount?: number; failures?: string[] } = await response.json();
       if (data.success && data.sources && data.sources.length > 0) {
-        const serverDisplayName = SERVER_NAMES[server] || server;
-        console.log(`[Flixer] ✓ Server ${server} (${serverDisplayName}) returned ${data.sources.length} source(s)`);
-        return data.sources.map(src => ({
+        allSources = data.sources.map(src => ({
           ...src,
-          title: `Flixer ${serverDisplayName}`,
-          server: server,
           status: 'working' as const,
         }));
+        console.log(`[Flixer] Batch extract returned ${allSources.length} sources`);
       }
-      throw new Error(data.error || 'No sources');
-    })
-  );
-
-  // Collect all successful sources
-  const allSources: StreamSource[] = [];
-  for (let i = 0; i < serverResults.length; i++) {
-    const result = serverResults[i];
-    if (result.status === 'fulfilled') {
-      allSources.push(...result.value);
     } else {
-      console.log(`[Flixer] Server ${NATO_ORDER[i]} failed: ${result.reason?.message || result.reason}`);
+      console.log(`[Flixer] Batch extract failed with HTTP ${response.status}, falling back to per-server`);
+    }
+  } catch (e) {
+    console.log(`[Flixer] Batch extract error: ${e instanceof Error ? e.message : e}, falling back to per-server`);
+  }
+
+  // Fallback: per-server parallel requests (old behavior)
+  if (allSources.length === 0) {
+    console.log(`[Flixer] Falling back to per-server extraction for ${NATO_ORDER.length} servers...`);
+    const serverResults = await Promise.allSettled(
+      NATO_ORDER.map(async (server) => {
+        const extractUrl = getFlixerExtractUrl(tmdbId, type, server, season, episode);
+        const response = await cfFetch(extractUrl, { signal: AbortSignal.timeout(15000) });
+
+        if (!response.ok) {
+          const body = await response.text().catch(() => '');
+          throw new Error(`HTTP ${response.status}: ${body.substring(0, 100)}`);
+        }
+
+        const data: FlixerApiResponse = await response.json();
+
+        if (data.success && data.sources && data.sources.length > 0) {
+          const serverDisplayName = SERVER_NAMES[server] || server;
+          console.log(`[Flixer] ✓ Server ${server} (${serverDisplayName}) returned ${data.sources.length} source(s)`);
+          return data.sources.map(src => ({
+            ...src,
+            title: `Flixer ${serverDisplayName}`,
+            server: server,
+            status: 'working' as const,
+          }));
+        }
+        throw new Error(data.error || 'No sources');
+      })
+    );
+
+    for (let i = 0; i < serverResults.length; i++) {
+      const result = serverResults[i];
+      if (result.status === 'fulfilled') {
+        allSources.push(...result.value);
+      } else {
+        console.log(`[Flixer] Server ${NATO_ORDER[i]} failed: ${result.reason?.message || result.reason}`);
+      }
     }
   }
 
-  console.log(`[Flixer] Total: ${allSources.length} source(s) from ${allSources.length} server(s)`);
+  console.log(`[Flixer] Total: ${allSources.length} source(s)`);
 
   if (allSources.length === 0) {
     return { success: false, sources: [], error: 'No working sources available from Flixer' };
   }
 
-  const subtitles = await fetchSubtitles(tmdbId, type, season, episode);
+  const subtitles = await subtitlePromise;
   return { success: true, sources: allSources, subtitles: subtitles.length > 0 ? subtitles : undefined };
 }
 
