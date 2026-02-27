@@ -76,6 +76,9 @@ const KAI_DOMAINS = ['https://animekai.to', 'https://anikai.to'];
 let KAI_BASE = KAI_DOMAINS[0];
 const ARM_API = 'https://arm.haglund.dev/api/v2/ids';
 
+// Import cfFetch for routing through RPI proxy on Cloudflare Workers
+import { cfFetch } from '../utils/cf-fetch';
+
 // ============================================================================
 // IN-MEMORY CACHES — avoid redundant network calls across requests
 // ============================================================================
@@ -330,7 +333,7 @@ async function getJson(url: string): Promise<any | null> {
 
 async function _fetchJson(url: string): Promise<any | null> {
   try {
-    const response = await fetch(url, {
+    const response = await cfFetch(url, {
       headers: HEADERS,
       signal: AbortSignal.timeout(10000),
     });
@@ -536,7 +539,7 @@ async function searchAnimeKaiByMalId(malId: number, searchQuery: string): Promis
     
     for (const domain of KAI_DOMAINS) {
       try {
-        const searchResponse = await fetch(`${domain}/ajax/anime/search?keyword=${encodeURIComponent(searchQuery)}`, {
+        const searchResponse = await cfFetch(`${domain}/ajax/anime/search?keyword=${encodeURIComponent(searchQuery)}`, {
           headers: HEADERS,
           signal: AbortSignal.timeout(8000),
         });
@@ -588,7 +591,7 @@ async function searchAnimeKaiByMalId(malId: number, searchQuery: string): Promis
     // Previously sequential (5+ seconds), now parallel (~1-2 seconds)
     const watchResults = await Promise.allSettled(
       scored.map(async (result) => {
-        const watchResp = await fetch(`${KAI_BASE}/watch/${result.slug}`, {
+        const watchResp = await cfFetch(`${KAI_BASE}/watch/${result.slug}`, {
           headers: HEADERS,
           signal: AbortSignal.timeout(6000),
         });
@@ -657,7 +660,7 @@ async function searchAnimeKaiByTitle(query: string): Promise<{ content_id: strin
     
     for (const domain of KAI_DOMAINS) {
       try {
-        const searchResponse = await fetch(`${domain}/ajax/anime/search?keyword=${encodeURIComponent(query)}`, {
+        const searchResponse = await cfFetch(`${domain}/ajax/anime/search?keyword=${encodeURIComponent(query)}`, {
           headers: HEADERS,
           signal: AbortSignal.timeout(8000),
         });
@@ -729,7 +732,7 @@ async function searchAnimeKaiByTitle(query: string): Promise<{ content_id: strin
     const watchUrl = `${KAI_BASE}/watch/${bestResult.slug}`;
     console.log(`[AnimeKai] Fetching watch page: ${watchUrl}`);
 
-    const watchResponse = await fetch(watchUrl, {
+    const watchResponse = await cfFetch(watchUrl, {
       headers: HEADERS,
       signal: AbortSignal.timeout(8000),
     });
@@ -1046,7 +1049,8 @@ async function extractMegaUpSourcesManually(embedUrl: string): Promise<string | 
       console.log(`[AnimeKai] Routing MegaUp /media/ through residential proxy: ${proxiedMediaUrl.substring(0, 100)}...`);
       
       try {
-        mediaResponse = await fetch(proxiedMediaUrl, {
+        // Use cfFetch to route through RPI when on CF Pages
+        mediaResponse = await cfFetch(proxiedMediaUrl, {
           headers: {
             'Accept': 'application/json',
           },
@@ -1208,7 +1212,9 @@ async function getStreamFromServer(lid: string, serverName: string): Promise<Str
     console.log(`[AnimeKai] Routing to RPI for full extraction: ${extractUrl.substring(0, 80)}...`);
     
     try {
-      const extractResponse = await fetch(extractUrl, {
+      // Use cfFetch to route through RPI when on CF Pages — CF Pages can't directly
+      // fetch other CF Workers on the same account
+      const extractResponse = await cfFetch(extractUrl, {
         signal: AbortSignal.timeout(20000),
       });
       

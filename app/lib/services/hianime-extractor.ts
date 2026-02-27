@@ -56,7 +56,10 @@ export async function extractHiAnimeStreams(
   console.log(`[HiAnime] Calling worker: ${extractUrl}`);
 
   try {
-    const res = await fetch(extractUrl, {
+    // Use cfFetch to route through RPI when on CF Pages — CF Pages can't directly
+    // fetch other CF Workers on the same account
+    const { cfFetch } = await import('@/app/lib/utils/cf-fetch');
+    const res = await cfFetch(extractUrl, {
       signal: AbortSignal.timeout(20000),
     });
     const data = await res.json() as {

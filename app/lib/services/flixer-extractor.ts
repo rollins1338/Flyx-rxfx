@@ -123,10 +123,14 @@ export async function extractFlixerStreams(
   const serverResults = await Promise.allSettled(
     NATO_ORDER.map(async (server) => {
       const extractUrl = getFlixerExtractUrl(tmdbId, type, server, season, episode);
-      const response = await fetch(extractUrl, { signal: AbortSignal.timeout(12000) });
+      console.log(`[Flixer] Fetching server ${server}: ${extractUrl.substring(0, 80)}...`);
+      // Use cfFetch to route through RPI when on CF Pages — CF Pages can't directly
+      // fetch other CF Workers on the same account (silent failure / instant rejection)
+      const response = await cfFetch(extractUrl, { signal: AbortSignal.timeout(15000) });
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        const body = await response.text().catch(() => '');
+        throw new Error(`HTTP ${response.status}: ${body.substring(0, 100)}`);
       }
 
       const data: FlixerApiResponse = await response.json();
@@ -185,7 +189,7 @@ export async function fetchFlixerSourceByName(
   try {
     const extractUrl = getFlixerExtractUrl(tmdbId, type, server, season, episode);
     
-    const response = await fetch(extractUrl, {
+    const response = await cfFetch(extractUrl, {
       signal: AbortSignal.timeout(20000),
     });
     

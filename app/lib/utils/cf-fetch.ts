@@ -10,28 +10,45 @@
  *   const response = await cfFetch(url, options);
  */
 
-// Detect if we're running on Cloudflare Workers
+// Detect if we're running on Cloudflare Workers/Pages (via OpenNext)
+// IMPORTANT: CF Pages with nodejs_compat has process.versions.node defined,
+// so we can't rely on that. Instead we check for CF-specific APIs and
+// the OpenNext/Cloudflare context.
 function isCloudflareWorker(): boolean {
   try {
-    // Multiple detection methods for Cloudflare Workers environment:
-    // 1. caches.default only exists in Cloudflare Workers
-    // 2. Check for CF-specific globals
-    // 3. Check if we're NOT in Node.js (no process.versions.node in Workers)
-    
+    // Method 1: caches.default only exists in Cloudflare Workers
     // @ts-ignore - caches.default only exists in Cloudflare Workers
-    const hasCachesDefault = typeof caches !== 'undefined' && typeof caches.default !== 'undefined';
+    if (typeof caches !== 'undefined' && typeof caches.default !== 'undefined') {
+      return true;
+    }
     
-    // In Cloudflare Workers, process.versions.node is undefined
-    // In Node.js, it's defined
-    const isNotNode = typeof process === 'undefined' || 
-                      typeof process.versions === 'undefined' || 
-                      typeof process.versions.node === 'undefined';
+    // Method 2: Check for OpenNext Cloudflare context
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { getCloudflareContext } = require('@opennextjs/cloudflare');
+      const ctx = getCloudflareContext({ async: false });
+      if (ctx?.env) return true;
+    } catch {
+      // Not on CF Pages/OpenNext
+    }
     
-    // Check for Cloudflare-specific environment
-    // @ts-ignore
-    const hasCfEnv = typeof globalThis.caches !== 'undefined';
+    // Method 3: Check for CF-specific env vars that are only set in production
+    // NEXT_PUBLIC_ vars are baked at build time, but RPI_PROXY_URL is a secret
+    // only available at runtime on CF Workers
+    if (typeof process !== 'undefined' && process.env) {
+      // If NODE_ENV is production AND we have no typical Node.js server indicators,
+      // we're likely on CF Pages. But this is fragile, so we also check if
+      // the RPI config is available (which means we SHOULD proxy).
+      // The real fix: if RPI is configured, always use it in production.
+      if (process.env.NODE_ENV === 'production') {
+        // On CF Pages, process.versions.node exists due to nodejs_compat
+        // but we're still on a Worker. Check for __cf_env__ or similar.
+        const cfEnv = (globalThis as unknown as { __cf_env__?: Record<string, string> })?.__cf_env__;
+        if (cfEnv) return true;
+      }
+    }
     
-    return hasCachesDefault || (isNotNode && hasCfEnv);
+    return false;
   } catch {
     return false;
   }
@@ -46,8 +63,11 @@ function getRpiConfig(): { url: string | undefined; key: string | undefined } {
   let url = process.env.RPI_PROXY_URL || process.env.NEXT_PUBLIC_RPI_PROXY_URL;
   let key = process.env.RPI_PROXY_KEY || process.env.NEXT_PUBLIC_RPI_PROXY_KEY;
   
+  // If we already have both, return early
+  if (url && key) return { url, key };
+  
   // If in Cloudflare Workers, try to get from CF context
-  if (isCloudflareWorker() && (!url || !key)) {
+  if (isCloudflareWorker()) {
     try {
       // Try OpenNext's getCloudflareContext
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -56,6 +76,7 @@ function getRpiConfig(): { url: string | undefined; key: string | undefined } {
       if (ctx?.env) {
         url = url || ctx.env.RPI_PROXY_URL;
         key = key || ctx.env.RPI_PROXY_KEY;
+        if (url && key) return { url, key };
       }
     } catch (e) {
       // getCloudflareContext not available
@@ -65,15 +86,16 @@ function getRpiConfig(): { url: string | undefined; key: string | undefined } {
     // Try global CF env
     const globalEnv = (globalThis as unknown as { process?: { env?: Record<string, string> } })?.process?.env;
     if (globalEnv) {
-      url = url || globalEnv.RPI_PROXY_URL;
-      key = key || globalEnv.RPI_PROXY_KEY;
+      url = url || globalEnv.RPI_PROXY_URL || globalEnv.NEXT_PUBLIC_RPI_PROXY_URL;
+      key = key || globalEnv.RPI_PROXY_KEY || globalEnv.NEXT_PUBLIC_RPI_PROXY_KEY;
+      if (url && key) return { url, key };
     }
     
     // Try __cf_env__
     const cfEnv = (globalThis as unknown as { __cf_env__?: Record<string, string> })?.__cf_env__;
     if (cfEnv) {
-      url = url || cfEnv.RPI_PROXY_URL;
-      key = key || cfEnv.RPI_PROXY_KEY;
+      url = url || cfEnv.RPI_PROXY_URL || cfEnv.NEXT_PUBLIC_RPI_PROXY_URL;
+      key = key || cfEnv.RPI_PROXY_KEY || cfEnv.NEXT_PUBLIC_RPI_PROXY_KEY;
     }
   }
   
@@ -81,7 +103,17 @@ function getRpiConfig(): { url: string | undefined; key: string | undefined } {
 }
 
 /**
- * Fetch that automatically routes through RPI proxy when on Cloudflare
+ * Fetch that automatically routes through RPI proxy when on Cloudflare.
+ * 
+ * CRITICAL: On CF Pages (OpenNext), direct fetch() to other CF Workers on the
+ * same account silently fails. We MUST route through RPI residential proxy.
+ * 
+ * Decision logic:
+ * 1. forceProxy=true → always proxy
+ * 2. Target is a CF Worker URL (*.workers.dev) AND we're in production → proxy
+ *    (this is the core fix for Worker-to-Worker fetch limitation)
+ * 3. isCloudflareWorker() AND target needs residential IP → proxy
+ * 4. Otherwise → direct fetch
  */
 export async function cfFetch(
   url: string,
@@ -89,12 +121,25 @@ export async function cfFetch(
   forceProxy: boolean = false
 ): Promise<Response> {
   const isCfWorker = isCloudflareWorker();
-  const useProxy = forceProxy || isCfWorker;
   
   // Get RPI config dynamically (handles CF Workers env)
   const { url: RPI_PROXY_URL, key: RPI_PROXY_KEY } = getRpiConfig();
+  const rpiConfigured = !!(RPI_PROXY_URL && RPI_PROXY_KEY);
   
-  console.log(`[cfFetch] isCfWorker=${isCfWorker}, useProxy=${useProxy}, RPI_URL=${RPI_PROXY_URL ? 'set' : 'unset'}, RPI_KEY=${RPI_PROXY_KEY ? 'set' : 'unset'}`);
+  const isProduction = typeof process !== 'undefined' && process.env?.NODE_ENV === 'production';
+  
+  // Check if target is a CF Worker URL (same-account Worker-to-Worker issue)
+  const isCfWorkerUrl = url.includes('.workers.dev');
+  
+  // Proxy when:
+  // 1. Explicitly forced
+  // 2. Target is a CF Worker and we're in production (Worker-to-Worker fix)
+  // 3. We're on CF and the target needs residential IP (datacenter IP blocking)
+  const useProxy = forceProxy || 
+    (isCfWorkerUrl && isProduction && rpiConfigured) ||
+    (isCfWorker && rpiConfigured);
+  
+  console.log(`[cfFetch] isCfWorker=${isCfWorker}, isProduction=${isProduction}, isCfWorkerUrl=${isCfWorkerUrl}, useProxy=${useProxy}, RPI=${rpiConfigured ? 'yes' : 'no'}`);
   
   if (useProxy && RPI_PROXY_URL && RPI_PROXY_KEY) {
     // Route through RPI residential proxy

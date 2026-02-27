@@ -464,7 +464,10 @@ async function extractFrom2EmbedApi(
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
     
-    const response = await fetch(cfUrl, {
+    // Use cfFetch to route through RPI when on CF Pages — CF Pages can't directly
+    // fetch other CF Workers on the same account (silent failure)
+    const { cfFetch } = await import('@/app/lib/utils/cf-fetch');
+    const response = await cfFetch(cfUrl, {
       headers: {
         'Accept': 'application/json',
       },
