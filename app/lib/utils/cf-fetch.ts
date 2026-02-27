@@ -105,15 +105,14 @@ function getRpiConfig(): { url: string | undefined; key: string | undefined } {
 /**
  * Fetch that automatically routes through RPI proxy when on Cloudflare.
  * 
- * CRITICAL: On CF Pages (OpenNext), direct fetch() to other CF Workers on the
- * same account silently fails. We MUST route through RPI residential proxy.
- * 
  * Decision logic:
- * 1. forceProxy=true → always proxy
- * 2. Target is a CF Worker URL (*.workers.dev) AND we're in production → proxy
- *    (this is the core fix for Worker-to-Worker fetch limitation)
- * 3. isCloudflareWorker() AND target needs residential IP → proxy
- * 4. Otherwise → direct fetch
+ * 1. forceProxy=true → always proxy through RPI
+ * 2. forceProxy=false (or omitted) with forceDirect=true → always direct
+ * 3. Target is a CF Worker URL (*.workers.dev) → try direct first, fall back to RPI
+ *    CF Pages CAN fetch CF Workers via public URL (goes through public internet).
+ *    Only true Worker-to-Worker service bindings have same-account issues.
+ * 4. isCloudflareWorker() AND target is external → proxy (datacenter IP blocking)
+ * 5. Otherwise → direct fetch
  */
 export async function cfFetch(
   url: string,
@@ -128,22 +127,34 @@ export async function cfFetch(
   
   const isProduction = typeof process !== 'undefined' && process.env?.NODE_ENV === 'production';
   
-  // Check if target is a CF Worker URL (same-account Worker-to-Worker issue)
+  // Check if target is our own CF Worker (*.workers.dev)
   const isCfWorkerUrl = url.includes('.workers.dev');
+  
+  // For our own CF Worker URLs: try direct first (CF Pages → CF Worker via public URL works).
+  // Only fall back to RPI if direct fails.
+  if (!forceProxy && isCfWorkerUrl && isProduction && rpiConfigured) {
+    try {
+      const response = await fetch(url, options);
+      // If we got a real response (even an error from our worker), direct works
+      if (response.status !== 530 && response.status !== 522 && response.status !== 523) {
+        return response;
+      }
+      console.log(`[cfFetch] Direct to CF Worker got ${response.status}, falling back to RPI`);
+    } catch (directError) {
+      console.log(`[cfFetch] Direct to CF Worker failed: ${directError instanceof Error ? directError.message : directError}, falling back to RPI`);
+    }
+    // Fall through to RPI proxy
+  }
   
   // Proxy when:
   // 1. Explicitly forced
-  // 2. Target is a CF Worker and we're in production (Worker-to-Worker fix)
-  // 3. We're on CF and the target needs residential IP (datacenter IP blocking)
+  // 2. We're on CF and the target is external (needs residential IP)
+  // 3. Direct to CF Worker failed (fell through from above)
   const useProxy = forceProxy || 
     (isCfWorkerUrl && isProduction && rpiConfigured) ||
-    (isCfWorker && rpiConfigured);
-  
-  console.log(`[cfFetch] isCfWorker=${isCfWorker}, isProduction=${isProduction}, isCfWorkerUrl=${isCfWorkerUrl}, useProxy=${useProxy}, RPI=${rpiConfigured ? 'yes' : 'no'}`);
+    (isCfWorker && rpiConfigured && !isCfWorkerUrl);
   
   if (useProxy && RPI_PROXY_URL && RPI_PROXY_KEY) {
-    // Route through RPI residential proxy
-    // Format: GET /proxy?url=<encoded_url> with X-API-Key header
     const proxyUrl = `${RPI_PROXY_URL}/proxy?url=${encodeURIComponent(url)}`;
     
     const headers = new Headers(options.headers);
@@ -153,14 +164,11 @@ export async function cfFetch(
     
     try {
       const response = await fetch(proxyUrl, {
-        method: 'GET', // RPI /proxy endpoint only supports GET
+        method: 'GET',
         headers,
         signal: options.signal,
       });
       
-      console.log(`[cfFetch] RPI response: ${response.status} ${response.statusText}`);
-      
-      // If RPI returns 429 (rate limited), log it
       if (response.status === 429) {
         console.warn(`[cfFetch] RPI proxy rate limited (429) for: ${url.substring(0, 60)}...`);
       }
@@ -168,17 +176,10 @@ export async function cfFetch(
       return response;
     } catch (error) {
       console.error(`[cfFetch] RPI proxy error:`, error instanceof Error ? error.message : error);
-      // Fall back to direct fetch if RPI fails
-      console.log(`[cfFetch] Falling back to direct fetch...`);
       return fetch(url, options);
     }
   }
   
-  // Direct fetch (local dev, or RPI not configured)
-  if (useProxy && (!RPI_PROXY_URL || !RPI_PROXY_KEY)) {
-    console.warn(`[cfFetch] On CF Worker but RPI not configured! Direct fetch will likely fail.`);
-  }
-  console.log(`[cfFetch] Direct fetch: ${url.substring(0, 80)}...`);
   return fetch(url, options);
 }
 
