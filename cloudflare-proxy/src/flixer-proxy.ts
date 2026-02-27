@@ -516,7 +516,8 @@ let serverTimeOffset = 0;
  */
 async function syncServerTime(): Promise<void> {
   const localTimeBefore = Date.now();
-  const response = await fetchWithRpi(`${FLIXER_API_BASE}/api/time?t=${localTimeBefore}`);
+  // Direct fetch — Flixer API doesn't block datacenter IPs
+  const response = await fetch(`${FLIXER_API_BASE}/api/time?t=${localTimeBefore}`);
   const localTimeAfter = Date.now();
   const data = await response.json() as { timestamp: number };
   

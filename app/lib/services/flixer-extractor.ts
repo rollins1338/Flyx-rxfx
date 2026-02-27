@@ -12,7 +12,6 @@
  */
 
 import { getFlixerExtractUrl, getFlixerExtractAllUrl } from '../proxy-config';
-import { cfFetch } from '../utils/cf-fetch';
 
 interface StreamSource {
   quality: string;
@@ -75,8 +74,8 @@ async function fetchSubtitles(
     if (type === 'tv' && season && episode) {
       url += `&season=${season}&episode=${episode}`;
     }
-    // Use cfFetch to route through RPI proxy on Cloudflare Workers
-    const response = await cfFetch(url, {
+    // Direct fetch — subtitle API doesn't block datacenter IPs
+    const response = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': FLIXER_BASE_URL },
     });
     if (!response.ok) return [];
@@ -99,9 +98,12 @@ async function fetchSubtitles(
  * The CF Worker handles WASM-based encryption/decryption
  * 
  * Updated: Uses /flixer/extract-all to fetch ALL servers in a single request.
- * The CF Worker fans out to all 12 servers in parallel internally,
- * avoiding 12 separate round-trips through RPI proxy.
- * Falls back to per-server requests if batch endpoint fails.
+ * The CF Worker fans out to all 12 servers in parallel internally.
+ * 
+ * IMPORTANT: We use direct fetch() here, NOT cfFetch(). The CF Worker is our
+ * own infrastructure — it doesn't block datacenter IPs. Only the final m3u8
+ * URLs and segments need residential proxy (handled by the stream proxy layer).
+ * Routing extraction through RPI added unnecessary latency.
  */
 export async function extractFlixerStreams(
   tmdbId: string,
@@ -119,15 +121,20 @@ export async function extractFlixerStreams(
     return { success: false, sources: [], error: 'Season and episode required for TV shows' };
   }
 
-  // Start subtitle fetch in parallel with extraction (don't wait for it)
+  // Start subtitle fetch in parallel with extraction (don't block on it)
   const subtitlePromise = fetchSubtitles(tmdbId, type, season, episode);
 
-  // Try batch endpoint first — one request instead of 12
+  // Use batch endpoint — one request, CF Worker fans out to all 12 servers
+  // Direct fetch to our own CF Worker (no RPI needed for extraction)
   let allSources: StreamSource[] = [];
+  const extractAllUrl = getFlixerExtractAllUrl(tmdbId, type, season, episode);
+
   try {
-    const extractAllUrl = getFlixerExtractAllUrl(tmdbId, type, season, episode);
-    console.log(`[Flixer] Using batch extract-all endpoint...`);
-    const response = await cfFetch(extractAllUrl, { signal: AbortSignal.timeout(30000) });
+    console.log(`[Flixer] Batch extract-all (direct fetch)...`);
+    const response = await fetch(extractAllUrl, {
+      signal: AbortSignal.timeout(30000),
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+    });
 
     if (response.ok) {
       const data: FlixerApiResponse & { successCount?: number; failures?: string[] } = await response.json();
@@ -137,21 +144,27 @@ export async function extractFlixerStreams(
           status: 'working' as const,
         }));
         console.log(`[Flixer] Batch extract returned ${allSources.length} sources`);
+      } else {
+        console.log(`[Flixer] Batch extract returned no sources: ${data.error || 'empty'}`);
       }
     } else {
-      console.log(`[Flixer] Batch extract failed with HTTP ${response.status}, falling back to per-server`);
+      const body = await response.text().catch(() => '');
+      console.log(`[Flixer] Batch extract HTTP ${response.status}: ${body.substring(0, 200)}`);
     }
   } catch (e) {
-    console.log(`[Flixer] Batch extract error: ${e instanceof Error ? e.message : e}, falling back to per-server`);
+    console.log(`[Flixer] Batch extract error: ${e instanceof Error ? e.message : e}`);
   }
 
-  // Fallback: per-server parallel requests (old behavior)
+  // Fallback: per-server parallel requests via direct fetch
   if (allSources.length === 0) {
-    console.log(`[Flixer] Falling back to per-server extraction for ${NATO_ORDER.length} servers...`);
+    console.log(`[Flixer] Falling back to per-server extraction (direct fetch)...`);
     const serverResults = await Promise.allSettled(
       NATO_ORDER.map(async (server) => {
         const extractUrl = getFlixerExtractUrl(tmdbId, type, server, season, episode);
-        const response = await cfFetch(extractUrl, { signal: AbortSignal.timeout(15000) });
+        const response = await fetch(extractUrl, {
+          signal: AbortSignal.timeout(15000),
+          headers: { 'User-Agent': 'Mozilla/5.0' },
+        });
 
         if (!response.ok) {
           const body = await response.text().catch(() => '');
@@ -162,7 +175,6 @@ export async function extractFlixerStreams(
 
         if (data.success && data.sources && data.sources.length > 0) {
           const serverDisplayName = SERVER_NAMES[server] || server;
-          console.log(`[Flixer] ✓ Server ${server} (${serverDisplayName}) returned ${data.sources.length} source(s)`);
           return data.sources.map(src => ({
             ...src,
             title: `Flixer ${serverDisplayName}`,
@@ -213,8 +225,9 @@ export async function fetchFlixerSourceByName(
   try {
     const extractUrl = getFlixerExtractUrl(tmdbId, type, server, season, episode);
     
-    const response = await cfFetch(extractUrl, {
+    const response = await fetch(extractUrl, {
       signal: AbortSignal.timeout(20000),
+      headers: { 'User-Agent': 'Mozilla/5.0' },
     });
     
     if (!response.ok) {
