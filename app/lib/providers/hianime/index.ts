@@ -24,7 +24,7 @@ export class HiAnimeProvider implements Provider {
   readonly priority = 35;
   readonly enabled = true;
 
-  supportsContent(mediaType: MediaType, metadata?: { isAnime?: boolean; isLive?: boolean }): boolean {
+  supportsContent(_mediaType: MediaType, metadata?: { isAnime?: boolean; isLive?: boolean }): boolean {
     if (metadata?.isAnime) return true;
     return false;
   }

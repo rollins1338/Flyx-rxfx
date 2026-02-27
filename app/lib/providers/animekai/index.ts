@@ -27,7 +27,7 @@ export class AnimeKaiProvider implements Provider {
   readonly priority = 30;
   readonly enabled = ANIMEKAI_ENABLED;
 
-  supportsContent(mediaType: MediaType, metadata?: { isAnime?: boolean; isLive?: boolean }): boolean {
+  supportsContent(_mediaType: MediaType, metadata?: { isAnime?: boolean; isLive?: boolean }): boolean {
     // AnimeKai only handles anime content
     if (metadata?.isAnime) return true;
     // Without metadata, anime content comes through as movie/tv — rely on caller to set isAnime
