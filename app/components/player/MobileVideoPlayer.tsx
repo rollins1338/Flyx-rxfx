@@ -10,15 +10,8 @@ import { usePresenceContext } from '@/components/analytics/PresenceProvider';
 // Player Core hooks — shared logic extracted for reuse by both desktop and mobile players
 // The mobile player integrates these hooks for shared functionality while retaining
 // mobile-specific UI controls (gestures, touch controls, orientation handling, etc.)
-import {
-  usePlayerState,
-  useSubtitles,
-  usePlaybackProgress,
-  useSourceSwitcher,
-  type PlayerSource,
-  type PlayerSubtitleTrack,
-  PLAYBACK_SPEED_OPTIONS,
-} from './core';
+// TODO: Integrate core hooks (usePlayerState, useSubtitles, usePlaybackProgress, useSourceSwitcher)
+// to replace inline implementations. See ./core for shared player logic.
 import styles from './MobileVideoPlayer.module.css';
 
 // Copy URL button with feedback for external players
