@@ -18,6 +18,9 @@ import { isAnimeContent } from '@/app/lib/services/animekai-extractor';
 import { performanceMonitor } from '@/app/lib/utils/performance-monitor';
 import { getStreamProxyUrl, getAnimeKaiProxyUrl, isMegaUpCdnUrl, is1moviesCdnUrl, isAnimeKaiSource } from '@/app/lib/proxy-config';
 
+// Log registry status at module load time
+console.log(`[EXTRACT] Registry loaded: ${registry.getAllEnabled().length} enabled providers: ${registry.getAllEnabled().map(p => p.name).join(', ')}`);
+
 // ============================================================================
 // RATE LIMITING & ANTI-ABUSE
 // ============================================================================
@@ -69,26 +72,33 @@ function maybeProxyUrl(source: any, provider: string): string {
     return source.url; // Return direct URL - browser will fetch directly
   }
 
-  // These providers/CDNs block datacenter IPs (Cloudflare, AWS, etc.)
-  // They MUST go through /animekai route -> RPI residential proxy
-  const isAnimeKai = provider === 'animekai';
-  const isAnimeKaiSrc = isAnimeKaiSource(source);
-  const isMegaUpCdn = isMegaUpCdnUrl(source.url);
-  const is1moviesCdn = is1moviesCdnUrl(source.url);
-  const is1movies = provider === '1movies';
-  const isFlixer = provider === 'flixer';
-  const isVidLink = provider === 'vidlink';
-  const isMultiEmbed = provider === 'multi-embed' || provider === 'multiembed' || provider === 'hexa';
-  // VidLink CDN domains block datacenter IPs
-  const isVidLinkCdn = source.url.includes('vodvidl.site') || source.url.includes('videostr.net');
+  try {
+    // These providers/CDNs block datacenter IPs (Cloudflare, AWS, etc.)
+    // They MUST go through /animekai route -> RPI residential proxy
+    const isAnimeKai = provider === 'animekai';
+    const isAnimeKaiSrc = isAnimeKaiSource(source);
+    const isMegaUpCdn = isMegaUpCdnUrl(source.url);
+    const is1moviesCdn = is1moviesCdnUrl(source.url);
+    const is1movies = provider === '1movies';
+    const isFlixer = provider === 'flixer';
+    const isVidLink = provider === 'vidlink';
+    const isMultiEmbed = provider === 'multi-embed' || provider === 'multiembed' || provider === 'hexa';
+    const isVidSrc = provider === 'vidsrc';
+    // VidLink CDN domains block datacenter IPs
+    const isVidLinkCdn = source.url.includes('vodvidl.site') || source.url.includes('videostr.net');
 
-  // Route through residential proxy for CDNs that block datacenter IPs
-  if (isAnimeKai || isAnimeKaiSrc || isMegaUpCdn || is1moviesCdn || is1movies || isFlixer || isVidLink || isVidLinkCdn || isMultiEmbed) {
+    // Route through residential proxy for CDNs that block datacenter IPs
+    if (isAnimeKai || isAnimeKaiSrc || isMegaUpCdn || is1moviesCdn || is1movies || isFlixer || isVidLink || isVidLinkCdn || isMultiEmbed || isVidSrc) {
+      return getAnimeKaiProxyUrl(source.url);
+    }
+
+    // Other sources use the standard /stream route
+    return getStreamProxyUrl(source.url, provider, source.referer, source.skipOrigin || false);
+  } catch (err) {
+    console.error(`[EXTRACT] maybeProxyUrl error for ${provider}:`, err instanceof Error ? err.message : err);
+    // Fallback: use getAnimeKaiProxyUrl which has hardcoded fallback
     return getAnimeKaiProxyUrl(source.url);
   }
-
-  // Other sources use the standard /stream route
-  return getStreamProxyUrl(source.url, provider, source.referer, source.skipOrigin || false);
 }
 
 // ============================================================================
@@ -398,7 +408,10 @@ export async function GET(request: NextRequest) {
       return await extractWithFallback(extractionRequest, type, isAnime);
     })();
 
-    pendingRequests.set(cacheKey, extractionPromise.then(r => r.sources));
+    // Store in pending requests for deduplication — add .catch to prevent unhandled rejection
+    const sourcesPromise = extractionPromise.then(r => r.sources);
+    sourcesPromise.catch(() => {}); // Prevent unhandled rejection warning
+    pendingRequests.set(cacheKey, sourcesPromise);
 
     try {
       const result = await extractionPromise;
@@ -489,21 +502,28 @@ async function extractFromSpecificProvider(
 ): Promise<{ sources: any[]; provider: string }> {
   const provider = registry.get(providerName);
   if (!provider) {
-    throw new Error(`Provider "${providerName}" not found`);
+    throw new Error(`Provider "${providerName}" not found in registry. Available: ${registry.getAllEnabled().map(p => p.name).join(', ')}`);
   }
   if (!provider.enabled) {
     throw new Error(`Provider "${providerName}" is disabled`);
   }
 
   console.log(`[EXTRACT] Using ${provider.name} (explicit request)...`);
-  const result = await provider.extract(request);
+  
+  let result;
+  try {
+    result = await provider.extract(request);
+  } catch (extractError) {
+    const msg = extractError instanceof Error ? extractError.message : String(extractError);
+    console.error(`[EXTRACT] ${provider.name} extract() threw:`, msg);
+    throw new Error(`${provider.name} extraction threw: ${msg}`);
+  }
+
+  console.log(`[EXTRACT] ${provider.name} result: success=${result.success}, sources=${result.sources.length}, error=${result.error || 'none'}`);
 
   if (result.success && result.sources.length > 0) {
-    const workingSources = result.sources.filter((s: any) => !s.status || s.status === 'working');
-    if (workingSources.length > 0 || result.sources.length > 0) {
-      console.log(`[EXTRACT] ✓ ${provider.name}: ${result.sources.length} sources`);
-      return { sources: result.sources, provider: provider.name };
-    }
+    console.log(`[EXTRACT] ✓ ${provider.name}: ${result.sources.length} sources`);
+    return { sources: result.sources, provider: provider.name };
   }
 
   throw new Error(result.error || `${provider.name} returned no sources`);
@@ -521,8 +541,9 @@ async function extractWithFallback(
   const metadata = { isAnime };
   const providers = registry.getForContent(mediaType, metadata);
 
+  console.log(`[EXTRACT] getForContent('${mediaType}', isAnime=${isAnime}): ${providers.map(p => `${p.name}(${p.priority})`).join(', ') || 'NONE'}`);
+
   // For anime, also include general movie/tv providers as fallback
-  // (VidLink supports anime content through movie/tv endpoints)
   let allProviders = [...providers];
   if (isAnime) {
     const generalProviders = registry.getForContent(mediaType);
@@ -531,9 +552,11 @@ async function extractWithFallback(
         allProviders.push(gp);
       }
     }
+    console.log(`[EXTRACT] With anime fallbacks: ${allProviders.map(p => p.name).join(', ')}`);
   }
 
   if (allProviders.length === 0) {
+    console.error(`[EXTRACT] No providers available for ${mediaType} (isAnime=${isAnime})`);
     throw new AllProvidersFailedError([]);
   }
 
@@ -544,12 +567,17 @@ async function extractWithFallback(
       console.log(`[EXTRACT] Trying ${provider.name} (priority ${provider.priority})...`);
       const result = await provider.extract(request);
 
+      console.log(`[EXTRACT] ${provider.name} result: success=${result.success}, sources=${result.sources.length}, error=${result.error || 'none'}`);
+
       if (result.success && result.sources.length > 0) {
         const workingSources = result.sources.filter((s: any) => !s.status || s.status === 'working');
         if (workingSources.length > 0) {
           console.log(`[EXTRACT] ✓ ${provider.name}: ${workingSources.length} working sources`);
           return { sources: result.sources, provider: provider.name };
         }
+        // If sources exist but none are "working", still return them
+        // (normalizeSource strips status, so most sources will pass the filter above)
+        console.log(`[EXTRACT] ${provider.name}: ${result.sources.length} sources but 0 working, continuing...`);
       }
 
       const errorMsg = result.error || 'No working sources';
@@ -562,7 +590,7 @@ async function extractWithFallback(
     }
   }
 
-  console.log('[EXTRACT] All providers failed');
+  console.log('[EXTRACT] All providers failed:', JSON.stringify(attempts));
   throw new AllProvidersFailedError(attempts);
 }
 

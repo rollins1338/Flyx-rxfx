@@ -91,6 +91,7 @@ export class VidSrcProvider implements Provider {
       referer: s.referer,
       requiresSegmentProxy: s.requiresSegmentProxy ?? true,
       skipOrigin: s.skipOrigin,
+      ...(s.status && { status: s.status }),
     };
   }
 }

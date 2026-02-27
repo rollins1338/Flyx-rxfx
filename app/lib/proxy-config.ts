@@ -21,12 +21,11 @@ export function getStreamProxyUrl(
   referer: string = 'https://www.2embed.cc',
   skipOrigin: boolean = false
 ): string {
-  const cfProxyUrl = process.env.NEXT_PUBLIC_CF_STREAM_PROXY_URL;
-  
-  if (!cfProxyUrl) {
-    console.error('[proxy-config] NEXT_PUBLIC_CF_STREAM_PROXY_URL is not set! Cloudflare Worker is required.');
-    throw new Error('Stream proxy not configured. Set NEXT_PUBLIC_CF_STREAM_PROXY_URL environment variable.');
-  }
+  // Try both NEXT_PUBLIC_ (available at build time) and server-side env var
+  // Fallback to hardcoded URL for production if env vars aren't set
+  const cfProxyUrl = process.env.NEXT_PUBLIC_CF_STREAM_PROXY_URL || 
+                     process.env.CF_STREAM_PROXY_URL || 
+                     'https://media-proxy.vynx.workers.dev/stream';
   
   // Strip trailing slash if present to avoid double slashes
   const baseUrl = cfProxyUrl.replace(/\/+$/, '');

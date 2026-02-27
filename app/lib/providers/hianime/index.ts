@@ -103,6 +103,9 @@ export class HiAnimeProvider implements Provider {
       referer: s.referer || '',
       requiresSegmentProxy: s.requiresSegmentProxy ?? true,
       skipOrigin: s.skipOrigin,
+      ...(s.status && { status: s.status }),
+      ...(s.skipIntro && { skipIntro: s.skipIntro }),
+      ...(s.skipOutro && { skipOutro: s.skipOutro }),
     };
   }
 }

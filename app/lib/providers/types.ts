@@ -36,6 +36,9 @@ export interface StreamSource {
   referer?: string;
   requiresSegmentProxy: boolean;
   skipOrigin?: boolean;
+  status?: 'working' | 'down' | 'unknown';
+  skipIntro?: [number, number];
+  skipOutro?: [number, number];
 }
 
 export interface SubtitleTrack {
