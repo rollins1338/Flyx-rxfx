@@ -707,9 +707,8 @@ async function getSourceFromServer(
 }
 
 /**
- * Extract ALL servers in parallel and return all working sources.
- * One warm-up request, then all 12 servers fire simultaneously.
- * No retries per server — with 12 servers we don't need them.
+ * Extract ALL servers in parallel. Returns as soon as at least one source is found,
+ * with a short grace period to collect more. Doesn't wait for all 12 to finish.
  */
 async function extractAllServers(
   tmdbId: string,
@@ -741,49 +740,53 @@ async function extractAllServers(
       : `/api/tmdb/tv/${tmdbId}/season/${season}/episode/${episode}/images`;
     try {
       await makeFlixerRequest(apiKey, warmupPath, {});
-    } catch (_) {
-      // Expected to fail sometimes
-    }
+    } catch (_) {}
 
-    logger.info(`Extracting ${allServers.length} servers in parallel for ${type}/${tmdbId}`);
+    logger.info(`Racing ${allServers.length} servers for ${type}/${tmdbId}`);
 
-    // Fan out ALL servers simultaneously — no retries, no delays
-    const results = await Promise.allSettled(
-      allServers.map(async (server) => {
-        const result = await getSourceFromServer(
-          loader,
-          apiKey,
-          type,
-          tmdbId,
-          server,
-          season || undefined,
-          episode || undefined
-        );
-        if (!result.url) throw new Error('No stream URL');
-        const displayName = SERVER_NAMES[server] || server;
-        return {
-          quality: 'auto',
-          title: `Flixer ${displayName}`,
-          url: result.url,
-          type: 'hls' as const,
-          referer: 'https://flixer.sh/',
-          requiresSegmentProxy: true,
-          status: 'working' as const,
-          language: 'en',
-          server,
-        };
-      })
-    );
-
+    // Collect sources as they resolve
     const sources: any[] = [];
-    const failures: string[] = [];
-    for (let i = 0; i < results.length; i++) {
-      const r = results[i];
-      if (r.status === 'fulfilled') {
-        sources.push(r.value);
-      } else {
-        failures.push(`${allServers[i]}: ${r.reason?.message || r.reason}`);
-      }
+    let firstSourceTime = 0;
+
+    // Create individual promises that push to sources array on success
+    const serverPromises = allServers.map(async (server) => {
+      try {
+        const result = await getSourceFromServer(
+          loader, apiKey, type, tmdbId, server,
+          season || undefined, episode || undefined,
+        );
+        if (result.url) {
+          const source = {
+            quality: 'auto',
+            title: `Flixer ${SERVER_NAMES[server] || server}`,
+            url: result.url,
+            type: 'hls',
+            referer: 'https://flixer.sh/',
+            requiresSegmentProxy: true,
+            status: 'working',
+            language: 'en',
+            server,
+          };
+          sources.push(source);
+          if (!firstSourceTime) firstSourceTime = Date.now();
+          return source;
+        }
+      } catch (_) {}
+      return null;
+    });
+
+    // Wait for first source, then give 1.5s grace period for more
+    const firstResult = await Promise.any(serverPromises).catch(() => null);
+
+    if (firstResult) {
+      // Got at least one — wait up to 1.5s more for others to trickle in
+      await Promise.race([
+        Promise.allSettled(serverPromises),
+        new Promise(r => setTimeout(r, 1500)),
+      ]);
+    } else {
+      // None resolved via Promise.any — wait for all to settle
+      await Promise.allSettled(serverPromises);
     }
 
     const elapsed = Date.now() - startTime;
@@ -792,7 +795,6 @@ async function extractAllServers(
     return jsonResponse({
       success: sources.length > 0,
       sources,
-      failures: failures.length > 0 ? failures : undefined,
       serverCount: allServers.length,
       successCount: sources.length,
       elapsed_ms: elapsed,
