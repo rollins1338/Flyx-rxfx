@@ -8,7 +8,6 @@
 
 import { useRealtimeSlice, useUserSlice, useContentSlice } from '../context/slices';
 import { useState, useEffect } from 'react';
-import AccessibleButton from './AccessibleButton';
 
 export default function UnifiedStatsBar() {
   const realtime = useRealtimeSlice();
