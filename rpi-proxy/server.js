@@ -318,6 +318,9 @@ function isAllowedOrigin(origin) {
 // Only proxy requests to known/trusted domains
 // ============================================================================
 const PROXY_ALLOWED_DOMAINS = [
+  // Jikan (MAL API) — needed for anime episode listings from CF Workers
+  'jikan.moe',
+  'api.jikan.moe',
   // DLHD key servers
   'soyspace.cyou',
   'adsfadfds.cfd',
