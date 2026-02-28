@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useStats } from '../context/StatsContext';
+import { useRealtimeSlice, useUserSlice } from '../context/slices';
 import { getAdminAnalyticsUrl } from '../hooks/useAnalyticsApi';
 import { colors, getPercentage } from './ui';
 
@@ -37,7 +37,10 @@ function useAnimatedNumber(value: number, duration = 400): number {
 interface HistoryPoint { time: number; total: number; watching: number; livetv: number; browsing: number; }
 
 export default function ImprovedLiveDashboard() {
-  const { stats, loading, refresh, lastRefresh } = useStats();
+  const realtime = useRealtimeSlice();
+  const users = useUserSlice();
+  const loading = realtime.loading;
+  const lastUpdate = realtime.lastUpdate;
   const [history, setHistory] = useState<HistoryPoint[]>([]);
 
   const fetchHistory = useCallback(async () => {
@@ -52,8 +55,8 @@ export default function ImprovedLiveDashboard() {
 
   useEffect(() => { fetchHistory(); const i = setInterval(fetchHistory, 300000); return () => clearInterval(i); }, [fetchHistory]);
 
-  const activity = { total: stats.liveUsers, watching: stats.liveWatching, livetv: stats.liveTVViewers, browsing: stats.liveBrowsing };
-  const peak = stats.peakStats;
+  const activity = { total: realtime.data.liveUsers, watching: realtime.data.watching, livetv: realtime.data.livetv, browsing: realtime.data.browsing };
+  const peak = { peakTotal: realtime.data.peakToday, peakWatching: 0, peakLiveTV: 0, peakBrowsing: 0, peakTotalTime: realtime.data.peakTime, peakWatchingTime: 0, peakLiveTVTime: 0, peakBrowsingTime: 0 };
   const formatTime = (ts: number) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   return (
@@ -66,18 +69,18 @@ export default function ImprovedLiveDashboard() {
               <span style={{ width: '6px', height: '6px', background: colors.success, borderRadius: '50%', animation: 'pulse 2s infinite' }} />LIVE
             </span>
           </h2>
-          <p style={{ margin: '4px 0 0 0', color: colors.text.muted, fontSize: '13px' }}>Updated: {lastRefresh ? lastRefresh.toLocaleTimeString() : 'Loading...'}</p>
+          <p style={{ margin: '4px 0 0 0', color: colors.text.muted, fontSize: '13px' }}>Updated: {lastUpdate ? new Date(lastUpdate).toLocaleTimeString() : 'Loading...'}</p>
         </div>
-        <button onClick={() => { refresh(); fetchHistory(); }} disabled={loading} style={{ padding: '6px 12px', background: 'rgba(120, 119, 198, 0.2)', border: '1px solid rgba(120, 119, 198, 0.3)', borderRadius: '6px', color: colors.primary, fontSize: '13px', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1 }}>
+        <button onClick={() => { fetchHistory(); }} disabled={loading} style={{ padding: '6px 12px', background: 'rgba(120, 119, 198, 0.2)', border: '1px solid rgba(120, 119, 198, 0.3)', borderRadius: '6px', color: colors.primary, fontSize: '13px', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1 }}>
           {loading ? '⏳' : '🔄'} Refresh
         </button>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
-        <ActivityCard title="On Site" value={activity.total} peak={peak?.peakTotal || 0} peakTime={peak?.peakTotalTime || 0} icon="👥" color={colors.success} isMain />
-        <ActivityCard title="Watching VOD" value={activity.watching} peak={peak?.peakWatching || 0} peakTime={peak?.peakWatchingTime || 0} icon="▶️" color={colors.primary} />
-        <ActivityCard title="Live TV" value={activity.livetv} peak={peak?.peakLiveTV || 0} peakTime={peak?.peakLiveTVTime || 0} icon="📺" color={colors.warning} />
-        <ActivityCard title="Browsing" value={activity.browsing} peak={peak?.peakBrowsing || 0} peakTime={peak?.peakBrowsingTime || 0} icon="🔍" color={colors.info} />
+        <ActivityCard title="On Site" value={activity.total} peak={peak.peakTotal || 0} peakTime={peak.peakTotalTime || 0} icon="👥" color={colors.success} isMain />
+        <ActivityCard title="Watching VOD" value={activity.watching} peak={peak.peakWatching || 0} peakTime={peak.peakWatchingTime || 0} icon="▶️" color={colors.primary} />
+        <ActivityCard title="Live TV" value={activity.livetv} peak={peak.peakLiveTV || 0} peakTime={peak.peakLiveTVTime || 0} icon="📺" color={colors.warning} />
+        <ActivityCard title="Browsing" value={activity.browsing} peak={peak.peakBrowsing || 0} peakTime={peak.peakBrowsingTime || 0} icon="🔍" color={colors.info} />
       </div>
 
       <div style={{ background: colors.bg.card, border: `1px solid ${colors.border.default}`, borderRadius: '12px', padding: '16px' }}>
@@ -125,18 +128,17 @@ export default function ImprovedLiveDashboard() {
         </div>
       )}
 
-      {stats.topContent?.length > 0 && (
+      {realtime.data.topActiveContent?.length > 0 && (
         <div style={{ background: colors.bg.card, border: `1px solid ${colors.border.default}`, borderRadius: '12px', padding: '16px' }}>
           <span style={{ color: colors.text.secondary, fontSize: '13px', display: 'block', marginBottom: '12px' }}>🔥 Active Content</span>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
-            {stats.topContent.slice(0, 6).map((c, i) => (
-              <div key={c.contentId} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: i === 0 ? 'rgba(255,215,0,0.1)' : 'rgba(255,255,255,0.02)', borderRadius: '8px', border: i === 0 ? '1px solid rgba(255,215,0,0.2)' : 'none' }}>
+            {realtime.data.topActiveContent.slice(0, 6).map((c, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: i === 0 ? 'rgba(255,215,0,0.1)' : 'rgba(255,255,255,0.02)', borderRadius: '8px', border: i === 0 ? '1px solid rgba(255,215,0,0.2)' : 'none' }}>
                 <span style={{ width: '28px', height: '28px', borderRadius: '50%', background: i < 3 ? ['#ffd700', '#c0c0c0', '#cd7f32'][i] : 'rgba(255,255,255,0.1)', color: i < 3 ? '#000' : colors.text.secondary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', fontSize: '12px' }}>{i + 1}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ color: colors.text.primary, fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.contentTitle || c.contentId}</div>
-                  <div style={{ color: colors.text.muted, fontSize: '11px' }}>{c.contentType}</div>
+                  <div style={{ color: colors.text.primary, fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.title}</div>
                 </div>
-                <span style={{ color: colors.success, fontWeight: '600', fontSize: '13px', padding: '4px 8px', background: 'rgba(16,185,129,0.15)', borderRadius: '12px' }}>{c.watchCount} 👁</span>
+                <span style={{ color: colors.success, fontWeight: '600', fontSize: '13px', padding: '4px 8px', background: 'rgba(16,185,129,0.15)', borderRadius: '12px' }}>{c.viewers} 👁</span>
               </div>
             ))}
           </div>

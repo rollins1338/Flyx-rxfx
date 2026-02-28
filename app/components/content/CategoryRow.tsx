@@ -209,7 +209,7 @@ export const CategoryRow: React.FC<CategoryRowProps> = ({
             reduceMotion ? (
               // Simple version for low-end devices - no staggered animations
               <div
-                key={item.id}
+                key={`${item.mediaType || 'content'}-${item.id}`}
                 className="flex-shrink-0 w-[140px] sm:w-[180px] md:w-[220px]"
               >
                 <ContentCard
@@ -227,7 +227,7 @@ export const CategoryRow: React.FC<CategoryRowProps> = ({
             ) : (
               // Full animation version for capable devices
               <motion.div
-                key={item.id}
+                key={`${item.mediaType || 'content'}-${item.id}`}
                 className="flex-shrink-0 w-[140px] sm:w-[180px] md:w-[220px]"
                 initial={{ opacity: 0, x: 50 }}
                 animate={{ opacity: 1, x: 0 }}

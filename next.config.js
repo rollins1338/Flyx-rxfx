@@ -135,4 +135,10 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+module.exports = async () => {
+  if (process.env.NODE_ENV === 'development' && process.env.USE_CLOUDFLARE_BACKEND === 'true') {
+    const { initOpenNextCloudflareForDev } = await import("@opennextjs/cloudflare");
+    initOpenNextCloudflareForDev();
+  }
+  return nextConfig;
+};

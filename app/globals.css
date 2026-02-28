@@ -54,6 +54,45 @@
   --border-color: #374151;
   --progress-bg: #374151;
   --color-primary: #6366f1;
+
+  /* ============================================
+     Navigation Design Tokens (Redesign)
+     ============================================ */
+
+  /* Backgrounds */
+  --nav-bg: #0f0f14;
+  --nav-bg-hover: #1a1a24;
+  --nav-bg-active: #1e1e2e;
+  --nav-surface: #16161f;
+  --content-bg: #0a0a0f;
+
+  /* Accent */
+  --nav-accent: #6366f1;
+  --nav-accent-soft: rgba(99, 102, 241, 0.15);
+
+  /* Text */
+  --nav-text: #e2e2e8;
+  --nav-text-muted: #71717a;
+  --nav-text-active: #ffffff;
+
+  /* Borders */
+  --nav-border: #1e1e2e;
+  --nav-divider: #1a1a24;
+
+  /* Sizing */
+  --sidebar-width: 256px;
+  --sidebar-collapsed-width: 72px;
+  --bottom-tab-height: 64px;
+  --nav-item-height: 44px;
+  --nav-item-radius: 10px;
+  --nav-transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Content area */
+  --content-max-width: 1400px;
+  --content-padding-x: 1.5rem;
+
+  /* Focus */
+  --nav-focus-ring: 0 0 0 2px var(--nav-accent);
 }
 
 /* Reset and Base Styles */

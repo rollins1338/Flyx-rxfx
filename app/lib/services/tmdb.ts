@@ -30,15 +30,23 @@ export async function fetchTMDBData(endpoint: string, params: Record<string, str
     }
   });
 
-  const response = await fetch(url.toString(), {
-    next: { revalidate: 3600 } // Cache for 1 hour
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-  if (!response.ok) {
-    throw new Error(`TMDB API error: ${response.status} ${response.statusText}`);
+  try {
+    const response = await fetch(url.toString(), {
+      signal: controller.signal,
+      next: { revalidate: 3600 }, // Cache for 1 hour
+    });
+
+    if (!response.ok) {
+      throw new Error(`TMDB API error: ${response.status} ${response.statusText}`);
+    }
+
+    return response.json();
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return response.json();
 }
 
 /**
@@ -499,9 +507,9 @@ export const tmdbService = {
 
     const results = (await Promise.all(promises)).flat();
 
-    // Remove duplicates
+    // Remove duplicates (use both id + mediaType to avoid collisions between movies and TV shows with the same TMDB ID)
     const uniqueResults = results.filter((item, index, self) =>
-      self.findIndex(i => i.id === item.id) === index
+      self.findIndex(i => i.id === item.id && i.mediaType === item.mediaType) === index
     );
 
     return uniqueResults.slice(0, 20);

@@ -1,480 +1,299 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { useAdmin } from '../context/AdminContext';
-import { getAdminAnalyticsUrl } from '../hooks/useAnalyticsApi';
-import { contentTitleCache } from '../../lib/utils/content-title-cache';
+/**
+ * Consolidated Content Analytics View
+ *
+ * Replaces content, engagement, and analytics pages.
+ * Wires ContentSlice context for SSE-based real-time data.
+ * Tabs: Watch Sessions, Top Content, Completion Rates
+ *
+ * Requirements: 6.1, 6.2
+ */
 
-// Custom hook for debounced value
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+import { useState } from 'react';
+import { useContentSlice } from '../context/slices';
+import {
+  colors,
+  gradients,
+  formatNumber,
+  formatDurationMinutes,
+  StatCard,
+  Card,
+  Grid,
+  ProgressBar,
+  TabSelector,
+  PageHeader,
+  LoadingState,
+  EmptyState,
+  getPercentage,
+  getCompletionColor,
+} from '../components/ui';
 
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
+type TabId = 'sessions' | 'top-content' | 'completion';
 
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
+export default function ContentAnalyticsPage() {
+  const content = useContentSlice();
+  const [activeTab, setActiveTab] = useState<TabId>('sessions');
 
-  return debouncedValue;
-}
+  const cd = content.data;
 
-interface ContentStat {
-  contentId: string;
-  contentTitle: string;
-  contentType: string;
-  views: number;
-  totalWatchTime: number;
-  avgCompletion: number;
-  uniqueViewers: number;
-  displayTitle?: string;
-}
-
-interface ContentMetrics {
-  totalContent: number;
-  totalViews: number;
-  totalWatchTime: number;
-  avgCompletion: number;
-  movieCount: number;
-  tvCount: number;
-  liveCount: number;
-  topPerformer: string;
-  mostCompleted: string;
-}
-
-// In-memory cache for content stats
-interface CachedContentStats {
-  data: ContentStat[];
-  timestamp: number;
-  cacheKey: string;
-}
-
-let contentStatsCache: CachedContentStats | null = null;
-const CACHE_TTL = 30000; // 30 seconds cache
-
-export default function AdminContentPage() {
-  const { dateRange, setIsLoading } = useAdmin();
-  const [stats, setStats] = useState<ContentStat[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingTitles, setLoadingTitles] = useState(false);
-  const [contentType, setContentType] = useState('all');
-  const [sortBy, setSortBy] = useState<'views' | 'watchTime' | 'completion' | 'viewers'>('views');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [searchQuery, setSearchQuery] = useState('');
-  const debouncedSearchQuery = useDebounce(searchQuery, 300); // 300ms debounce
-  const [viewMode, setViewMode] = useState<'table' | 'cards' | 'chart'>('table');
-  const fetchInProgress = useRef(false);
-
-  const fetchStats = useCallback(async () => {
-    // Prevent concurrent fetches
-    if (fetchInProgress.current) return;
-    
-    const cacheKey = dateRange.startDate && dateRange.endDate 
-      ? `${dateRange.startDate.toISOString()}-${dateRange.endDate.toISOString()}-${contentType}`
-      : `${dateRange.period}-${contentType}`;
-    
-    const now = Date.now();
-    
-    // Check cache first
-    if (contentStatsCache && 
-        contentStatsCache.cacheKey === cacheKey && 
-        (now - contentStatsCache.timestamp) < CACHE_TTL) {
-      setStats(contentStatsCache.data);
-      setLoading(false);
-      return;
-    }
-    
-    try {
-      fetchInProgress.current = true;
-      setLoading(true);
-      setIsLoading(true);
-      
-      const params = new URLSearchParams();
-      if (dateRange.startDate && dateRange.endDate) {
-        params.append('startDate', dateRange.startDate.toISOString());
-        params.append('endDate', dateRange.endDate.toISOString());
-      } else {
-        params.append('period', dateRange.period);
-      }
-      if (contentType !== 'all') {
-        params.append('contentType', contentType);
-      }
-      
-      const response = await fetch(getAdminAnalyticsUrl('admin-analytics', Object.fromEntries(params)));
-      if (response.ok) {
-        const data = await response.json();
-        const rawStats = data.data?.contentPerformance || [];
-        
-        // Cache the raw stats
-        contentStatsCache = {
-          data: rawStats,
-          timestamp: now,
-          cacheKey,
-        };
-        
-        setStats(rawStats);
-        
-        // Fetch titles in background (non-blocking)
-        if (rawStats.length > 0) {
-          setLoadingTitles(true);
-          contentTitleCache.getTitles(
-            rawStats.map((stat: ContentStat) => ({
-              contentId: stat.contentId,
-              contentType: stat.contentType as 'movie' | 'tv'
-            }))
-          ).then(titlesMap => {
-            setStats(prevStats => prevStats.map(stat => ({
-              ...stat,
-              displayTitle: titlesMap.get(`${stat.contentType}-${stat.contentId}`) || stat.contentTitle || `${stat.contentType === 'movie' ? 'Movie' : 'Show'} #${stat.contentId}`
-            })));
-          }).catch(err => {
-            console.error('Failed to fetch titles:', err);
-          }).finally(() => {
-            setLoadingTitles(false);
-          });
-        }
-      }
-    } catch (err) {
-      console.error('Failed to fetch content stats:', err);
-    } finally {
-      setLoading(false);
-      setIsLoading(false);
-      fetchInProgress.current = false;
-    }
-  }, [dateRange, contentType, setIsLoading]);
-
-  useEffect(() => {
-    fetchStats();
-  }, [fetchStats]);
-
-  const metrics = useMemo((): ContentMetrics | null => {
-    if (stats.length === 0) return null;
-    const totalViews = stats.reduce((sum, s) => sum + s.views, 0);
-    const totalWatchTime = stats.reduce((sum, s) => sum + s.totalWatchTime, 0);
-    const avgCompletion = stats.reduce((sum, s) => sum + s.avgCompletion, 0) / stats.length;
-    const movieCount = stats.filter(s => s.contentType === 'movie').length;
-    const tvCount = stats.filter(s => s.contentType === 'tv').length;
-    const liveCount = stats.filter(s => s.contentType === 'live').length;
-    const topByViews = [...stats].sort((a, b) => b.views - a.views)[0];
-    const topByCompletion = [...stats].sort((a, b) => b.avgCompletion - a.avgCompletion)[0];
-    return {
-      totalContent: stats.length,
-      totalViews,
-      totalWatchTime,
-      avgCompletion: Math.round(avgCompletion),
-      movieCount,
-      tvCount,
-      liveCount,
-      topPerformer: topByViews?.displayTitle || topByViews?.contentTitle || 'N/A',
-      mostCompleted: topByCompletion?.displayTitle || topByCompletion?.contentTitle || 'N/A',
-    };
-  }, [stats]);
-
-  const filteredStats = useMemo(() => {
-    let result = [...stats];
-    if (debouncedSearchQuery) {
-      const query = debouncedSearchQuery.toLowerCase();
-      result = result.filter(s => 
-        s.displayTitle?.toLowerCase().includes(query) ||
-        s.contentTitle?.toLowerCase().includes(query) ||
-        s.contentId?.toLowerCase().includes(query)
-      );
-    }
-    result.sort((a, b) => {
-      let aVal: number, bVal: number;
-      switch (sortBy) {
-        case 'views': aVal = a.views; bVal = b.views; break;
-        case 'watchTime': aVal = a.totalWatchTime; bVal = b.totalWatchTime; break;
-        case 'completion': aVal = a.avgCompletion; bVal = b.avgCompletion; break;
-        case 'viewers': aVal = a.uniqueViewers; bVal = b.uniqueViewers; break;
-        default: aVal = a.views; bVal = b.views;
-      }
-      return sortOrder === 'desc' ? bVal - aVal : aVal - bVal;
-    });
-    return result;
-  }, [stats, debouncedSearchQuery, sortBy, sortOrder]);
-
-  const chartData = useMemo(() => {
-    const top10 = filteredStats.slice(0, 10);
-    const maxViews = Math.max(...top10.map(s => s.views), 1);
-    return top10.map(s => ({ ...s, viewsPercentage: (s.views / maxViews) * 100 }));
-  }, [filteredStats]);
-
-  const formatDuration = (minutes: number) => {
-    const hours = Math.floor(minutes / 60);
-    const mins = Math.round(minutes % 60);
-    return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
-  };
-
-  const getCompletionColor = (percentage: number) => {
-    if (percentage >= 75) return '#10b981';
-    if (percentage >= 50) return '#f59e0b';
-    if (percentage >= 25) return '#3b82f6';
-    return '#ef4444';
-  };
-
-  const getContentTypeStyle = (type: string) => {
-    switch (type) {
-      case 'movie':
-        return { background: 'rgba(16, 185, 129, 0.2)', color: '#10b981' };
-      case 'tv':
-        return { background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b' };
-      case 'live':
-        return { background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444' };
-      default:
-        return { background: 'rgba(148, 163, 184, 0.2)', color: '#94a3b8' };
-    }
-  };
-
-  const getContentTypeLabel = (type: string) => {
-    switch (type) {
-      case 'movie': return 'Movie';
-      case 'tv': return 'TV Show';
-      case 'live': return 'Live TV';
-      default: return type;
-    }
-  };
-
-  if (loading) {
-    return (
-      <div style={{ textAlign: 'center', padding: '60px', color: '#94a3b8' }}>
-        Loading content analytics...
-      </div>
-    );
-  }
+  const tabs = [
+    { id: 'sessions', label: 'Watch Sessions', icon: '▶️' },
+    { id: 'top-content', label: 'Top Content', icon: '🏆' },
+    { id: 'completion', label: 'Completion Rates', icon: '✅' },
+  ];
 
   return (
     <div>
-      <div style={{ marginBottom: '32px', paddingBottom: '20px', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
-        <h2 style={{ margin: 0, color: '#f8fafc', fontSize: '24px', fontWeight: '600' }}>Content Performance</h2>
-        <p style={{ margin: '8px 0 0 0', color: '#94a3b8', fontSize: '16px' }}>Analyze content popularity, engagement, and viewer retention</p>
+      <PageHeader
+        title="Content Analytics"
+        icon="🎬"
+        subtitle="Watch sessions, top content, and completion rates"
+        actions={
+          <ConnectionBadge connected={content.connected} lastUpdate={content.lastUpdate} />
+        }
+      />
+
+      {/* Summary metrics */}
+      <Grid cols="auto-fit" minWidth="160px" gap="16px">
+        <StatCard title="Total Sessions" value={cd.totalSessions} icon="📊" color={colors.primary} />
+        <StatCard title="Watch Time" value={formatDurationMinutes(cd.totalWatchTime)} icon="⏱️" color={colors.success} gradient={gradients.success} />
+        <StatCard title="Avg Session" value={`${cd.avgSessionDuration}m`} icon="📈" color={colors.pink} />
+        <StatCard title="Completion" value={`${cd.completionRate}%`} icon="✅" color={colors.warning} />
+        <StatCard title="Movies" value={cd.movieSessions} icon="🎬" color={colors.info} />
+        <StatCard title="TV Shows" value={cd.tvSessions} icon="📺" color={colors.purple} />
+      </Grid>
+
+      <div style={{ marginTop: '24px' }}>
+        <TabSelector tabs={tabs} activeTab={activeTab} onChange={(id) => setActiveTab(id as TabId)} />
       </div>
 
-      {metrics && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-          <MetricCard title="Total Content" value={metrics.totalContent} icon="📚" color="#7877c6" />
-          <MetricCard title="Total Views" value={metrics.totalViews.toLocaleString()} icon="👁️" color="#10b981" />
-          <MetricCard title="Watch Time" value={formatDuration(metrics.totalWatchTime)} icon="⏱️" color="#f59e0b" />
-          <MetricCard title="Avg Completion" value={`${metrics.avgCompletion}%`} icon="✅" color="#ec4899" />
-          <MetricCard title="Movies" value={metrics.movieCount} icon="🎬" color="#3b82f6" />
-          <MetricCard title="TV Shows" value={metrics.tvCount} icon="📺" color="#8b5cf6" />
-          {metrics.liveCount > 0 && (
-            <MetricCard title="Live TV" value={metrics.liveCount} icon="📡" color="#ef4444" />
-          )}
-        </div>
-      )}
-
-      {metrics && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-          <div style={{ background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.05))', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '12px', padding: '20px' }}>
-            <div style={{ color: '#10b981', fontSize: '13px', fontWeight: '600', marginBottom: '8px' }}>🏆 TOP PERFORMER</div>
-            <div style={{ color: '#f8fafc', fontSize: '18px', fontWeight: '600' }}>{metrics.topPerformer}</div>
-          </div>
-          <div style={{ background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.1), rgba(236, 72, 153, 0.05))', border: '1px solid rgba(236, 72, 153, 0.3)', borderRadius: '12px', padding: '20px' }}>
-            <div style={{ color: '#ec4899', fontSize: '13px', fontWeight: '600', marginBottom: '8px' }}>⭐ HIGHEST COMPLETION</div>
-            <div style={{ color: '#f8fafc', fontSize: '18px', fontWeight: '600' }}>{metrics.mostCompleted}</div>
-          </div>
-        </div>
-      )}
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          <div style={{ position: 'relative' }}>
-            <input 
-              type="text" 
-              placeholder="Search by title or ID..." 
-              value={searchQuery} 
-              onChange={(e) => setSearchQuery(e.target.value)} 
-              style={{ 
-                padding: '10px 36px 10px 16px', 
-                background: 'rgba(255, 255, 255, 0.05)', 
-                border: '1px solid rgba(255, 255, 255, 0.1)', 
-                borderRadius: '8px', 
-                color: '#f8fafc', 
-                fontSize: '14px', 
-                minWidth: '220px', 
-                outline: 'none' 
-              }} 
-              aria-label="Search content by title or ID"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                style={{
-                  position: 'absolute',
-                  right: '10px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  color: '#94a3b8',
-                  cursor: 'pointer',
-                  padding: '4px',
-                  fontSize: '14px',
-                  lineHeight: 1
-                }}
-                aria-label="Clear search"
-              >
-                ✕
-              </button>
-            )}
-            {searchQuery !== debouncedSearchQuery && (
-              <span style={{ 
-                position: 'absolute', 
-                right: searchQuery ? '32px' : '10px', 
-                top: '50%', 
-                transform: 'translateY(-50%)', 
-                color: '#64748b', 
-                fontSize: '12px' 
-              }}>
-                ...
-              </span>
-            )}
-          </div>
-          <select 
-            value={contentType} 
-            onChange={(e) => setContentType(e.target.value)} 
-            style={selectStyle}
-            aria-label="Filter by content type"
-          >
-            <option value="all">All Content</option>
-            <option value="movie">Movies</option>
-            <option value="tv">TV Shows</option>
-            <option value="live">Live TV</option>
-          </select>
-          <select 
-            value={`${sortBy}-${sortOrder}`} 
-            onChange={(e) => { 
-              const [field, order] = e.target.value.split('-'); 
-              setSortBy(field as typeof sortBy); 
-              setSortOrder(order as typeof sortOrder); 
-            }} 
-            style={selectStyle}
-            aria-label="Sort content"
-          >
-            <option value="views-desc">Most Views</option>
-            <option value="views-asc">Least Views</option>
-            <option value="watchTime-desc">Most Watch Time</option>
-            <option value="watchTime-asc">Least Watch Time</option>
-            <option value="completion-desc">Highest Completion</option>
-            <option value="completion-asc">Lowest Completion</option>
-            <option value="viewers-desc">Most Unique Viewers</option>
-            <option value="viewers-asc">Least Unique Viewers</option>
-          </select>
-        </div>
-        <div style={{ display: 'flex', gap: '4px', background: 'rgba(255, 255, 255, 0.05)', padding: '4px', borderRadius: '8px' }}>
-          {[{ id: 'table', icon: '📋', label: 'Table view' }, { id: 'cards', icon: '🃏', label: 'Cards view' }, { id: 'chart', icon: '📊', label: 'Chart view' }].map((mode) => (
-            <button 
-              key={mode.id} 
-              onClick={() => setViewMode(mode.id as typeof viewMode)} 
-              style={{ 
-                padding: '8px 12px', 
-                background: viewMode === mode.id ? '#7877c6' : 'transparent', 
-                border: 'none', 
-                borderRadius: '6px', 
-                color: viewMode === mode.id ? 'white' : '#94a3b8', 
-                cursor: 'pointer', 
-                fontSize: '16px' 
-              }}
-              aria-label={mode.label}
-              aria-pressed={viewMode === mode.id}
-            >
-              {mode.icon}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {loadingTitles && <div style={{ color: '#94a3b8', fontSize: '14px', marginBottom: '16px' }}>Fetching content titles...</div>}
-
-      {viewMode === 'table' && (
-        <div style={{ background: 'rgba(255, 255, 255, 0.03)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.1)', overflow: 'hidden' }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '800px' }}>
-              <thead>
-                <tr style={{ background: 'rgba(255, 255, 255, 0.03)' }}>
-                  <th style={thStyle}>#</th>
-                  <th style={thStyle}>Title</th>
-                  <th style={thStyle}>Type</th>
-                  <th style={thStyle}>Views</th>
-                  <th style={thStyle}>Unique Viewers</th>
-                  <th style={thStyle}>Watch Time</th>
-                  <th style={thStyle}>Completion</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStats.length === 0 ? (
-                  <tr><td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>No content found</td></tr>
-                ) : (
-                  filteredStats.map((stat, index) => (
-                    <tr key={stat.contentId} style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                      <td style={tdStyle}><span style={{ width: '28px', height: '28px', borderRadius: '50%', background: index < 3 ? ['#ffd700', '#c0c0c0', '#cd7f32'][index] : 'rgba(255,255,255,0.1)', color: index < 3 ? '#000' : '#94a3b8', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: '600', fontSize: '12px' }}>{index + 1}</span></td>
-                      <td style={tdStyle}><div style={{ color: '#f8fafc', fontWeight: '500' }}>{stat.displayTitle || stat.contentTitle || stat.contentId}</div><div style={{ color: '#64748b', fontSize: '12px', marginTop: '2px' }}>ID: {stat.contentId}</div></td>
-                      <td style={tdStyle}><span style={{ padding: '4px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', ...getContentTypeStyle(stat.contentType) }}>{getContentTypeLabel(stat.contentType)}</span></td>
-                      <td style={tdStyle}><span style={{ fontWeight: '600', color: '#f8fafc' }}>{stat.views.toLocaleString()}</span></td>
-                      <td style={tdStyle}><span style={{ color: '#94a3b8' }}>{stat.uniqueViewers?.toLocaleString() || 0}</span></td>
-                      <td style={tdStyle}><span style={{ color: '#f8fafc' }}>{formatDuration(stat.totalWatchTime)}</span></td>
-                      <td style={tdStyle}><div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><div style={{ width: '80px', height: '8px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden' }}><div style={{ height: '100%', width: `${Math.min(stat.avgCompletion, 100)}%`, background: getCompletionColor(stat.avgCompletion), borderRadius: '4px' }} /></div><span style={{ color: getCompletionColor(stat.avgCompletion), fontWeight: '600', fontSize: '13px' }}>{Math.round(stat.avgCompletion)}%</span></div></td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {viewMode === 'cards' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
-          {filteredStats.map((stat, index) => (
-            <div key={stat.contentId} style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '12px', padding: '20px', position: 'relative' }}>
-              {index < 3 && <div style={{ position: 'absolute', top: '12px', right: '12px', width: '28px', height: '28px', borderRadius: '50%', background: ['#ffd700', '#c0c0c0', '#cd7f32'][index], color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', fontSize: '12px' }}>{index + 1}</div>}
-              <span style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', ...getContentTypeStyle(stat.contentType) }}>{getContentTypeLabel(stat.contentType)}</span>
-              <h3 style={{ margin: '12px 0 16px 0', color: '#f8fafc', fontSize: '16px', fontWeight: '600', lineHeight: '1.3', paddingRight: index < 3 ? '36px' : 0 }}>{stat.displayTitle || stat.contentTitle || stat.contentId}</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div><div style={{ color: '#64748b', fontSize: '11px', textTransform: 'uppercase' }}>Views</div><div style={{ color: '#f8fafc', fontSize: '18px', fontWeight: '700' }}>{stat.views.toLocaleString()}</div></div>
-                <div><div style={{ color: '#64748b', fontSize: '11px', textTransform: 'uppercase' }}>Watch Time</div><div style={{ color: '#f8fafc', fontSize: '18px', fontWeight: '700' }}>{formatDuration(stat.totalWatchTime)}</div></div>
-              </div>
-              <div style={{ marginTop: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}><span style={{ color: '#64748b', fontSize: '12px' }}>Completion</span><span style={{ color: getCompletionColor(stat.avgCompletion), fontWeight: '600', fontSize: '13px' }}>{Math.round(stat.avgCompletion)}%</span></div>
-                <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}><div style={{ height: '100%', width: `${Math.min(stat.avgCompletion, 100)}%`, background: getCompletionColor(stat.avgCompletion), borderRadius: '3px' }} /></div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {viewMode === 'chart' && (
-        <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '12px', padding: '24px' }}>
-          <h3 style={{ margin: '0 0 20px 0', color: '#f8fafc', fontSize: '16px' }}>Top 10 Content by Views</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {chartData.map((stat, index) => (
-              <div key={stat.contentId} style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: index < 3 ? ['#ffd700', '#c0c0c0', '#cd7f32'][index] : 'rgba(255,255,255,0.1)', color: index < 3 ? '#000' : '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '600', fontSize: '11px', flexShrink: 0 }}>{index + 1}</span>
-                <div style={{ width: '200px', flexShrink: 0 }}><div style={{ color: '#f8fafc', fontSize: '14px', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{stat.displayTitle || stat.contentTitle || stat.contentId}</div><div style={{ color: '#64748b', fontSize: '11px' }}>{stat.contentType}</div></div>
-                <div style={{ flex: 1, height: '24px', background: 'rgba(255,255,255,0.1)', borderRadius: '12px', overflow: 'hidden' }}><div style={{ height: '100%', width: `${stat.viewsPercentage}%`, background: 'linear-gradient(90deg, #7877c6, #ff77c6)', borderRadius: '12px' }} /></div>
-                <span style={{ color: '#f8fafc', fontWeight: '600', fontSize: '14px', width: '60px', textAlign: 'right' }}>{stat.views.toLocaleString()}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+      {content.loading ? (
+        <LoadingState message="Loading content data..." />
+      ) : activeTab === 'sessions' ? (
+        <SessionsTab cd={cd} />
+      ) : activeTab === 'top-content' ? (
+        <TopContentTab cd={cd} />
+      ) : (
+        <CompletionTab cd={cd} />
       )}
     </div>
   );
 }
 
-const selectStyle: React.CSSProperties = { padding: '10px 16px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '8px', color: '#f8fafc', fontSize: '14px', cursor: 'pointer', outline: 'none' };
-const thStyle: React.CSSProperties = { padding: '14px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' };
-const tdStyle: React.CSSProperties = { padding: '14px 16px', color: '#e2e8f0', fontSize: '14px' };
+/* ------------------------------------------------------------------ */
+/* Watch Sessions Tab                                                 */
+/* ------------------------------------------------------------------ */
 
-function MetricCard({ title, value, icon, color }: { title: string; value: string | number; icon: string; color: string }) {
+function SessionsTab({ cd }: { cd: ReturnType<typeof useContentSlice>['data'] }) {
   return (
-    <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '12px', padding: '16px', borderTop: `3px solid ${color}` }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}><span style={{ fontSize: '20px' }}>{icon}</span><span style={{ color: '#94a3b8', fontSize: '13px' }}>{title}</span></div>
-      <div style={{ fontSize: '24px', fontWeight: '700', color: '#f8fafc' }}>{value}</div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <Grid cols={2} gap="20px">
+        <Card title="Session Breakdown" icon="📊">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <ProgressBar
+              label="🎬 Movies"
+              value={cd.movieSessions}
+              max={cd.totalSessions || 1}
+              gradient={gradients.primary}
+              showLabel
+            />
+            <ProgressBar
+              label="📺 TV Shows"
+              value={cd.tvSessions}
+              max={cd.totalSessions || 1}
+              gradient={gradients.purple}
+              showLabel
+            />
+          </div>
+        </Card>
+
+        <Card title="Watch Time Summary" icon="⏱️">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: colors.text.secondary }}>Total Watch Time</span>
+              <span style={{ color: colors.text.primary, fontWeight: '600' }}>{formatDurationMinutes(cd.totalWatchTime)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: colors.text.secondary }}>Avg Session Duration</span>
+              <span style={{ color: colors.text.primary, fontWeight: '600' }}>{cd.avgSessionDuration}m</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: colors.text.secondary }}>Completion Rate</span>
+              <span style={{ color: getCompletionColor(cd.completionRate), fontWeight: '600' }}>{cd.completionRate}%</span>
+            </div>
+          </div>
+        </Card>
+      </Grid>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Top Content Tab                                                    */
+/* ------------------------------------------------------------------ */
+
+function TopContentTab({ cd }: { cd: ReturnType<typeof useContentSlice>['data'] }) {
+  if (cd.topContent.length === 0) {
+    return <EmptyState icon="🎬" title="No Content Data" message="Content performance data will appear as users watch content" />;
+  }
+
+  const maxViews = Math.max(...cd.topContent.map((c) => c.views), 1);
+
+  return (
+    <Card title="Top Content by Views" icon="🏆">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        {cd.topContent.slice(0, 15).map((item, i) => (
+          <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <span
+              style={{
+                width: '28px',
+                height: '28px',
+                borderRadius: '50%',
+                background: i < 3 ? ['#ffd700', '#c0c0c0', '#cd7f32'][i] : 'rgba(255,255,255,0.1)',
+                color: i < 3 ? '#000' : colors.text.muted,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: '600',
+                fontSize: '12px',
+                flexShrink: 0,
+              }}
+            >
+              {i + 1}
+            </span>
+            <div style={{ width: '200px', flexShrink: 0 }}>
+              <div style={{ color: colors.text.primary, fontSize: '14px', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {item.title}
+              </div>
+              <div style={{ color: colors.text.muted, fontSize: '11px' }}>{item.type}</div>
+            </div>
+            <div style={{ flex: 1, height: '24px', background: 'rgba(255,255,255,0.1)', borderRadius: '12px', overflow: 'hidden' }}>
+              <div
+                style={{
+                  height: '100%',
+                  width: `${(item.views / maxViews) * 100}%`,
+                  background: gradients.mixed,
+                  borderRadius: '12px',
+                }}
+              />
+            </div>
+            <span style={{ color: colors.text.primary, fontWeight: '600', fontSize: '14px', width: '80px', textAlign: 'right' }}>
+              {formatNumber(item.views)}
+            </span>
+            <span style={{ color: colors.text.muted, fontSize: '12px', width: '60px', textAlign: 'right' }}>
+              {formatDurationMinutes(item.watchTime)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Completion Rates Tab                                               */
+/* ------------------------------------------------------------------ */
+
+function CompletionTab({ cd }: { cd: ReturnType<typeof useContentSlice>['data'] }) {
+  if (cd.topContent.length === 0) {
+    return <EmptyState icon="✅" title="No Completion Data" message="Completion rates will appear as users finish watching content" />;
+  }
+
+  // Sort by completion (we don't have per-item completion in the slice, so show overall)
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <Card title="Overall Completion Rate" icon="✅">
+        <div style={{ textAlign: 'center', padding: '20px' }}>
+          <div
+            style={{
+              fontSize: '64px',
+              fontWeight: '700',
+              color: getCompletionColor(cd.completionRate),
+              lineHeight: 1,
+            }}
+          >
+            {cd.completionRate}%
+          </div>
+          <div style={{ color: colors.text.secondary, fontSize: '14px', marginTop: '8px' }}>
+            of sessions reach completion
+          </div>
+          <div style={{ marginTop: '16px', maxWidth: '400px', margin: '16px auto 0' }}>
+            <ProgressBar value={cd.completionRate} max={100} gradient={gradients.success} height={12} />
+          </div>
+        </div>
+      </Card>
+
+      <Grid cols={2} gap="20px">
+        <Card title="Session Type Breakdown" icon="📊">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <span style={{ color: colors.text.primary }}>🎬 Movie Sessions</span>
+                <span style={{ color: colors.text.secondary }}>{formatNumber(cd.movieSessions)}</span>
+              </div>
+              <ProgressBar value={cd.movieSessions} max={cd.totalSessions || 1} gradient={gradients.primary} height={8} />
+            </div>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <span style={{ color: colors.text.primary }}>📺 TV Sessions</span>
+                <span style={{ color: colors.text.secondary }}>{formatNumber(cd.tvSessions)}</span>
+              </div>
+              <ProgressBar value={cd.tvSessions} max={cd.totalSessions || 1} gradient={gradients.purple} height={8} />
+            </div>
+          </div>
+        </Card>
+
+        <Card title="Engagement Metrics" icon="📈">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <MetricRow label="Total Sessions" value={formatNumber(cd.totalSessions)} />
+            <MetricRow label="Total Watch Time" value={formatDurationMinutes(cd.totalWatchTime)} />
+            <MetricRow label="Avg Duration" value={`${cd.avgSessionDuration}m`} />
+            <MetricRow label="Completion Rate" value={`${cd.completionRate}%`} color={getCompletionColor(cd.completionRate)} />
+          </div>
+        </Card>
+      </Grid>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Shared                                                             */
+/* ------------------------------------------------------------------ */
+
+function ConnectionBadge({ connected, lastUpdate }: { connected: boolean; lastUpdate: number }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        padding: '4px 10px',
+        borderRadius: '12px',
+        background: connected ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)',
+        border: `1px solid ${connected ? 'rgba(16,185,129,0.2)' : 'rgba(245,158,11,0.2)'}`,
+        fontSize: '11px',
+        color: connected ? colors.success : colors.warning,
+      }}
+    >
+      <div
+        style={{
+          width: '6px',
+          height: '6px',
+          borderRadius: '50%',
+          background: connected ? colors.success : colors.warning,
+        }}
+      />
+      {connected ? 'Live' : 'Polling'}
+    </div>
+  );
+}
+
+function MetricRow({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+      <span style={{ color: colors.text.secondary, fontSize: '14px' }}>{label}</span>
+      <span style={{ color: color || colors.text.primary, fontWeight: '600', fontSize: '14px' }}>{value}</span>
     </div>
   );
 }

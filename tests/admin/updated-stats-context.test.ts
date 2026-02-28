@@ -1,95 +1,84 @@
 /**
- * Basic Tests for Updated StatsContext
- * Verifies that the refactored StatsContext includes bot filtering and detection metrics
+ * Basic Tests for Slice Contexts (replacement for StatsContext tests)
+ * Verifies that the new slice-based contexts exist and provide the expected interfaces
+ * Feature: admin-panel-realtime-rewrite
  */
 
 import { describe, test, expect } from 'bun:test';
 
-describe('Updated StatsContext', () => {
-  test('StatsContext file includes bot detection interfaces', async () => {
-    const statsContextContent = await Bun.file('app/admin/context/StatsContext.tsx').text();
-    
-    // Verify bot detection interfaces are defined
-    expect(statsContextContent).toContain('BotDetectionMetrics');
-    expect(statsContextContent).toContain('BotFilterOptions');
-    expect(statsContextContent).toContain('totalDetections');
-    expect(statsContextContent).toContain('suspectedBots');
-    expect(statsContextContent).toContain('confirmedBots');
-    expect(statsContextContent).toContain('includeBots');
-    expect(statsContextContent).toContain('confidenceThreshold');
+describe('Slice Contexts (replaces StatsContext)', () => {
+  test('Slice contexts file exists and exports all slice hooks', async () => {
+    const slicesContent = await Bun.file('app/admin/context/slices.tsx').text();
+
+    // Verify all four slice hooks are exported
+    expect(slicesContent).toContain('useRealtimeSlice');
+    expect(slicesContent).toContain('useContentSlice');
+    expect(slicesContent).toContain('useGeoSlice');
+    expect(slicesContent).toContain('useUserSlice');
   });
 
-  test('StatsContext includes bot filtering in context type', async () => {
-    const statsContextContent = await Bun.file('app/admin/context/StatsContext.tsx').text();
-    
-    // Verify context type includes bot filtering
-    expect(statsContextContent).toContain('botFilterOptions: BotFilterOptions');
-    expect(statsContextContent).toContain('setBotFilterOptions');
+  test('Slice contexts file exports all slice providers', async () => {
+    const slicesContent = await Bun.file('app/admin/context/slices.tsx').text();
+
+    expect(slicesContent).toContain('RealtimeSliceProvider');
+    expect(slicesContent).toContain('ContentSliceProvider');
+    expect(slicesContent).toContain('GeoSliceProvider');
+    expect(slicesContent).toContain('UserSliceProvider');
   });
 
-  test('Default bot filter options are configured', async () => {
-    const statsContextContent = await Bun.file('app/admin/context/StatsContext.tsx').text();
-    
-    // Verify default bot filter options
-    expect(statsContextContent).toContain('defaultBotFilterOptions');
-    expect(statsContextContent).toContain('includeBots: false');
-    expect(statsContextContent).toContain('confidenceThreshold: 70');
-    expect(statsContextContent).toContain('showBotMetrics: true');
+  test('SSE connection provider and hook are exported', async () => {
+    const slicesContent = await Bun.file('app/admin/context/slices.tsx').text();
+
+    expect(slicesContent).toContain('SSEConnectionProvider');
+    expect(slicesContent).toContain('useSSEConnection');
   });
 
-  test('StatsProvider includes bot filtering logic', async () => {
-    const statsContextContent = await Bun.file('app/admin/context/StatsContext.tsx').text();
-    
-    // Verify bot filtering is implemented in provider
-    expect(statsContextContent).toContain('excludeBots');
-    expect(statsContextContent).toContain('botThreshold');
-    expect(statsContextContent).toContain('botFilterOptions');
-    expect(statsContextContent).toContain('setBotFilterOptions');
+  test('Slice contexts use SSE for real-time data', async () => {
+    const slicesContent = await Bun.file('app/admin/context/slices.tsx').text();
+
+    // Verify SSE integration
+    expect(slicesContent).toContain('useSSE');
+    expect(slicesContent).toContain('useSliceSSE');
   });
 
-  test('Auto-refresh mechanism is implemented', async () => {
-    const statsContextContent = await Bun.file('app/admin/context/StatsContext.tsx').text();
-    
-    // Verify 30-second auto-refresh
-    expect(statsContextContent).toContain('setInterval');
-    expect(statsContextContent).toContain('30000'); // 30 seconds in milliseconds
-    expect(statsContextContent).toContain('clearInterval');
+  test('Admin layout wraps children with slice providers', async () => {
+    const layoutContent = await Bun.file('app/admin/components/AdminLayout.tsx').text();
+
+    // Verify slice providers are used in layout
+    expect(layoutContent).toContain('RealtimeSliceProvider');
+    expect(layoutContent).toContain('ContentSliceProvider');
+    expect(layoutContent).toContain('GeoSliceProvider');
+    expect(layoutContent).toContain('UserSliceProvider');
+    expect(layoutContent).toContain('SSEConnectionProvider');
   });
 
-  test('Bot detection metrics are included in stats', async () => {
-    const statsContextContent = await Bun.file('app/admin/context/StatsContext.tsx').text();
-    
-    // Verify bot detection metrics are mapped from API response
-    expect(statsContextContent).toContain('botDetection: {');
-    expect(statsContextContent).toContain('data.botDetection?.totalDetections');
-    expect(statsContextContent).toContain('data.botDetection?.suspectedBots');
-    expect(statsContextContent).toContain('data.botDetection?.recentDetections');
+  test('Dashboard page uses slice contexts instead of StatsContext', async () => {
+    const dashboardPage = await Bun.file('app/admin/dashboard/page.tsx').text();
+
+    // Should use new slice hooks
+    expect(dashboardPage).toContain('useRealtimeSlice');
+    expect(dashboardPage).toContain('useUserSlice');
+
+    // Should NOT use old StatsContext
+    expect(dashboardPage).not.toContain('useStats');
   });
 
-  test('Refetch occurs when bot filter options change', async () => {
-    const statsContextContent = await Bun.file('app/admin/context/StatsContext.tsx').text();
-    
-    // Verify useEffect dependency on botFilterOptions
-    expect(statsContextContent).toContain('useEffect(() => {');
-    expect(statsContextContent).toContain('botFilterOptions');
-    expect(statsContextContent).toContain('fetchAllStats');
+  test('UnifiedStatsBar uses slice contexts', async () => {
+    const statsBar = await Bun.file('app/admin/components/UnifiedStatsBar.tsx').text();
+
+    expect(statsBar).toContain('useRealtimeSlice');
+    expect(statsBar).toContain('useUserSlice');
+    expect(statsBar).toContain('useContentSlice');
+    expect(statsBar).not.toContain('useStats');
   });
 
-  test('Requirements coverage is complete', () => {
-    // Verify all requirements from task 2 are addressed:
-    
-    // Requirement 1.3: Single source of truth for all admin components
-    // ✅ Implemented via unified StatsContext with consistent data distribution
-    
-    // Requirement 1.4: Automatic updates across all components
-    // ✅ Implemented via React context reactivity and 30-second refresh
-    
-    // Requirement 2.1: Real-time monitoring with 30-second updates
-    // ✅ Implemented via setInterval with 30000ms interval
-    
-    // Requirement 10.2: Bot filtering options throughout analytics
-    // ✅ Implemented via BotFilterOptions and query parameter filtering
-    
-    expect(true).toBe(true); // All requirements verified above
+  test('Old StatsContext file has been removed', async () => {
+    let exists = true;
+    try {
+      await Bun.file('app/admin/context/StatsContext.tsx').text();
+    } catch {
+      exists = false;
+    }
+    expect(exists).toBe(false);
   });
 });

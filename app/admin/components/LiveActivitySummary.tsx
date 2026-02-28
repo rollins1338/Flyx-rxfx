@@ -1,23 +1,23 @@
 'use client';
 
 /**
- * LiveActivitySummary - OPTIMIZED
- * 
- * Compact summary of real-time user activity
- * Uses ONLY unified stats context - no additional API calls
+ * LiveActivitySummary - Compact summary of real-time user activity
+ * Uses RealtimeSlice context for SSE-based data
  */
 
-import { useStats } from '../context/StatsContext';
+import { useRealtimeSlice } from '../context/slices';
 import { colors, getPercentage } from './ui';
 
 export default function LiveActivitySummary() {
-  const { stats, loading } = useStats();
+  const realtime = useRealtimeSlice();
+  const loading = realtime.loading;
 
-  const total = stats.liveUsers;
-  const watching = stats.liveWatching;
-  const livetv = stats.liveTVViewers;
-  const browsing = stats.liveBrowsing;
-  const peak = stats.peakStats;
+  const total = realtime.data.liveUsers;
+  const watching = realtime.data.watching;
+  const livetv = realtime.data.livetv;
+  const browsing = realtime.data.browsing;
+  const peakToday = realtime.data.peakToday;
+  const peakTime = realtime.data.peakTime;
 
   const formatPeakTime = (ts: number) => {
     if (!ts) return '';
@@ -67,12 +67,12 @@ export default function LiveActivitySummary() {
             Real-time user activity breakdown
           </p>
         </div>
-        {peak && peak.peakTotal > 0 && (
+        {peakToday > 0 && (
           <div style={{ textAlign: 'right' }}>
             <div style={{ color: colors.text.muted, fontSize: '11px' }}>Peak today</div>
-            <div style={{ color: colors.pink, fontSize: '16px', fontWeight: '700' }}>{peak.peakTotal}</div>
-            {peak.peakTotalTime > 0 && (
-              <div style={{ color: colors.text.muted, fontSize: '10px' }}>at {formatPeakTime(peak.peakTotalTime)}</div>
+            <div style={{ color: colors.pink, fontSize: '16px', fontWeight: '700' }}>{peakToday}</div>
+            {peakTime > 0 && (
+              <div style={{ color: colors.text.muted, fontSize: '10px' }}>at {formatPeakTime(peakTime)}</div>
             )}
           </div>
         )}

@@ -1,23 +1,15 @@
 /**
- * PresenceProvider - SIMPLIFIED
- * 
- * Now uses the unified analytics client which batches all data
- * and syncs every 60 seconds. This component just provides context
- * for other components that need user/session IDs.
+ * PresenceProvider — Local-first presence tracking.
+ *
+ * Provides a context for components that need activity type and
+ * browsing context. Delegates all tracking to Local_Tracker.
  */
 
 'use client';
 
 import { createContext, useContext, ReactNode, useEffect, useState, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
-import { 
-  getAnalyticsClient, 
-  getUserId, 
-  getSessionId, 
-  setActivity,
-  updateWatchProgress,
-  trackPageView,
-} from '@/lib/analytics/unified-analytics-client';
+import { LocalTracker } from '@/lib/local-tracker/local-tracker';
 
 interface ContentInfo {
   contentId?: string;
@@ -47,64 +39,50 @@ interface PresenceProviderProps {
 
 export function PresenceProvider({ children }: PresenceProviderProps) {
   const pathname = usePathname();
-  const [userId, setUserId] = useState('');
-  const [sessionId, setSessionId] = useState('');
   const [isActive, setIsActive] = useState(true);
 
-  // Initialize analytics client
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    
-    // Initialize the unified client
-    getAnalyticsClient();
-    
-    // Get IDs
-    setUserId(getUserId());
-    setSessionId(getSessionId());
-    
-    // Track visibility
+
     const handleVisibility = () => {
       setIsActive(document.visibilityState === 'visible');
     };
     document.addEventListener('visibilitychange', handleVisibility);
-    
+
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, []);
 
-  // Track page changes
+  // Track page changes via Local_Tracker
   useEffect(() => {
-    if (pathname && userId) {
-      trackPageView(pathname, document.title);
+    if (pathname) {
+      const tracker = LocalTracker.getInstance();
+      tracker.trackPageView(pathname);
     }
-  }, [pathname, userId]);
+  }, [pathname]);
 
-  // Set activity type (called by video player, etc.)
   const setActivityType = useCallback((type: 'browsing' | 'watching' | 'livetv', content?: ContentInfo) => {
-    setActivity(type);
-    
-    if (content && content.contentId) {
-      updateWatchProgress({
-        contentId: content.contentId,
-        contentType: type === 'livetv' ? 'livetv' : (content.contentType || 'movie'),
-        contentTitle: content.contentTitle,
-        seasonNumber: content.seasonNumber,
-        episodeNumber: content.episodeNumber,
-        position: 0,
-        duration: 0,
-      });
+    const tracker = LocalTracker.getInstance();
+    if (type === 'watching' || type === 'livetv') {
+      if (content?.contentId) {
+        tracker.startWatch(
+          content.contentId,
+          type === 'livetv' ? 'livetv' : (content.contentType || 'movie'),
+          content.contentTitle || '',
+          content.seasonNumber,
+          content.episodeNumber,
+        );
+      }
     }
   }, []);
 
-  // Set browsing context
-  const setBrowsingContext = useCallback((_pageName: string, _contentTitle?: string, _contentId?: string, _contentType?: 'movie' | 'tv') => {
-    setActivity('browsing');
+  const setBrowsingContext = useCallback((_pageName: string) => {
     // Page view is already tracked by pathname change
   }, []);
 
   return (
-    <PresenceContext.Provider value={{ userId, sessionId, isActive, setActivityType, setBrowsingContext }}>
+    <PresenceContext.Provider value={{ userId: '', sessionId: '', isActive, setActivityType, setBrowsingContext }}>
       {children}
     </PresenceContext.Provider>
   );

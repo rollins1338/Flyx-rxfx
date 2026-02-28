@@ -98,10 +98,11 @@ export default function DetailedRealtimeAnalytics() {
     try {
       setError(null);
       
+      const cfWorkerUrl = process.env.NEXT_PUBLIC_CF_SYNC_URL || 'https://flyx-sync.vynx.workers.dev';
       // Fetch presence stats and traffic sources in parallel
       const [presenceRes, trafficRes] = await Promise.all([
-        fetch('/api/admin/analytics/presence-stats?minutes=30'),
-        fetch('/api/admin/analytics/traffic-sources?days=1&limit=50')
+        fetch(`${cfWorkerUrl}/presence-stats?minutes=30`),
+        fetch(`${cfWorkerUrl}/traffic-sources?days=1&limit=50`)
       ]);
 
       if (!presenceRes.ok || !trafficRes.ok) {

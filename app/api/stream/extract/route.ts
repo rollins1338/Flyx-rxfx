@@ -364,6 +364,17 @@ export async function GET(request: NextRequest) {
     }
 
     console.log('[EXTRACT] Request:', { tmdbId, type, season, episode, provider: providerParam, sourceName, malId, malTitle });
+
+    // GUARD: Reject TMDB-dependent providers when tmdbId=0 (MAL-direct anime)
+    // These providers (flixer, vidlink, vidsrc, etc.) need a real TMDB ID to work
+    const tmdbDependentProviders = ['flixer', 'vidlink', 'vidsrc', 'multi-embed', 'hexa', '1movies'];
+    if (tmdbId === '0' && tmdbDependentProviders.includes(providerParam)) {
+      return NextResponse.json(
+        { error: `${providerParam} requires a real TMDB ID (tmdbId=0 is MAL-direct anime)`, success: false },
+        { status: 400 }
+      );
+    }
+
     performanceMonitor.start('stream-extraction');
 
     // Resolve provider alias

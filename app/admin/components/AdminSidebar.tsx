@@ -10,8 +10,8 @@ import {
     Film,
     Settings,
     LogOut,
-    Database,
-    Megaphone,
+    Globe,
+    Activity,
 } from 'lucide-react';
 
 export default function AdminSidebar() {
@@ -45,19 +45,21 @@ export default function AdminSidebar() {
     };
 
     const menuItems = [
-        { icon: LayoutDashboard, label: 'Dashboard', href: '/admin' },
-        { icon: Users, label: 'Users', href: '/admin/users' },
+        { icon: LayoutDashboard, label: 'Dashboard', href: '/admin/dashboard' },
         { icon: Film, label: 'Content', href: '/admin/content' },
-        { icon: Database, label: 'IPTV Manager', href: '/admin/iptv-manager' },
-        { icon: Megaphone, label: 'Site Banner', href: '/admin/banner' },
+        { icon: Users, label: 'Users', href: '/admin/users' },
+        { icon: Globe, label: 'Geographic', href: '/admin/geographic' },
+        { icon: Activity, label: 'System Health', href: '/admin/system-health' },
         { icon: Settings, label: 'Settings', href: '/admin/settings' },
     ];
 
     // Check if current path matches or starts with the menu item href
     const isActive = (href: string) => {
         if (pathname === href) return true;
-        // For nested routes, check if pathname starts with href (but not for /admin root)
-        if (href !== '/admin' && pathname?.startsWith(href + '/')) return true;
+        // /admin root redirects to dashboard
+        if (href === '/admin/dashboard' && pathname === '/admin') return true;
+        // For nested routes, check if pathname starts with href
+        if (pathname?.startsWith(href + '/')) return true;
         return false;
     };
 

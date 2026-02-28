@@ -11,6 +11,12 @@ compatibility_date = "2025-12-07"
 [observability]
 enabled = false
 
+# Cron triggers:
+#   - Every 15 minutes: hourly aggregation (Requirements: 3.1)
+#   - Daily at midnight UTC: daily aggregation + cleanup (Requirements: 3.2, 10.2)
+[triggers]
+crons = ["*/15 * * * *", "0 0 * * *"]
+
 [vars]
 LOG_LEVEL = "info"
 # ALLOWED_ORIGINS = "https://tv.vynx.cc,http://localhost:3000"

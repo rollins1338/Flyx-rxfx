@@ -4,8 +4,6 @@ import { useCallback, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import type { MediaItem } from '@/types/media';
-import { Navigation } from '@/components/layout/Navigation';
-import { Footer } from '@/components/layout/Footer';
 import { PageTransition } from '@/components/layout/PageTransition';
 import { useAnalytics } from '@/components/analytics/AnalyticsProvider';
 import { usePresenceContext } from '@/components/analytics/PresenceProvider';
@@ -49,10 +47,6 @@ export default function BrowsePageClient({
     router.push(`/details/${item.id}?type=${mediaType}`);
   }, [router, trackEvent, type]);
 
-  const handleSearch = useCallback((query: string) => {
-    if (query.trim()) router.push(`/search?q=${encodeURIComponent(query)}`);
-  }, [router]);
-
   const handlePageChange = (newPage: number) => {
     const params = new URLSearchParams(searchParams.toString());
     params.set('page', newPage.toString());
@@ -70,7 +64,6 @@ export default function BrowsePageClient({
   return (
     <PageTransition>
       <div className="min-h-screen bg-[#0a0a0f]">
-        <Navigation onSearch={handleSearch} />
         
         {/* Header */}
         <section className={`relative pt-24 pb-8 bg-gradient-to-b ${themeColors.bg} via-transparent to-transparent`}>
@@ -110,7 +103,7 @@ export default function BrowsePageClient({
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
                 {items.map((item, index) => (
                   <motion.div
-                    key={item.id}
+                    key={`${item.mediaType || 'content'}-${item.id}`}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: Math.min(index * 0.02, 0.4) }}
@@ -227,8 +220,6 @@ export default function BrowsePageClient({
             </>
           )}
         </main>
-
-        <Footer />
       </div>
     </PageTransition>
   );

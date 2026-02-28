@@ -109,9 +109,11 @@ async function getBrowseData(type: string, filter: string, genre: string, page: 
     const results = await Promise.all(pagePromises);
     const mediaType = type === 'movie' || type === 'anime-movies' ? 'movie' : 'tv';
     
-    // Combine results from all pages
+    // Combine results from all pages and deduplicate
     const allItems = results.flatMap(data => 
       data?.results?.map((item: any) => ({ ...item, mediaType })) || []
+    ).filter((item, index, self) =>
+      self.findIndex(i => i.id === item.id && i.mediaType === item.mediaType) === index
     );
     
     const firstResult = results[0];

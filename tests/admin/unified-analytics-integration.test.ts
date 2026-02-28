@@ -16,12 +16,13 @@ describe('Unified Analytics API Infrastructure', () => {
     expect(Bun.file(botDetectionPath).size).toBeGreaterThan(0);
   });
 
-  test('Cache TTL is set to 30 seconds as required', async () => {
+  test('Unified stats route redirects to cf-sync-worker', async () => {
     const unifiedStatsContent = await Bun.file('app/api/admin/unified-stats/route.ts').text();
     
-    // Verify cache TTL is set to 30 seconds (30000ms)
-    expect(unifiedStatsContent).toContain('CACHE_TTL = 30000');
-    expect(unifiedStatsContent).toContain('30 seconds cache TTL');
+    // After the realtime rewrite, unified-stats is a redirect to cf-sync-worker
+    expect(unifiedStatsContent).toContain('DEPRECATED');
+    expect(unifiedStatsContent).toContain('cf-sync-worker');
+    expect(unifiedStatsContent).toContain('/admin/stats');
   });
 
   test('Bot detection scoring system is implemented', async () => {
@@ -39,30 +40,25 @@ describe('Unified Analytics API Infrastructure', () => {
     expect(botDetectionContent).toContain('confidenceScore');
   });
 
-  test('Database schema includes bot detection tables', async () => {
-    const botDetectionContent = await Bun.file('app/api/admin/bot-detection/route.ts').text();
+  test('Database schema setup script includes bot detection tables', async () => {
+    const setupScriptContent = await Bun.file('scripts/setup-bot-detection-tables.js').text();
     
-    // Verify bot detection table schema
-    expect(botDetectionContent).toContain('CREATE TABLE IF NOT EXISTS bot_detections');
-    expect(botDetectionContent).toContain('confidence_score INTEGER NOT NULL');
-    expect(botDetectionContent).toContain('detection_reasons TEXT NOT NULL');
-    expect(botDetectionContent).toContain('status TEXT DEFAULT');
-    
-    // Verify indexes are created
-    expect(botDetectionContent).toContain('idx_bot_detections_user_id');
-    expect(botDetectionContent).toContain('idx_bot_detections_confidence');
-    expect(botDetectionContent).toContain('idx_bot_detections_status');
+    // Verify bot detection table schema is in the setup script
+    expect(setupScriptContent).toContain('CREATE TABLE IF NOT EXISTS bot_detections');
+    expect(setupScriptContent).toContain('CREATE INDEX IF NOT EXISTS');
   });
 
-  test('Unified stats API includes bot detection metrics', async () => {
-    const unifiedStatsContent = await Bun.file('app/api/admin/unified-stats/route.ts').text();
+  test('Stats are now served by cf-sync-worker with bot detection in separate route', async () => {
+    const botDetectionContent = await Bun.file('app/api/admin/bot-detection/route.ts').text();
     
-    // Verify bot detection is integrated into unified stats
-    expect(unifiedStatsContent).toContain('botDetection');
-    expect(unifiedStatsContent).toContain('BOT DETECTION METRICS');
-    expect(unifiedStatsContent).toContain('bot_detections');
-    expect(unifiedStatsContent).toContain('suspected_bots');
-    expect(unifiedStatsContent).toContain('confirmed_bots');
+    // Bot detection is still served by its own route
+    expect(botDetectionContent).toContain('DETECTION_CRITERIA');
+    expect(botDetectionContent).toContain('calculateBotScore');
+    expect(botDetectionContent).toContain('confidenceScore');
+    
+    // Unified stats now redirects to cf-sync-worker
+    const unifiedStatsContent = await Bun.file('app/api/admin/unified-stats/route.ts').text();
+    expect(unifiedStatsContent).toContain('redirect');
   });
 
   test('Setup script exists and is functional', async () => {

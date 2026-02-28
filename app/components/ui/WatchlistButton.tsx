@@ -15,14 +15,15 @@ export function WatchlistButton({ item, variant = 'full', className = '' }: Watc
   const { addToWatchlist, removeFromWatchlist, isInWatchlist } = useWatchlist();
   const { trackEvent } = useAnalytics();
   
-  const inWatchlist = isInWatchlist(item.id);
+  const mediaType = (item.mediaType || item.media_type || 'movie') as 'movie' | 'tv';
+  const inWatchlist = isInWatchlist(item.id, mediaType);
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
     
     if (inWatchlist) {
-      removeFromWatchlist(item.id);
+      removeFromWatchlist(item.id, mediaType);
       trackEvent('watchlist_removed', { content_id: item.id, source: 'button' });
     } else {
       addToWatchlist(item);

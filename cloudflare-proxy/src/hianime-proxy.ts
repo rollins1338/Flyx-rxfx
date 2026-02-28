@@ -757,7 +757,8 @@ export async function handleHiAnimeRequest(request: Request, env: Env): Promise<
       for (const result of [subResult, dubResult]) {
         if (!result) continue;
         for (const src of result.sources) {
-          // Rewrite the m3u8 URL to go through our proxy
+          // Proxy the m3u8 URL through our /hianime/stream endpoint
+          // This rewrites playlist URLs so segments also go through the proxy
           const proxiedUrl = `${proxyOrigin}/hianime/stream?url=${encodeURIComponent(src.url)}`;
           sources.push({
             quality: 'auto',
@@ -815,16 +816,39 @@ export async function handleHiAnimeRequest(request: Request, env: Env): Promise<
 
     const hasRpi = !!(env.RPI_PROXY_URL && env.RPI_PROXY_KEY);
 
-    // Strategy 1: Direct fetch from CF Worker (intra-Cloudflare, often bypasses challenges)
+    // Detect MegaCloud CDN URLs early — needed by all strategies
+    const isMegaCloudCdn = decodedUrl.includes('/_v7/') || decodedUrl.includes('/_v8/') || decodedUrl.includes('/_v6/');
+
+    // Build RPI base URL once for reuse across strategies
+    let rpiBaseUrl = '';
+    if (hasRpi) {
+      rpiBaseUrl = env.RPI_PROXY_URL!;
+      if (!rpiBaseUrl.startsWith('http://') && !rpiBaseUrl.startsWith('https://')) {
+        rpiBaseUrl = `https://${rpiBaseUrl}`;
+      }
+      rpiBaseUrl = rpiBaseUrl.replace(/\/+$/, '');
+    }
+
+    // Strategy 1: Direct fetch from CF Worker (intra-Cloudflare network)
+    // MegaCloud CDN requires Referer+Origin headers from megacloud.blog — without them → 403
+    let strategy1Status = 0;
+    let strategy2Status = 0;
+    let strategy3Status = 0;
     try {
-      const response = await fetchWithRetry(decodedUrl, {
-        headers: {
-          'User-Agent': UA,
-          'Accept': '*/*',
-          'Accept-Encoding': 'identity',
-        },
-        signal: AbortSignal.timeout(15000),
-      }, 3, 1000); // 3 retries with 1s, 2s, 4s delays
+      const fetchHeaders: Record<string, string> = {
+        'User-Agent': UA,
+        'Accept': '*/*',
+        'Accept-Encoding': 'identity',
+      };
+      if (isMegaCloudCdn) {
+        fetchHeaders['Referer'] = 'https://megacloud.blog/';
+        fetchHeaders['Origin'] = 'https://megacloud.blog';
+      }
+      const response = await fetch(decodedUrl, {
+        headers: fetchHeaders,
+        signal: AbortSignal.timeout(10000),
+      });
+      strategy1Status = response.status;
 
       if (response.ok) {
         const contentType = response.headers.get('content-type') || '';
@@ -864,35 +888,28 @@ export async function handleHiAnimeRequest(request: Request, env: Env): Promise<
         });
       }
       logger.warn('Direct fetch failed', { status: response.status });
+      strategy1Status = response.status;
       // Fall through to RPI
     } catch (error) {
       logger.warn('Direct fetch error, trying RPI', { error: (error as Error).message });
+      strategy1Status = -1;
     }
 
     // Strategy 2: RPI residential proxy fallback
     if (hasRpi) {
       try {
-        let rpiBaseUrl = env.RPI_PROXY_URL!;
-        if (!rpiBaseUrl.startsWith('http://') && !rpiBaseUrl.startsWith('https://')) {
-          rpiBaseUrl = `https://${rpiBaseUrl}`;
-        }
-        rpiBaseUrl = rpiBaseUrl.replace(/\/+$/, '');
-
-        // Check if this is a MegaCloud CDN URL (/_v7/ or /_v8/ paths)
-        // MegaCloud uses aggressive Cloudflare TLS fingerprinting
-        // Use curl-impersonate endpoint which mimics Chrome's EXACT TLS fingerprint
-        const isMegaCloudCdn = decodedUrl.includes('/_v7/') || decodedUrl.includes('/_v8/');
         
         let rpiUrl: string;
         if (isMegaCloudCdn) {
-          // Use Rust fetch endpoint for MegaCloud CDN (JS execution + TLS mimicry)
+          // For MegaCloud CDN, try /animekai FIRST — it uses Node's fetch() (undici)
+          // which has a different TLS fingerprint that often passes MegaCloud's protection.
+          // /fetch-rust requires the binary to be installed and often fails.
           const rpiParams = new URLSearchParams({
             url: decodedUrl,
             key: env.RPI_PROXY_KEY!,
-            solve: 'true', // Enable JS challenge solving
           });
-          rpiUrl = `${rpiBaseUrl}/fetch-rust?${rpiParams.toString()}`;
-          logger.debug('Using Rust fetch for MegaCloud CDN', { rpiUrl: rpiUrl.substring(0, 80) });
+          rpiUrl = `${rpiBaseUrl}/animekai?${rpiParams.toString()}`;
+          logger.debug('Using /animekai for MegaCloud CDN (primary)', { rpiUrl: rpiUrl.substring(0, 80) });
         } else {
           // Use regular AnimeKai endpoint for other URLs
           const rpiParams = new URLSearchParams({
@@ -904,8 +921,9 @@ export async function handleHiAnimeRequest(request: Request, env: Env): Promise<
         }
 
         const rpiResponse = await fetchWithRetry(rpiUrl, {
-          signal: AbortSignal.timeout(45000), // Increased to 45s for curl-impersonate
-        }, 3, 1000); // 3 retries with 1s, 2s, 4s delays
+          signal: AbortSignal.timeout(isMegaCloudCdn ? 20000 : 45000),
+        }, isMegaCloudCdn ? 2 : 3, 1000); // Fewer retries for CDN to fail fast to Strategy 3
+        strategy2Status = rpiResponse.status;
 
         if (rpiResponse.ok) {
           const contentType = rpiResponse.headers.get('content-type') || '';
@@ -945,14 +963,78 @@ export async function handleHiAnimeRequest(request: Request, env: Env): Promise<
           });
         }
         logger.warn('RPI proxy returned error', { status: rpiResponse.status });
+        strategy2Status = rpiResponse.status;
       } catch (error) {
         logger.warn('RPI proxy error', { error: (error as Error).message });
+        strategy2Status = -1;
+      }
+
+      // Strategy 3: If /animekai failed for MegaCloud CDN, try /fetch-rust endpoint
+      // The /fetch-rust endpoint uses curl-impersonate for Chrome TLS fingerprint mimicry
+      if (isMegaCloudCdn) {
+        try {
+          const rustParams = new URLSearchParams({
+            url: decodedUrl,
+            key: env.RPI_PROXY_KEY!,
+            solve: 'true',
+          });
+          const rustUrl = `${rpiBaseUrl}/fetch-rust?${rustParams.toString()}`;
+          logger.debug('Trying /fetch-rust fallback for MegaCloud CDN', { url: rustUrl.substring(0, 80) });
+
+          const fallbackResponse = await fetchWithRetry(rustUrl, {
+            signal: AbortSignal.timeout(30000),
+          }, 2, 1000);
+
+          if (fallbackResponse.ok) {
+            const contentType = fallbackResponse.headers.get('content-type') || '';
+
+            if (contentType.includes('mpegurl') || decodedUrl.includes('.m3u8')) {
+              const text = await fallbackResponse.text();
+              const rewritten = rewritePlaylistUrls(text, decodedUrl, url.origin);
+              return new Response(rewritten, {
+                status: 200,
+                headers: {
+                  'Content-Type': 'application/vnd.apple.mpegurl',
+                  'Cache-Control': 'public, max-age=5',
+                  'X-Proxied-Via': 'rpi-fetch-rust-fallback',
+                  ...corsHeaders(),
+                },
+              });
+            }
+
+            const body = await fallbackResponse.arrayBuffer();
+            const firstBytes = new Uint8Array(body.slice(0, 4));
+            const isMpegTs = firstBytes[0] === 0x47;
+            const isFmp4 = firstBytes[0] === 0x00 && firstBytes[1] === 0x00 && firstBytes[2] === 0x00;
+            let actualContentType = contentType;
+            if (isMpegTs) actualContentType = 'video/mp2t';
+            else if (isFmp4) actualContentType = 'video/mp4';
+            else if (!actualContentType) actualContentType = 'application/octet-stream';
+
+            return new Response(body, {
+              status: 200,
+              headers: {
+                'Content-Type': actualContentType,
+                'Content-Length': body.byteLength.toString(),
+                'Cache-Control': 'public, max-age=3600',
+                'X-Proxied-Via': 'rpi-fetch-rust-fallback',
+                ...corsHeaders(),
+              },
+            });
+          }
+          logger.warn('RPI /fetch-rust fallback also failed', { status: fallbackResponse.status });
+          strategy3Status = fallbackResponse.status;
+        } catch (error) {
+          logger.warn('RPI /fetch-rust fallback error', { error: (error as Error).message });
+          strategy3Status = -1;
+        }
       }
     }
 
     return jsonResponse({
       error: 'Stream fetch failed from all sources',
       hint: hasRpi ? 'Both direct and RPI proxy failed' : 'RPI proxy not configured',
+      debug: { strategy1Status, strategy2Status, strategy3Status, isMegaCloudCdn, hasRpi },
     }, 502);
   }
 

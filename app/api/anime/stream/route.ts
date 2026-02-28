@@ -47,15 +47,18 @@ export async function GET(request: NextRequest) {
     const title = anime.title_english || anime.title;
     console.log(`[ANIME-STREAM] Found anime: ${title} (type: ${anime.type}, episodes: ${anime.episodes})`);
 
-    // TRY BOTH PROVIDERS IN PARALLEL - Get sub/dub from both HiAnime AND AnimeKai!
-    console.log(`[ANIME-STREAM] Extracting from BOTH providers in parallel...`);
+    // TRY REQUESTED PROVIDER FIRST, then fallback to the other
+    // The VideoPlayer already fires both providers in parallel, so we should NOT
+    // fire both here — that causes 4x duplicate requests.
+    console.log(`[ANIME-STREAM] Extracting from ${requestedProvider}...`);
     
-    const [hianimeResult, animekaiResult] = await Promise.allSettled([
-      extractFromProvider('hianime', malId, title, anime, isMovie, episode),
-      extractFromProvider('animekai', malId, title, anime, isMovie, episode),
-    ]);
+    const primaryResult = await extractFromProvider(requestedProvider, malId, title, anime, isMovie, episode)
+      .catch((err) => {
+        console.log(`[ANIME-STREAM] ❌ ${requestedProvider} threw:`, err?.message);
+        return null;
+      });
 
-    // Collect all sources from both providers
+    // Collect sources from primary provider
     const allSources: Array<{
       quality: string;
       title: string;
@@ -71,41 +74,48 @@ export async function GET(request: NextRequest) {
     const allSubtitles: Array<{ label: string; url: string; language: string }> = [];
     const providersUsed: string[] = [];
 
-    // Process HiAnime results
-    if (hianimeResult.status === 'fulfilled' && hianimeResult.value?.success && hianimeResult.value.sources.length > 0) {
-      console.log(`[ANIME-STREAM] ✅ HiAnime: ${hianimeResult.value.sources.length} sources`);
-      hianimeResult.value.sources.forEach(source => {
-        allSources.push({
-          ...source,
-          title: `${source.title} [HiAnime]`,
-        });
-      });
-      if (hianimeResult.value.subtitles) {
-        allSubtitles.push(...hianimeResult.value.subtitles);
-      }
-      providersUsed.push('hianime');
-    } else {
-      const error = hianimeResult.status === 'rejected' ? hianimeResult.reason?.message : hianimeResult.value?.error;
-      console.log(`[ANIME-STREAM] ❌ HiAnime failed: ${error || 'No sources'}`);
-    }
+    const providerLabel = requestedProvider === 'hianime' ? 'HiAnime' : 'AnimeKai';
 
-    // Process AnimeKai results
-    if (animekaiResult.status === 'fulfilled' && animekaiResult.value?.success && animekaiResult.value.sources.length > 0) {
-      console.log(`[ANIME-STREAM] ✅ AnimeKai: ${animekaiResult.value.sources.length} sources`);
-      animekaiResult.value.sources.forEach(source => {
-        allSources.push({
-          ...source,
-          url: getAnimeKaiProxyUrl(source.url), // AnimeKai needs residential proxy
-          title: `${source.title} [AnimeKai]`,
-        });
+    if (primaryResult?.success && primaryResult.sources.length > 0) {
+      console.log(`[ANIME-STREAM] ✅ ${providerLabel}: ${primaryResult.sources.length} sources`);
+      primaryResult.sources.forEach(source => {
+        const processedSource = requestedProvider === 'animekai'
+          ? { ...source, url: getAnimeKaiProxyUrl(source.url), title: `${source.title} [AnimeKai]` }
+          : { ...source, title: `${source.title} [HiAnime]` };
+        allSources.push(processedSource);
       });
-      if (animekaiResult.value.subtitles) {
-        allSubtitles.push(...animekaiResult.value.subtitles);
+      if (primaryResult.subtitles) {
+        allSubtitles.push(...primaryResult.subtitles);
       }
-      providersUsed.push('animekai');
+      providersUsed.push(requestedProvider);
     } else {
-      const error = animekaiResult.status === 'rejected' ? animekaiResult.reason?.message : animekaiResult.value?.error;
-      console.log(`[ANIME-STREAM] ❌ AnimeKai failed: ${error || 'No sources'}`);
+      const error = primaryResult?.error || 'No sources';
+      console.log(`[ANIME-STREAM] ❌ ${providerLabel} failed: ${error}`);
+      
+      // Fallback to the other provider
+      const fallbackProvider: Provider = requestedProvider === 'hianime' ? 'animekai' : 'hianime';
+      console.log(`[ANIME-STREAM] Trying fallback: ${fallbackProvider}...`);
+      
+      const fallbackResult = await extractFromProvider(fallbackProvider, malId, title, anime, isMovie, episode)
+        .catch((err) => {
+          console.log(`[ANIME-STREAM] ❌ ${fallbackProvider} threw:`, err?.message);
+          return null;
+        });
+
+      if (fallbackResult?.success && fallbackResult.sources.length > 0) {
+        const fbLabel = fallbackProvider === 'hianime' ? 'HiAnime' : 'AnimeKai';
+        console.log(`[ANIME-STREAM] ✅ ${fbLabel} (fallback): ${fallbackResult.sources.length} sources`);
+        fallbackResult.sources.forEach(source => {
+          const processedSource = fallbackProvider === 'animekai'
+            ? { ...source, url: getAnimeKaiProxyUrl(source.url), title: `${source.title} [AnimeKai]` }
+            : { ...source, title: `${source.title} [HiAnime]` };
+          allSources.push(processedSource);
+        });
+        if (fallbackResult.subtitles) {
+          allSubtitles.push(...fallbackResult.subtitles);
+        }
+        providersUsed.push(fallbackProvider);
+      }
     }
 
     // Return all sources from both providers

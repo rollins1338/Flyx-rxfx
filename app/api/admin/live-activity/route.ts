@@ -20,8 +20,8 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-// Analytics Worker URL
-const CF_ANALYTICS_WORKER_URL = process.env.NEXT_PUBLIC_CF_ANALYTICS_WORKER_URL || 'https://flyx-analytics.vynx.workers.dev';
+// Sync Worker URL (admin analytics endpoints)
+const CF_ANALYTICS_WORKER_URL = process.env.NEXT_PUBLIC_CF_SYNC_URL || 'https://flyx-sync.vynx.workers.dev';
 const REQUEST_TIMEOUT = 5000;
 
 interface LiveActivity {

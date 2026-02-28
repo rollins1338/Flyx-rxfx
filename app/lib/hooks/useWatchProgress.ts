@@ -1,11 +1,16 @@
 /**
- * Watch Progress Hook
- * Enhanced watch progress tracking with anonymized user data
+ * Watch Progress Hook — Local-first implementation.
+ *
+ * Replaces the old cloud-first useWatchProgress that depended on
+ * the AnalyticsProvider context and userTrackingService.
+ * Now writes all progress directly to Local_Store via Local_Tracker.
+ *
+ * Requirements: 1.2
  */
 
 import { useEffect, useCallback, useRef } from 'react';
-import { useAnalytics } from '@/components/analytics/AnalyticsProvider';
-import { userTrackingService } from '@/lib/services/user-tracking';
+import { LocalTracker } from '../local-tracker/local-tracker';
+import { LocalStore } from '../local-store/local-store';
 
 interface WatchProgressOptions {
   contentId?: string;
@@ -17,10 +22,11 @@ interface WatchProgressOptions {
   onComplete?: () => void;
 }
 
-const SAVE_INTERVAL = 5000; // Save to localStorage every 5 seconds
-const MIN_WATCH_THRESHOLD = 10; // Minimum 10 seconds watched to save
-const ANALYTICS_INTERVAL = 30000; // Track analytics every 30 seconds
-const COMPLETION_THRESHOLD = 0.9; // Consider 90% as completed
+const SAVE_INTERVAL = 5000;
+const MIN_WATCH_THRESHOLD = 10;
+const COMPLETION_THRESHOLD = 0.9;
+
+const store = new LocalStore();
 
 export function useWatchProgress(options: WatchProgressOptions) {
   const {
@@ -30,257 +36,126 @@ export function useWatchProgress(options: WatchProgressOptions) {
     seasonNumber,
     episodeNumber,
     onProgress,
-    onComplete
+    onComplete,
   } = options;
 
-  const {
-    trackWatchEvent,
-    getWatchProgress,
-    trackContentEngagement,
-    updateActivity,
-    updateWatchTime,
-  } = useAnalytics();
-
   const lastSaveTimeRef = useRef<number>(0);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastAnalyticsTimeRef = useRef<number>(0);
   const hasStartedRef = useRef<boolean>(false);
   const wasCompletedRef = useRef<boolean>(false);
 
-  // Load saved progress from user tracking
+  const mappedType = contentType === 'episode' ? 'tv' : 'movie';
+
+  // Load saved progress from Local_Store
   const loadProgress = useCallback((): number => {
     if (!contentId) return 0;
-
     try {
-      const progress = getWatchProgress(contentId, seasonNumber, episodeNumber);
-
-      if (progress) {
-        // Only restore if watched within last 7 days and not completed
-        const daysSince = (Date.now() - progress.lastWatched) / (1000 * 60 * 60 * 24);
-        if (daysSince < 7 && !progress.completed) {
-          return progress.currentTime;
+      const entry = store.getWatchProgress(contentId, seasonNumber, episodeNumber);
+      if (entry) {
+        const daysSince = (Date.now() - entry.lastWatched) / (1000 * 60 * 60 * 24);
+        const completion = entry.duration > 0 ? entry.position / entry.duration : 0;
+        if (daysSince < 7 && completion < COMPLETION_THRESHOLD) {
+          return entry.position;
         }
       }
-    } catch (error) {
-      console.error('Failed to load watch progress:', error);
+    } catch {
+      // ignore
     }
-
     return 0;
-  }, [contentId, seasonNumber, episodeNumber, getWatchProgress]);
+  }, [contentId, seasonNumber, episodeNumber]);
 
-  // Track watch start
-  const handleWatchStart = useCallback((currentTime: number, duration: number) => {
-    if (!contentId || hasStartedRef.current) return;
+  // Start watch via Local_Tracker
+  const handleWatchStart = useCallback(
+    (_currentTime: number, duration: number) => {
+      if (!contentId || hasStartedRef.current) return;
+      hasStartedRef.current = true;
 
-    hasStartedRef.current = true;
-
-    const mappedContentType = contentType === 'episode' ? 'tv' : 'movie';
-
-    trackWatchEvent({
-      contentId,
-      contentType: mappedContentType,
-      contentTitle,
-      action: 'start',
-      currentTime,
-      duration,
-      seasonNumber,
-      episodeNumber,
-    });
-
-    trackContentEngagement(contentId, mappedContentType, 'watch_start', {
-      contentTitle,
-      seasonNumber,
-      episodeNumber,
-    });
-
-    // Update live activity
-    updateActivity({
-      type: 'watching',
-      contentId,
-      contentTitle,
-      contentType: mappedContentType,
-      seasonNumber,
-      episodeNumber,
-      currentPosition: Math.round(currentTime),
-      duration: Math.round(duration),
-    });
-  }, [contentId, contentType, contentTitle, seasonNumber, episodeNumber, trackWatchEvent, trackContentEngagement, updateActivity]);
-
-  // Track watch pause
-  const handleWatchPause = useCallback((currentTime: number, duration: number) => {
-    if (!contentId) return;
-
-    const mappedContentType = contentType === 'episode' ? 'tv' : 'movie';
-
-    trackWatchEvent({
-      contentId,
-      contentType: mappedContentType,
-      contentTitle,
-      action: 'pause',
-      currentTime,
-      duration,
-      seasonNumber,
-      episodeNumber,
-    });
-  }, [contentId, contentType, contentTitle, seasonNumber, episodeNumber, trackWatchEvent]);
-
-  // Track watch resume
-  const handleWatchResume = useCallback((currentTime: number, duration: number) => {
-    if (!contentId) return;
-
-    const mappedContentType = contentType === 'episode' ? 'tv' : 'movie';
-
-    trackWatchEvent({
-      contentId,
-      contentType: mappedContentType,
-      contentTitle,
-      action: 'resume',
-      currentTime,
-      duration,
-      seasonNumber,
-      episodeNumber,
-    });
-  }, [contentId, contentType, contentTitle, seasonNumber, episodeNumber, trackWatchEvent]);
-
-  // Handle progress updates
-  // OPTIMIZED: Only saves to localStorage every SAVE_INTERVAL for local resume.
-  // Network sync only happens on pause/seek/complete/exit (not periodic).
-  // This dramatically reduces CF Worker and D1 usage.
-  const handleProgress = useCallback((currentTime: number, duration: number) => {
-    if (!contentId || duration <= 0) return;
-
-    onProgress?.(currentTime, duration);
-
-    // Track start if not already tracked
-    if (!hasStartedRef.current) {
-      handleWatchStart(currentTime, duration);
-    }
-
-    const mappedContentType = contentType === 'episode' ? 'tv' : 'movie';
-    const completionPercentage = currentTime / duration;
-
-    // Check for completion (90% threshold)
-    if (completionPercentage >= COMPLETION_THRESHOLD && !wasCompletedRef.current) {
-      wasCompletedRef.current = true;
-
-      trackWatchEvent({
+      const tracker = LocalTracker.getInstance();
+      tracker.startWatch(
         contentId,
-        contentType: mappedContentType,
-        contentTitle,
-        action: 'complete',
-        currentTime,
+        mappedType as 'movie' | 'tv' | 'livetv',
+        contentTitle ?? '',
+        seasonNumber,
+        episodeNumber,
         duration,
-        seasonNumber,
-        episodeNumber,
-      });
+      );
+    },
+    [contentId, mappedType, contentTitle, seasonNumber, episodeNumber],
+  );
 
-      trackContentEngagement(contentId, mappedContentType, 'watch_complete', {
-        seasonNumber,
-        episodeNumber,
-        completionPercentage: Math.round(completionPercentage * 100),
-        totalWatchTime: Math.round(currentTime),
-      });
+  // Pause
+  const handleWatchPause = useCallback(
+    (_currentTime: number, _duration: number) => {
+      if (!contentId) return;
+      LocalTracker.getInstance().pauseWatch();
+    },
+    [contentId],
+  );
 
-      onComplete?.();
-    }
+  // Resume — just re-send a progress update
+  const handleWatchResume = useCallback(
+    (currentTime: number, duration: number) => {
+      if (!contentId) return;
+      const tracker = LocalTracker.getInstance();
+      if (!hasStartedRef.current) {
+        handleWatchStart(currentTime, duration);
+      }
+      tracker.updateProgress(currentTime, duration);
+    },
+    [contentId, handleWatchStart],
+  );
 
-    // Save progress to localStorage periodically (local only, no network)
-    // This ensures resume works even if the tab crashes
-    const timeSinceLastSave = Date.now() - lastSaveTimeRef.current;
-    if (timeSinceLastSave >= SAVE_INTERVAL && currentTime >= MIN_WATCH_THRESHOLD) {
-      // Save to localStorage for local resume (no network call)
-      userTrackingService.updateWatchProgressLocal({
-        contentId,
-        contentType: mappedContentType,
-        seasonNumber,
-        episodeNumber,
-        currentTime,
-        duration,
-        completionPercentage: Math.round(completionPercentage * 100),
-        lastWatched: Date.now(),
-        completed: false,
-      });
+  // Progress updates — writes to Local_Store periodically
+  const handleProgress = useCallback(
+    (currentTime: number, duration: number) => {
+      if (!contentId || duration <= 0) return;
 
-      // Update enhanced watch time tracking in memory (no network)
-      updateWatchTime({
-        contentId,
-        contentType: mappedContentType,
-        contentTitle,
-        seasonNumber,
-        episodeNumber,
-        currentPosition: currentTime,
-        duration,
-        isPlaying: true,
-      });
+      onProgress?.(currentTime, duration);
 
-      lastSaveTimeRef.current = Date.now();
-    }
+      if (!hasStartedRef.current) {
+        handleWatchStart(currentTime, duration);
+      }
 
-    // Track analytics periodically (every 30 seconds) - local event only, no network
-    const timeSinceLastAnalytics = Date.now() - lastAnalyticsTimeRef.current;
-    if (timeSinceLastAnalytics >= ANALYTICS_INTERVAL) {
-      trackContentEngagement(contentId, mappedContentType, 'watch_progress', {
-        currentTime: Math.round(currentTime),
-        duration: Math.round(duration),
-        completionPercentage: Math.round(completionPercentage * 100),
-        seasonNumber,
-        episodeNumber,
-      });
+      const completionPct = currentTime / duration;
 
-      lastAnalyticsTimeRef.current = Date.now();
-    }
-  }, [
-    contentId,
-    contentType,
-    contentTitle,
-    seasonNumber,
-    episodeNumber,
-    onProgress,
-    onComplete,
-    handleWatchStart,
-    trackWatchEvent,
-    trackContentEngagement,
-    updateWatchTime,
-  ]);
+      // Completion detection
+      if (completionPct >= COMPLETION_THRESHOLD && !wasCompletedRef.current) {
+        wasCompletedRef.current = true;
+        LocalTracker.getInstance().updateProgress(currentTime, duration);
+        onComplete?.();
+      }
 
-  // Get current progress
+      // Periodic save to Local_Store
+      const elapsed = Date.now() - lastSaveTimeRef.current;
+      if (elapsed >= SAVE_INTERVAL && currentTime >= MIN_WATCH_THRESHOLD) {
+        LocalTracker.getInstance().updateProgress(currentTime, duration);
+        lastSaveTimeRef.current = Date.now();
+      }
+    },
+    [contentId, onProgress, onComplete, handleWatchStart],
+  );
+
+  // Get current progress from Local_Store
   const getCurrentProgress = useCallback(() => {
     if (!contentId) return null;
-    return getWatchProgress(contentId);
-  }, [contentId, getWatchProgress]);
+    return store.getWatchProgress(contentId, seasonNumber, episodeNumber);
+  }, [contentId, seasonNumber, episodeNumber]);
 
-  // Mark as completed manually
-  const markAsCompleted = useCallback((currentTime: number, duration: number) => {
-    if (!contentId || wasCompletedRef.current) return;
+  // Mark as completed
+  const markAsCompleted = useCallback(
+    (currentTime: number, duration: number) => {
+      if (!contentId || wasCompletedRef.current) return;
+      wasCompletedRef.current = true;
+      LocalTracker.getInstance().updateProgress(currentTime, duration);
+      onComplete?.();
+    },
+    [contentId, onComplete],
+  );
 
-    wasCompletedRef.current = true;
-    const mappedContentType = contentType === 'episode' ? 'tv' : 'movie';
-
-    trackWatchEvent({
-      contentId,
-      contentType: mappedContentType,
-      contentTitle,
-      action: 'complete',
-      currentTime,
-      duration,
-      seasonNumber,
-      episodeNumber,
-    });
-
-    trackContentEngagement(contentId, mappedContentType, 'watch_complete', {
-      seasonNumber,
-      episodeNumber,
-      completionPercentage: Math.round((currentTime / duration) * 100),
-    });
-
-    onComplete?.();
-  }, [contentId, contentType, seasonNumber, episodeNumber, trackWatchEvent, trackContentEngagement, onComplete]);
-
-  // Cleanup on unmount
+  // Stop watch on unmount
   useEffect(() => {
     return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
+      if (hasStartedRef.current) {
+        LocalTracker.getInstance().stopWatch();
       }
     };
   }, []);

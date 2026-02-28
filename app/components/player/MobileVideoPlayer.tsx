@@ -361,6 +361,11 @@ export default function MobileVideoPlayer({
     onErrorRef.current = onError;
   }, [onError]);
 
+  // Track network error retries to auto-fallback to next source
+  const networkRetryCountRef = useRef(0);
+  const onSourceChangeRef = useRef(onSourceChange);
+  useEffect(() => { onSourceChangeRef.current = onSourceChange; }, [onSourceChange]);
+
   // Debug: Log anime props
   useEffect(() => {
     console.log('[MobilePlayer] Anime props:', { isAnime, audioPref, hasOnAudioPrefChange: !!onAudioPrefChange });
@@ -578,6 +583,7 @@ export default function MobileVideoPlayer({
     
     console.log('[MobilePlayer] Initializing HLS for:', streamUrl.substring(0, 50));
     lastInitializedUrlRef.current = streamUrl;
+    networkRetryCountRef.current = 0; // Reset retry counter for new source
     
     const video = videoRef.current;
     setIsLoading(true);
@@ -674,8 +680,26 @@ export default function MobileVideoPlayer({
       });
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (data.fatal) {
-          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
-          else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+            networkRetryCountRef.current++;
+            console.log(`[MobilePlayer] Network error #${networkRetryCountRef.current}:`, data.details);
+            
+            if (networkRetryCountRef.current <= 2) {
+              // Retry the same source a couple times
+              hls.startLoad();
+            } else {
+              // After 2 retries, try next source automatically
+              const nextIndex = currentSourceIndex + 1;
+              if (nextIndex < availableSources.length) {
+                console.log(`[MobilePlayer] Auto-switching to source ${nextIndex} after ${networkRetryCountRef.current} network failures`);
+                onSourceChangeRef.current?.(nextIndex, currentTime);
+              } else {
+                setError('Stream unavailable. Try another source.');
+                setIsLoading(false);
+                onErrorRef.current?.('All sources failed with network errors');
+              }
+            }
+          } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
           else {
             setError('Playback failed. Try another source.');
             setIsLoading(false);

@@ -35,7 +35,6 @@ database_id = "b7875a59-3876-4223-9c3d-7644c16f44a5"
 # Required variables (set as Plaintext):
 #   NODE_ENV = "production"
 #   NEXT_PUBLIC_CF_SYNC_URL = "https://flyx-sync.vynx.workers.dev"
-#   NEXT_PUBLIC_CF_ANALYTICS_WORKER_URL = "https://flyx-analytics.vynx.workers.dev"
 #   NEXT_PUBLIC_CF_PROXY_URL = "https://media-proxy.vynx.workers.dev"
 #   NEXT_PUBLIC_CF_STREAM_PROXY_URL = "https://media-proxy.vynx.workers.dev/stream"
 #   NEXT_PUBLIC_CF_TV_PROXY_URL = "https://media-proxy.vynx.workers.dev"

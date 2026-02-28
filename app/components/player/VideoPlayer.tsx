@@ -526,6 +526,12 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
 
   // Fetch sources for a specific provider
   const fetchSources = async (providerName: string, force: boolean = false): Promise<any[] | null> => {
+    // GUARD: Don't fetch TMDB-dependent providers when tmdbId is 0 (MAL-direct anime)
+    if (tmdbId === '0' && !['hianime', 'animekai'].includes(providerName)) {
+      console.log(`[VideoPlayer] Skipping ${providerName} fetch — tmdbId=0 (MAL-direct)`);
+      return null;
+    }
+
     // Check cache first
     if (!force && sourcesCache[providerName] && sourcesCache[providerName].length > 0) {
       console.log(`[VideoPlayer] Using cached sources for ${providerName}`);
@@ -969,8 +975,13 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
       const userOrder = userProviderSettings.providerOrder || [];
       const disabledProviders = new Set(userProviderSettings.disabledProviders || []);
 
+      // MAL-direct anime (tmdbId=0 or malId without real TMDB ID): only anime providers
+      // Flixer/VidLink/VidSrc all need a real TMDB ID — they 404 with tmdbId=0
+      const isMalDirect = tmdbId === '0' || (isAnime && (!tmdbId || tmdbId === '0'));
       const defaultOrder: string[] = isAnime
-        ? ['hianime', 'animekai', 'flixer', 'vidlink', 'vidsrc']
+        ? (isMalDirect
+          ? ['hianime', 'animekai']
+          : ['hianime', 'animekai', 'flixer', 'vidlink', 'vidsrc'])
         : ['flixer', 'vidlink', 'vidsrc'];
 
       // Merge: user order first, then defaults for anything not in user order
@@ -1047,6 +1058,12 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
       const providerPromises: Promise<void>[] = [];
 
       for (const providerName of priorityOrder) {
+        // SAFETY: Skip TMDB-dependent providers when tmdbId is 0 (MAL-direct anime)
+        if (isMalDirect && !['hianime', 'animekai'].includes(providerName)) {
+          console.log(`[VideoPlayer] Skipping ${providerName} — tmdbId=0 (MAL-direct)`);
+          continue;
+        }
+
         if (providerName === 'flixer') {
           for (const server of FLIXER_SERVERS) {
             providerPromises.push((async () => {
@@ -4595,6 +4612,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
                 <div className={styles.tabsContainer} data-server-tabs="true">
                   {providerTabOrder
                     .filter(p => providerAvailability[p])
+                    .filter(p => tmdbId !== '0' || ['hianime', 'animekai'].includes(p))
                     .map(p => {
                       const displayNames: Record<string, string> = {
                         flixer: 'Flixer',

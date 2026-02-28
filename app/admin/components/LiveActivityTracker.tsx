@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useStats } from '../context/StatsContext';
+import { useRealtimeSlice } from '../context/slices';
 import { getAdminAnalyticsUrl } from '../hooks/useAnalyticsApi';
 
 // Helper function to get country name from ISO code
@@ -74,8 +74,14 @@ interface LiveTVStats {
 }
 
 export default function LiveActivityTracker() {
-  // Use unified stats for consistent user counts across the admin panel
-  const { stats: unifiedStats } = useStats();
+  // Use slice context for consistent user counts across the admin panel
+  const realtime = useRealtimeSlice();
+  const unifiedStats = {
+    liveUsers: realtime.data.liveUsers,
+    liveWatching: realtime.data.watching,
+    liveTVViewers: realtime.data.livetv,
+    liveBrowsing: realtime.data.browsing,
+  };
   
   const [activities, setActivities] = useState<LiveActivity[]>([]);
   const [stats, setStats] = useState<LiveStats | null>(null);

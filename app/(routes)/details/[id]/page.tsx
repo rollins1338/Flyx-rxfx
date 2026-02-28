@@ -103,9 +103,12 @@ export default async function DetailsPage({ params, searchParams }: DetailsPageP
         : tmdbService.getPopularTV(1).catch(() => []),
     ]);
 
-    // Combine and filter out current item
+    // Combine and filter out current item (use mediaType+id for unique comparison)
     relatedContent = [...trending, ...popular]
-      .filter(item => item.id !== id)
+      .filter(item => !(item.id === id && item.mediaType === mediaType))
+      .filter((item, index, self) =>
+        self.findIndex(i => i.id === item.id && i.mediaType === item.mediaType) === index
+      )
       .slice(0, 12);
 
   } catch (err) {

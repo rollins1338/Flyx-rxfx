@@ -6,8 +6,6 @@
 'use client';
 
 import { useState, useCallback, useMemo } from 'react';
-import { Navigation } from '@/components/layout/Navigation';
-import { Footer } from '@/components/layout/Footer';
 import { useLiveTVData, LiveEvent, TVChannel, ContentType } from './hooks/useLiveTVData';
 import { VideoPlayer } from './components/VideoPlayer';
 import styles from './LiveTV.module.css';
@@ -116,7 +114,6 @@ export default function LiveTVRefactored() {
 
   return (
     <div className={styles.liveTVPage}>
-      <Navigation />
       
       <main className={styles.mainContent}>
         {/* Header */}
@@ -353,8 +350,6 @@ export default function LiveTVRefactored() {
         isOpen={isPlayerOpen}
         onClose={handleClosePlayer}
       />
-
-      <Footer />
     </div>
   );
 }

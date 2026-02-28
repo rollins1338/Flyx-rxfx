@@ -10,7 +10,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import LiveActivityTracker from '../components/LiveActivityTracker';
 import ImprovedLiveDashboard from '../components/ImprovedLiveDashboard';
-import { useStats } from '../context/StatsContext';
+import { useRealtimeSlice, useGeoSlice } from '../context/slices';
 import { getAdminAnalyticsUrl } from '../hooks/useAnalyticsApi';
 import { colors, getPercentage } from '../components/ui';
 
@@ -40,7 +40,18 @@ interface LiveStats {
 type ViewMode = 'dashboard' | 'realtime' | 'summary' | 'map';
 
 export default function AdminLivePage() {
-  const { stats: unifiedStats, lastRefresh } = useStats();
+  const realtime = useRealtimeSlice();
+  const geo = useGeoSlice();
+  const lastRefresh = realtime.lastUpdate ? new Date(realtime.lastUpdate) : null;
+  
+  const unifiedStats = {
+    liveUsers: realtime.data.liveUsers,
+    liveWatching: realtime.data.watching,
+    liveTVViewers: realtime.data.livetv,
+    liveBrowsing: realtime.data.browsing,
+    topCountries: geo.data.topCountries,
+    peakStats: { peakTotal: realtime.data.peakToday, peakTotalTime: realtime.data.peakTime } as any,
+  };
   
   const [activities, setActivities] = useState<LiveActivity[]>([]);
   const [stats, setStats] = useState<LiveStats | null>(null);

@@ -1,57 +1,45 @@
 /**
- * AnalyticsTracker - Lightweight component that initializes unified tracking
- * 
+ * AnalyticsTracker — Lightweight component that initializes local-first tracking.
+ *
  * Add this to your root layout to enable analytics:
  *   <AnalyticsTracker />
- * 
- * This replaces:
- * - PresenceProvider
- * - AnalyticsProvider
- * - Any other tracking providers
  */
 
 'use client';
 
 import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
-import { initTracker, trackPageView } from '@/lib/analytics/unified-tracker';
+import { LocalTracker } from '@/lib/local-tracker/local-tracker';
 
 interface AnalyticsTrackerProps {
-  /** Disable tracking entirely */
   disabled?: boolean;
-  /** Paths to exclude from tracking (e.g., ['/admin']) */
   excludePaths?: string[];
 }
 
-export function AnalyticsTracker({ 
-  disabled = false, 
-  excludePaths = ['/admin'] 
+export function AnalyticsTracker({
+  disabled = false,
+  excludePaths = ['/admin'],
 }: AnalyticsTrackerProps) {
   const pathname = usePathname();
 
-  // Initialize tracker once
   useEffect(() => {
     if (disabled || typeof window === 'undefined') return;
-    
-    // Check if current path should be excluded
     const shouldExclude = excludePaths.some(path => pathname?.startsWith(path));
     if (shouldExclude) return;
 
-    initTracker();
+    const tracker = LocalTracker.getInstance();
+    tracker.init();
   }, [disabled]);
 
-  // Track page views on route change
   useEffect(() => {
     if (disabled || typeof window === 'undefined' || !pathname) return;
-    
-    // Check if current path should be excluded
     const shouldExclude = excludePaths.some(path => pathname.startsWith(path));
     if (shouldExclude) return;
 
-    trackPageView(pathname, document.title);
+    const tracker = LocalTracker.getInstance();
+    tracker.trackPageView(pathname);
   }, [pathname, disabled, excludePaths]);
 
-  // This component renders nothing
   return null;
 }
 

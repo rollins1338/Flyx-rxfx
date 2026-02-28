@@ -1,7 +1,7 @@
 /**
  * Complete Admin Workflows Integration Tests
  * Tests end-to-end admin user workflows and cross-component data consistency
- * Feature: admin-panel-unified-refactor, Property Integration: Complete workflows
+ * Feature: admin-panel-realtime-rewrite, Property Integration: Complete workflows
  */
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
@@ -16,48 +16,42 @@ describe('Complete Admin Workflows Integration', () => {
     expect(authMiddleware).toContain('export');
     expect(authMiddleware).toContain('auth');
     
-    // Verify dashboard page exists and uses StatsContext
+    // Verify dashboard page exists and uses slice contexts
     const dashboardPage = await Bun.file('app/admin/dashboard/page.tsx').text();
-    expect(dashboardPage).toContain('useStats');
-    // Dashboard page uses StatsContext but doesn't need to import StatsProvider directly
+    expect(dashboardPage).toContain('useRealtimeSlice');
+    expect(dashboardPage).toContain('useUserSlice');
     
-    // Verify analytics page exists and uses unified data
-    const analyticsPage = await Bun.file('app/admin/analytics/page.tsx').text();
-    expect(analyticsPage).toContain('useStats');
+    // Verify content page exists (consolidated analytics)
+    const contentPage = await Bun.file('app/admin/content/page.tsx').text();
+    expect(contentPage).toContain('Content');
     
     // Verify navigation structure is consistent
     const sidebar = await Bun.file('app/admin/components/AdminSidebar.tsx').text();
     expect(sidebar).toContain('/admin/dashboard');
-    expect(sidebar).toContain('/admin/analytics');
+    expect(sidebar).toContain('/admin/content');
     expect(sidebar).toContain('/admin/users');
-    expect(sidebar).toContain('/admin/traffic');
+    expect(sidebar).toContain('/admin/geographic');
   });
 
-  // Test 2: Cross-Component Data Consistency
-  test('Cross-component data consistency through StatsContext', async () => {
-    const statsContext = await Bun.file('app/admin/context/StatsContext.tsx').text();
+  // Test 2: Cross-Component Data Consistency via Slice Contexts
+  test('Cross-component data consistency through slice contexts', async () => {
+    const slicesContext = await Bun.file('app/admin/context/slices.tsx').text();
     
-    // Verify StatsContext provides unified data structure
-    expect(statsContext).toContain('UnifiedStats');
-    expect(statsContext).toContain('liveUsers');
-    expect(statsContext).toContain('activeToday');
-    expect(statsContext).toContain('totalSessions');
-    expect(statsContext).toContain('botDetection');
+    // Verify slice contexts provide structured data
+    expect(slicesContext).toContain('RealtimeSliceProvider');
+    expect(slicesContext).toContain('ContentSliceProvider');
+    expect(slicesContext).toContain('GeoSliceProvider');
+    expect(slicesContext).toContain('UserSliceProvider');
     
-    // Verify auto-refresh mechanism (30 seconds)
-    expect(statsContext).toContain('30000');
-    expect(statsContext).toContain('setInterval');
+    // Verify SSE integration for real-time updates
+    expect(slicesContext).toContain('useSSE');
+    expect(slicesContext).toContain('useSliceSSE');
     
-    // Verify bot filtering integration
-    expect(statsContext).toContain('BotFilterOptions');
-    expect(statsContext).toContain('excludeBots');
-    expect(statsContext).toContain('botThreshold');
-    
-    // Verify UnifiedStatsBar uses the context
+    // Verify UnifiedStatsBar uses the slice contexts
     const statsBar = await Bun.file('app/admin/components/UnifiedStatsBar.tsx').text();
-    expect(statsBar).toContain('useStats');
-    expect(statsBar).toContain('liveUsers');
-    expect(statsBar).toContain('activeToday');
+    expect(statsBar).toContain('useRealtimeSlice');
+    expect(statsBar).toContain('useUserSlice');
+    expect(statsBar).toContain('useContentSlice');
   });
 
   // Test 3: Bot Detection Complete Workflow
@@ -145,7 +139,7 @@ describe('Complete Admin Workflows Integration', () => {
     // Verify responsive layout component exists
     const responsiveLayout = await Bun.file('app/admin/components/ResponsiveLayout.tsx').text();
     expect(responsiveLayout).toContain('ResponsiveLayout');
-    expect(responsiveLayout).toContain('isMobile'); // Check for responsive functionality
+    expect(responsiveLayout).toContain('isMobile');
     
     // Verify accessible components exist
     const accessibleButton = await Bun.file('app/admin/components/AccessibleButton.tsx').text();
@@ -162,32 +156,17 @@ describe('Complete Admin Workflows Integration', () => {
     expect(keyboardNav).toContain('keyboard');
   });
 
-  // Test 8: Unified API Integration Workflow
-  test('Unified API integration complete workflow', async () => {
-    // Verify unified stats API exists
-    const unifiedAPI = await Bun.file('app/api/admin/unified-stats/route.ts').text();
-    expect(unifiedAPI).toContain('unified');
-    expect(unifiedAPI).toContain('CACHE_TTL');
-    expect(unifiedAPI).toContain('30000'); // 30 second cache
+  // Test 8: Consolidated Navigation Workflow
+  test('Consolidated navigation with 6 primary views', async () => {
+    const sidebar = await Bun.file('app/admin/components/AdminSidebar.tsx').text();
     
-    // Verify all admin pages use unified data source
-    const pages = [
-      'app/admin/analytics/page.tsx',
-      'app/admin/users/page.tsx',
-      'app/admin/traffic/page.tsx',
-      'app/admin/dashboard/page.tsx'
-    ];
-    
-    for (const pagePath of pages) {
-      try {
-        const pageContent = await Bun.file(pagePath).text();
-        // Should use StatsContext instead of direct API calls
-        expect(pageContent).toContain('useStats');
-      } catch (error) {
-        // Some pages might not exist yet, that's okay for this test
-        console.log(`Page ${pagePath} not found, skipping check`);
-      }
-    }
+    // Verify 6 consolidated navigation items
+    expect(sidebar).toContain('/admin/dashboard');
+    expect(sidebar).toContain('/admin/content');
+    expect(sidebar).toContain('/admin/users');
+    expect(sidebar).toContain('/admin/geographic');
+    expect(sidebar).toContain('/admin/system-health');
+    expect(sidebar).toContain('/admin/settings');
   });
 
   // Property-based test for data consistency across components
@@ -201,9 +180,6 @@ describe('Complete Admin Workflows Integration', () => {
       }),
       (mockStats) => {
         // Property: All components receiving the same stats should display consistent data
-        // This tests that the StatsContext provides consistent data to all consumers
-        
-        // Simulate multiple components receiving the same stats
         const component1Data = {
           liveUsers: mockStats.liveUsers,
           dau: mockStats.activeToday,
@@ -218,7 +194,6 @@ describe('Complete Admin Workflows Integration', () => {
           bots: mockStats.botDetectionCount
         };
         
-        // All components should receive identical data
         expect(component1Data.liveUsers).toBe(component2Data.liveUsers);
         expect(component1Data.dau).toBe(component2Data.dau);
         expect(component1Data.sessions).toBe(component2Data.sessions);
@@ -233,16 +208,12 @@ describe('Complete Admin Workflows Integration', () => {
   test('Property: Workflow state consistency across navigation', () => {
     fc.assert(fc.property(
       fc.record({
-        currentPage: fc.constantFrom('dashboard', 'analytics', 'users', 'traffic', 'bot-detection'),
+        currentPage: fc.constantFrom('dashboard', 'content', 'users', 'geographic', 'system-health', 'settings'),
         userRole: fc.constantFrom('admin', 'viewer', 'moderator'),
         botFilterEnabled: fc.boolean(),
         dataTimeRange: fc.constantFrom('1h', '24h', '7d', '30d')
       }),
       (workflowState) => {
-        // Property: Navigation between pages should maintain consistent state
-        // Bot filter settings should persist across page changes
-        // User permissions should be consistent across all pages
-        
         const pageState = {
           page: workflowState.currentPage,
           role: workflowState.userRole,
@@ -250,8 +221,7 @@ describe('Complete Admin Workflows Integration', () => {
           timeRange: workflowState.dataTimeRange
         };
         
-        // State should be valid and consistent
-        expect(['dashboard', 'analytics', 'users', 'traffic', 'bot-detection']).toContain(pageState.page);
+        expect(['dashboard', 'content', 'users', 'geographic', 'system-health', 'settings']).toContain(pageState.page);
         expect(['admin', 'viewer', 'moderator']).toContain(pageState.role);
         expect(typeof pageState.botFilter).toBe('boolean');
         expect(['1h', '24h', '7d', '30d']).toContain(pageState.timeRange);
@@ -261,41 +231,40 @@ describe('Complete Admin Workflows Integration', () => {
     ), { numRuns: 100 });
   });
 
-  // Test 9: Performance and Caching Workflow
-  test('Performance and caching complete workflow', async () => {
-    const unifiedAPI = await Bun.file('app/api/admin/unified-stats/route.ts').text();
+  // Test 9: SSE-based Real-time Architecture
+  test('SSE-based real-time architecture is wired correctly', async () => {
+    // Verify SSE hook exists
+    const sseHook = await Bun.file('app/admin/hooks/useSSE.ts').text();
+    expect(sseHook).toContain('useSSE');
+    expect(sseHook).toContain('EventSource');
     
-    // Verify caching is implemented
-    expect(unifiedAPI).toContain('CACHE_TTL');
-    expect(unifiedAPI).toContain('30000'); // 30 seconds
-    expect(unifiedAPI).toContain('cache');
+    // Verify slice contexts use SSE
+    const slices = await Bun.file('app/admin/context/slices.tsx').text();
+    expect(slices).toContain('useSliceSSE');
+    expect(slices).toContain('SSEConnectionProvider');
     
-    // Verify StatsContext implements auto-refresh
-    const statsContext = await Bun.file('app/admin/context/StatsContext.tsx').text();
-    expect(statsContext).toContain('setInterval');
-    expect(statsContext).toContain('30000'); // 30 seconds
-    expect(statsContext).toContain('fetchAllStats');
+    // Verify admin layout initializes SSE at layout level
+    const layout = await Bun.file('app/admin/components/AdminLayout.tsx').text();
+    expect(layout).toContain('SSEConnectionProvider');
   });
 
-  // Test 10: Complete User Journey Integration
-  test('Complete user journey from login to data export', async () => {
-    // This test verifies the complete integration of all major workflows
-    
+  // Test 10: Complete User Journey
+  test('Complete user journey from login to consolidated views', async () => {
     // 1. Authentication components exist
     const authMiddleware = await Bun.file('app/admin/middleware/auth.ts').text();
     expect(authMiddleware).toContain('auth');
     
-    // 2. Navigation is properly structured
+    // 2. Navigation is properly structured with consolidated views
     const sidebar = await Bun.file('app/admin/components/AdminSidebar.tsx').text();
-    expect(sidebar).toContain('menuItems');
     expect(sidebar).toContain('Dashboard');
-    expect(sidebar).toContain('Analytics');
-    expect(sidebar).toContain('Export Data');
+    expect(sidebar).toContain('Content');
+    expect(sidebar).toContain('Users');
+    expect(sidebar).toContain('Geographic');
     
-    // 3. Data flows through unified context
-    const statsContext = await Bun.file('app/admin/context/StatsContext.tsx').text();
-    expect(statsContext).toContain('StatsProvider');
-    expect(statsContext).toContain('useStats');
+    // 3. Data flows through slice contexts
+    const slices = await Bun.file('app/admin/context/slices.tsx').text();
+    expect(slices).toContain('RealtimeSliceProvider');
+    expect(slices).toContain('useRealtimeSlice');
     
     // 4. Export functionality is integrated
     const exportAPI = await Bun.file('app/api/admin/export/route.ts').text();
@@ -307,76 +276,49 @@ describe('Complete Admin Workflows Integration', () => {
   });
 });
 
+
 /**
  * Cross-Component Data Flow Integration Tests
- * Tests data consistency between StatsContext and all consuming components
+ * Tests data consistency between slice contexts and all consuming components
  */
 describe('Cross-Component Data Flow Integration', () => {
   
-  test('StatsContext provides consistent data to all components', async () => {
-    const statsContext = await Bun.file('app/admin/context/StatsContext.tsx').text();
+  test('Slice contexts provide structured data to all components', async () => {
+    const slicesContext = await Bun.file('app/admin/context/slices.tsx').text();
     
-    // Verify the context exports the correct interface
-    expect(statsContext).toContain('UnifiedStats');
-    expect(statsContext).toContain('useStats');
-    expect(statsContext).toContain('StatsProvider');
+    // Verify the context exports the correct hooks
+    expect(slicesContext).toContain('useRealtimeSlice');
+    expect(slicesContext).toContain('useContentSlice');
+    expect(slicesContext).toContain('useGeoSlice');
+    expect(slicesContext).toContain('useUserSlice');
     
-    // Verify all required metrics are included
-    const requiredMetrics = [
-      'liveUsers',
-      'activeToday',
-      'totalSessions',
-      'botDetection',
-      'topContent',
-      'pageViews',
-      'topCountries',
-      'deviceBreakdown'
-    ];
-    
-    for (const metric of requiredMetrics) {
-      expect(statsContext).toContain(metric);
-    }
+    // Verify providers are exported
+    expect(slicesContext).toContain('RealtimeSliceProvider');
+    expect(slicesContext).toContain('ContentSliceProvider');
+    expect(slicesContext).toContain('GeoSliceProvider');
+    expect(slicesContext).toContain('UserSliceProvider');
   });
 
-  test('All admin pages use unified data source', async () => {
-    // Check that major admin pages use StatsContext instead of direct API calls
-    const pagesToCheck = [
-      { path: 'app/admin/dashboard/page.tsx', name: 'Dashboard' },
-      { path: 'app/admin/analytics/page.tsx', name: 'Analytics' },
-      { path: 'app/admin/users/page.tsx', name: 'Users' },
-      { path: 'app/admin/traffic/page.tsx', name: 'Traffic' }
-    ];
+  test('All admin pages use slice contexts', async () => {
+    // Dashboard uses realtime and user slices
+    const dashboardPage = await Bun.file('app/admin/dashboard/page.tsx').text();
+    expect(dashboardPage).toContain('useRealtimeSlice');
+    expect(dashboardPage).toContain('useUserSlice');
     
-    for (const page of pagesToCheck) {
-      try {
-        const pageContent = await Bun.file(page.path).text();
-        
-        // Should use StatsContext
-        expect(pageContent).toContain('useStats');
-        
-        // Should not make direct API calls (indicates proper integration)
-        // This is a soft check - some pages might still have legacy API calls
-        console.log(`✓ ${page.name} page uses unified data source`);
-        
-      } catch (error) {
-        console.log(`⚠ ${page.name} page not found at ${page.path}`);
-      }
-    }
+    // Content page exists
+    const contentPage = await Bun.file('app/admin/content/page.tsx').text();
+    expect(contentPage).toContain('Content');
+    
+    // Users page exists
+    const usersPage = await Bun.file('app/admin/users/page.tsx').text();
+    expect(usersPage).toContain('User');
   });
 
-  test('Bot filtering is consistently applied across all components', async () => {
-    const statsContext = await Bun.file('app/admin/context/StatsContext.tsx').text();
-    
-    // Verify bot filtering is integrated into the context
-    expect(statsContext).toContain('BotFilterOptions');
-    expect(statsContext).toContain('includeBots');
-    expect(statsContext).toContain('confidenceThreshold');
-    expect(statsContext).toContain('excludeBots');
-    
-    // Verify bot filter controls exist
+  test('Bot filtering is self-contained in BotFilterControls', async () => {
     const botFilterControls = await Bun.file('app/admin/components/BotFilterControls.tsx').text();
     expect(botFilterControls).toContain('BotFilterOptions');
-    expect(botFilterControls).toContain('setBotFilterOptions');
+    expect(botFilterControls).toContain('includeBots');
+    expect(botFilterControls).toContain('confidenceThreshold');
   });
 
   // Property-based test for API response consistency
@@ -393,10 +335,9 @@ describe('Cross-Component Data Flow Integration', () => {
           dau: fc.integer({ min: 0, max: 10000 }),
           wau: fc.integer({ min: 0, max: 50000 })
         }).map(users => {
-          // Ensure logical consistency: WAU >= DAU, and both <= total
           const dau = Math.min(users.dau, users.total);
-          const wau = Math.max(users.wau, dau); // WAU must be at least DAU
-          const total = Math.max(users.total, wau); // Total must be at least WAU
+          const wau = Math.max(users.wau, dau);
+          const total = Math.max(users.total, wau);
           return { total, dau, wau };
         }),
         content: fc.record({
@@ -406,10 +347,6 @@ describe('Cross-Component Data Flow Integration', () => {
         })
       }),
       (apiResponse) => {
-        // Property: API responses should always have consistent structure
-        // All numeric values should be non-negative
-        // Derived values should be logically consistent
-        
         expect(apiResponse.realtime.totalActive).toBeGreaterThanOrEqual(0);
         expect(apiResponse.realtime.watching).toBeGreaterThanOrEqual(0);
         expect(apiResponse.realtime.browsing).toBeGreaterThanOrEqual(0);
@@ -422,10 +359,7 @@ describe('Cross-Component Data Flow Integration', () => {
         expect(apiResponse.content.totalWatchTime).toBeGreaterThanOrEqual(0);
         expect(apiResponse.content.avgDuration).toBeGreaterThanOrEqual(0);
         
-        // Logical consistency: DAU should not exceed total users
         expect(apiResponse.users.dau).toBeLessThanOrEqual(apiResponse.users.total);
-        
-        // WAU should be >= DAU (weekly includes daily)
         expect(apiResponse.users.wau).toBeGreaterThanOrEqual(apiResponse.users.dau);
         
         return true;
@@ -436,44 +370,36 @@ describe('Cross-Component Data Flow Integration', () => {
 
 /**
  * End-to-End Feature Integration Tests
- * Tests complete feature workflows from UI to API to database
+ * Tests complete feature workflows from UI to API
  */
 describe('End-to-End Feature Integration', () => {
   
   test('Bot detection end-to-end integration', async () => {
-    // 1. Bot detection API exists and is functional
     const botAPI = await Bun.file('app/api/admin/bot-detection/route.ts').text();
     expect(botAPI).toContain('calculateBotScore');
     expect(botAPI).toContain('DETECTION_CRITERIA');
     
-    // 2. Bot detection page exists
     const botPage = await Bun.file('app/admin/bot-detection/page.tsx').text();
     expect(botPage).toContain('bot');
     
-    // 3. Bot filter controls are integrated
     const botControls = await Bun.file('app/admin/components/BotFilterControls.tsx').text();
     expect(botControls).toContain('BotFilterOptions');
     
-    // 4. Manual review workflow exists
     const reviewAPI = await Bun.file('app/api/admin/bot-detection/review/route.ts').text();
     expect(reviewAPI).toContain('review');
     
-    // 5. Database setup script exists
     const setupScript = await Bun.file('scripts/setup-bot-detection-tables.js').text();
     expect(setupScript).toContain('bot_detections');
   });
 
   test('Data export end-to-end integration', async () => {
-    // 1. Export API exists
     const exportAPI = await Bun.file('app/api/admin/export/route.ts').text();
     expect(exportAPI).toContain('export');
     expect(exportAPI).toContain('format');
     
-    // 2. Export page exists
     const exportPage = await Bun.file('app/admin/export/page.tsx').text();
     expect(exportPage).toContain('export');
     
-    // 3. Export panel component exists
     const exportPanel = await Bun.file('app/admin/components/DataExportPanel.tsx').text();
     expect(exportPanel).toContain('export');
     expect(exportPanel).toContain('CSV');
@@ -481,23 +407,18 @@ describe('End-to-End Feature Integration', () => {
   });
 
   test('Security and audit end-to-end integration', async () => {
-    // 1. Security middleware exists
     const authMiddleware = await Bun.file('app/admin/middleware/auth.ts').text();
     expect(authMiddleware).toContain('auth');
     
-    // 2. Security provider exists
     const securityProvider = await Bun.file('app/admin/components/SecurityProvider.tsx').text();
     expect(securityProvider).toContain('SecurityProvider');
     
-    // 3. Permission gate exists
     const permissionGate = await Bun.file('app/admin/components/PermissionGate.tsx').text();
     expect(permissionGate).toContain('PermissionGate');
     
-    // 4. Audit logging exists
     const auditLogger = await Bun.file('app/admin/components/AuditLogger.tsx').text();
     expect(auditLogger).toContain('AuditLogger');
     
-    // 5. Audit API exists
     const auditAPI = await Bun.file('app/api/admin/audit-log/route.ts').text();
     expect(auditAPI).toContain('audit');
   });
@@ -512,12 +433,6 @@ describe('End-to-End Feature Integration', () => {
         success: fc.boolean()
       }),
       (workflowEvent) => {
-        // Property: All workflow events should maintain data integrity
-        // User IDs should be valid strings
-        // Actions should be from allowed set
-        // Timestamps should be reasonable
-        // Success status should be boolean
-        
         expect(typeof workflowEvent.userId).toBe('string');
         expect(workflowEvent.userId.length).toBeGreaterThan(0);
         expect(['view_analytics', 'export_data', 'review_bot', 'update_settings']).toContain(workflowEvent.action);

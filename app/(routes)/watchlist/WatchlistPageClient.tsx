@@ -3,8 +3,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Navigation } from '@/components/layout/Navigation';
-import { Footer } from '@/components/layout/Footer';
 import { PageTransition } from '@/components/layout/PageTransition';
 import { useWatchlist, WatchlistItem } from '@/hooks/useWatchlist';
 import { useAnalytics } from '@/components/analytics/AnalyticsProvider';
@@ -198,7 +196,7 @@ export default function WatchlistPageClient() {
     try {
       const sampleItems = currentItems.slice(0, 5);
       const allRecs: RecommendedItem[] = [];
-      const seenIds = new Set(currentItems.map(i => String(i.id)));
+      const seenKeys = new Set(currentItems.map(i => `${i.mediaType}-${String(i.id)}`));
       
       for (const item of sampleItems) {
         try {
@@ -210,9 +208,9 @@ export default function WatchlistPageClient() {
             const recs = data.results || [];
             
             for (const rec of recs.slice(0, 8)) {
-              const recId = String(rec.id);
-              if (!seenIds.has(recId)) {
-                seenIds.add(recId);
+              const recKey = `${item.mediaType}-${String(rec.id)}`;
+              if (!seenKeys.has(recKey)) {
+                seenKeys.add(recKey);
                 allRecs.push({
                   ...rec,
                   mediaType: item.mediaType,
@@ -307,9 +305,9 @@ export default function WatchlistPageClient() {
     router.push(`/details/${item.id}?type=${item.mediaType}`);
   }, [router, trackEvent]);
 
-  const handleRemove = useCallback((e: React.MouseEvent, id: number | string) => {
+  const handleRemove = useCallback((e: React.MouseEvent, id: number | string, mediaType?: 'movie' | 'tv') => {
     e.stopPropagation();
-    removeFromWatchlist(id);
+    removeFromWatchlist(id, mediaType);
     trackEvent('watchlist_item_removed', { content_id: id });
   }, [removeFromWatchlist, trackEvent]);
 
@@ -318,10 +316,6 @@ export default function WatchlistPageClient() {
     trackEvent('watchlist_cleared', { item_count: items.length });
     setShowClearConfirm(false);
   }, [clearWatchlist, items.length, trackEvent]);
-
-  const handleSearch = useCallback((query: string) => {
-    if (query.trim()) router.push(`/search?q=${encodeURIComponent(query)}`);
-  }, [router]);
 
   const scroll = (direction: 'left' | 'right') => {
     if (scrollRef.current) {
@@ -336,7 +330,6 @@ export default function WatchlistPageClient() {
   return (
     <PageTransition>
       <div className="min-h-screen bg-[#0a0a0f] overflow-x-hidden">
-        <Navigation onSearch={handleSearch} />
         
         {/* Hero Section */}
         <section className="relative pt-16 md:pt-20 pb-12 md:pb-16 overflow-hidden">
@@ -442,11 +435,11 @@ export default function WatchlistPageClient() {
                   <AnimatePresence mode="popLayout">
                     {items.map((item, index) => (
                       <WatchlistCard
-                        key={item.id}
+                        key={`${item.mediaType}-${item.id}`}
                         item={item}
                         index={index}
                         onClick={() => handleContentClick(item)}
-                        onRemove={(e) => handleRemove(e, item.id)}
+                        onRemove={(e) => handleRemove(e, item.id, item.mediaType)}
                       />
                     ))}
                   </AnimatePresence>
@@ -606,8 +599,6 @@ export default function WatchlistPageClient() {
             </motion.div>
           )}
         </AnimatePresence>
-
-        <Footer />
       </div>
     </PageTransition>
   );

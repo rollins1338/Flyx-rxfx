@@ -157,7 +157,8 @@ export function TVNavigationProvider({ children }: TVNavigationProviderProps) {
       // Find the scrollable container for horizontal scrolling
       const scrollContainer = current.closest('.overflow-x-auto, [data-tv-scroll-container]') as HTMLElement;
 
-      // For LEFT/RIGHT: Navigate within the same group sequentially
+      // For LEFT/RIGHT: Navigate within the same group sequentially,
+      // then fall back to cross-group spatial navigation at edges
       if (direction === 'left' || direction === 'right') {
         const currentIndex = sameGroupElements.indexOf(current);
         
@@ -171,7 +172,37 @@ export function TVNavigationProvider({ children }: TVNavigationProviderProps) {
           return target;
         }
         
-        return null;
+        // At edge of group — find nearest element in the spatial direction across other groups
+        let bestCrossGroup: HTMLElement | null = null;
+        let bestCrossGroupDist = Infinity;
+
+        for (const el of focusables) {
+          if (el === current) continue;
+          // Skip elements in the same group
+          const elGroup = el.closest('[data-tv-group]');
+          const elGroupId = elGroup?.getAttribute('data-tv-group');
+          if (elGroupId === currentGroupId) continue;
+
+          const elRect = el.getBoundingClientRect();
+          const elCenterX = elRect.left + window.scrollX + elRect.width / 2;
+          const elCenterY = elRect.top + window.scrollY + elRect.height / 2;
+
+          // Check element is in the correct horizontal direction
+          if (direction === 'left' && elCenterX >= currentCenterX) continue;
+          if (direction === 'right' && elCenterX <= currentCenterX) continue;
+
+          // Score: prefer horizontally close, penalize vertical distance
+          const dx = Math.abs(elCenterX - currentCenterX);
+          const dy = Math.abs(elCenterY - currentCenterY);
+          const dist = dx + dy * 3;
+
+          if (dist < bestCrossGroupDist) {
+            bestCrossGroupDist = dist;
+            bestCrossGroup = el;
+          }
+        }
+
+        return bestCrossGroup;
       }
 
       // For UP/DOWN: First try to find element in same group that's above/below

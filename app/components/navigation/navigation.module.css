@@ -1,0 +1,419 @@
+/* ============================================
+   Navigation Module — Shared Styles
+   Uses --nav-* design tokens from globals.css
+   ============================================ */
+
+/* ----- Sidebar Layout ----- */
+
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  width: var(--sidebar-width);
+  background: var(--nav-bg);
+  border-right: 1px solid var(--nav-border);
+  display: flex;
+  flex-direction: column;
+  z-index: 40;
+  transition: width var(--nav-transition);
+  overflow: hidden;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.sidebarCollapsed {
+  width: var(--sidebar-collapsed-width);
+}
+
+/* ----- Logo ----- */
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 16px;
+  height: 64px;
+  flex-shrink: 0;
+}
+
+/* ----- Nav Sections ----- */
+
+.navSection {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 12px;
+}
+
+.navDivider {
+  height: 1px;
+  background: var(--nav-divider);
+  margin: 8px 12px;
+}
+
+/* ----- Nav Item ----- */
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: var(--nav-item-height);
+  padding: 0 12px;
+  border-radius: var(--nav-item-radius);
+  color: var(--nav-text-muted);
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  position: relative;
+  transition:
+    background var(--nav-transition),
+    color var(--nav-transition);
+  white-space: nowrap;
+  overflow: hidden;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+}
+
+.navItem:hover {
+  background: var(--nav-bg-hover);
+  color: var(--nav-text);
+}
+
+/* ----- Active Indicator ----- */
+
+.navItemActive {
+  background: var(--nav-bg-active);
+  color: var(--nav-text-active);
+}
+
+.navItemActive::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--nav-accent);
+}
+
+/* ----- Nav Icon & Label ----- */
+
+.navIcon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+}
+
+.navLabel {
+  opacity: 1;
+  transition: opacity var(--nav-transition);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.navLabelHidden {
+  opacity: 0;
+  width: 0;
+  pointer-events: none;
+}
+
+/* ----- Collapse Toggle ----- */
+
+.collapseToggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid var(--nav-border);
+  color: var(--nav-text-muted);
+  cursor: pointer;
+  transition:
+    background var(--nav-transition),
+    color var(--nav-transition);
+  padding: 0;
+  margin: 0 auto;
+  flex-shrink: 0;
+}
+
+.collapseToggle:hover {
+  background: var(--nav-bg-hover);
+  color: var(--nav-text);
+}
+
+/* ----- Focus Ring (3:1 contrast — #6366f1 on #0f0f14) ----- */
+
+.navItem:focus-visible,
+.collapseToggle:focus-visible {
+  outline: none;
+  box-shadow: var(--nav-focus-ring);
+}
+
+/* ----- Tooltip (collapsed mode) ----- */
+
+.tooltip {
+  position: absolute;
+  left: calc(var(--sidebar-collapsed-width) + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--nav-surface);
+  color: var(--nav-text);
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 150ms ease;
+  z-index: 50;
+  border: 1px solid var(--nav-border);
+}
+
+.navItem:hover .tooltip {
+  opacity: 1;
+}
+
+/* ----- Bottom Tab Bar ----- */
+
+.bottomTabBar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--bottom-tab-height);
+  background: var(--nav-bg);
+  border-top: 1px solid var(--nav-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  z-index: 40;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.tabItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex: 1;
+  height: 100%;
+  color: var(--nav-text-muted);
+  text-decoration: none;
+  font-size: 0.625rem;
+  font-weight: 500;
+  transition: color var(--nav-transition);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.tabItem:hover {
+  color: var(--nav-text);
+}
+
+.tabItemActive {
+  color: var(--nav-accent);
+}
+
+.tabItem:focus-visible {
+  outline: none;
+  box-shadow: var(--nav-focus-ring);
+}
+
+.tabIcon {
+  width: 22px;
+  height: 22px;
+}
+
+.tabLabel {
+  line-height: 1;
+}
+
+/* ----- Command Palette Overlay ----- */
+
+.paletteOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 20vh;
+  z-index: 100;
+}
+
+.palettePanel {
+  width: 100%;
+  max-width: 520px;
+  background: var(--nav-surface);
+  border: 1px solid var(--nav-border);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
+}
+
+.paletteInput {
+  width: 100%;
+  padding: 16px 20px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--nav-divider);
+  color: var(--nav-text);
+  font-size: 1rem;
+  font-family: inherit;
+  outline: none;
+}
+
+.paletteInput::placeholder {
+  color: var(--nav-text-muted);
+}
+
+.paletteResults {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.paletteItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  color: var(--nav-text);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background var(--nav-transition);
+  text-decoration: none;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+}
+
+.paletteItem:hover,
+.paletteItemFocused {
+  background: var(--nav-bg-hover);
+}
+
+.paletteItem:focus-visible {
+  outline: none;
+  box-shadow: var(--nav-focus-ring);
+}
+
+/* ----- Content Area ----- */
+
+.contentArea {
+  min-height: 100vh;
+}
+
+/* ----- Community Panel ----- */
+
+.communityPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px;
+  border-top: 1px solid var(--nav-divider);
+}
+
+.communityLink {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--nav-item-radius);
+  color: var(--nav-text-muted);
+  text-decoration: none;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  transition:
+    background var(--nav-transition),
+    color var(--nav-transition);
+}
+
+.communityLink:hover {
+  background: var(--nav-bg-hover);
+  color: var(--nav-text);
+}
+
+.communityLink:focus-visible {
+  outline: none;
+  box-shadow: var(--nav-focus-ring);
+}
+
+.communityStat {
+  margin-left: auto;
+  font-size: 0.6875rem;
+  color: var(--nav-text-muted);
+  opacity: 0.7;
+}
+
+/* ----- TV Breakpoint Scaling ----- */
+
+@media (min-width: 1920px) {
+  .navItem {
+    height: 48px;
+    min-width: 48px;
+    font-size: 0.9375rem;
+  }
+
+  .tabItem {
+    min-height: 48px;
+    min-width: 48px;
+  }
+
+  .collapseToggle {
+    width: 48px;
+    height: 48px;
+  }
+
+  .communityLink {
+    min-height: 48px;
+  }
+}
+
+/* ----- Navigation Shell ----- */
+
+.shell {
+  position: relative;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+.shellWithSidebar {
+  margin-left: var(--sidebar-width);
+  transition: margin-left var(--nav-transition);
+}
+
+.shellWithRail {
+  margin-left: var(--sidebar-collapsed-width);
+  transition: margin-left var(--nav-transition);
+}
+
+.shellMobile {
+  margin-left: 0;
+  padding-bottom: var(--bottom-tab-height);
+}
+
+/* ----- Reduced Motion ----- */
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .navItem,
+  .navLabel,
+  .collapseToggle,
+  .tabItem,
+  .paletteItem,
+  .communityLink,
+  .shellWithSidebar,
+  .shellWithRail {
+    transition: none;
+  }
+}

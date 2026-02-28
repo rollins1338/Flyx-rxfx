@@ -4,8 +4,6 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { MediaItem } from '@/types/media';
-import { Navigation } from '@/components/layout/Navigation';
-import { Footer } from '@/components/layout/Footer';
 import { PageTransition } from '@/components/layout/PageTransition';
 import { useAnalytics } from '@/components/analytics/AnalyticsProvider';
 import { usePresenceContext } from '@/components/analytics/PresenceProvider';
@@ -69,22 +67,25 @@ export default function HomePageClient({
     setReduceMotion(shouldReduce);
   }, []);
 
-  // Hero carousel content - filter out duplicates
+  // Hero carousel content - filter out duplicates (use mediaType+id to avoid collisions)
   const heroItems = React.useMemo(() => {
     const items: MediaItem[] = [];
-    const seenIds = new Set<number | string>();
+    const seenKeys = new Set<string>();
+    
+    const getKey = (item: MediaItem) => `${item.mediaType || 'unknown'}-${item.id}`;
     
     // Add heroContent first if it exists
     if (heroContent) {
       items.push(heroContent);
-      seenIds.add(heroContent.id);
+      seenKeys.add(getKey(heroContent));
     }
     
     // Add trending items, skipping duplicates
     for (const item of trendingToday.slice(0, 5)) {
-      if (!seenIds.has(item.id)) {
+      const key = getKey(item);
+      if (!seenKeys.has(key)) {
         items.push(item);
-        seenIds.add(item.id);
+        seenKeys.add(key);
       }
       if (items.length >= 5) break;
     }
@@ -212,8 +213,6 @@ export default function HomePageClient({
   return (
     <PageTransition>
       <div className="min-h-screen bg-black overflow-hidden">
-        {/* Navigation */}
-        <Navigation onSearch={handleSearch} />
 
         {/* Immersive Hero Section */}
         {currentHero && (
@@ -724,8 +723,6 @@ export default function HomePageClient({
             </div>
           </section>
         </main>
-
-        <Footer />
       </div>
     </PageTransition>
   );
@@ -905,7 +902,7 @@ function ContentSection({
               // Always use simple version - no whileInView animations
               return (
                 <div
-                  key={item.id}
+                  key={`${item.mediaType || 'content'}-${item.id}`}
                   onClick={() => onItemClick(item)}
                   onKeyDown={handleKeyDown}
                   className={`flex-shrink-0 w-[120px] sm:w-56 md:w-64 cursor-pointer group ${reduceMotion ? '' : 'transition-transform duration-200 hover:scale-[1.02] hover:-translate-y-1'}`}

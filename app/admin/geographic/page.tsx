@@ -1,19 +1,33 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { useAdmin } from '../context/AdminContext';
-import { useStats } from '../context/StatsContext';
-import WorldMap from '../components/WorldMap';
+/**
+ * Consolidated Geographic View
+ *
+ * Wires GeoSlice context for SSE-based real-time data.
+ * Country and city distribution with real-time active users overlay.
+ *
+ * Requirements: 6.1, 6.2
+ */
 
-interface GeoMetrics {
-  totalCountries: number;
-  topCountry: string;
-  topCountryPercentage: number;
-  internationalPercentage: number;
-  regionBreakdown: Array<{ region: string; count: number }>;
-}
+import { useState, useMemo } from 'react';
+import { useGeoSlice } from '../context/slices';
+import {
+  colors,
+  gradients,
+  formatNumber,
+  StatCard,
+  Card,
+  Grid,
+  ProgressBar,
+  TabSelector,
+  PageHeader,
+  LoadingState,
+  EmptyState,
+  getPercentage,
+} from '../components/ui';
 
-// Helper functions defined at module level to avoid hoisting issues
+type TabId = 'countries' | 'cities' | 'realtime';
+
 function getRegion(countryCode: string): string {
   const regions: Record<string, string[]> = {
     'North America': ['US', 'CA', 'MX'],
@@ -23,451 +37,198 @@ function getRegion(countryCode: string): string {
     'Middle East': ['AE', 'SA', 'IL', 'TR', 'EG'],
     'Africa': ['ZA', 'NG', 'KE', 'MA'],
   };
-  
   for (const [region, countries] of Object.entries(regions)) {
     if (countries.includes(countryCode)) return region;
   }
   return 'Other';
 }
 
-function getCountryName(code: string): string {
-  if (!code || code === 'Unknown' || code === 'Local') return code || 'Unknown';
-  try {
-    const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
-    return regionNames.of(code) || code;
-  } catch {
-    return code;
-  }
-}
+export default function GeographicPage() {
+  const geo = useGeoSlice();
+  const [activeTab, setActiveTab] = useState<TabId>('countries');
+  const gd = geo.data;
 
-function getRegionEmoji(region: string): string {
-  const emojis: Record<string, string> = {
-    'North America': '🌎',
-    'Europe': '🌍',
-    'Asia Pacific': '🌏',
-    'Latin America': '🌎',
-    'Middle East': '🏜️',
-    'Africa': '🌍',
-    'Other': '🌐',
-  };
-  return emojis[region] || '🌐';
-}
+  const tabs = [
+    { id: 'countries', label: 'Countries', icon: '🌍' },
+    { id: 'cities', label: 'Cities', icon: '🏙️' },
+    { id: 'realtime', label: 'Real-time', icon: '🟢' },
+  ];
 
-export default function AdminGeographicPage() {
-  const { setIsLoading } = useAdmin();
-  // Use unified stats - SINGLE SOURCE OF TRUTH (already cached)
-  const { stats: unifiedStats, loading: statsLoading } = useStats();
-  
-  const [viewMode, setViewMode] = useState<'list' | 'regions'>('list');
-  
-  // Use geographic data from unified stats (already fetched and cached)
-  const geoData = useMemo(() => {
-    return unifiedStats.topCountries.map(c => ({ 
-      country: c.country, 
-      countryName: c.countryName, 
-      count: c.count 
-    }));
-  }, [unifiedStats.topCountries]);
+  const totalCountryUsers = useMemo(
+    () => gd.topCountries.reduce((s, c) => s + c.count, 0),
+    [gd.topCountries]
+  );
 
-  // Calculate metrics from unified stats data
-  const metrics = useMemo((): GeoMetrics | null => {
-    if (geoData.length === 0) {
-      return {
-        totalCountries: 0,
-        topCountry: 'N/A',
-        topCountryPercentage: 0,
-        internationalPercentage: 0,
-        regionBreakdown: [],
-      };
-    }
-    
-    const total = geoData.reduce((sum, g) => sum + g.count, 0);
-    const topCountry = geoData[0];
-    
-    // Group by region
-    const regionMap: Record<string, number> = {};
-    geoData.forEach((g) => {
-      const region = getRegion(g.country);
-      regionMap[region] = (regionMap[region] || 0) + g.count;
+  const regionBreakdown = useMemo(() => {
+    const map: Record<string, number> = {};
+    gd.topCountries.forEach((c) => {
+      const r = getRegion(c.country);
+      map[r] = (map[r] || 0) + c.count;
     });
-    
-    const regionBreakdown = Object.entries(regionMap)
+    return Object.entries(map)
       .map(([region, count]) => ({ region, count }))
       .sort((a, b) => b.count - a.count);
-    
-    const topCountryDisplay = topCountry?.countryName || getCountryName(topCountry?.country) || topCountry?.country || 'N/A';
-    
-    return {
-      totalCountries: geoData.filter((g) => g.country !== 'Unknown').length,
-      topCountry: topCountryDisplay,
-      topCountryPercentage: total > 0 ? Math.round((topCountry?.count / total) * 100) : 0,
-      internationalPercentage: total > 0 ? Math.round(((total - (geoData[0]?.count || 0)) / total) * 100) : 0,
-      regionBreakdown,
-    };
-  }, [geoData]);
-
-  // Sync loading state with admin context
-  useEffect(() => {
-    setIsLoading(statsLoading);
-  }, [statsLoading, setIsLoading]);
-
-  if (statsLoading) {
-    return (
-      <div style={{ textAlign: 'center', padding: '60px', color: '#94a3b8' }}>
-        Loading geographic data...
-      </div>
-    );
-  }
+  }, [gd.topCountries]);
 
   return (
     <div>
-      <div style={{
-        marginBottom: '32px',
-        paddingBottom: '20px',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '16px',
-      }}>
-        <div>
-          <h2 style={{
-            margin: 0,
-            color: '#f8fafc',
-            fontSize: '24px',
-            fontWeight: '600',
-            letterSpacing: '-0.5px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-          }}>
-            <span style={{
-              width: '40px',
-              height: '40px',
-              background: 'linear-gradient(135deg, #6366f1, #a855f7)',
-              borderRadius: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '20px',
-            }}>🌍</span>
-            Geographic Analytics
-          </h2>
-          <p style={{
-            margin: '8px 0 0 0',
-            color: '#94a3b8',
-            fontSize: '14px'
-          }}>
-            Real-time viewer distribution across the globe
-          </p>
-        </div>
-        <div style={{
-          display: 'flex',
-          gap: '12px',
-          alignItems: 'center',
-        }}>
-          <div style={{
-            background: 'rgba(34, 197, 94, 0.1)',
-            border: '1px solid rgba(34, 197, 94, 0.3)',
-            borderRadius: '20px',
-            padding: '6px 14px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}>
-            <div style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              background: '#22c55e',
-              animation: 'pulse 2s ease-in-out infinite',
-            }} />
-            <span style={{ color: '#22c55e', fontSize: '13px', fontWeight: '500' }}>Live Data</span>
-          </div>
-        </div>
-      </div>
-      
-      <style jsx>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
-      `}</style>
+      <PageHeader title="Geographic Analytics" icon="🌍" subtitle="User distribution across the globe"
+        actions={<ConnectionBadge connected={geo.connected} />} />
 
-      {/* Metrics Cards */}
-      {metrics && (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '16px',
-          marginBottom: '24px'
-        }}>
-          <div style={{
-            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.05))',
-            border: '1px solid rgba(99, 102, 241, 0.2)',
-            borderRadius: '16px',
-            padding: '20px',
-            position: 'relative',
-            overflow: 'hidden',
-          }}>
-            <div style={{
-              position: 'absolute',
-              top: '-20px',
-              right: '-20px',
-              width: '80px',
-              height: '80px',
-              background: 'radial-gradient(circle, rgba(99, 102, 241, 0.2) 0%, transparent 70%)',
-              borderRadius: '50%',
-            }} />
-            <div style={{ color: '#a5b4fc', fontSize: '12px', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}>Countries</div>
-            <div style={{ fontSize: '32px', fontWeight: '700', color: '#f8fafc' }}>{metrics.totalCountries}</div>
-            <div style={{ color: '#64748b', fontSize: '13px', marginTop: '4px' }}>Unique locations</div>
-          </div>
-          <div style={{
-            background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.1), rgba(236, 72, 153, 0.05))',
-            border: '1px solid rgba(168, 85, 247, 0.2)',
-            borderRadius: '16px',
-            padding: '20px',
-            position: 'relative',
-            overflow: 'hidden',
-          }}>
-            <div style={{
-              position: 'absolute',
-              top: '-20px',
-              right: '-20px',
-              width: '80px',
-              height: '80px',
-              background: 'radial-gradient(circle, rgba(168, 85, 247, 0.2) 0%, transparent 70%)',
-              borderRadius: '50%',
-            }} />
-            <div style={{ color: '#c4b5fd', fontSize: '12px', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}>Top Country</div>
-            <div style={{ fontSize: '24px', fontWeight: '700', color: '#f8fafc' }}>{getCountryName(metrics.topCountry)}</div>
-            <div style={{ color: '#a855f7', fontSize: '14px', fontWeight: '600', marginTop: '4px' }}>{metrics.topCountryPercentage}% of viewers</div>
-          </div>
-          <div style={{
-            background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(16, 185, 129, 0.05))',
-            border: '1px solid rgba(34, 197, 94, 0.2)',
-            borderRadius: '16px',
-            padding: '20px',
-            position: 'relative',
-            overflow: 'hidden',
-          }}>
-            <div style={{
-              position: 'absolute',
-              top: '-20px',
-              right: '-20px',
-              width: '80px',
-              height: '80px',
-              background: 'radial-gradient(circle, rgba(34, 197, 94, 0.2) 0%, transparent 70%)',
-              borderRadius: '50%',
-            }} />
-            <div style={{ color: '#86efac', fontSize: '12px', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}>International</div>
-            <div style={{ fontSize: '32px', fontWeight: '700', color: '#f8fafc' }}>{metrics.internationalPercentage}%</div>
-            <div style={{ color: '#64748b', fontSize: '13px', marginTop: '4px' }}>Global reach</div>
-          </div>
-          <div style={{
-            background: 'linear-gradient(135deg, rgba(251, 146, 60, 0.1), rgba(245, 158, 11, 0.05))',
-            border: '1px solid rgba(251, 146, 60, 0.2)',
-            borderRadius: '16px',
-            padding: '20px',
-            position: 'relative',
-            overflow: 'hidden',
-          }}>
-            <div style={{
-              position: 'absolute',
-              top: '-20px',
-              right: '-20px',
-              width: '80px',
-              height: '80px',
-              background: 'radial-gradient(circle, rgba(251, 146, 60, 0.2) 0%, transparent 70%)',
-              borderRadius: '50%',
-            }} />
-            <div style={{ color: '#fdba74', fontSize: '12px', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}>Regions</div>
-            <div style={{ fontSize: '32px', fontWeight: '700', color: '#f8fafc' }}>{metrics.regionBreakdown.length}</div>
-            <div style={{ color: '#64748b', fontSize: '13px', marginTop: '4px' }}>Active zones</div>
-          </div>
-        </div>
-      )}
+      {/* Summary */}
+      <Grid cols="auto-fit" minWidth="180px" gap="16px">
+        <StatCard title="Countries" value={gd.topCountries.length} icon="🌍" color={colors.primary} />
+        <StatCard title="Cities" value={gd.topCities.length} icon="🏙️" color={colors.purple} />
+        <StatCard title="Active Now" value={gd.realtimeGeo.reduce((s, g) => s + g.count, 0)} icon="🟢" color={colors.success} pulse />
+        <StatCard title="Regions" value={regionBreakdown.length} icon="🗺️" color={colors.warning} />
+      </Grid>
 
-      {/* View Mode Toggle */}
-      <div style={{
-        display: 'flex',
-        gap: '8px',
-        marginBottom: '20px',
-        background: 'rgba(255, 255, 255, 0.02)',
-        padding: '6px',
-        borderRadius: '12px',
-        border: '1px solid rgba(255, 255, 255, 0.06)',
-        width: 'fit-content',
-      }}>
-        <button
-          onClick={() => setViewMode('list')}
-          style={{
-            padding: '10px 20px',
-            background: viewMode === 'list' ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'transparent',
-            border: 'none',
-            borderRadius: '8px',
-            color: viewMode === 'list' ? '#fff' : '#94a3b8',
-            cursor: 'pointer',
-            fontSize: '14px',
-            fontWeight: '500',
-            transition: 'all 0.2s ease',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          🗺️ World Map
-        </button>
-        <button
-          onClick={() => setViewMode('regions')}
-          style={{
-            padding: '10px 20px',
-            background: viewMode === 'regions' ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'transparent',
-            border: 'none',
-            borderRadius: '8px',
-            color: viewMode === 'regions' ? '#fff' : '#94a3b8',
-            cursor: 'pointer',
-            fontSize: '14px',
-            fontWeight: '500',
-            transition: 'all 0.2s ease',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          📊 By Region
-        </button>
+      <div style={{ marginTop: '24px' }}>
+        <TabSelector tabs={tabs} activeTab={activeTab} onChange={(id) => setActiveTab(id as TabId)} />
       </div>
 
-      {/* Content based on view mode */}
-      {viewMode === 'list' ? (
-        <WorldMap data={geoData} />
+      {geo.loading ? (
+        <LoadingState message="Loading geographic data..." />
+      ) : activeTab === 'countries' ? (
+        <CountriesTab countries={gd.topCountries} total={totalCountryUsers} regions={regionBreakdown} />
+      ) : activeTab === 'cities' ? (
+        <CitiesTab cities={gd.topCities} />
       ) : (
-        <div style={{
-          background: 'linear-gradient(135deg, rgba(10, 10, 20, 0.98), rgba(15, 15, 30, 0.95))',
-          border: '1px solid rgba(99, 102, 241, 0.2)',
-          borderRadius: '20px',
-          overflow: 'hidden',
-        }}>
-          <div style={{
-            padding: '20px 24px',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}>
-            <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '18px', fontWeight: '600' }}>
-              📊 Regional Distribution
-            </h3>
-            <span style={{ color: '#64748b', fontSize: '13px' }}>
-              {metrics?.regionBreakdown.length || 0} active regions
-            </span>
-          </div>
-          
-          <div style={{ padding: '24px' }}>
-            {metrics?.regionBreakdown && metrics.regionBreakdown.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {metrics.regionBreakdown.map((region, index) => {
-                  const total = metrics.regionBreakdown.reduce((sum, r) => sum + r.count, 0);
-                  const percentage = total > 0 ? (region.count / total) * 100 : 0;
-                  const colors = [
-                    'linear-gradient(90deg, #6366f1, #8b5cf6)',
-                    'linear-gradient(90deg, #a855f7, #d946ef)',
-                    'linear-gradient(90deg, #ec4899, #f43f5e)',
-                    'linear-gradient(90deg, #f97316, #eab308)',
-                    'linear-gradient(90deg, #22c55e, #10b981)',
-                    'linear-gradient(90deg, #06b6d4, #3b82f6)',
-                  ];
-                  const color = colors[index % colors.length];
-                  
-                  return (
-                    <div key={region.region} style={{
-                      background: 'rgba(255, 255, 255, 0.02)',
-                      border: '1px solid rgba(255, 255, 255, 0.06)',
-                      borderRadius: '12px',
-                      padding: '16px 20px',
-                      transition: 'all 0.2s ease',
-                    }}>
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: '12px',
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <span style={{
-                            width: '32px',
-                            height: '32px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            background: 'rgba(99, 102, 241, 0.1)',
-                            borderRadius: '8px',
-                            fontSize: '16px',
-                          }}>
-                            {getRegionEmoji(region.region)}
-                          </span>
-                          <span style={{ color: '#f8fafc', fontWeight: '600', fontSize: '15px' }}>{region.region}</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                          <span style={{ color: '#f8fafc', fontWeight: '700', fontSize: '18px' }}>
-                            {region.count.toLocaleString()}
-                          </span>
-                          <span style={{
-                            background: 'rgba(99, 102, 241, 0.1)',
-                            padding: '4px 10px',
-                            borderRadius: '12px',
-                            color: '#a5b4fc',
-                            fontSize: '13px',
-                            fontWeight: '600',
-                          }}>
-                            {Math.round(percentage)}%
-                          </span>
-                        </div>
-                      </div>
-                      <div style={{
-                        height: '8px',
-                        background: 'rgba(255, 255, 255, 0.05)',
-                        borderRadius: '4px',
-                        overflow: 'hidden',
-                      }}>
-                        <div style={{
-                          height: '100%',
-                          width: `${percentage}%`,
-                          background: color,
-                          borderRadius: '4px',
-                          transition: 'width 0.5s ease',
-                          boxShadow: '0 0 10px rgba(99, 102, 241, 0.3)',
-                        }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '60px 40px', color: '#64748b' }}>
-                <div style={{
-                  width: '80px',
-                  height: '80px',
-                  margin: '0 auto 24px auto',
-                  background: 'linear-gradient(135deg, #6366f1, #a855f7)',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 0 40px rgba(99, 102, 241, 0.4)',
-                }}>
-                  <span style={{ fontSize: '36px' }}>🗺️</span>
-                </div>
-                <h4 style={{ color: '#f8fafc', margin: '0 0 8px 0' }}>No Regional Data Yet</h4>
-                <p style={{ margin: 0, fontSize: '14px' }}>Geographic data will appear as users watch content</p>
-              </div>
-            )}
-          </div>
-        </div>
+        <RealtimeTab realtimeGeo={gd.realtimeGeo} />
       )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Countries Tab                                                      */
+/* ------------------------------------------------------------------ */
+
+function CountriesTab({
+  countries,
+  total,
+  regions,
+}: {
+  countries: Array<{ country: string; name: string; count: number }>;
+  total: number;
+  regions: Array<{ region: string; count: number }>;
+}) {
+  if (countries.length === 0) {
+    return <EmptyState icon="🌍" title="No Geographic Data" message="Country data will appear as users visit the site" />;
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <Grid cols={2} gap="20px">
+        <Card title="Top Countries" icon="🌍">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {countries.slice(0, 12).map((c) => {
+              const pct = getPercentage(c.count, total);
+              return (
+                <div key={c.country}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ color: colors.text.primary }}>{c.name || c.country}</span>
+                    <span style={{ color: colors.text.muted }}>{formatNumber(c.count)} ({pct}%)</span>
+                  </div>
+                  <ProgressBar value={c.count} max={total} gradient={gradients.primary} height={6} />
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+
+        <Card title="Regional Distribution" icon="🗺️">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            {regions.map((r) => {
+              const pct = getPercentage(r.count, total);
+              return (
+                <div key={r.region}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ color: colors.text.primary }}>{r.region}</span>
+                    <span style={{ color: colors.text.muted }}>{formatNumber(r.count)} ({pct}%)</span>
+                  </div>
+                  <ProgressBar value={r.count} max={total} gradient={gradients.purple} height={6} />
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      </Grid>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Cities Tab                                                         */
+/* ------------------------------------------------------------------ */
+
+function CitiesTab({ cities }: { cities: Array<{ city: string; country: string; name: string; count: number }> }) {
+  if (cities.length === 0) {
+    return <EmptyState icon="🏙️" title="No City Data" message="City data will appear as users visit the site" />;
+  }
+
+  const total = cities.reduce((s, c) => s + c.count, 0);
+
+  return (
+    <Card title="Top Cities" icon="🏙️">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {cities.slice(0, 15).map((c) => {
+          const pct = getPercentage(c.count, total);
+          return (
+            <div key={`${c.city}-${c.country}`}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span style={{ color: colors.text.primary }}>
+                  {c.city}{' '}
+                  <span style={{ color: colors.text.muted, fontSize: '12px' }}>({c.name || c.country})</span>
+                </span>
+                <span style={{ color: colors.text.muted }}>{formatNumber(c.count)} ({pct}%)</span>
+              </div>
+              <ProgressBar value={c.count} max={total} gradient={gradients.success} height={6} />
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Real-time Tab (active users overlay)                               */
+/* ------------------------------------------------------------------ */
+
+function RealtimeTab({ realtimeGeo }: { realtimeGeo: Array<{ country: string; name: string; count: number }> }) {
+  if (realtimeGeo.length === 0) {
+    return <EmptyState icon="🟢" title="No Active Users" message="Real-time geographic data will appear when users are online" />;
+  }
+
+  return (
+    <Card title="Currently Active By Location" icon="🟢">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {realtimeGeo.slice(0, 15).map((loc) => (
+          <div key={loc.country} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+            <span style={{ color: colors.text.primary, fontSize: '14px' }}>{loc.name || loc.country}</span>
+            <span style={{ color: colors.success, fontWeight: '600', fontSize: '14px' }}>{loc.count} online</span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Shared                                                             */
+/* ------------------------------------------------------------------ */
+
+function ConnectionBadge({ connected }: { connected: boolean }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: '12px',
+      background: connected ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)',
+      border: `1px solid ${connected ? 'rgba(16,185,129,0.2)' : 'rgba(245,158,11,0.2)'}`,
+      fontSize: '11px', color: connected ? colors.success : colors.warning,
+    }}>
+      <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: connected ? colors.success : colors.warning }} />
+      {connected ? 'Live' : 'Polling'}
     </div>
   );
 }

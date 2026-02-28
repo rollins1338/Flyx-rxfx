@@ -122,7 +122,7 @@ function RelatedContentSection({
           >
             {items.map((item) => (
               <div
-                key={item.id}
+                key={`${item.mediaType || 'content'}-${item.id}`}
                 onClick={() => onItemSelect(String(item.id))}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
@@ -516,35 +516,7 @@ export default function DetailsPageClient({
         });
       }
       
-      // Try to fetch from API for more accurate server-side data
-      try {
-        const userId = localStorage.getItem('flyx_user_id');
-        console.log('[DetailsPage] Fetching watch sessions for userId:', userId?.substring(0, 8), 'contentId:', content.id);
-        if (userId) {
-          const response = await fetch(
-            `/api/analytics/watch-session?userId=${userId}&contentId=${content.id}&limit=100`
-          );
-          if (response.ok) {
-            const data = await response.json();
-            console.log('[DetailsPage] Watch sessions response:', data);
-            if (data.sessions && Array.isArray(data.sessions)) {
-              data.sessions.forEach((session: any) => {
-                // Check if this session is for the current season
-                if (session.season_number === seasonNumber && session.episode_number) {
-                  const episodeNum = session.episode_number;
-                  const progress = session.completion_percentage || 0;
-                  console.log(`[DetailsPage] Found progress for S${seasonNumber}E${episodeNum}: ${progress}%`);
-                  // Use the higher progress value (local or server)
-                  progressMap[episodeNum] = Math.max(progressMap[episodeNum] || 0, progress);
-                }
-              });
-            }
-          }
-        }
-      } catch (apiErr) {
-        // API fetch failed, use localStorage data only
-        console.log('Using localStorage progress only:', apiErr);
-      }
+      // Local-first: all watch progress is in Local_Store, no server fetch needed
       
       console.log('[DetailsPage] Final progress map:', progressMap);
       setEpisodeProgress(progressMap);

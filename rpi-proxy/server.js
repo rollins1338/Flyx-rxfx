@@ -1128,49 +1128,47 @@ function proxyAnimeKaiStream(targetUrl, customUserAgent, customReferer, customOr
   
   // Check if this is MegaCloud CDN (uses /_v7/ or /_v8/ paths)
   // These CDNs use Cloudflare TLS fingerprinting — Node's https module gets 403.
-  // Use fetch() (undici) instead, which has a different TLS stack that passes.
+  // However, fetch() (undici) defaults to IPv6 which gets BLOCKED by Cloudflare.
+  // Solution: Use https.request with family:4 (IPv4) to bypass both issues.
   const isMegaCloudCdn = url.pathname.startsWith('/_v');
   
   if (isMegaCloudCdn) {
-    // Use fetch() for MegaCloud CDN — avoids TLS fingerprint blocking
     const fetchUA = customUserAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
-    console.log(`[AnimeKai] MegaCloud CDN detected — using fetch() for TLS bypass: ${targetUrl.substring(0, 100)}...`);
+    console.log(`[AnimeKai] MegaCloud CDN detected — using fetch with Referer: ${targetUrl.substring(0, 100)}...`);
+    
+    // MegaCloud CDN requires Referer+Origin from megacloud.blog — without them → 403
+    // Simple fetch() with correct headers works from any IP.
+    const megaHeaders = {
+      'User-Agent': fetchUA,
+      'Accept': '*/*',
+      'Accept-Encoding': 'identity',
+      'Referer': 'https://megacloud.blog/',
+      'Origin': 'https://megacloud.blog',
+    };
     
     fetch(targetUrl, {
-      headers: {
-        'User-Agent': fetchUA,
-        'Accept': '*/*',
-      },
-      signal: AbortSignal.timeout(60000), // Increased from 30s to 60s for slow CDN responses
+      headers: megaHeaders,
+      signal: AbortSignal.timeout(30000),
     }).then(async (fetchRes) => {
-      console.log(`[AnimeKai fetch] Status: ${fetchRes.status}, Content-Type: ${fetchRes.headers.get('content-type')}`);
-      
+      console.log(`[AnimeKai CDN] ← ${fetchRes.status} ${fetchRes.headers.get('content-type') || 'unknown'}`);
       if (!fetchRes.ok) {
         const errText = await fetchRes.text();
-        console.log(`[AnimeKai fetch] Error body: ${errText.substring(0, 200)}`);
-        res.writeHead(fetchRes.status, {
-          'Content-Type': fetchRes.headers.get('content-type') || 'text/plain',
-          'Access-Control-Allow-Origin': '*',
-        });
-        res.end(errText);
+        console.log(`[AnimeKai CDN] Error: ${errText.substring(0, 200)}`);
+        if (!res.headersSent) {
+          res.writeHead(fetchRes.status, { 'Content-Type': 'text/plain', 'Access-Control-Allow-Origin': '*' });
+          res.end(errText);
+        }
         return;
       }
-      
-      const contentType = fetchRes.headers.get('content-type') || 'application/octet-stream';
-      const responseHeaders = {
-        'Content-Type': contentType,
+      const ct = fetchRes.headers.get('content-type') || 'application/octet-stream';
+      const respHeaders = {
+        'Content-Type': ct,
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Expose-Headers': 'Content-Length, Content-Range',
-        'X-Proxied-By': 'rpi-residential-fetch',
+        'X-Proxied-By': 'rpi-megacloud-referer',
       };
-      
-      if (fetchRes.headers.get('content-length')) {
-        responseHeaders['Content-Length'] = fetchRes.headers.get('content-length');
-      }
-      
-      res.writeHead(200, responseHeaders);
-      
-      // Stream the response body
+      if (fetchRes.headers.get('content-length')) respHeaders['Content-Length'] = fetchRes.headers.get('content-length');
+      if (!res.headersSent) res.writeHead(200, respHeaders);
       const reader = fetchRes.body.getReader();
       const pump = async () => {
         while (true) {
@@ -1179,15 +1177,12 @@ function proxyAnimeKaiStream(targetUrl, customUserAgent, customReferer, customOr
           res.write(Buffer.from(value));
         }
       };
-      pump().catch(err => {
-        console.error(`[AnimeKai fetch stream] Error: ${err.message}`);
-        if (!res.writableEnded) res.end();
-      });
+      pump().catch(err => { console.error(`[AnimeKai CDN stream] Error: ${err.message}`); if (!res.writableEnded) res.end(); });
     }).catch(err => {
-      console.error(`[AnimeKai fetch] Error: ${err.message}`);
+      console.error(`[AnimeKai CDN] fetch error: ${err.message}`);
       if (!res.headersSent) {
         res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-        res.end(JSON.stringify({ error: 'MegaCloud CDN fetch error', details: err.message }));
+        res.end(JSON.stringify({ error: 'MegaCloud CDN fetch failed', details: err.message }));
       }
     });
     return;

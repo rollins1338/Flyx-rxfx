@@ -4,8 +4,6 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { MediaItem } from '@/types/media';
-import { Navigation } from '@/components/layout/Navigation';
-import { Footer } from '@/components/layout/Footer';
 import { PageTransition } from '@/components/layout/PageTransition';
 import { useAnalytics } from '@/components/analytics/AnalyticsProvider';
 import { usePresenceContext } from '@/components/analytics/PresenceProvider';
@@ -451,7 +449,6 @@ export default function SearchPageClient({
   return (
     <PageTransition>
       <div className="min-h-screen bg-black text-white">
-        <Navigation onSearch={setQuery} />
 
         <div className="pt-24 px-4 lg:px-8 max-w-[1920px] mx-auto">
           <div className="flex flex-col lg:flex-row gap-8">
@@ -598,7 +595,6 @@ export default function SearchPageClient({
           </div>
         </div>
       </div>
-      <Footer />
     </PageTransition>
   );
 }

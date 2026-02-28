@@ -43,7 +43,10 @@ if (typeof window === 'undefined') {
   (global as any).navigator = {
     doNotTrack: '0',
   };
+  const originalCrypto = globalThis.crypto;
   (global as any).crypto = {
     randomUUID: () => 'test-uuid-' + Math.random().toString(36).substring(7),
+    subtle: originalCrypto?.subtle,
+    getRandomValues: originalCrypto?.getRandomValues?.bind(originalCrypto),
   };
 }

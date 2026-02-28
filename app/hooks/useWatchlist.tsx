@@ -21,8 +21,8 @@ export interface WatchlistItem {
 interface WatchlistContextType {
   items: WatchlistItem[];
   addToWatchlist: (item: MediaItem) => void;
-  removeFromWatchlist: (id: number | string) => void;
-  isInWatchlist: (id: number | string) => boolean;
+  removeFromWatchlist: (id: number | string, mediaType?: 'movie' | 'tv') => void;
+  isInWatchlist: (id: number | string, mediaType?: 'movie' | 'tv') => boolean;
   clearWatchlist: () => void;
 }
 
@@ -132,16 +132,24 @@ export function WatchlistProvider({ children }: { children: ReactNode }) {
     };
 
     setItems(prev => {
-      if (prev.some(i => i.id === item.id)) return prev;
+      if (prev.some(i => i.id === item.id && i.mediaType === mediaTypeValue)) return prev;
       return [watchlistItem, ...prev];
     });
   }, []);
 
-  const removeFromWatchlist = useCallback((id: number | string) => {
-    setItems(prev => prev.filter(item => item.id !== id));
+  const removeFromWatchlist = useCallback((id: number | string, mediaType?: 'movie' | 'tv') => {
+    setItems(prev => prev.filter(item => {
+      if (mediaType) {
+        return !(item.id === id && item.mediaType === mediaType);
+      }
+      return item.id !== id;
+    }));
   }, []);
 
-  const isInWatchlist = useCallback((id: number | string) => {
+  const isInWatchlist = useCallback((id: number | string, mediaType?: 'movie' | 'tv') => {
+    if (mediaType) {
+      return items.some(item => item.id === id && item.mediaType === mediaType);
+    }
     return items.some(item => item.id === id);
   }, [items]);
 

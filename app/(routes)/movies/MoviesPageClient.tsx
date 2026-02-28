@@ -4,8 +4,6 @@ import { useCallback, useRef, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import type { MediaItem } from '@/types/media';
-import { Navigation } from '@/components/layout/Navigation';
-import { Footer } from '@/components/layout/Footer';
 import { PageTransition } from '@/components/layout/PageTransition';
 import { useAnalytics } from '@/components/analytics/AnalyticsProvider';
 import { usePresenceContext } from '@/components/analytics/PresenceProvider';
@@ -50,6 +48,7 @@ export default function MoviesPageClient() {
   const { region } = useRegion();
   const [data, setData] = useState<MoviesData>(initialData);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Track browsing activity - run once on mount
   useEffect(() => {
@@ -59,30 +58,48 @@ export default function MoviesPageClient() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    async function fetchData() {
-      setLoading(true);
+    let cancelled = false;
+
+    async function fetchData(attempt = 1) {
+      if (attempt === 1) setLoading(true);
+      setError(null);
       try {
         const res = await fetch(`/api/content/movies?region=${region.code}`);
+        if (cancelled) return;
         if (res.ok) {
           const json = await res.json();
-          setData(json);
+          if (!json.error) {
+            setData(json);
+          } else {
+            throw new Error(json.error);
+          }
+        } else if (res.status === 429 && attempt < 3) {
+          // Rate limited - retry with backoff
+          await new Promise(r => setTimeout(r, attempt * 2000));
+          if (!cancelled) return fetchData(attempt + 1);
+        } else {
+          throw new Error(`HTTP ${res.status}`);
         }
-      } catch (error) {
-        console.error('Failed to fetch movies:', error);
+      } catch (err) {
+        if (cancelled) return;
+        console.error('Failed to fetch movies:', err);
+        if (attempt < 3) {
+          await new Promise(r => setTimeout(r, attempt * 1500));
+          if (!cancelled) return fetchData(attempt + 1);
+        }
+        setError('Failed to load movies. Please try refreshing the page.');
       }
-      setLoading(false);
+      if (!cancelled) setLoading(false);
     }
     fetchData();
+
+    return () => { cancelled = true; };
   }, [region.code]);
 
   const handleContentClick = useCallback((item: MediaItem, source: string) => {
     trackEvent('content_clicked', { content_id: item.id, source });
     router.push(`/details/${item.id}?type=movie`);
   }, [router, trackEvent]);
-
-  const handleSearch = useCallback((query: string) => {
-    if (query.trim()) router.push(`/search?q=${encodeURIComponent(query)}`);
-  }, [router]);
 
   const handleSeeAll = useCallback((filter: string, genre?: string) => {
     const params = new URLSearchParams({ type: 'movie' });
@@ -95,7 +112,6 @@ export default function MoviesPageClient() {
   return (
     <PageTransition>
       <div className="min-h-screen bg-[#0a0a0f] overflow-x-hidden flex flex-col">
-        <Navigation onSearch={handleSearch} />
         
         {/* Cinematic Hero */}
         <section className="relative pt-20 md:pt-24 pb-12 md:pb-16 overflow-hidden">
@@ -155,8 +171,21 @@ export default function MoviesPageClient() {
         {/* Spacer to push footer down while loading */}
         {loading && <div className="flex-grow" />}
 
+        {/* Error State */}
+        {!loading && error && (
+          <div className="flex-grow flex items-center justify-center px-4">
+            <div className="text-center py-20">
+              <div className="text-5xl mb-4">😕</div>
+              <p className="text-gray-400 text-lg mb-4">{error}</p>
+              <button onClick={() => window.location.reload()} className="px-6 py-2.5 bg-amber-500/20 border border-amber-500/30 rounded-full text-amber-400 text-sm font-medium hover:bg-amber-500/30 transition-colors">
+                Try Again
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Content Sections */}
-        {!loading && (
+        {!loading && !error && (
           <main className="pb-20 space-y-2 flex-grow">
             <ContentRow title="🔥 Popular Now" data={data.popular} onItemClick={handleContentClick} onSeeAll={() => handleSeeAll('popular')} accentColor="amber" />
             <ContentRow title="🎬 Now Playing" data={data.nowPlaying} onItemClick={handleContentClick} onSeeAll={() => handleSeeAll('now_playing')} accentColor="amber" />
@@ -175,8 +204,6 @@ export default function MoviesPageClient() {
             <ContentRow title="📹 Documentary" data={data.documentary} onItemClick={handleContentClick} onSeeAll={() => handleSeeAll('', '99')} accentColor="gray" />
           </main>
         )}
-
-        <Footer />
       </div>
     </PageTransition>
   );
@@ -224,7 +251,7 @@ function ContentRow({ title, data, onItemClick, onSeeAll, accentColor = 'amber' 
         </div>
         <div ref={scrollRef} className="flex gap-3 md:gap-4 overflow-x-auto scrollbar-hide pb-3 md:pb-4 -mx-1 px-1 md:-mx-2 md:px-2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }} data-tv-scroll-container="true" data-tv-group={`movies-${title.toLowerCase().replace(/[^a-z]/g, '')}`}>
           {data.items.map((item, index) => (
-            <motion.div key={item.id} initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true, margin: '-50px' }} transition={{ delay: Math.min(index * 0.03, 0.3) }} whileTap={{ scale: 0.95 }} onClick={() => onItemClick(item, title)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onItemClick(item, title); } }} className="flex-shrink-0 w-[120px] sm:w-32 md:w-36 lg:w-44 cursor-pointer group" data-tv-focusable="true" tabIndex={0} role="button" aria-label={item.title || item.name || ''}>
+            <motion.div key={`${item.mediaType || 'movie'}-${item.id}`} initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true, margin: '-50px' }} transition={{ delay: Math.min(index * 0.03, 0.3) }} whileTap={{ scale: 0.95 }} onClick={() => onItemClick(item, title)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onItemClick(item, title); } }} className="flex-shrink-0 w-[120px] sm:w-32 md:w-36 lg:w-44 cursor-pointer group" data-tv-focusable="true" tabIndex={0} role="button" aria-label={item.title || item.name || ''}>
               <motion.div whileHover={{ scale: 1.05, y: -8 }} whileTap={{ scale: 0.97 }} transition={{ type: 'spring', stiffness: 300, damping: 20 }} className="relative rounded-lg md:rounded-xl overflow-hidden bg-gray-900 shadow-lg group-hover:shadow-xl transition-shadow">
                 <img src={item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : '/placeholder-poster.jpg'} alt={item.title || item.name || ''} className="w-full aspect-[2/3] object-cover" loading="lazy" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-0 group-hover:opacity-100 md:transition-opacity md:duration-300" />

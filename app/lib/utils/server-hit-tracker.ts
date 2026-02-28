@@ -14,46 +14,13 @@ interface ServerHitData {
 
 /**
  * Track a server-side hit (for use in server components)
- * This is a fire-and-forget function that won't block rendering
+ * 
+ * NOTE: The analytics API routes have been removed as part of the local-first
+ * migration. Server-side hit tracking is no longer supported — client-side
+ * tracking via Local_Tracker handles all analytics.
  */
-export async function trackServerHit(data: ServerHitData): Promise<void> {
-  try {
-    const headersList = await headers();
-    const userAgent = headersList.get('user-agent') || '';
-    const referer = headersList.get('referer');
-    
-    // Skip tracking for known browser requests that will be tracked client-side
-    // Only track bots, API clients, and non-JS requests
-    const isBrowser = userAgent.toLowerCase().includes('mozilla') && 
-                      !userAgent.toLowerCase().includes('bot') &&
-                      !userAgent.toLowerCase().includes('crawler');
-    
-    if (isBrowser) {
-      // Browser requests will be tracked by client-side analytics
-      return;
-    }
-    
-    // Use internal API to track the hit
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    
-    // Fire and forget - don't await
-    fetch(`${baseUrl}/api/analytics/server-hit`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': userAgent,
-        ...(referer ? { 'Referer': referer } : {}),
-      },
-      body: JSON.stringify({
-        pagePath: data.pagePath,
-        id: data.id,
-      }),
-    }).catch(() => {
-      // Silently fail - don't break the page
-    });
-  } catch {
-    // Silently fail
-  }
+export async function trackServerHit(_data: ServerHitData): Promise<void> {
+  // No-op: analytics API routes removed in local-first migration
 }
 
 /**

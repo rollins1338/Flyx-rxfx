@@ -2,8 +2,6 @@
 
 import { useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Navigation } from '@/components/layout/Navigation';
-import { Footer } from '@/components/layout/Footer';
 import { PageTransition } from '@/components/layout/PageTransition';
 import { useAnalytics } from '@/components/analytics/AnalyticsProvider';
 
@@ -17,7 +15,6 @@ export default function AboutPageClient() {
   return (
     <PageTransition>
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900">
-        <Navigation />
         
         {/* Hero Section */}
         <section className="pt-24 pb-16 px-6">
@@ -278,8 +275,6 @@ export default function AboutPageClient() {
 
           </div>
         </main>
-
-        <Footer />
       </div>
     </PageTransition>
   );

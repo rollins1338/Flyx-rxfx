@@ -3,17 +3,21 @@
 /**
  * Unified Stats Bar
  * Displays consistent real-time stats across all admin pages
- * Uses the StatsContext for single source of truth
- * Enhanced with responsive design and accessibility features
+ * Uses slice contexts (RealtimeSlice + UserSlice + ContentSlice) for SSE-based data
  */
 
-import { useStats } from '../context/StatsContext';
+import { useRealtimeSlice, useUserSlice, useContentSlice } from '../context/slices';
 import { useState, useEffect } from 'react';
 import AccessibleButton from './AccessibleButton';
 
 export default function UnifiedStatsBar() {
-  const { stats, loading, lastRefresh, refresh } = useStats();
+  const realtime = useRealtimeSlice();
+  const users = useUserSlice();
+  const content = useContentSlice();
   const [isMobile, setIsMobile] = useState(false);
+
+  const loading = realtime.loading && users.loading;
+  const lastUpdate = realtime.lastUpdate || users.lastUpdate;
 
   useEffect(() => {
     const checkScreenSize = () => {
@@ -55,15 +59,15 @@ export default function UnifiedStatsBar() {
         role="group"
         aria-label="Current statistics"
       >
-        {/* Live Users - shows total active (2-min window) */}
+        {/* Live Users */}
         <StatItem
           icon="🟢"
           label="On Site"
-          value={stats.liveUsers}
+          value={realtime.data.liveUsers}
           loading={loading}
-          pulse={stats.liveUsers > 0}
+          pulse={realtime.data.liveUsers > 0}
           color="#10b981"
-          subtitle={stats.liveWatching > 0 ? `${stats.liveWatching} watching` : undefined}
+          subtitle={realtime.data.watching > 0 ? `${realtime.data.watching} watching` : undefined}
           priority={1}
           isMobile={isMobile}
         />
@@ -72,19 +76,19 @@ export default function UnifiedStatsBar() {
         <StatItem
           icon="📊"
           label="Today (DAU)"
-          value={stats.activeToday}
+          value={users.data.dau}
           loading={loading}
           color="#7877c6"
           priority={2}
           isMobile={isMobile}
         />
         
-        {/* WAU - Hide on mobile to save space */}
+        {/* WAU - Hide on mobile */}
         {!isMobile && (
           <StatItem
             icon="📈"
             label="This Week"
-            value={stats.activeThisWeek}
+            value={users.data.wau}
             loading={loading}
             color="#f59e0b"
             priority={3}
@@ -96,29 +100,28 @@ export default function UnifiedStatsBar() {
         <StatItem
           icon="▶️"
           label={isMobile ? "Sessions" : "Sessions (24h)"}
-          value={stats.totalSessions}
+          value={content.data.totalSessions}
           loading={loading}
           color="#3b82f6"
           priority={4}
           isMobile={isMobile}
         />
         
-        {/* Watch Time - show in hours as float, hide on mobile */}
+        {/* Watch Time - hide on mobile */}
         {!isMobile && (
           <StatItem
             icon="⏱️"
             label="Watch Time (24h)"
-            value={`${(stats.totalWatchTime / 60).toFixed(1)}h`}
+            value={`${(content.data.totalWatchTime / 60).toFixed(1)}h`}
             loading={loading}
             color="#ec4899"
-            subtitle={stats.allTimeWatchTime > 0 ? `All time: ${(stats.allTimeWatchTime / 60).toFixed(1)}h` : undefined}
             priority={5}
             isMobile={isMobile}
           />
         )}
       </div>
 
-      {/* Right side - Last updated & refresh */}
+      {/* Right side - Last updated */}
       <div 
         style={{ 
           display: 'flex', 
@@ -138,39 +141,36 @@ export default function UnifiedStatsBar() {
             }}
             aria-live="polite"
           >
-            {lastRefresh 
-              ? `Updated ${lastRefresh.toLocaleTimeString()}`
+            {lastUpdate 
+              ? `Updated ${new Date(lastUpdate).toLocaleTimeString()}`
               : 'Loading...'
             }
           </span>
         )}
-        <AccessibleButton
-          onClick={refresh}
-          disabled={loading}
-          variant="ghost"
-          size="sm"
-          ariaLabel="Refresh statistics data"
+        <span
           style={{
-            padding: '6px 12px',
-            background: 'rgba(255, 255, 255, 0.05)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            borderRadius: '6px',
-            color: '#94a3b8',
-            fontSize: '12px',
-            minHeight: '32px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '4px 10px',
+            borderRadius: '12px',
+            fontSize: '11px',
+            fontWeight: '500',
+            background: realtime.connected ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)',
+            color: realtime.connected ? '#10b981' : '#f59e0b',
+            border: `1px solid ${realtime.connected ? 'rgba(16,185,129,0.2)' : 'rgba(245,158,11,0.2)'}`,
           }}
+          role="status"
+          aria-label={realtime.connected ? 'Real-time connected' : 'Polling fallback'}
         >
-          <span 
-            style={{ 
-              display: 'inline-block',
-              animation: loading ? 'spin 1s linear infinite' : 'none'
-            }}
-            aria-hidden="true"
-          >
-            🔄
-          </span>
-          {!isMobile && 'Refresh'}
-        </AccessibleButton>
+          <span style={{
+            width: '6px',
+            height: '6px',
+            borderRadius: '50%',
+            background: realtime.connected ? '#10b981' : '#f59e0b',
+          }} />
+          {realtime.connected ? 'Live' : 'Polling'}
+        </span>
       </div>
 
       <style jsx>{`
@@ -208,7 +208,6 @@ function StatItem({
   priority?: number;
   isMobile?: boolean;
 }) {
-  // Hide lower priority items on mobile
   if (isMobile && priority > 4) {
     return null;
   }

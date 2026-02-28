@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchTMDBData } from '@/app/lib/services/tmdb';
 
+// Fetch with graceful fallback - individual failures don't break the whole page
+async function safeFetch(endpoint: string, params: Record<string, string>): Promise<any> {
+  try {
+    return await fetchTMDBData(endpoint, params);
+  } catch (error) {
+    console.warn(`[Movies API] Failed to fetch ${endpoint}:`, error);
+    return { results: [], total_results: 0 };
+  }
+}
+
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const region = searchParams.get('region') || '';
 
   try {
-    // For origin country filtering, we MUST use /discover endpoint with with_origin_country
-    // The /movie/popular etc. endpoints don't support origin country filtering
     const regionParam: Record<string, string> = region ? { with_origin_country: region } : {};
 
     const [
@@ -16,33 +24,32 @@ export async function GET(request: NextRequest) {
       thriller, romance, drama, documentary,
       fantasy, mystery, adventure, family
     ] = await Promise.all([
-      // Use discover for all categories when region is specified to filter by origin country
       region 
-        ? fetchTMDBData('/discover/movie', { sort_by: 'popularity.desc', ...regionParam })
-        : fetchTMDBData('/movie/popular', { page: '1' }),
+        ? safeFetch('/discover/movie', { sort_by: 'popularity.desc', ...regionParam })
+        : safeFetch('/movie/popular', { page: '1' }),
       region
-        ? fetchTMDBData('/discover/movie', { sort_by: 'vote_average.desc', 'vote_count.gte': '200', ...regionParam })
-        : fetchTMDBData('/movie/top_rated', { page: '1' }),
+        ? safeFetch('/discover/movie', { sort_by: 'vote_average.desc', 'vote_count.gte': '200', ...regionParam })
+        : safeFetch('/movie/top_rated', { page: '1' }),
       region
-        ? fetchTMDBData('/discover/movie', { 
+        ? safeFetch('/discover/movie', { 
             sort_by: 'popularity.desc',
             'primary_release_date.gte': new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0],
             'primary_release_date.lte': new Date().toISOString().split('T')[0],
             ...regionParam 
           })
-        : fetchTMDBData('/movie/now_playing', { page: '1' }),
-      fetchTMDBData('/discover/movie', { with_genres: '28', sort_by: 'popularity.desc', ...regionParam }),
-      fetchTMDBData('/discover/movie', { with_genres: '35', sort_by: 'popularity.desc', ...regionParam }),
-      fetchTMDBData('/discover/movie', { with_genres: '27', sort_by: 'popularity.desc', ...regionParam }),
-      fetchTMDBData('/discover/movie', { with_genres: '878', sort_by: 'popularity.desc', ...regionParam }),
-      fetchTMDBData('/discover/movie', { with_genres: '53', sort_by: 'popularity.desc', ...regionParam }),
-      fetchTMDBData('/discover/movie', { with_genres: '10749', sort_by: 'popularity.desc', ...regionParam }),
-      fetchTMDBData('/discover/movie', { with_genres: '18', sort_by: 'popularity.desc', ...regionParam }),
-      fetchTMDBData('/discover/movie', { with_genres: '99', sort_by: 'popularity.desc', ...regionParam }),
-      fetchTMDBData('/discover/movie', { with_genres: '14', sort_by: 'popularity.desc', ...regionParam }),
-      fetchTMDBData('/discover/movie', { with_genres: '9648', sort_by: 'popularity.desc', ...regionParam }),
-      fetchTMDBData('/discover/movie', { with_genres: '12', sort_by: 'popularity.desc', ...regionParam }),
-      fetchTMDBData('/discover/movie', { with_genres: '10751', sort_by: 'popularity.desc', ...regionParam }),
+        : safeFetch('/movie/now_playing', { page: '1' }),
+      safeFetch('/discover/movie', { with_genres: '28', sort_by: 'popularity.desc', ...regionParam }),
+      safeFetch('/discover/movie', { with_genres: '35', sort_by: 'popularity.desc', ...regionParam }),
+      safeFetch('/discover/movie', { with_genres: '27', sort_by: 'popularity.desc', ...regionParam }),
+      safeFetch('/discover/movie', { with_genres: '878', sort_by: 'popularity.desc', ...regionParam }),
+      safeFetch('/discover/movie', { with_genres: '53', sort_by: 'popularity.desc', ...regionParam }),
+      safeFetch('/discover/movie', { with_genres: '10749', sort_by: 'popularity.desc', ...regionParam }),
+      safeFetch('/discover/movie', { with_genres: '18', sort_by: 'popularity.desc', ...regionParam }),
+      safeFetch('/discover/movie', { with_genres: '99', sort_by: 'popularity.desc', ...regionParam }),
+      safeFetch('/discover/movie', { with_genres: '14', sort_by: 'popularity.desc', ...regionParam }),
+      safeFetch('/discover/movie', { with_genres: '9648', sort_by: 'popularity.desc', ...regionParam }),
+      safeFetch('/discover/movie', { with_genres: '12', sort_by: 'popularity.desc', ...regionParam }),
+      safeFetch('/discover/movie', { with_genres: '10751', sort_by: 'popularity.desc', ...regionParam }),
     ]);
 
     const addMediaType = (items: any[]) => items?.map((item: any) => ({ ...item, mediaType: 'movie' })) || [];

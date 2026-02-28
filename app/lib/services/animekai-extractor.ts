@@ -9,9 +9,9 @@
  * - MAL IDs are unique identifiers that don't change
  * - Avoids issues with title variations (e.g., "JJK" vs "Jujutsu Kaisen")
  * 
- * *** FULLY NATIVE - NO enc-dec.app DEPENDENCY! ***
+ * *** MegaUp decryption uses enc-dec.app API ***
  * - AnimeKai crypto: Native implementation (183 substitution tables)
- * - MegaUp decryption: Native implementation (pre-computed keystream)
+ * - MegaUp decryption: enc-dec.app API (keystream is video-specific, native XOR impossible)
  * 
  * Flow:
  * 1. Determine MAL ID (from parameter or TMDB → MAL lookup via ARM API)
@@ -746,7 +746,7 @@ async function searchAnimeKaiByTitle(query: string): Promise<{ content_id: strin
 
     // Extract anime_id from syncData
     let kaiId: string | null = null;
-    const syncDataMatch = watchHtml.match(/<script[^>]*id="syncData"[^>]*type="application\/json"[^>]*>([\s\S]*?)<\/script>/i);
+    const syncDataMatch = watchHtml.match(/<script[^>]*id="syncData"[^>]*>([\s\S]*?)<\/script>/i);
     if (syncDataMatch) {
       try {
         const syncData = JSON.parse(syncDataMatch[1]);
@@ -807,9 +807,8 @@ async function searchAnimeKai(query: string, malId?: number | null): Promise<{ c
       return malResult;
     }
     
-    // Try alternative search queries if the first one failed
-    // This handles cases where the title doesn't match AnimeKai's naming
-    const alternativeQueries = generateAlternativeSearchQueries(query);
+    // Try a limited set of alternative search queries (max 3 to avoid excessive requests)
+    const alternativeQueries = generateAlternativeSearchQueries(query).slice(0, 3);
     for (const altQuery of alternativeQueries) {
       console.log(`[AnimeKai] Trying alternative query: "${altQuery}"`);
       const altResult = await searchAnimeKaiByMalId(malId, altQuery);
@@ -1112,10 +1111,16 @@ async function extractMegaUpSourcesManually(embedUrl: string): Promise<string | 
       return null;
     }
     
-    console.log(`[AnimeKai] Got encrypted media data (${mediaData.result.length} chars), decrypting natively...`);
+    console.log(`[AnimeKai] Got encrypted media data (${mediaData.result.length} chars), decrypting via enc-dec.app...`);
     
-    // Decrypt using native implementation (no enc-dec.app!)
-    const decrypted = decryptMegaUp(mediaData.result);
+    // Decrypt using enc-dec.app API (keystream is video-specific, native XOR doesn't work)
+    let decrypted: string;
+    try {
+      decrypted = await decryptMegaUp(mediaData.result);
+    } catch (decryptError) {
+      console.log(`[AnimeKai] MegaUp decryption failed:`, decryptError);
+      return null;
+    }
     
     // Parse the decrypted result
     let streamData: any;
@@ -1502,41 +1507,12 @@ async function extractAnimeKaiStreamsLocal(
     console.log(`[AnimeKai] ========================================`);
     
     // Step 3: Search AnimeKai
-    // The searchAnimeKai function is now MAL ID focused - it will:
-    // 1. Search with the title
-    // 2. Check each result's syncData.mal_id
-    // 3. Return the one that matches our MAL ID
+    // The searchAnimeKai function handles MAL ID search + alternative queries + title fallback internally
     let animeResult: { content_id: string; title: string; episodes?: ParsedEpisodes } | null = null;
     
-    // Primary search: Use MAL ID if available
     if (finalMalId) {
       console.log(`[AnimeKai] Searching by MAL ID ${finalMalId}...`);
       animeResult = await searchAnimeKai(finalSearchTitle, finalMalId);
-      
-      if (!animeResult) {
-        // Try alternative search queries
-        const alternativeQueries = [
-          // Try just the base title (before colon)
-          finalSearchTitle.split(':')[0].trim(),
-          // Try without "Season X" suffix
-          finalSearchTitle.replace(/\s*Season\s*\d+.*$/i, '').trim(),
-          // Try without "Part X" suffix
-          finalSearchTitle.replace(/\s*Part\s*\d+.*$/i, '').trim(),
-          // Try the subtitle only (after colon)
-          finalSearchTitle.includes(':') ? finalSearchTitle.split(':').pop()?.trim() : null,
-        ].filter((q): q is string => q !== null && q !== '' && q !== finalSearchTitle);
-        
-        for (const altQuery of alternativeQueries) {
-          console.log(`[AnimeKai] Trying alternative: "${altQuery}"`);
-          animeResult = await searchAnimeKai(altQuery, finalMalId);
-          if (animeResult) {
-            console.log(`[AnimeKai] ✓ Found with alternative query`);
-            break;
-          }
-        }
-      } else {
-        console.log(`[AnimeKai] ✓ Found with MAL title: "${animeResult.title}"`);
-      }
     }
     
     // Fallback: Title-only search (no MAL ID)

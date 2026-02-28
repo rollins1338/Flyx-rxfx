@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchTMDBData } from '@/app/lib/services/tmdb';
 
+// Fetch with graceful fallback - individual failures don't break the whole page
+async function safeFetch(endpoint: string, params: Record<string, string>): Promise<any> {
+  try {
+    return await fetchTMDBData(endpoint, params);
+  } catch (error) {
+    console.warn(`[Series API] Failed to fetch ${endpoint}:`, error);
+    return { results: [], total_results: 0 };
+  }
+}
+
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const region = searchParams.get('region') || '';
@@ -16,21 +26,21 @@ export async function GET(request: NextRequest) {
       mystery, thriller, documentary, reality,
       family, western, war
     ] = await Promise.all([
-      fetchTMDBData('/discover/tv', { sort_by: 'popularity.desc', without_genres: '16', ...regionParam }),
-      fetchTMDBData('/discover/tv', { sort_by: 'vote_average.desc', without_genres: '16', 'vote_count.gte': '200', ...regionParam }),
-      fetchTMDBData('/discover/tv', { sort_by: 'popularity.desc', without_genres: '16', 'air_date.gte': thirtyDaysAgo, ...regionParam }),
-      fetchTMDBData('/discover/tv', { sort_by: 'popularity.desc', without_genres: '16', 'air_date.gte': today, 'air_date.lte': today, ...regionParam }),
-      fetchTMDBData('/discover/tv', { with_genres: '18', without_genres: '16', sort_by: 'popularity.desc', ...regionParam }),
-      fetchTMDBData('/discover/tv', { with_genres: '80', without_genres: '16', sort_by: 'popularity.desc', ...regionParam }),
-      fetchTMDBData('/discover/tv', { with_genres: '10765', without_genres: '16', sort_by: 'popularity.desc', ...regionParam }),
-      fetchTMDBData('/discover/tv', { with_genres: '35', without_genres: '16', sort_by: 'popularity.desc', ...regionParam }),
-      fetchTMDBData('/discover/tv', { with_genres: '9648', without_genres: '16', sort_by: 'popularity.desc', ...regionParam }),
-      fetchTMDBData('/discover/tv', { with_genres: '10759', without_genres: '16', sort_by: 'popularity.desc', ...regionParam }),
-      fetchTMDBData('/discover/tv', { with_genres: '99', without_genres: '16', sort_by: 'popularity.desc', ...regionParam }),
-      fetchTMDBData('/discover/tv', { with_genres: '10764', without_genres: '16', sort_by: 'popularity.desc', ...regionParam }),
-      fetchTMDBData('/discover/tv', { with_genres: '10751', without_genres: '16', sort_by: 'popularity.desc', ...regionParam }),
-      fetchTMDBData('/discover/tv', { with_genres: '37', without_genres: '16', sort_by: 'popularity.desc', ...regionParam }),
-      fetchTMDBData('/discover/tv', { with_genres: '10768', without_genres: '16', sort_by: 'popularity.desc', ...regionParam }),
+      safeFetch('/discover/tv', { sort_by: 'popularity.desc', without_genres: '16', ...regionParam }),
+      safeFetch('/discover/tv', { sort_by: 'vote_average.desc', without_genres: '16', 'vote_count.gte': '200', ...regionParam }),
+      safeFetch('/discover/tv', { sort_by: 'popularity.desc', without_genres: '16', 'air_date.gte': thirtyDaysAgo, ...regionParam }),
+      safeFetch('/discover/tv', { sort_by: 'popularity.desc', without_genres: '16', 'air_date.gte': today, 'air_date.lte': today, ...regionParam }),
+      safeFetch('/discover/tv', { with_genres: '18', without_genres: '16', sort_by: 'popularity.desc', ...regionParam }),
+      safeFetch('/discover/tv', { with_genres: '80', without_genres: '16', sort_by: 'popularity.desc', ...regionParam }),
+      safeFetch('/discover/tv', { with_genres: '10765', without_genres: '16', sort_by: 'popularity.desc', ...regionParam }),
+      safeFetch('/discover/tv', { with_genres: '35', without_genres: '16', sort_by: 'popularity.desc', ...regionParam }),
+      safeFetch('/discover/tv', { with_genres: '9648', without_genres: '16', sort_by: 'popularity.desc', ...regionParam }),
+      safeFetch('/discover/tv', { with_genres: '10759', without_genres: '16', sort_by: 'popularity.desc', ...regionParam }),
+      safeFetch('/discover/tv', { with_genres: '99', without_genres: '16', sort_by: 'popularity.desc', ...regionParam }),
+      safeFetch('/discover/tv', { with_genres: '10764', without_genres: '16', sort_by: 'popularity.desc', ...regionParam }),
+      safeFetch('/discover/tv', { with_genres: '10751', without_genres: '16', sort_by: 'popularity.desc', ...regionParam }),
+      safeFetch('/discover/tv', { with_genres: '37', without_genres: '16', sort_by: 'popularity.desc', ...regionParam }),
+      safeFetch('/discover/tv', { with_genres: '10768', without_genres: '16', sort_by: 'popularity.desc', ...regionParam }),
     ]);
 
     const addMediaType = (items: any[]) => items?.map((item: any) => ({ ...item, mediaType: 'tv' })) || [];

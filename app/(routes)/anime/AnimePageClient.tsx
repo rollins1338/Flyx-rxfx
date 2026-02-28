@@ -4,8 +4,6 @@ import { useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import type { MALAnimeListItem } from '@/lib/services/mal-listings';
-import { Navigation } from '@/components/layout/Navigation';
-import { Footer } from '@/components/layout/Footer';
 import { PageTransition } from '@/components/layout/PageTransition';
 import { useAnalytics } from '@/components/analytics/AnalyticsProvider';
 import { usePresenceContext } from '@/components/analytics/PresenceProvider';
@@ -43,10 +41,6 @@ export default function AnimePageClient({
     router.push(`/anime/${item.mal_id}`);
   }, [router, trackEvent]);
 
-  const handleSearch = useCallback((query: string) => {
-    if (query.trim()) router.push(`/search?q=${encodeURIComponent(query)}`);
-  }, [router]);
-
   const handleSeeAll = useCallback((filter: string, genre?: string) => {
     const params = new URLSearchParams({ type: filter === 'movies' ? 'anime-movies' : 'anime' });
     if (filter && filter !== 'movies') params.set('filter', filter);
@@ -67,7 +61,6 @@ export default function AnimePageClient({
   return (
     <PageTransition>
       <div className="min-h-screen bg-[#0a0812] overflow-x-hidden">
-        <Navigation onSearch={handleSearch} />
         <section className="relative pt-16 md:pt-20 pb-12 md:pb-16 overflow-hidden">
           <div className="container mx-auto px-4 md:px-6 relative z-10">
             <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} className="text-center max-w-4xl mx-auto">
@@ -83,7 +76,6 @@ export default function AnimePageClient({
             <ContentRow key={section.title} title={section.title} data={section.data} onItemClick={handleContentClick} onSeeAll={() => handleSeeAll(section.filter, section.genre)} accentColor={section.accentColor} />
           ))}
         </main>
-        <Footer />
       </div>
     </PageTransition>
   );

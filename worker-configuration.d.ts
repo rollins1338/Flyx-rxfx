@@ -19,7 +19,6 @@ interface CloudflareEnv {
   
   // Worker URLs
   NEXT_PUBLIC_CF_SYNC_URL?: string;
-  NEXT_PUBLIC_CF_ANALYTICS_WORKER_URL?: string;
   NEXT_PUBLIC_CF_PROXY_URL?: string;
   NEXT_PUBLIC_CF_STREAM_PROXY_URL?: string;
   NEXT_PUBLIC_CF_TV_PROXY_URL?: string;

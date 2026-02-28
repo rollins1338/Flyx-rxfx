@@ -23,7 +23,7 @@ A modern streaming platform built with Next.js 16, featuring movies, TV shows, l
 
 Flyx runs entirely on Cloudflare's edge network using:
 - **Cloudflare Pages** - Next.js app via `@opennextjs/cloudflare`
-- **Cloudflare Workers** - Analytics, sync, and stream proxy
+- **Cloudflare Workers** - Sync and stream proxy
 - **Cloudflare D1** - SQLite database at the edge
 
 ### Prerequisites
@@ -67,7 +67,6 @@ NEXT_PUBLIC_TMDB_API_KEY=your_tmdb_api_key
 
 # Cloudflare Worker URLs (update after deploying workers)
 NEXT_PUBLIC_CF_SYNC_URL=https://flyx-sync.YOUR-SUBDOMAIN.workers.dev
-NEXT_PUBLIC_CF_ANALYTICS_WORKER_URL=https://flyx-analytics.YOUR-SUBDOMAIN.workers.dev
 NEXT_PUBLIC_CF_PROXY_URL=https://media-proxy.YOUR-SUBDOMAIN.workers.dev
 ```
 
@@ -78,11 +77,6 @@ Create the required D1 databases:
 ```bash
 # Admin database (for main app)
 wrangler d1 create flyx-admin-db
-
-# Analytics database (for analytics worker)
-cd cf-analytics-worker
-wrangler d1 create flyx-analytics-db
-cd ..
 
 # Sync database (for sync worker)
 cd cf-sync-worker
@@ -97,11 +91,6 @@ cd ..
 ```bash
 # Initialize admin database schema
 npm run d1:init
-
-# Initialize analytics worker schema
-cd cf-analytics-worker
-wrangler d1 execute flyx-analytics-db --file=schema.sql
-cd ..
 
 # Initialize sync worker schema
 cd cf-sync-worker
@@ -134,7 +123,6 @@ Or deploy individually:
 
 ```bash
 # Deploy workers first
-npm run deploy:analytics-worker
 npm run deploy:sync-worker
 npm run deploy:media-proxy
 
@@ -150,10 +138,9 @@ npm run deploy:cloudflare
 |--------|-------------|
 | `npm run build:cloudflare` | Build Next.js app for Cloudflare Pages |
 | `npm run deploy:cloudflare` | Build and deploy main app to Cloudflare Pages |
-| `npm run deploy:analytics-worker` | Deploy analytics worker |
 | `npm run deploy:sync-worker` | Deploy sync worker |
 | `npm run deploy:media-proxy` | Deploy media proxy worker |
-| `npm run deploy:workers` | Deploy all three workers |
+| `npm run deploy:workers` | Deploy both workers |
 | `npm run deploy:all` | Deploy workers + main app (full deployment) |
 | `npm run preview:cloudflare` | Preview Cloudflare build locally |
 
@@ -163,13 +150,12 @@ npm run deploy:cloudflare
 
 ### Database Structure
 
-Flyx uses three D1 databases:
+Flyx uses two D1 databases:
 
 | Database | Purpose | Used By |
 |----------|---------|---------|
 | `flyx-admin-db` | Admin users, feedback, bot detection, daily metrics | Main App |
-| `flyx-analytics-db` | Page views, watch sessions, presence tracking | Analytics Worker |
-| `flyx-sync-db` | Watch progress, watchlist, user preferences | Sync Worker |
+| `flyx-sync-db` | Watch progress, watchlist, user preferences, admin heartbeats, daily stats | Sync Worker |
 
 ### Updating wrangler.toml
 
@@ -181,14 +167,6 @@ After creating databases, update the `database_id` in each `wrangler.toml`:
 binding = "DB"
 database_name = "flyx-admin-db"
 database_id = "YOUR-ADMIN-DB-ID"
-```
-
-**`cf-analytics-worker/wrangler.toml`:**
-```toml
-[[d1_databases]]
-binding = "DB"
-database_name = "flyx-analytics-db"
-database_id = "YOUR-ANALYTICS-DB-ID"
 ```
 
 **`cf-sync-worker/wrangler.toml`:**
@@ -228,7 +206,6 @@ wrangler d1 execute flyx-admin-db --command="SELECT * FROM admin_users"
 | Variable | Description |
 |----------|-------------|
 | `NEXT_PUBLIC_CF_SYNC_URL` | Sync Worker URL for cross-device sync |
-| `NEXT_PUBLIC_CF_ANALYTICS_WORKER_URL` | Analytics Worker URL |
 | `NEXT_PUBLIC_CF_PROXY_URL` | Media proxy worker URL |
 
 ### Optional
@@ -251,7 +228,6 @@ npm run dev
 npm run preview:cloudflare
 
 # Run workers locally
-cd cf-analytics-worker && npm run dev
 cd cf-sync-worker && npm run dev
 cd cloudflare-proxy && npm run dev
 ```
@@ -298,11 +274,11 @@ npm run admin:delete <username>
 │  │                   D1: flyx-admin-db                    │ │
 │  └────────────────────────────────────────────────────────┘ │
 │                           │                                  │
-│  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐  │
-│  │ Sync Worker │  │  Analytics   │  │   Media Proxy     │  │
-│  │             │  │   Worker     │  │     Worker        │  │
-│  │ D1: sync-db │  │ D1: analytics│  │                   │  │
-│  └─────────────┘  └──────────────┘  └───────────────────┘  │
+│  ┌─────────────────────────────┐  ┌───────────────────┐    │
+│  │        Sync Worker          │  │   Media Proxy     │    │
+│  │  (sync + admin analytics)   │  │     Worker        │    │
+│  │       D1: sync-db           │  │                   │    │
+│  └─────────────────────────────┘  └───────────────────┘    │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -328,11 +304,10 @@ flyx-main/
 │   ├── components/        # React components
 │   ├── lib/               # Utilities & services
 │   │   ├── db/           # D1 database utilities
-│   │   ├── analytics/    # Analytics client
+│   │   ├── analytics/    # Local-first analytics
 │   │   └── sync/         # Sync client
 │   └── types/             # TypeScript types
-├── cf-analytics-worker/   # Analytics Worker + D1
-├── cf-sync-worker/        # Sync Worker + D1
+├── cf-sync-worker/        # Sync Worker + D1 (sync + admin analytics)
 ├── cloudflare-proxy/      # Stream proxy worker
 ├── scripts/               # CLI scripts
 │   ├── init-d1-admin.sql # D1 schema initialization
@@ -373,7 +348,7 @@ npm run d1:init
 wrangler deployments list
 
 # View worker logs
-cd cf-analytics-worker && wrangler tail
+cd cf-sync-worker && wrangler tail
 ```
 
 ### Environment Variables Not Working

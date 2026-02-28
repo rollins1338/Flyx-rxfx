@@ -68,7 +68,8 @@ export default function DetailedContentAnalytics() {
     try {
       setError(null);
       
-      const response = await fetch(`/api/admin/analytics?period=${period}`);
+      const cfWorkerUrl = process.env.NEXT_PUBLIC_CF_SYNC_URL || 'https://flyx-sync.vynx.workers.dev';
+      const response = await fetch(`${cfWorkerUrl}/admin/stats?slices=content&range=${period}`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch content analytics');

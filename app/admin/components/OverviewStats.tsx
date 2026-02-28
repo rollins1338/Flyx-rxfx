@@ -1,13 +1,11 @@
 'use client';
 
 /**
- * OverviewStats - OPTIMIZED
- * 
- * Uses ONLY unified stats context - no additional API calls
- * All data comes from StatsContext which is already fetched once
+ * OverviewStats - Uses slice contexts (no StatsContext dependency)
+ * All data comes from RealtimeSlice, UserSlice, ContentSlice, GeoSlice
  */
 
-import { useStats } from '../context/StatsContext';
+import { useRealtimeSlice, useUserSlice, useContentSlice, useGeoSlice } from '../context/slices';
 import { 
   StatCard, 
   Grid, 
@@ -20,9 +18,14 @@ import {
 } from './ui';
 
 export default function OverviewStats() {
-  const { stats, loading } = useStats();
+  const realtime = useRealtimeSlice();
+  const users = useUserSlice();
+  const content = useContentSlice();
+  const geo = useGeoSlice();
 
-  if (loading && !stats.lastUpdated) {
+  const loading = realtime.loading && users.loading && content.loading;
+
+  if (loading && !realtime.lastUpdate && !users.lastUpdate) {
     return (
       <Grid cols="auto-fit" minWidth="200px" gap="20px">
         {[1, 2, 3, 4].map(i => (
@@ -43,28 +46,28 @@ export default function OverviewStats() {
       <Grid cols="auto-fit" minWidth="180px" gap="16px">
         <StatCard 
           title="Total Sessions" 
-          value={stats.totalSessions} 
+          value={content.data.totalSessions} 
           icon="📊" 
           color={colors.primary}
           gradient={gradients.primary}
         />
         <StatCard 
           title="Watch Time" 
-          value={formatDurationMinutes(stats.totalWatchTime)} 
+          value={formatDurationMinutes(content.data.totalWatchTime)} 
           icon="⏱️" 
           color={colors.success}
           gradient={gradients.success}
         />
         <StatCard 
           title="Avg Session" 
-          value={`${stats.avgSessionDuration}m`} 
+          value={`${content.data.avgSessionDuration}m`} 
           icon="📈" 
           color={colors.pink}
           gradient={gradients.pink}
         />
         <StatCard 
           title="Completion" 
-          value={`${stats.completionRate}%`} 
+          value={`${content.data.completionRate}%`} 
           icon="✅" 
           color={colors.warning}
           gradient={gradients.warning}
@@ -75,44 +78,42 @@ export default function OverviewStats() {
       <Grid cols="auto-fit" minWidth="160px" gap="16px">
         <StatCard 
           title="Live Users" 
-          value={stats.liveUsers} 
+          value={realtime.data.liveUsers} 
           icon="🟢" 
           color={colors.success}
-          pulse={stats.liveUsers > 0}
+          pulse={realtime.data.liveUsers > 0}
         />
         <StatCard 
           title="Live TV" 
-          value={stats.liveTVViewers} 
+          value={realtime.data.livetv} 
           icon="📺" 
           color={colors.warning}
-          pulse={stats.liveTVViewers > 0}
+          pulse={realtime.data.livetv > 0}
         />
-        <StatCard title="DAU" value={stats.activeToday} icon="📊" color={colors.primary} />
-        <StatCard title="WAU" value={stats.activeThisWeek} icon="📈" color={colors.info} />
-        <StatCard title="MAU" value={stats.activeThisMonth} icon="📅" color={colors.purple} />
+        <StatCard title="DAU" value={users.data.dau} icon="📊" color={colors.primary} />
+        <StatCard title="WAU" value={users.data.wau} icon="📈" color={colors.info} />
+        <StatCard title="MAU" value={users.data.mau} icon="📅" color={colors.purple} />
       </Grid>
 
       {/* User Metrics */}
       <Grid cols="auto-fit" minWidth="160px" gap="16px">
-        <StatCard title="New Today" value={stats.newUsersToday} icon="🆕" color={colors.success} />
-        <StatCard title="Returning" value={stats.returningUsers} icon="🔄" color={colors.info} />
+        <StatCard title="New Today" value={users.data.newToday} icon="🆕" color={colors.success} />
+        <StatCard title="Returning" value={users.data.returningUsers} icon="🔄" color={colors.info} />
         <StatCard 
           title="Retention" 
-          value={`${stats.activeToday > 0 ? Math.round((stats.returningUsers / stats.activeToday) * 100) : 0}%`} 
+          value={`${users.data.dau > 0 ? Math.round((users.data.returningUsers / users.data.dau) * 100) : 0}%`} 
           icon="💪" 
           color={colors.purple} 
         />
-        <StatCard title="Page Views" value={stats.pageViews} icon="👁️" color={colors.cyan} />
-        <StatCard title="Visitors" value={stats.uniqueVisitors} icon="🧑‍💻" color={colors.pink} />
       </Grid>
 
       {/* Device & Geographic Distribution */}
       <Grid cols={2} gap="20px">
         <Card title="Device Distribution" icon="📱">
-          {stats.deviceBreakdown.length > 0 ? (
+          {users.data.deviceBreakdown.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {stats.deviceBreakdown.slice(0, 4).map((device) => {
-                const total = stats.deviceBreakdown.reduce((sum, d) => sum + d.count, 0);
+              {users.data.deviceBreakdown.slice(0, 4).map((device) => {
+                const total = users.data.deviceBreakdown.reduce((sum, d) => sum + d.count, 0);
                 const icons: Record<string, string> = { desktop: '💻', mobile: '📱', tablet: '📲', unknown: '🖥️' };
                 return (
                   <ProgressBar 
@@ -134,15 +135,15 @@ export default function OverviewStats() {
         </Card>
 
         <Card title="Top Countries" icon="🌍">
-          {stats.topCountries.length > 0 ? (
+          {geo.data.topCountries.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {stats.topCountries.slice(0, 5).map((country) => {
-                const total = stats.topCountries.reduce((sum, c) => sum + c.count, 0);
+              {geo.data.topCountries.slice(0, 5).map((country) => {
+                const total = geo.data.topCountries.reduce((sum, c) => sum + c.count, 0);
                 return (
                   <div key={country.country}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                       <span style={{ color: colors.text.primary, fontSize: '13px' }}>
-                        {country.countryName || country.country}
+                        {country.name || country.country}
                       </span>
                       <span style={{ color: colors.text.muted, fontSize: '12px' }}>
                         {country.count} ({getPercentage(country.count, total)}%)

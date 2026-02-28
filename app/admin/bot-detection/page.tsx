@@ -8,7 +8,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import BotFilterControls from '../components/BotFilterControls';
-import { useStats } from '../context/StatsContext';
 
 interface BotDetection {
   id: string;
@@ -136,8 +135,7 @@ export default function BotDetectionPage() {
   const [trafficDays, setTrafficDays] = useState(7);
   const [selectedBotHit, setSelectedBotHit] = useState<BotTrafficData['recentHits'][0] | null>(null);
   
-  // Use StatsContext for global bot filter settings
-  const { refresh: refreshStats } = useStats();
+  // Bot filter settings are now self-contained in BotFilterControls
 
   useEffect(() => {
     fetchBotDetectionData();
@@ -166,7 +164,7 @@ export default function BotDetectionPage() {
     try {
       setTrafficLoading(true);
       // Try CF worker first, fallback to unified-stats
-      const cfWorkerUrl = process.env.NEXT_PUBLIC_CF_ANALYTICS_URL || 'https://flyx-analytics.vynx.workers.dev';
+      const cfWorkerUrl = process.env.NEXT_PUBLIC_CF_SYNC_URL || 'https://flyx-sync.vynx.workers.dev';
       const response = await fetch(`${cfWorkerUrl}/admin/bot-stats?days=${trafficDays}&limit=100`);
       const data = await response.json();
       
@@ -235,8 +233,6 @@ export default function BotDetectionPage() {
         // Refresh data after successful review
         await fetchBotDetectionData();
         await fetchReviewHistory();
-        // Also refresh global stats
-        await refreshStats();
         
         setSelectedDetection(null);
         setReviewNotes('');

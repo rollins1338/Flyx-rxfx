@@ -9,6 +9,7 @@ import { TVNavigationHint } from './components/tv/TVNavigationHint'
 import AdminBanner from './components/ui/AdminBanner'
 import { WatchlistProvider } from './hooks/useWatchlist'
 import SyncProvider from './components/providers/SyncProvider'
+import { NavigationOverlay } from './components/navigation/NavigationOverlay'
 
 // Optimized font loading with next/font (eliminates render-blocking CSS)
 const inter = Inter({
@@ -108,6 +109,7 @@ export default function RootLayout({
                 <WatchlistProvider>
                   <TVNavigationProvider>
                     <AdminBanner />
+                    <NavigationOverlay />
                     {children}
                     <TVNavigationHint />
                   </TVNavigationProvider>

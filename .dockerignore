@@ -22,7 +22,6 @@ private/
 
 # Worker subprojects (not needed for main app build)
 cdn-live-extractor/
-cf-analytics-worker/
 cf-sync-worker/
 dlhd-extractor-worker/
 rpi-proxy/
