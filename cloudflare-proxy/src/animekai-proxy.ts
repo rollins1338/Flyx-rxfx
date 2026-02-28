@@ -462,6 +462,32 @@ function handleSuccessResponse(
 }
 
 /**
+ * Determine the correct RPI route based on the target URL domain.
+ * Each provider CDN has a dedicated RPI endpoint with the right headers.
+ */
+function getRpiRouteForUrl(url: string): string {
+  // VidLink CDN — vodvidl.site, videostr.net
+  if (url.includes('vodvidl.site') || url.includes('videostr.net')) {
+    return 'vidlink/stream';
+  }
+  // VidSrc / 2embed / cloudnestra CDN
+  if (url.includes('2embed') || url.includes('vidsrc') || url.includes('cloudnestra') || 
+      url.includes('shadowlandschronicles') || url.includes('embedsito')) {
+    return 'vidsrc/stream';
+  }
+  // 1movies CDN — p.XXXXX.workers.dev with 111movies referer
+  if (url.match(/p\.\d+\.workers\.dev/) && !url.includes('flixer') && !url.includes('hexa')) {
+    return '1movies/stream';
+  }
+  // Flixer CDN — p.XXXXX.workers.dev with flixer referer, or hexa.su
+  if (url.includes('hexa.su') || url.includes('plsdontscrapemelove')) {
+    return 'flixer/stream';
+  }
+  // Default: generic /animekai endpoint (MegaUp CDN, AnimeKai domains)
+  return 'animekai';
+}
+
+/**
  * Fetch via RPI residential proxy
  */
 async function fetchViaRpiProxy(
@@ -489,11 +515,9 @@ async function fetchViaRpiProxy(
       rpiParams.set('ua', customUserAgent);
     }
     
-    // Auto-detect referer
+    // Auto-detect referer based on target domain
     if (customReferer) {
       rpiParams.set('referer', customReferer);
-    } else if (decodedUrl.match(/p\.\d+\.workers\.dev/)) {
-      rpiParams.set('referer', 'https://flixer.cc/');
     } else if (decodedUrl.includes('vodvidl.site') || decodedUrl.includes('videostr.net')) {
       // VidLink CDN — extract embedded headers from URL if present
       try {
@@ -511,11 +535,17 @@ async function fetchViaRpiProxy(
         rpiParams.set('referer', 'https://videostr.net/');
         rpiParams.set('origin', 'https://videostr.net');
       }
+    } else if (decodedUrl.includes('hexa.su') || decodedUrl.includes('plsdontscrapemelove')) {
+      // Flixer CDN
+      rpiParams.set('referer', 'https://flixer.cc/');
+    } else if (decodedUrl.match(/p\.\d+\.workers\.dev/)) {
+      // Could be Flixer or 1movies — default to 1movies since Flixer has its own /flixer/stream route
+      rpiParams.set('referer', 'https://111movies.com/');
     } else if (decodedUrl.match(/\.[a-z0-9]+\.site/)) {
       rpiParams.set('referer', 'https://animekai.to/');
     }
     
-    const rpiUrl = `${rpiBaseUrl}/animekai?${rpiParams.toString()}`;
+    const rpiUrl = `${rpiBaseUrl}/${getRpiRouteForUrl(decodedUrl)}?${rpiParams.toString()}`;
     logger.debug('Forwarding to RPI proxy', { rpiUrl: rpiUrl.substring(0, 80) });
 
     const rpiResponse = await fetch(rpiUrl, {

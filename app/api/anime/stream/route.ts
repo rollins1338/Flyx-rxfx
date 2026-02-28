@@ -3,8 +3,9 @@
  * GET /api/anime/stream?malId=57658&episode=1&provider=hianime
  * GET /api/anime/stream?malId=4107 (for movies, no episode needed)
  * 
- * Supports providers: hianime (default), animekai (fallback)
- * If requested provider fails, automatically tries the other.
+ * Supports providers: hianime, animekai
+ * Each request returns ONLY sources from the requested provider.
+ * The VideoPlayer fires both providers in parallel and uses the first to succeed.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -47,87 +48,38 @@ export async function GET(request: NextRequest) {
     const title = anime.title_english || anime.title;
     console.log(`[ANIME-STREAM] Found anime: ${title} (type: ${anime.type}, episodes: ${anime.episodes})`);
 
-    // TRY REQUESTED PROVIDER FIRST, then fallback to the other
-    // The VideoPlayer already fires both providers in parallel, so we should NOT
-    // fire both here — that causes 4x duplicate requests.
-    console.log(`[ANIME-STREAM] Extracting from ${requestedProvider}...`);
+    // Extract from the REQUESTED provider ONLY — no fallback.
+    // The VideoPlayer fires both providers in parallel via Promise.any,
+    // so cross-provider fallback here would cause duplicate/misattributed sources.
+    console.log(`[ANIME-STREAM] Extracting from ${requestedProvider} (no fallback)...`);
     
-    const primaryResult = await extractFromProvider(requestedProvider, malId, title, anime, isMovie, episode)
+    const result = await extractFromProvider(requestedProvider, malId, title, anime, isMovie, episode)
       .catch((err) => {
         console.log(`[ANIME-STREAM] ❌ ${requestedProvider} threw:`, err?.message);
         return null;
       });
 
-    // Collect sources from primary provider
-    const allSources: Array<{
-      quality: string;
-      title: string;
-      url: string;
-      type: string;
-      referer: string;
-      requiresSegmentProxy: boolean;
-      skipOrigin?: boolean;
-      language?: string;
-      skipIntro?: [number, number];
-      skipOutro?: [number, number];
-    }> = [];
-    const allSubtitles: Array<{ label: string; url: string; language: string }> = [];
-    const providersUsed: string[] = [];
-
     const providerLabel = requestedProvider === 'hianime' ? 'HiAnime' : 'AnimeKai';
 
-    if (primaryResult?.success && primaryResult.sources.length > 0) {
-      console.log(`[ANIME-STREAM] ✅ ${providerLabel}: ${primaryResult.sources.length} sources`);
-      primaryResult.sources.forEach(source => {
-        const processedSource = requestedProvider === 'animekai'
-          ? { ...source, url: getAnimeKaiProxyUrl(source.url), title: `${source.title} [AnimeKai]` }
-          : { ...source, title: `${source.title} [HiAnime]` };
-        allSources.push(processedSource);
-      });
-      if (primaryResult.subtitles) {
-        allSubtitles.push(...primaryResult.subtitles);
-      }
-      providersUsed.push(requestedProvider);
-    } else {
-      const error = primaryResult?.error || 'No sources';
-      console.log(`[ANIME-STREAM] ❌ ${providerLabel} failed: ${error}`);
+    if (result?.success && result.sources.length > 0) {
+      console.log(`[ANIME-STREAM] ✅ ${providerLabel}: ${result.sources.length} sources`);
       
-      // Fallback to the other provider
-      const fallbackProvider: Provider = requestedProvider === 'hianime' ? 'animekai' : 'hianime';
-      console.log(`[ANIME-STREAM] Trying fallback: ${fallbackProvider}...`);
-      
-      const fallbackResult = await extractFromProvider(fallbackProvider, malId, title, anime, isMovie, episode)
-        .catch((err) => {
-          console.log(`[ANIME-STREAM] ❌ ${fallbackProvider} threw:`, err?.message);
-          return null;
-        });
-
-      if (fallbackResult?.success && fallbackResult.sources.length > 0) {
-        const fbLabel = fallbackProvider === 'hianime' ? 'HiAnime' : 'AnimeKai';
-        console.log(`[ANIME-STREAM] ✅ ${fbLabel} (fallback): ${fallbackResult.sources.length} sources`);
-        fallbackResult.sources.forEach(source => {
-          const processedSource = fallbackProvider === 'animekai'
-            ? { ...source, url: getAnimeKaiProxyUrl(source.url), title: `${source.title} [AnimeKai]` }
-            : { ...source, title: `${source.title} [HiAnime]` };
-          allSources.push(processedSource);
-        });
-        if (fallbackResult.subtitles) {
-          allSubtitles.push(...fallbackResult.subtitles);
+      const sources = result.sources.map(source => {
+        if (requestedProvider === 'animekai') {
+          return { ...source, url: getAnimeKaiProxyUrl(source.url), title: `${source.title} [AnimeKai]` };
         }
-        providersUsed.push(fallbackProvider);
-      }
-    }
+        return { ...source, title: `${source.title} [HiAnime]` };
+      });
 
-    // Return all sources from both providers
-    if (allSources.length > 0) {
       const executionTime = Date.now() - startTime;
-      console.log(`[ANIME-STREAM] ✅ SUCCESS: ${allSources.length} total sources from ${providersUsed.join(' + ')}`);
+      console.log(`[ANIME-STREAM] ✅ SUCCESS: ${sources.length} sources from ${requestedProvider} in ${executionTime}ms`);
       
       return NextResponse.json({
         success: true,
-        sources: allSources,
-        subtitles: allSubtitles,
-        providers: providersUsed,
+        sources,
+        subtitles: result.subtitles || [],
+        provider: requestedProvider,
+        providers: [requestedProvider],
         anime: {
           malId: anime.mal_id,
           title: anime.title,
@@ -139,8 +91,11 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    const error = result?.error || 'No sources';
+    console.log(`[ANIME-STREAM] ❌ ${providerLabel} failed: ${error}`);
+
     return NextResponse.json(
-      { error: 'No streams found from any provider', success: false },
+      { error: `No streams found from ${providerLabel}`, provider: requestedProvider, success: false },
       { status: 404 }
     );
   } catch (error) {

@@ -497,7 +497,7 @@ async function fetchAuthData(channel: string, logger: any, env?: Env): Promise<S
       }
       rpiBase = rpiBase.replace(/\/+$/, '');
       
-      const rpiUrl = `${rpiBase}/animekai?url=${encodeURIComponent(hitsplayUrl)}&key=${env.RPI_PROXY_KEY}&referer=${encodeURIComponent('https://daddylive.mp/')}`;
+      const rpiUrl = `${rpiBase}/dlhd/stream?url=${encodeURIComponent(hitsplayUrl)}&key=${env.RPI_PROXY_KEY}&referer=${encodeURIComponent('https://daddylive.mp/')}`;
       logger.info('Fetching hitsplay via RPI', { rpiUrl: rpiUrl.substring(0, 150) });
       
       const controller = new AbortController();
@@ -722,7 +722,7 @@ async function fetchServerKey(channelKey: string, logger: any, env?: Env): Promi
       }
       rpiBase = rpiBase.replace(/\/+$/, '');
       
-      const rpiUrl = `${rpiBase}/animekai?url=${encodeURIComponent(url)}&key=${env.RPI_PROXY_KEY}`;
+      const rpiUrl = `${rpiBase}/dlhd/stream?url=${encodeURIComponent(url)}&key=${env.RPI_PROXY_KEY}`;
       logger.info('Trying server lookup via RPI', { channelKey });
       
       const rpiRes = await fetch(rpiUrl);
@@ -1011,9 +1011,9 @@ async function handlePlaylistRequest(
     }
     rpiBase = rpiBase.replace(/\/+$/, '');
     
-    // Use /animekai endpoint with referer header - DLHD CDN requires it
-    const rpiUrl = `${rpiBase}/animekai?key=${env.RPI_PROXY_KEY}&url=${encodeURIComponent(m3u8Url)}&referer=${encodeURIComponent('https://www.ksohls.ru/')}`;
-    logger.info('Calling RPI /animekai for M3U8', { 
+    // Use /dlhd/stream endpoint with referer header - DLHD CDN requires it
+    const rpiUrl = `${rpiBase}/dlhd/stream?key=${env.RPI_PROXY_KEY}&url=${encodeURIComponent(m3u8Url)}&referer=${encodeURIComponent('https://www.ksohls.ru/')}`;
+    logger.info('Calling RPI /dlhd/stream for M3U8', { 
       rpiBase,
       rpiUrl: rpiUrl.substring(0, 200),
       m3u8Url,

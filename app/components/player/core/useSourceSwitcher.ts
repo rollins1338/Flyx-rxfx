@@ -10,7 +10,7 @@
 'use client';
 
 import { useCallback } from 'react';
-import { getAnimeKaiProxyUrl } from '@/app/lib/proxy-config';
+import { getAnimeKaiProxyUrl, getFlixerStreamProxyUrl, getHiAnimeStreamProxyUrl } from '@/app/lib/proxy-config';
 import type { PlayerSource } from './types';
 
 export interface UseSourceSwitcherOptions {
@@ -55,15 +55,27 @@ export function useSourceSwitcher(options: UseSourceSwitcherOptions): UseSourceS
         finalUrl.includes('/stream/?url=') ||
         finalUrl.includes('/stream?url=') ||
         finalUrl.includes('/animekai?url=') ||
-        finalUrl.includes('/animekai/?url=');
+        finalUrl.includes('/animekai/?url=') ||
+        finalUrl.includes('/flixer/stream?url=');
 
       if (!isAlreadyProxied) {
         const targetUrl = source.directUrl || source.url;
-        finalUrl = getAnimeKaiProxyUrl(targetUrl);
+        // Route through provider-specific proxy
+        const isFlixerSource = source.title?.toLowerCase().includes('flixer') || 
+                               options.provider === 'flixer';
+        const isHiAnimeSource = source.title?.toLowerCase().includes('hianime') ||
+                                options.provider === 'hianime';
+        if (isFlixerSource) {
+          finalUrl = getFlixerStreamProxyUrl(targetUrl);
+        } else if (isHiAnimeSource) {
+          finalUrl = getHiAnimeStreamProxyUrl(targetUrl);
+        } else {
+          finalUrl = getAnimeKaiProxyUrl(targetUrl);
+        }
       }
     }
     return finalUrl;
-  }, []);
+  }, [options.provider]);
 
   const switchSource = useCallback((sourceIndex: number) => {
     const source = availableSources[sourceIndex];

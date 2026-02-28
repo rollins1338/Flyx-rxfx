@@ -27,7 +27,6 @@ import { usePinchZoom } from '@/hooks/usePinchZoom';
 import { useCast, CastMedia } from '@/hooks/useCast';
 import { CastOverlay } from './CastButton';
 import TranscriptButton from './TranscriptButton';
-import { getAnimeKaiProxyUrl, getFlixerExtractUrl } from '@/app/lib/proxy-config';
 // Player Core hooks — shared logic extracted for reuse by both desktop and mobile players
 // These hooks encapsulate HLS management, subtitle handling, progress tracking, and source switching.
 // The desktop player integrates these hooks for shared functionality while retaining
@@ -563,47 +562,64 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     }
 
     try {
-      // FLIXER: Call CF Worker directly from browser (no RPI for extraction)
+      // FLIXER: Use server-side extraction via API route (same path as mobile player).
+      // Direct browser-to-CF-Worker calls can fail due to CORS/network issues.
       if (providerName === 'flixer') {
-        const FLIXER_SERVERS = ['alpha', 'bravo', 'delta', 'echo'];
-        const SERVER_DISPLAY: Record<string, string> = { alpha: 'Ares', bravo: 'Balder', delta: 'Dionysus', echo: 'Eros' };
-
-        const serverFetches = FLIXER_SERVERS.map(async (server) => {
-          try {
-            const cfWorkerUrl = getFlixerExtractUrl(tmdbId, mediaType, server, season, episode);
-            const res = await fetch(cfWorkerUrl, { priority: 'high' as RequestPriority, cache: 'no-store' });
-            const data = await res.json();
-            if (data.success && data.sources?.length && data.sources[0]?.url) {
-              const src = data.sources[0];
-              return {
-                quality: src.quality || 'auto',
-                title: `Flixer ${SERVER_DISPLAY[server] || server}`,
-                url: getAnimeKaiProxyUrl(src.url),
-                directUrl: src.url,
-                type: src.type || 'hls',
-                referer: src.referer || '',
-                requiresSegmentProxy: true,
-                status: 'working' as const,
-                server,
-              };
+        const params = new URLSearchParams({ tmdbId, type: mediaType, provider: 'flixer' });
+        if (mediaType === 'tv' && season && episode) {
+          params.append('season', season.toString());
+          params.append('episode', episode.toString());
+        }
+        console.log(`[VideoPlayer] Flixer: fetching via API route`);
+        const res = await fetch(`/api/stream/extract?${params}`, { priority: 'high' as RequestPriority, cache: 'no-store' });
+        const data = await res.json();
+        if (data.sources?.length) {
+          const sources = data.sources.filter((s: any) => s.url);
+          if (sources.length > 0) {
+            setSourcesCache(prev => ({ ...prev, flixer: sources }));
+            if (providerName === provider) {
+              setAvailableSources(sources);
             }
-          } catch {}
-          return null;
-        });
-
-        const results = await Promise.allSettled(serverFetches);
-        const sources = results
-          .map(r => r.status === 'fulfilled' ? r.value : null)
-          .filter((s): s is NonNullable<typeof s> => s !== null);
-
-        if (sources.length > 0) {
-          setSourcesCache(prev => ({ ...prev, flixer: sources }));
-          if (providerName === provider) {
-            setAvailableSources(sources);
+            return sources;
           }
-          return sources;
         }
         throw new Error('No Flixer sources available');
+      }
+
+      // ANIME PROVIDERS: Use dedicated /api/anime/stream when malId is available
+      if (malId && (providerName === 'animekai' || providerName === 'hianime')) {
+        const params = new URLSearchParams({
+          malId: malId.toString(),
+          provider: providerName,
+        });
+        if (mediaType === 'tv' && episode) {
+          params.append('episode', episode.toString());
+        }
+        console.log(`[VideoPlayer] ${providerName}: fetching via /api/anime/stream (malId=${malId})`);
+        const res = await fetch(`/api/anime/stream?${params}`, { priority: 'high' as RequestPriority, cache: 'no-store' });
+        const data = await res.json();
+
+        if (data.success && data.sources?.length) {
+          const sources = data.sources.filter((s: any) => s.url);
+          if (sources.length > 0) {
+            // Verify provider matches — don't cache cross-provider sources
+            const actualProvider = data.provider || providerName;
+            if (actualProvider !== providerName) {
+              console.log(`[VideoPlayer] ${providerName}: API returned ${actualProvider} sources — not caching`);
+              setSourcesCache(prev => ({ ...prev, [providerName]: [] }));
+              return [];
+            }
+            setSourcesCache(prev => ({ ...prev, [providerName]: sources }));
+            if (providerName === provider) {
+              setAvailableSources(sources);
+              const firstSource = sources[0];
+              if (firstSource?.skipIntro) setSkipIntro(firstSource.skipIntro);
+              if (firstSource?.skipOutro) setSkipOutro(firstSource.skipOutro);
+            }
+            return sources;
+          }
+        }
+        throw new Error(data.error || `No ${providerName} sources available`);
       }
 
       const params = new URLSearchParams({
@@ -755,79 +771,31 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
       }
     }
     
-    // FLIXER: Call CF Worker DIRECTLY from browser (no RPI needed for extraction).
-    // RPI is only used later for proxying the m3u8 segments during playback.
-    // Fire 4 parallel requests to individual servers, return the FIRST one that works.
-    // Additional servers trickle in via background promises and get added to availableSources.
+    // FLIXER: Use server-side extraction via API route (same path as mobile player).
+    // Direct browser-to-CF-Worker calls can fail due to CORS/network issues.
     if (providerName === 'flixer') {
-      const FLIXER_SERVERS = ['alpha', 'bravo', 'delta', 'echo'];
-      const SERVER_DISPLAY: Record<string, string> = { alpha: 'Ares', bravo: 'Balder', delta: 'Dionysus', echo: 'Eros' };
-      console.log(`[VideoPlayer] Flixer: racing ${FLIXER_SERVERS.length} servers via CF Worker (direct)...`);
-
-      // Create per-server fetch promises — browser → CF Worker (no RPI)
-      const serverFetches = FLIXER_SERVERS.map(async (server) => {
-        try {
-          const cfWorkerUrl = getFlixerExtractUrl(tmdbId, mediaType, server, season, episode);
-          const res = await fetch(cfWorkerUrl, {
-            priority: 'high' as RequestPriority,
-            cache: 'no-store',
-          });
-          const data = await res.json();
-          if (data.success && data.sources?.length && data.sources[0]?.url) {
-            const src = data.sources[0];
-            // Proxy the m3u8 URL through /animekai for playback (RPI for segments)
-            const proxiedUrl = getAnimeKaiProxyUrl(src.url);
-            const source = {
-              quality: src.quality || 'auto',
-              title: `Flixer ${SERVER_DISPLAY[server] || server}`,
-              url: proxiedUrl,
-              directUrl: src.url,
-              type: src.type || 'hls',
-              referer: src.referer || '',
-              requiresSegmentProxy: true,
-              status: 'working' as const,
-              server,
-            };
-            console.log(`[VideoPlayer] ✓ Flixer ${server} ready`);
-            return source;
+      console.log(`[VideoPlayer] Flixer: fetching via API route (fallback path)`);
+      const params = new URLSearchParams({ tmdbId, type: mediaType, provider: 'flixer' });
+      if (mediaType === 'tv' && season && episode) {
+        params.append('season', season.toString());
+        params.append('episode', episode.toString());
+      }
+      try {
+        const res = await fetch(`/api/stream/extract?${params}`, { priority: 'high' as RequestPriority, cache: 'no-store' });
+        const data = await res.json();
+        if (data.sources?.length) {
+          const sources = data.sources.filter((s: any) => s.url);
+          if (sources.length > 0) {
+            console.log(`[VideoPlayer] ✓ Flixer returned ${sources.length} source(s) via API`);
+            return { sources, provider: 'flixer' };
           }
-        } catch {}
+        }
+        console.warn('[VideoPlayer] ✗ Flixer returned no sources via API');
         return null;
-      });
-
-      // Wait for the FIRST server to succeed
-      const firstSource = await Promise.any(
-        serverFetches.map(p => p.then(s => { if (!s) throw new Error('no source'); return s; }))
-      ).catch(() => null);
-
-      if (!firstSource) {
-        console.warn('[VideoPlayer] ✗ All Flixer servers failed');
+      } catch (err) {
+        console.error('[VideoPlayer] ✗ Flixer API error:', err);
         return null;
       }
-
-      // Return immediately with the first source so playback starts
-      const result = { sources: [firstSource], provider: 'flixer' };
-
-      // Background: collect remaining servers and add them to availableSources
-      Promise.allSettled(serverFetches).then(results => {
-        const extraSources = results
-          .map(r => r.status === 'fulfilled' ? r.value : null)
-          .filter((s): s is NonNullable<typeof s> => s !== null && s.server !== firstSource.server);
-
-        if (extraSources.length > 0) {
-          console.log(`[VideoPlayer] Flixer: +${extraSources.length} additional server(s) ready`);
-          setAvailableSources(prev => {
-            const existing = new Set(prev.map((s: any) => s.server));
-            const newSources = extraSources.filter(s => !existing.has(s.server));
-            if (newSources.length === 0) return prev;
-            const updated = [...prev, ...newSources];
-            setSourcesCache(prevCache => ({ ...prevCache, flixer: updated }));
-            return updated;
-          });
-        }
-      });
-
-      return result;
     }
 
     // For non-flixer providers, use the generic extract API
@@ -938,11 +906,13 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
       autoPlayTimerRef.current = null;
     }
 
+    let cancelled = false;
+
     const initializePlayer = async () => {
       // ================================================================
-      // PARALLEL SOURCE POOL
-      // Fire ALL providers at once. Sources pool as they arrive.
-      // Auto-play picks from the pool respecting user's provider order.
+      // SEQUENTIAL PROVIDER FETCH (same approach as mobile player)
+      // Try providers one at a time in priority order.
+      // First source with a valid URL wins. Move on after 1s timeout.
       // ================================================================
 
       const isAnime = !!malId;
@@ -975,8 +945,6 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
       const userOrder = userProviderSettings.providerOrder || [];
       const disabledProviders = new Set(userProviderSettings.disabledProviders || []);
 
-      // MAL-direct anime (tmdbId=0 or malId without real TMDB ID): only anime providers
-      // Flixer/VidLink/VidSrc all need a real TMDB ID — they 404 with tmdbId=0
       const isMalDirect = tmdbId === '0' || (isAnime && (!tmdbId || tmdbId === '0'));
       const defaultOrder: string[] = isAnime
         ? (isMalDirect
@@ -984,7 +952,6 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
           : ['hianime', 'animekai', 'flixer', 'vidlink', 'vidsrc'])
         : ['flixer', 'vidlink', 'vidsrc'];
 
-      // Merge: user order first, then defaults for anything not in user order
       const priorityOrder: string[] = [];
       for (const p of userOrder) {
         if (!disabledProviders.has(p) && defaultOrder.includes(p) && !priorityOrder.includes(p)) {
@@ -997,190 +964,142 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
         }
       }
 
-      console.log(`[VideoPlayer] Pool: priority order [${priorityOrder.join(' → ')}], firing all in parallel`);
+      console.log(`[VideoPlayer] Sequential fetch: [${priorityOrder.join(' → ')}]`);
       setProviderTabOrder([...priorityOrder]);
 
-      const FLIXER_SERVERS = ['alpha', 'bravo', 'delta', 'echo'];
-      const SERVER_DISPLAY: Record<string, string> = { alpha: 'Ares', bravo: 'Balder', delta: 'Dionysus', echo: 'Eros' };
       const contentKey = `${tmdbId}-${mediaType}${season ? `-s${season}` : ''}${episode ? `-e${episode}` : ''}`;
 
-      // Source pool: keyed by provider name
-      const pool: Record<string, any[]> = {};
-      let playbackStarted = false;
+      // Helper: fetch with a timeout — resolves null if too slow
+      const fetchWithTimeout = (url: string, timeoutMs: number): Promise<Response | null> => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        return fetch(url, { cache: 'no-store', signal: controller.signal })
+          .then(res => { clearTimeout(timer); return res; })
+          .catch(() => { clearTimeout(timer); return null; });
+      };
 
-      // Resolve function — called by the selection loop when it picks a source
-      let resolveFirstSource: ((value: { source: any; provider: string } | null) => void) | null = null;
-      const firstSourcePromise = new Promise<{ source: any; provider: string } | null>(resolve => {
-        resolveFirstSource = resolve;
+      // Helper: build API URL for a provider
+      const buildApiUrl = (providerName: string): string | null => {
+        if (isMalDirect && !['hianime', 'animekai'].includes(providerName)) return null;
+        if (isAnime && malId && (providerName === 'animekai' || providerName === 'hianime')) {
+          const params = new URLSearchParams({ malId: malId.toString(), provider: providerName });
+          if (mediaType === 'tv' && episode) params.append('episode', episode.toString());
+          return `/api/anime/stream?${params}`;
+        }
+        const params = new URLSearchParams({ tmdbId, type: mediaType, provider: providerName });
+        if (mediaType === 'tv' && season && episode) {
+          params.append('season', season.toString());
+          params.append('episode', episode.toString());
+        }
+        if (malId) params.append('malId', malId.toString());
+        if (malTitle) params.append('malTitle', malTitle);
+        return `/api/stream/extract?${params}`;
+      };
+
+      // ---- FIRE ALL PROVIDERS IN PARALLEL, USE FIRST SUCCESS ----
+      // Each provider races independently. First one to return valid sources wins.
+      // This avoids waiting 5-7s for a failing provider before trying the next one.
+      type ProviderResult = { providerName: string; data: any; sources: any[] };
+
+      const providerPromises = priorityOrder.map(async (providerName): Promise<ProviderResult> => {
+        const apiUrl = buildApiUrl(providerName);
+        if (!apiUrl) throw new Error(`${providerName}: skipped (MAL-direct)`);
+
+        console.log(`[VideoPlayer] Trying ${providerName}...`);
+        const res = await fetchWithTimeout(apiUrl, 15000);
+        if (!res || !res.ok) throw new Error(`${providerName}: ${res ? res.status : 'timeout'}`);
+
+        const data = await res.json();
+        const sources = data.sources?.filter((s: any) => s.url && s.url.length > 0) || [];
+        if (sources.length === 0) throw new Error(`${providerName}: no sources`);
+
+        // Verify the provider didn't return a different provider's sources
+        const actualProvider = data.provider || providerName;
+        if (actualProvider !== providerName) {
+          throw new Error(`${providerName}: API returned ${actualProvider} instead`);
+        }
+
+        console.log(`[VideoPlayer] ✓ ${providerName}: ${sources.length} source(s)`);
+        return { providerName, data, sources };
       });
 
-      // Called when any source arrives from any provider
-      const onSourceArrived = (source: any, providerName: string) => {
-        if (!pool[providerName]) pool[providerName] = [];
-        pool[providerName].push(source);
+      // Use Promise.any — first provider to resolve with sources wins
+      try {
+        const winner = await Promise.any(providerPromises);
+        if (cancelled) return;
 
-        // Update UI progressively
-        setSourcesCache(prev => ({
-          ...prev,
-          [providerName]: [...(prev[providerName] || []), source],
-        }));
-        setAvailableSources(prev => [...prev, source]);
+        const { providerName, sources } = winner;
 
-        // Try to pick a source if playback hasn't started
-        if (!playbackStarted) {
-          tryPickSource();
+        // Pick best source
+        let selectedSource = sources[0];
+        let selectedIndex = 0;
+
+        if (isAnime && (providerName === 'animekai' || providerName === 'hianime')) {
+          const audioPref = userProviderSettings.animeAudioPreference || 'sub';
+          const matchIdx = sources.findIndex((s: any) =>
+            s.title && sourceMatchesAudioPreference(s.title, audioPref)
+          );
+          if (matchIdx >= 0) {
+            selectedSource = sources[matchIdx];
+            selectedIndex = matchIdx;
+          }
         }
-      };
 
-      // Pick the best source from the pool based on user's priority order
-      const tryPickSource = () => {
-        if (playbackStarted) return;
-        for (const providerName of priorityOrder) {
-          if (pool[providerName]?.length) {
-            playbackStarted = true;
-            // For anime, try to match audio preference
-            let picked = pool[providerName][0];
-            if (isAnime && (providerName === 'animekai' || providerName === 'hianime')) {
-              const audioPref = userProviderSettings.animeAudioPreference || 'sub';
-              const match = pool[providerName].find((s: any) =>
-                s.title && sourceMatchesAudioPreference(s.title, audioPref)
-              );
-              if (match) picked = match;
+        console.log(`[VideoPlayer] ✓ ${providerName}: playing "${selectedSource.title}" — ${selectedSource.url?.substring(0, 80)}`);
+
+        setProvider(providerName);
+        setMenuProvider(providerName);
+        recordSuccessfulProvider(contentKey, providerName);
+        setSourcesCache(prev => ({ ...prev, [providerName]: sources }));
+        setAvailableSources(sources);
+        setCurrentSourceIndex(selectedIndex);
+
+        if (selectedSource.skipIntro) setSkipIntro(selectedSource.skipIntro);
+        if (selectedSource.skipOutro) setSkipOutro(selectedSource.skipOutro);
+
+        if (isAnime && selectedSource.title && (providerName === 'animekai' || providerName === 'hianime')) {
+          const actualPref = sourceMatchesAudioPreference(selectedSource.title, 'dub') ? 'dub' : 'sub';
+          const savedPref = userProviderSettings.animeAudioPreference || 'sub';
+          if (actualPref !== savedPref) setAnimeAudioPref(actualPref as AnimeAudioPreference);
+        }
+
+        setStreamUrl(selectedSource.url);
+        setIsLoading(false);
+
+        // Collect remaining sources in background (for source picker)
+        Promise.allSettled(providerPromises).then(results => {
+          if (cancelled) return;
+          for (const r of results) {
+            if (r.status === 'fulfilled' && r.value.providerName !== providerName) {
+              setSourcesCache(prev => ({ ...prev, [r.value.providerName]: r.value.sources }));
             }
-            resolveFirstSource?.({ source: picked, provider: providerName });
-            return;
           }
-        }
-      };
+        });
 
-      // ---- FIRE ALL PROVIDERS IN PARALLEL ----
-
-      const providerPromises: Promise<void>[] = [];
-
-      for (const providerName of priorityOrder) {
-        // SAFETY: Skip TMDB-dependent providers when tmdbId is 0 (MAL-direct anime)
-        if (isMalDirect && !['hianime', 'animekai'].includes(providerName)) {
-          console.log(`[VideoPlayer] Skipping ${providerName} — tmdbId=0 (MAL-direct)`);
-          continue;
-        }
-
-        if (providerName === 'flixer') {
-          for (const server of FLIXER_SERVERS) {
-            providerPromises.push((async () => {
-              try {
-                const cfWorkerUrl = getFlixerExtractUrl(tmdbId, mediaType, server, season, episode);
-                const res = await fetch(cfWorkerUrl, { priority: 'high' as RequestPriority, cache: 'no-store' });
-                const data = await res.json();
-                if (data.success && data.sources?.length && data.sources[0]?.url) {
-                  const src = data.sources[0];
-                  onSourceArrived({
-                    quality: src.quality || 'auto',
-                    title: `Flixer ${SERVER_DISPLAY[server] || server}`,
-                    url: getAnimeKaiProxyUrl(src.url),
-                    directUrl: src.url,
-                    type: src.type || 'hls',
-                    referer: src.referer || '',
-                    requiresSegmentProxy: true,
-                    status: 'working',
-                    server,
-                  }, 'flixer');
-                }
-              } catch {}
-            })());
-          }
-        } else if (isAnime && malId && (providerName === 'animekai' || providerName === 'hianime')) {
-          providerPromises.push((async () => {
-            try {
-              const params = new URLSearchParams({ malId: malId.toString(), provider: providerName });
-              if (mediaType === 'tv' && episode) params.append('episode', episode.toString());
-              const res = await fetch(`/api/anime/stream?${params}`, { priority: 'high' as RequestPriority, cache: 'no-store' });
-              const data = await res.json();
-              if (data.success && data.sources?.length) {
-                for (const src of data.sources) {
-                  if (src.url) onSourceArrived({ ...src, requiresSegmentProxy: src.requiresSegmentProxy ?? true }, data.provider || providerName);
-                }
-              }
-            } catch {}
-          })());
-        } else {
-          providerPromises.push((async () => {
-            try {
-              const params = new URLSearchParams({ tmdbId, type: mediaType, provider: providerName });
-              if (mediaType === 'tv' && season && episode) {
-                params.append('season', season.toString());
-                params.append('episode', episode.toString());
-              }
-              if (malId) params.append('malId', malId.toString());
-              if (malTitle) params.append('malTitle', malTitle);
-              const res = await fetch(`/api/stream/extract?${params}`, { priority: 'high' as RequestPriority, cache: 'no-store' });
-              const data = await res.json();
-              if (data.sources?.length) {
-                const actualProvider = data.provider || providerName;
-                for (const src of data.sources) {
-                  if (src.url) onSourceArrived(src, actualProvider);
-                }
-              }
-            } catch {}
-          })());
+        return;
+      } catch (aggregateError) {
+        // All providers failed
+        if (cancelled) return;
+        const errors = (aggregateError as AggregateError).errors || [];
+        for (const e of errors) {
+          console.warn(`[VideoPlayer] ${e.message || e}`);
         }
       }
 
-      // Fallback: if all providers settle and nothing was picked, resolve null
-      Promise.allSettled(providerPromises).then(() => {
-        if (!playbackStarted) {
-          resolveFirstSource?.(null);
-        }
-      });
-
-      // ---- WAIT FOR SELECTION ----
-      const picked = await firstSourcePromise;
-
-      if (!picked) {
-        console.error('[VideoPlayer] All providers failed — pool empty');
+      // All providers exhausted
+      if (!cancelled) {
+        console.error('[VideoPlayer] All providers failed');
         setError('No streams available from any provider');
         setIsLoading(false);
         setHighlightServerButton(true);
-        return;
       }
-
-      const { source, provider: pickedProvider } = picked;
-      console.log(`[VideoPlayer] ✓ Playing: ${source.title} from ${pickedProvider}`);
-
-      setProvider(pickedProvider);
-      setMenuProvider(pickedProvider);
-      recordSuccessfulProvider(contentKey, pickedProvider);
-      setCurrentSourceIndex(0);
-
-      if (source.skipIntro) setSkipIntro(source.skipIntro);
-      if (source.skipOutro) setSkipOutro(source.skipOutro);
-
-      if (isAnime && source.title && (pickedProvider === 'animekai' || pickedProvider === 'hianime')) {
-        const actualPref = sourceMatchesAudioPreference(source.title, 'dub') ? 'dub' : 'sub';
-        const savedPref = userProviderSettings.animeAudioPreference || 'sub';
-        if (actualPref !== savedPref) setAnimeAudioPref(actualPref as AnimeAudioPreference);
-      }
-
-      // Build stream URL
-      let finalUrl = source.url;
-      if (source.requiresSegmentProxy) {
-        const isAlreadyProxied = finalUrl.includes('/stream?url=') ||
-                                  finalUrl.includes('/stream/?url=') ||
-                                  finalUrl.includes('/animekai?url=') ||
-                                  finalUrl.includes('/animekai/?url=') ||
-                                  finalUrl.includes('/api/stream-proxy');
-        if (!isAlreadyProxied) {
-          finalUrl = getAnimeKaiProxyUrl(source.directUrl || source.url);
-        }
-      }
-
-      setStreamUrl(finalUrl);
-      setIsLoading(false);
-
-      // Let remaining providers finish pooling in background
-      console.log(`[VideoPlayer] Pool: playback started, remaining sources still arriving...`);
     };
 
     initializePlayer();
+
+    return () => {
+      cancelled = true; // Prevent stale updates from React Strict Mode double-mount
+    };
   // IMPORTANT: Include malId in dependencies for MAL-direct anime (tmdbId=0)
   // Without this, switching between different MAL anime won't trigger a re-fetch
   }, [tmdbId, mediaType, season, episode, malId]);
@@ -1197,7 +1116,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
     // Reset source confirmation flag for new stream
     sourceConfirmedWorkingRef.current = false;
 
-    if (streamUrl.includes('.m3u8') || streamUrl.includes('stream-proxy') || streamUrl.includes('/stream/') || streamUrl.includes('/animekai') || streamUrl.includes('/vidsrc')) {
+    if (streamUrl.includes('.m3u8') || streamUrl.includes('stream-proxy') || streamUrl.includes('/stream/') || streamUrl.includes('/animekai') || streamUrl.includes('/flixer/stream') || streamUrl.includes('/hianime') || streamUrl.includes('/vidsrc') || streamUrl.includes('workers.dev')) {
       if (Hls.isSupported()) {
         // Check if this is a Flixer source (needs more aggressive buffering)
         const isFlixerSource = streamUrl.includes('flixer') || streamUrl.includes('p.10015.workers.dev') || streamUrl.includes('afc7d47f');
@@ -1320,7 +1239,26 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
           }
           // Only autoplay if resume prompt won't be shown
           if (!shouldShowResumePromptRef.current) {
-            video.play().catch(e => console.log('[VideoPlayer] Autoplay prevented:', e));
+            // Apply saved volume BEFORE play attempt so browser sees correct state
+            video.volume = getSavedVolume();
+            video.muted = getSavedMuteState();
+            video.play().catch(e => {
+              console.log('[VideoPlayer] Autoplay prevented, trying muted:', e);
+              // Browser blocked unmuted autoplay — try muted, then unmute on first interaction
+              video.muted = true;
+              video.play().then(() => {
+                console.log('[VideoPlayer] Muted autoplay succeeded');
+                // Unmute on first user interaction
+                const unmute = () => {
+                  video.muted = getSavedMuteState();
+                  video.volume = getSavedVolume();
+                  document.removeEventListener('click', unmute);
+                  document.removeEventListener('keydown', unmute);
+                };
+                document.addEventListener('click', unmute, { once: true });
+                document.addEventListener('keydown', unmute, { once: true });
+              }).catch(e2 => console.log('[VideoPlayer] Muted autoplay also prevented:', e2));
+            });
           } else {
             console.log('[VideoPlayer] Skipping autoplay - resume prompt will be shown');
           }
@@ -1335,20 +1273,21 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
         });
 
         hls.on(Hls.Events.ERROR, async (_event, data) => {
-          console.error('[HLS] Error:', {
+          // Use console.warn for non-fatal errors to avoid triggering Next.js dev overlay
+          const logFn = data.fatal ? console.error : console.warn;
+          logFn('[HLS] Error:', {
             type: data.type,
             details: data.details,
             fatal: data.fatal,
             url: data.url,
             response: data.response,
             reason: data.reason,
-            networkDetails: data.networkDetails,
             frag: data.frag ? { sn: data.frag.sn, url: data.frag.url } : null,
           });
           
           // Log the actual response if available
           if (data.response) {
-            console.error('[HLS] Response details:', {
+            logFn('[HLS] Response details:', {
               code: data.response.code,
               text: data.response.text,
             });
@@ -1561,7 +1500,17 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
           }
           // Only autoplay if resume prompt won't be shown
           if (!shouldShowResumePromptRef.current) {
-            video.play().catch(e => console.log('[VideoPlayer] Autoplay prevented:', e));
+            video.volume = getSavedVolume();
+            video.muted = getSavedMuteState();
+            video.play().catch(e => {
+              console.log('[VideoPlayer] Autoplay prevented (Safari), trying muted:', e);
+              video.muted = true;
+              video.play().then(() => {
+                const unmute = () => { video.muted = getSavedMuteState(); video.volume = getSavedVolume(); document.removeEventListener('click', unmute); document.removeEventListener('keydown', unmute); };
+                document.addEventListener('click', unmute, { once: true });
+                document.addEventListener('keydown', unmute, { once: true });
+              }).catch(() => {});
+            });
           } else {
             console.log('[VideoPlayer] Skipping autoplay (Safari) - resume prompt will be shown');
           }
@@ -1586,7 +1535,17 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
         }
         // Only autoplay if resume prompt won't be shown
         if (!shouldShowResumePromptRef.current) {
-          video.play().catch(e => console.log('[VideoPlayer] Autoplay prevented:', e));
+          video.volume = getSavedVolume();
+          video.muted = getSavedMuteState();
+          video.play().catch(e => {
+            console.log('[VideoPlayer] Autoplay prevented (native), trying muted:', e);
+            video.muted = true;
+            video.play().then(() => {
+              const unmute = () => { video.muted = getSavedMuteState(); video.volume = getSavedVolume(); document.removeEventListener('click', unmute); document.removeEventListener('keydown', unmute); };
+              document.addEventListener('click', unmute, { once: true });
+              document.addEventListener('keydown', unmute, { once: true });
+            }).catch(() => {});
+          });
         } else {
           console.log('[VideoPlayer] Skipping autoplay (native) - resume prompt will be shown');
         }

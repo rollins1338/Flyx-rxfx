@@ -267,7 +267,7 @@ async function getMegaCloudKey(): Promise<string> {
 // ============================================================================
 // RPI Proxy Helper — route requests through residential IP
 // HiAnime blocks CF Worker IPs (Cloudflare challenge), so we route scraping
-// calls through the RPI proxy's /animekai endpoint which has a residential IP.
+// calls through the RPI proxy's /hianime/stream endpoint which has a residential IP.
 // ============================================================================
 
 let _rpiConfig: { baseUrl: string; key: string } | null = null;
@@ -293,7 +293,7 @@ async function rpiFetch(url: string, headers: Record<string, string> = {}): Prom
         url,
         key: _rpiConfig.key,
       });
-      const rpiUrl = `${_rpiConfig.baseUrl}/animekai?${rpiParams.toString()}`;
+      const rpiUrl = `${_rpiConfig.baseUrl}/hianime/stream?${rpiParams.toString()}`;
       console.log(`[rpiFetch] Routing through RPI: ${url.substring(0, 80)} → ${rpiUrl.substring(0, 80)}`);
       const res = await fetch(rpiUrl, { signal: AbortSignal.timeout(20000) });
       console.log(`[rpiFetch] RPI response: ${res.status} ${res.headers.get('content-type')}`);
@@ -901,23 +901,21 @@ export async function handleHiAnimeRequest(request: Request, env: Env): Promise<
         
         let rpiUrl: string;
         if (isMegaCloudCdn) {
-          // For MegaCloud CDN, try /animekai FIRST — it uses Node's fetch() (undici)
-          // which has a different TLS fingerprint that often passes MegaCloud's protection.
-          // /fetch-rust requires the binary to be installed and often fails.
+          // For MegaCloud CDN, use /hianime/stream — dedicated endpoint with correct headers
           const rpiParams = new URLSearchParams({
             url: decodedUrl,
             key: env.RPI_PROXY_KEY!,
           });
-          rpiUrl = `${rpiBaseUrl}/animekai?${rpiParams.toString()}`;
-          logger.debug('Using /animekai for MegaCloud CDN (primary)', { rpiUrl: rpiUrl.substring(0, 80) });
+          rpiUrl = `${rpiBaseUrl}/hianime/stream?${rpiParams.toString()}`;
+          logger.debug('Using /hianime/stream for MegaCloud CDN (primary)', { rpiUrl: rpiUrl.substring(0, 80) });
         } else {
-          // Use regular AnimeKai endpoint for other URLs
+          // Use dedicated HiAnime endpoint for other URLs
           const rpiParams = new URLSearchParams({
             url: decodedUrl,
             key: env.RPI_PROXY_KEY!,
           });
-          rpiUrl = `${rpiBaseUrl}/animekai?${rpiParams.toString()}`;
-          logger.debug('Forwarding to RPI proxy', { rpiUrl: rpiUrl.substring(0, 80) });
+          rpiUrl = `${rpiBaseUrl}/hianime/stream?${rpiParams.toString()}`;
+          logger.debug('Forwarding to RPI /hianime/stream', { rpiUrl: rpiUrl.substring(0, 80) });
         }
 
         const rpiResponse = await fetchWithRetry(rpiUrl, {
@@ -969,7 +967,7 @@ export async function handleHiAnimeRequest(request: Request, env: Env): Promise<
         strategy2Status = -1;
       }
 
-      // Strategy 3: If /animekai failed for MegaCloud CDN, try /fetch-rust endpoint
+      // Strategy 3: If /hianime/stream failed for MegaCloud CDN, try /fetch-rust endpoint
       // The /fetch-rust endpoint uses curl-impersonate for Chrome TLS fingerprint mimicry
       if (isMegaCloudCdn) {
         try {

@@ -7,6 +7,7 @@ import { useMobileGestures } from '@/hooks/useMobileGestures';
 import { useWatchProgress } from '@/lib/hooks/useWatchProgress';
 import { useCast, CastMedia } from '@/hooks/useCast';
 import { usePresenceContext } from '@/components/analytics/PresenceProvider';
+import { getSavedVolume, getSavedMuteState, saveVolumeSettings } from '@/lib/utils/player-preferences';
 // Player Core hooks — shared logic extracted for reuse by both desktop and mobile players
 // The mobile player integrates these hooks for shared functionality while retaining
 // mobile-specific UI controls (gestures, touch controls, orientation handling, etc.)
@@ -201,7 +202,8 @@ export default function MobileVideoPlayer({
   // Keep refs in sync with props
   useEffect(() => { skipIntroRef.current = skipIntroProp; }, [skipIntroProp]);
   useEffect(() => { skipOutroRef.current = skipOutroProp; }, [skipOutroProp]);
-  const [volumeLevel, setVolumeLevel] = useState(1);
+  const [volumeLevel, setVolumeLevel] = useState(() => getSavedVolume());
+  const [isMuted, setIsMuted] = useState(() => getSavedMuteState());
   const [showBrightnessOverlay, setShowBrightnessOverlay] = useState(false);
   const [showVolumeOverlay, setShowVolumeOverlay] = useState(false);
   const [longPressActive, setLongPressActive] = useState(false);
@@ -406,13 +408,17 @@ export default function MobileVideoPlayer({
     const video = videoRef.current;
     if (!video || isLocked) return;
     if (video.paused) {
+      // User interaction — unmute if we were force-muted by autoplay policy
+      if (video.muted && !isMuted) {
+        video.muted = false;
+      }
       video.play().catch(console.error);
     } else {
       video.pause();
     }
     triggerHaptic('light');
     resetControlsTimeout();
-  }, [isLocked, resetControlsTimeout]);
+  }, [isLocked, isMuted, resetControlsTimeout]);
 
   const seekTo = useCallback((time: number) => {
     const video = videoRef.current;
@@ -499,12 +505,18 @@ export default function MobileVideoPlayer({
     if (isLocked) return;
     const newVolume = Math.max(0, Math.min(1, volumeStartRef.current - progress));
     setVolumeLevel(newVolume);
-    if (videoRef.current) videoRef.current.volume = newVolume;
+    const newMuted = newVolume === 0;
+    setIsMuted(newMuted);
+    if (videoRef.current) {
+      videoRef.current.volume = newVolume;
+      videoRef.current.muted = newMuted;
+    }
     setShowVolumeOverlay(true);
   }, [isLocked]);
 
   const handleVerticalDragRightEnd = useCallback(() => {
     volumeStartRef.current = volumeLevel;
+    saveVolumeSettings(volumeLevel, volumeLevel === 0);
     setTimeout(() => setShowVolumeOverlay(false), 500);
   }, [volumeLevel]);
 
@@ -596,9 +608,18 @@ export default function MobileVideoPlayer({
         video.currentTime = pendingSeekTimeRef.current;
         pendingSeekTimeRef.current = null;
       }
-      video.muted = false;
+      // Apply saved volume preferences
+      const savedVolume = getSavedVolume();
+      const savedMuted = getSavedMuteState();
+      video.volume = savedVolume;
+      video.muted = savedMuted;
+      setVolumeLevel(savedVolume);
+      setIsMuted(savedMuted);
       video.play().catch(() => {
+        // Browser blocked unmuted autoplay — mute and play, but track it
+        // so we can unmute on first user interaction
         video.muted = true;
+        setIsMuted(true);
         video.play().catch(() => {});
       });
     };
@@ -947,6 +968,7 @@ export default function MobileVideoPlayer({
     video.currentTime = savedProgress;
     video.play().catch(() => {
       video.muted = true;
+      setIsMuted(true);
       video.play().catch(() => {});
     });
     setShowResumePrompt(false);
@@ -962,6 +984,7 @@ export default function MobileVideoPlayer({
     video.currentTime = 0;
     video.play().catch(() => {
       video.muted = true;
+      setIsMuted(true);
       video.play().catch(() => {});
     });
     setShowResumePrompt(false);

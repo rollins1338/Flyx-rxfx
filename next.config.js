@@ -1,5 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Disable React Strict Mode in dev to prevent double-mounting effects
+  // which causes duplicate extraction requests and race conditions
+  reactStrictMode: false,
+
   // Enable standalone output for Docker deployments
   ...(process.env.FLYX_SELF_HOSTED === 'true' || process.env.DOCKER_BUILD === 'true'
     ? { output: 'standalone' }

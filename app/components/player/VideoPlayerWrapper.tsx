@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { useIsMobile } from '@/hooks/useIsMobile';
-import { getAnimeKaiProxyUrl } from '@/app/lib/proxy-config';
+import { getAnimeKaiProxyUrl, getFlixerStreamProxyUrl, getHiAnimeStreamProxyUrl } from '@/app/lib/proxy-config';
 import { getProviderSettings } from '@/lib/sync';
 
 // Dynamically import players to reduce initial bundle size
@@ -186,16 +186,22 @@ export default function VideoPlayerWrapper(props: VideoPlayerWrapperProps) {
             // Get the first source URL
             let sourceUrl = sources[0].url;
             
-            // Apply proxy if needed
+            // Apply proxy if needed — route through provider-specific proxy
             if (sources[0].requiresSegmentProxy) {
               const isAlreadyProxied = sourceUrl.includes('/api/stream-proxy') || 
                 sourceUrl.includes('/stream/') ||
-                sourceUrl.includes('/animekai');
+                sourceUrl.includes('/animekai') ||
+                sourceUrl.includes('/flixer/stream');
               
               if (!isAlreadyProxied) {
-                sourceUrl = getAnimeKaiProxyUrl(
-                  sources[0].directUrl || sourceUrl
-                );
+                const targetUrl = sources[0].directUrl || sourceUrl;
+                if (actualProvider === 'flixer') {
+                  sourceUrl = getFlixerStreamProxyUrl(targetUrl);
+                } else if (actualProvider === 'hianime') {
+                  sourceUrl = getHiAnimeStreamProxyUrl(targetUrl);
+                } else {
+                  sourceUrl = getAnimeKaiProxyUrl(targetUrl);
+                }
               }
             }
 
@@ -240,14 +246,21 @@ export default function VideoPlayerWrapper(props: VideoPlayerWrapperProps) {
     const source = streamData.sources[index];
     let sourceUrl = source.url;
 
-    // Apply proxy if needed
+    // Apply proxy if needed — route through provider-specific proxy
     if (source.requiresSegmentProxy) {
       const isAlreadyProxied = sourceUrl.includes('/api/stream-proxy') || 
         sourceUrl.includes('/stream/') ||
-        sourceUrl.includes('/animekai');
+        sourceUrl.includes('/animekai') ||
+        sourceUrl.includes('/flixer/stream');
       
       if (!isAlreadyProxied) {
-        sourceUrl = getAnimeKaiProxyUrl(sourceUrl);
+        if (streamData.provider === 'flixer') {
+          sourceUrl = getFlixerStreamProxyUrl(sourceUrl);
+        } else if (streamData.provider === 'hianime') {
+          sourceUrl = getHiAnimeStreamProxyUrl(sourceUrl);
+        } else {
+          sourceUrl = getAnimeKaiProxyUrl(sourceUrl);
+        }
       }
     }
 

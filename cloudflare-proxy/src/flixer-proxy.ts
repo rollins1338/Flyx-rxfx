@@ -540,11 +540,16 @@ async function ensureWasmInitialized(logger: ReturnType<typeof createLogger>): P
   wasmInitPromise = (async () => {
     if (cachedWasmLoader && cachedApiKey) return; // double-check after await
     logger.info('Initializing Flixer WASM...');
-    await syncServerTime();
+    try {
+      await syncServerTime();
+      logger.info('Time sync done', { offset: serverTimeOffset });
+    } catch (e) {
+      logger.warn('Time sync failed, using local time', { error: e instanceof Error ? e.message : String(e) });
+    }
     cachedWasmLoader = new FlixerWasmLoader();
     await cachedWasmLoader.initialize(FLIXER_WASM);
     cachedApiKey = cachedWasmLoader.getImgKey();
-    logger.info('Flixer WASM initialized', { keyPrefix: cachedApiKey.slice(0, 16) });
+    logger.info('Flixer WASM initialized', { keyPrefix: cachedApiKey.slice(0, 16), keyLen: cachedApiKey.length });
   })();
   wasmInitPromise.catch(() => { 
     wasmInitPromise = null;
@@ -564,7 +569,15 @@ function getOrCreateWarmup(apiKey: string, warmupPath: string): Promise<void> {
   if (warmupCache && warmupCache.key === warmupPath && (now - warmupCache.timestamp) < WARMUP_TTL) {
     return warmupCache.promise;
   }
-  const promise = makeFlixerRequest(apiKey, warmupPath, {}).then(() => {}).catch(() => {});
+  console.log(`[Flixer] Warm-up request: ${warmupPath}`);
+  // bW90aGFmYWth header is REQUIRED on the initial server-list fetch.
+  // hexa.su flipped the logic — without it, the API returns plain TMDB data
+  // instead of the encrypted stream server list.
+  const promise = makeFlixerRequest(apiKey, warmupPath, { 'bW90aGFmYWth': '1' }).then(() => {
+    console.log(`[Flixer] Warm-up OK`);
+  }).catch((e) => {
+    console.log(`[Flixer] Warm-up failed: ${e instanceof Error ? e.message : String(e)}`);
+  });
   warmupCache = { key: warmupPath, promise, timestamp: now };
   return promise;
 }
@@ -575,8 +588,8 @@ function getOrCreateWarmup(apiKey: string, warmupPath: string): Promise<void> {
 async function syncServerTime(): Promise<void> {
   try {
     const localTimeBefore = Date.now();
-    // hexa.su time sync — no JS challenge, direct fetch works
-    const response = await fetchWithRpi(`${FLIXER_API_BASE}/api/time?t=${localTimeBefore}`, {
+    // hexa.su time sync — no JS challenge, direct fetch works from CF Workers
+    const response = await fetch(`${FLIXER_API_BASE}/api/time?t=${localTimeBefore}`, {
       signal: AbortSignal.timeout(5000),
     });
     
@@ -662,16 +675,16 @@ function generateAuthHeaders(apiKey: string, path: string): Record<string, strin
     'X-Client-Fingerprint': generateClientFingerprint(),
     'Accept': 'text/plain',
     'Accept-Language': 'en-US,en;q=0.9',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
-    'Referer': 'https://flixer.cc/',
-    'sec-ch-ua': '"Chromium";v="143", "Not A(Brand";v="24"',
-    'sec-ch-ua-mobile': '?0',
-    'sec-ch-ua-platform': '"Windows"',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
   };
 }
 
 /**
- * Make authenticated API request to Flixer
+ * Make authenticated API request to Flixer/Hexa
+ * 
+ * IMPORTANT: hexa.su works fine from datacenter IPs (no JS challenge).
+ * We fetch DIRECTLY — no RPI proxy needed. This avoids double-proxying
+ * and eliminates the RPI as a failure point.
  */
 async function makeFlixerRequest(
   apiKey: string,
@@ -696,6 +709,13 @@ async function makeFlixerRequest(
   const signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, messageData);
   const signature = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)));
   
+  // HEADER NOTES (Feb 2026 — hexa.su flipped the bW90aGFmYWth logic):
+  // - bW90aGFmYWth: "1" is now REQUIRED on the initial server-list fetch (warm-up).
+  //   Without it, the API returns plain TMDB image data instead of encrypted stream data.
+  //   It is passed via extraHeaders from getOrCreateWarmup().
+  // - For per-server source fetches (X-Only-Sources + X-Server), do NOT send bW90aGFmYWth.
+  // - Origin header should NOT be sent
+  // - sec-fetch-* headers should NOT be sent
   const headers: Record<string, string> = {
     'X-Api-Key': apiKey,
     'X-Request-Timestamp': timestamp.toString(),
@@ -704,22 +724,16 @@ async function makeFlixerRequest(
     'X-Client-Fingerprint': generateClientFingerprint(),
     'Accept': 'text/plain',
     'Accept-Language': 'en-US,en;q=0.9',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
-    'Referer': 'https://flixer.cc/',
-    'sec-ch-ua': '"Chromium";v="143", "Not A(Brand";v="24"',
-    'sec-ch-ua-mobile': '?0',
-    'sec-ch-ua-platform': '"Windows"',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     ...extraHeaders,
   };
   
-  // CRITICAL: Do NOT send these headers - they cause the request to be blocked
-  // - bW90aGFmYWth (base64 for "mothafaka") - anti-scraping marker
-  // - Origin header
-  // - sec-fetch-* headers
+  // Direct fetch — hexa.su has NO JS challenge, works from CF Worker IPs.
+  // Do NOT route through RPI — that adds latency and a failure point.
+  const url = `${FLIXER_API_BASE}${path}`;
+  console.log(`[Flixer] API request: ${path} (server: ${extraHeaders['X-Server'] || 'none'})`);
   
-  // Route through RPI if configured, otherwise direct.
-  // hexa.su doesn't have a JS challenge, so direct fetch works from CF Workers.
-  const response = await fetchWithRpi(`${FLIXER_API_BASE}${path}`, {
+  const response = await fetch(url, {
     headers,
     signal: AbortSignal.timeout(8000),
   });
@@ -788,8 +802,10 @@ async function getSourceFromServer(
     if (url && url.trim() !== '') {
       return { url, raw: data };
     }
+    
+    console.log(`[Flixer] ${server}: decrypted OK but no URL found in response`);
   } catch (e) {
-    // Single attempt failed, move on
+    console.log(`[Flixer] ${server}: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   return { url: null, raw: null };
@@ -841,7 +857,7 @@ async function extractAllServers(
             title: `Flixer ${SERVER_NAMES[server] || server}`,
             url: result.url,
             type: 'hls',
-            referer: 'https://flixer.cc/',
+            referer: 'https://hexa.su/',
             requiresSegmentProxy: true,
             status: 'working',
             language: 'en',
@@ -992,7 +1008,7 @@ export async function handleFlixerRequest(request: Request, env: Env): Promise<R
           title: `Flixer ${displayName}`,
           url: result.url,
           type: 'hls',
-          referer: 'https://flixer.cc/',
+          referer: 'https://hexa.su/',
           requiresSegmentProxy: true,
           status: 'working',
           language: 'en',
@@ -1017,7 +1033,166 @@ export async function handleFlixerRequest(request: Request, env: Env): Promise<R
     }
   }
 
+  // =========================================================================
+  // /flixer/stream — Proxy Flixer CDN m3u8 playlists and segments
+  // This is the DEDICATED route for Flixer playback. Do NOT use /animekai.
+  // Flixer CDN (p.XXXXX.workers.dev) blocks CF Worker IPs, so we route
+  // through RPI residential proxy. The referer must be correct for each CDN.
+  // =========================================================================
+  if (path === '/flixer/stream') {
+    const targetUrl = url.searchParams.get('url');
+    if (!targetUrl) {
+      return jsonResponse({ error: 'Missing url parameter' }, 400);
+    }
+
+    const decodedUrl = decodeURIComponent(targetUrl);
+    logger.info('Flixer stream proxy', { url: decodedUrl.substring(0, 100) });
+
+    // Determine correct referer for the CDN
+    let cdnReferer = 'https://hexa.su/';
+    if (decodedUrl.includes('frostcomet') || decodedUrl.includes('thunderleaf') || decodedUrl.includes('skyember')) {
+      cdnReferer = 'https://hexa.su/';
+    }
+
+    // Strategy 1: Try direct fetch from CF Worker (some CDN subdomains allow it)
+    try {
+      const directRes = await fetch(decodedUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+          'Accept': '*/*',
+          'Accept-Encoding': 'identity',
+          'Referer': cdnReferer,
+          'Origin': 'https://hexa.su',
+        },
+        signal: AbortSignal.timeout(8000),
+      });
+
+      if (directRes.ok) {
+        logger.info('Flixer stream: CF direct OK');
+        return handleFlixerStreamResponse(directRes, decodedUrl, url.origin, 'cf-direct', logger);
+      }
+      logger.debug('Flixer stream: CF direct failed', { status: directRes.status });
+    } catch (e) {
+      logger.debug('Flixer stream: CF direct error', { error: e instanceof Error ? e.message : String(e) });
+    }
+
+    // Strategy 2: RPI residential proxy
+    if (env.RPI_PROXY_URL && env.RPI_PROXY_KEY) {
+      try {
+        let rpiBase = env.RPI_PROXY_URL.replace(/\/+$/, '');
+        if (!rpiBase.startsWith('http')) rpiBase = `https://${rpiBase}`;
+
+        const rpiParams = new URLSearchParams({
+          url: decodedUrl,
+          key: env.RPI_PROXY_KEY,
+          referer: cdnReferer,
+          origin: 'https://hexa.su',
+        });
+        const rpiUrl = `${rpiBase}/flixer/stream?${rpiParams.toString()}`;
+        logger.debug('Flixer stream: trying RPI', { rpiUrl: rpiUrl.substring(0, 80) });
+
+        const rpiRes = await fetch(rpiUrl, { signal: AbortSignal.timeout(15000) });
+        if (rpiRes.ok) {
+          logger.info('Flixer stream: RPI OK');
+          return handleFlixerStreamResponse(rpiRes, decodedUrl, url.origin, 'rpi', logger);
+        }
+        logger.warn('Flixer stream: RPI failed', { status: rpiRes.status });
+      } catch (e) {
+        logger.error('Flixer stream: RPI error', { error: e instanceof Error ? e.message : String(e) });
+      }
+    }
+
+    return jsonResponse({ error: 'All proxy strategies failed for Flixer CDN' }, 502);
+  }
+
   return jsonResponse({ error: 'Unknown endpoint' }, 404);
+}
+
+/**
+ * Handle a successful Flixer CDN response — rewrite m3u8 playlists, pass through segments.
+ */
+function handleFlixerStreamResponse(
+  response: Response,
+  originalUrl: string,
+  proxyOrigin: string,
+  via: string,
+  logger: ReturnType<typeof createLogger>,
+): Response | Promise<Response> {
+  const contentType = response.headers.get('content-type') || '';
+  const isPlaylist = contentType.includes('mpegurl') || originalUrl.includes('.m3u8');
+
+  if (isPlaylist) {
+    return response.text().then(text => {
+      const rewritten = rewriteFlixerPlaylist(text, originalUrl, proxyOrigin);
+      return new Response(rewritten, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/vnd.apple.mpegurl',
+          'Cache-Control': 'public, max-age=5',
+          'X-Proxied-Via': via,
+          ...corsHeaders(),
+        },
+      });
+    });
+  }
+
+  // Segment — pass through with correct content type
+  return response.arrayBuffer().then(body => {
+    const firstBytes = new Uint8Array(body.slice(0, 4));
+    const isMpegTs = firstBytes[0] === 0x47;
+    const isFmp4 = firstBytes[0] === 0x00 && firstBytes[1] === 0x00 && firstBytes[2] === 0x00;
+    let actualContentType = contentType;
+    if (isMpegTs) actualContentType = 'video/mp2t';
+    else if (isFmp4) actualContentType = 'video/mp4';
+    else if (!actualContentType) actualContentType = 'application/octet-stream';
+
+    return new Response(body, {
+      status: 200,
+      headers: {
+        'Content-Type': actualContentType,
+        'Content-Length': body.byteLength.toString(),
+        'Cache-Control': 'public, max-age=3600',
+        'X-Proxied-Via': via,
+        ...corsHeaders(),
+      },
+    });
+  });
+}
+
+/**
+ * Rewrite m3u8 playlist URLs to route through /flixer/stream
+ */
+function rewriteFlixerPlaylist(playlist: string, baseUrl: string, proxyOrigin: string): string {
+  const lines = playlist.split('\n');
+  const rewritten: string[] = [];
+  const base = new URL(baseUrl);
+  const basePath = base.pathname.substring(0, base.pathname.lastIndexOf('/') + 1);
+
+  const proxyUrl = (u: string): string => {
+    let abs: string;
+    if (u.startsWith('http://') || u.startsWith('https://')) abs = u;
+    else if (u.startsWith('/')) abs = `${base.origin}${u}`;
+    else abs = `${base.origin}${basePath}${u}`;
+    return `${proxyOrigin}/flixer/stream?url=${encodeURIComponent(abs)}`;
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (line.startsWith('#EXT-X-MEDIA:') || line.startsWith('#EXT-X-I-FRAME-STREAM-INF:')) {
+      const uriMatch = line.match(/URI="([^"]+)"/);
+      if (uriMatch) {
+        rewritten.push(line.replace(`URI="${uriMatch[1]}"`, `URI="${proxyUrl(uriMatch[1])}"`));
+      } else {
+        rewritten.push(line);
+      }
+    } else if (line.startsWith('#') || trimmed === '') {
+      rewritten.push(line);
+    } else {
+      try { rewritten.push(proxyUrl(trimmed)); }
+      catch { rewritten.push(line); }
+    }
+  }
+  return rewritten.join('\n');
 }
 
 export default {

@@ -380,7 +380,7 @@ async function fetchPlayerJWT(channel: string, logger: any, env?: Env): Promise<
     
     // Try RPI proxy first (hitsplay blocks CF IPs)
     if (env?.RPI_PROXY_URL && env?.RPI_PROXY_KEY) {
-      const rpiUrl = `${env.RPI_PROXY_URL}/animekai?url=${encodeURIComponent(hitsplayUrl)}&key=${env.RPI_PROXY_KEY}&referer=${encodeURIComponent('https://daddylive.mp/')}`;
+      const rpiUrl = `${env.RPI_PROXY_URL}/dlhd/stream?url=${encodeURIComponent(hitsplayUrl)}&key=${env.RPI_PROXY_KEY}&referer=${encodeURIComponent('https://daddylive.mp/')}`;
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 6000); // 6 sec timeout
       
@@ -490,7 +490,7 @@ async function getServerKey(channelKey: string, logger: any, env?: Env): Promise
   // Try RPI proxy if configured
   if (env?.RPI_PROXY_URL && env?.RPI_PROXY_KEY) {
     try {
-      const rpiUrl = `${env.RPI_PROXY_URL}/animekai?url=${encodeURIComponent(lookupUrl)}&key=${env.RPI_PROXY_KEY}`;
+      const rpiUrl = `${env.RPI_PROXY_URL}/dlhd/stream?url=${encodeURIComponent(lookupUrl)}&key=${env.RPI_PROXY_KEY}`;
       const rpiRes = await fetch(rpiUrl);
       if (rpiRes.ok) {
         const text = await rpiRes.text();
@@ -529,7 +529,7 @@ async function fetchServerKeyFromLookup(channelKey: string, logger: any, env?: E
   try {
     let res: Response;
     if (env?.RPI_PROXY_URL && env?.RPI_PROXY_KEY) {
-      const rpiUrl = `${env.RPI_PROXY_URL}/animekai?url=${encodeURIComponent(lookupUrl)}&key=${env.RPI_PROXY_KEY}&referer=${encodeURIComponent(`https://${PLAYER_DOMAIN}/`)}`;
+      const rpiUrl = `${env.RPI_PROXY_URL}/dlhd/stream?url=${encodeURIComponent(lookupUrl)}&key=${env.RPI_PROXY_KEY}&referer=${encodeURIComponent(`https://${PLAYER_DOMAIN}/`)}`;
       res = await fetch(rpiUrl);
     } else {
       res = await fetch(lookupUrl, {
@@ -639,7 +639,7 @@ async function fetchCdnLiveStream(channelName: string, countryCode: string, logg
     
     let res: Response;
     if (env?.RPI_PROXY_URL && env?.RPI_PROXY_KEY) {
-      const rpiUrl = `${env.RPI_PROXY_URL}/animekai?url=${encodeURIComponent(playerUrl)}&key=${env.RPI_PROXY_KEY}&referer=${encodeURIComponent('https://daddylive.mp/')}`;
+      const rpiUrl = `${env.RPI_PROXY_URL}/dlhd/stream?url=${encodeURIComponent(playerUrl)}&key=${env.RPI_PROXY_KEY}&referer=${encodeURIComponent('https://daddylive.mp/')}`;
       res = await fetch(rpiUrl);
     } else {
       // Fallback to direct fetch if RPI not configured (will likely fail)
@@ -1095,7 +1095,7 @@ async function fetchViaRpiProxy(
   
   // Pass both referer AND origin for DLHD CDN requests
   const originParam = origin ? `&origin=${encodeURIComponent(origin)}` : '';
-  const rpiUrl = `${env.RPI_PROXY_URL}/animekai?url=${encodeURIComponent(url)}&key=${env.RPI_PROXY_KEY}&referer=${encodeURIComponent(referer)}${originParam}`;
+  const rpiUrl = `${env.RPI_PROXY_URL}/dlhd/stream?url=${encodeURIComponent(url)}&key=${env.RPI_PROXY_KEY}&referer=${encodeURIComponent(referer)}${originParam}`;
   return fetch(rpiUrl, { signal });
 }
 
@@ -1230,7 +1230,7 @@ async function tryDvalnaServer(
   try {
     // Use RPI proxy with www.ksohls.ru referer - JWT is optional
     let rpiUrl = env?.RPI_PROXY_URL && env?.RPI_PROXY_KEY
-      ? `${env.RPI_PROXY_URL}/animekai?url=${encodeURIComponent(m3u8Url)}&key=${env.RPI_PROXY_KEY}&referer=${encodeURIComponent('https://www.ksohls.ru/')}`
+      ? `${env.RPI_PROXY_URL}/dlhd/stream?url=${encodeURIComponent(m3u8Url)}&key=${env.RPI_PROXY_KEY}&referer=${encodeURIComponent('https://www.ksohls.ru/')}`
       : null;
     
     if (!rpiUrl) {
@@ -1565,7 +1565,7 @@ async function handleCdnLiveM3U8Proxy(url: URL, logger: any, origin: string | nu
     if (env?.RPI_PROXY_URL && env?.RPI_PROXY_KEY) {
       logger.info('Trying RPI proxy for CDN-Live M3U8');
       try {
-        const rpiUrl = `${env.RPI_PROXY_URL}/animekai?url=${encodeURIComponent(decodedUrl)}&key=${env.RPI_PROXY_KEY}&referer=${encodeURIComponent(referer)}`;
+        const rpiUrl = `${env.RPI_PROXY_URL}/dlhd/stream?url=${encodeURIComponent(decodedUrl)}&key=${env.RPI_PROXY_KEY}&referer=${encodeURIComponent(referer)}`;
         const rpiRes = await fetch(rpiUrl, { signal: controller.signal });
         if (rpiRes.ok) {
           response = rpiRes;
@@ -1902,7 +1902,7 @@ async function handleSegmentProxy(url: URL, logger: any, origin: string | null, 
       logger.info('Trying RPI proxy for segment');
       try {
         // Pass both referer AND origin for DLHD CDN segments
-        const rpiUrl = `${env.RPI_PROXY_URL}/animekai?url=${encodeURIComponent(decodedUrl)}&key=${env.RPI_PROXY_KEY}&referer=${encodeURIComponent(referer)}&origin=${encodeURIComponent(requestOrigin)}`;
+        const rpiUrl = `${env.RPI_PROXY_URL}/dlhd/stream?url=${encodeURIComponent(decodedUrl)}&key=${env.RPI_PROXY_KEY}&referer=${encodeURIComponent(referer)}&origin=${encodeURIComponent(requestOrigin)}`;
         logger.info('RPI URL', { rpiUrl: rpiUrl.substring(0, 150) });
         
         const rpiRes = await fetch(rpiUrl, {

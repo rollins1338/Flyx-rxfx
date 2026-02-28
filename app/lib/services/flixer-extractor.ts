@@ -11,8 +11,11 @@
  * - WASM must be bundled with CF Worker, not fetched at runtime
  */
 
-import { getFlixerExtractUrl } from '../proxy-config';
-import { cfFetch } from '../utils/cf-fetch';
+import { getFlixerExtractUrl, getFlixerExtractAllUrl } from '../proxy-config';
+
+// Use regular fetch for CF Worker endpoints — cfFetch would double-proxy
+// through RPI since it detects .workers.dev URLs. The CF Worker handles
+// the hexa.su API call directly (no RPI needed).
 
 interface StreamSource {
   quality: string;
@@ -111,10 +114,8 @@ async function fetchSubtitles(
 /**
  * Extract streams from Flixer via Cloudflare Worker
  * 
- * Strategy: fire 4 servers in parallel through RPI, return the FIRST one that
- * resolves successfully. Don't wait for the rest — the player needs one source
- * to start playback. Additional sources are collected during a short grace period
- * so the user has alternatives in the source picker.
+ * Uses the /flixer/extract-all batch endpoint — one round trip to the CF Worker
+ * which fans out to all servers internally. Much faster than 6 individual requests.
  */
 export async function extractFlixerStreams(
   tmdbId: string,
@@ -135,51 +136,44 @@ export async function extractFlixerStreams(
   // Subtitles in parallel (don't block)
   const subtitlePromise = fetchSubtitles(tmdbId, type, season, episode);
 
-  // Race servers — return as soon as the first one works
-  const sources: StreamSource[] = [];
+  try {
+    // Single batch request — CF Worker fans out to all servers internally
+    const extractAllUrl = getFlixerExtractAllUrl(tmdbId, type, season, episode);
+    const response = await fetch(extractAllUrl, { signal: AbortSignal.timeout(12000) });
 
-  const serverPromises = FAST_SERVERS.map(async (server): Promise<StreamSource | null> => {
-    try {
-      const extractUrl = getFlixerExtractUrl(tmdbId, type, server, season, episode);
-      const response = await cfFetch(extractUrl, { signal: AbortSignal.timeout(10000) });
-      if (!response.ok) return null;
-      const data: FlixerApiResponse = await response.json();
-      if (data.success && data.sources?.length) {
-        const src: StreamSource = {
-          ...data.sources[0],
-          title: `Flixer ${SERVER_NAMES[server] || server}`,
-          server,
-          status: 'working' as const,
-        };
-        sources.push(src);
-        return src;
-      }
-    } catch (_) {}
-    return null;
-  });
+    if (!response.ok) {
+      console.log(`[Flixer] extract-all returned ${response.status}`);
+      return { success: false, sources: [], error: `Flixer API returned ${response.status}` };
+    }
 
-  // Wait for first success
-  const first = await Promise.any(serverPromises).catch(() => null);
+    const data = await response.json() as { success: boolean; sources?: StreamSource[]; error?: string };
 
-  if (first) {
-    // Got one — give 1s for more to trickle in, then return
-    await Promise.race([
-      Promise.allSettled(serverPromises),
-      new Promise(r => setTimeout(r, 1000)),
-    ]);
-  } else {
-    // None from fast servers — wait for all to settle
-    await Promise.allSettled(serverPromises);
+    if (!data.success || !data.sources?.length) {
+      console.log(`[Flixer] extract-all: no sources`);
+      return { success: false, sources: [], error: data.error || 'No working sources from Flixer' };
+    }
+
+    // Sources already have correct format from the CF Worker
+    const sources: StreamSource[] = data.sources.map((s: any) => ({
+      quality: s.quality || 'auto',
+      title: s.title || 'Flixer',
+      url: s.url,
+      type: (s.type || 'hls') as 'hls' | 'mp4',
+      referer: s.referer || 'https://hexa.su/',
+      requiresSegmentProxy: s.requiresSegmentProxy ?? true,
+      status: 'working' as const,
+      language: s.language || 'en',
+      server: s.server,
+    }));
+
+    console.log(`[Flixer] ${sources.length} source(s) via extract-all`);
+
+    const subtitles = await subtitlePromise;
+    return { success: true, sources, subtitles: subtitles.length > 0 ? subtitles : undefined };
+  } catch (err) {
+    console.error(`[Flixer] extract-all error:`, err instanceof Error ? err.message : err);
+    return { success: false, sources: [], error: err instanceof Error ? err.message : 'Flixer extraction failed' };
   }
-
-  console.log(`[Flixer] ${sources.length} source(s)`);
-
-  if (sources.length === 0) {
-    return { success: false, sources: [], error: 'No working sources from Flixer' };
-  }
-
-  const subtitles = await subtitlePromise;
-  return { success: true, sources, subtitles: subtitles.length > 0 ? subtitles : undefined };
 }
 
 /**
@@ -201,7 +195,7 @@ export async function fetchFlixerSourceByName(
   try {
     const extractUrl = getFlixerExtractUrl(tmdbId, type, server, season, episode);
     
-    const response = await cfFetch(extractUrl, {
+    const response = await fetch(extractUrl, {
       signal: AbortSignal.timeout(20000),
     });
     

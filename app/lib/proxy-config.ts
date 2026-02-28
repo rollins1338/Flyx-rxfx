@@ -426,6 +426,76 @@ export function isFlixerCdnUrl(url: string): boolean {
   return url.includes('flixer') || url.includes('plsdontscrapemelove') || url.includes('hexa.su') || url.includes('themoviedb.hexa');
 }
 
+/**
+ * Get Flixer stream proxy URL — dedicated /flixer/stream route.
+ * Flixer CDN (p.XXXXX.workers.dev) blocks CF Worker IPs, so this route
+ * handles RPI proxying with the correct Referer for Flixer CDN domains.
+ * 
+ * DO NOT use /animekai for Flixer streams — each provider has its own route.
+ */
+export function getFlixerStreamProxyUrl(url: string): string {
+  const baseUrl = getFlixerProxyBaseUrl();
+  return `${baseUrl}/flixer/stream?url=${encodeURIComponent(url)}`;
+}
+
+// ============================================================================
+// HiAnime Proxy Configuration
+// ============================================================================
+
+/**
+ * Get HiAnime/MegaCloud stream proxy URL — dedicated /hianime/stream route.
+ * MegaCloud CDN uses TLS fingerprinting; this route handles RPI proxying
+ * with megacloud.blog Referer/Origin.
+ */
+export function getHiAnimeStreamProxyUrl(url: string): string {
+  const baseUrl = getFlixerProxyBaseUrl(); // same CF Worker base
+  return `${baseUrl}/hianime?url=${encodeURIComponent(url)}`;
+}
+
+// ============================================================================
+// VidLink Proxy Configuration
+// ============================================================================
+
+/**
+ * Get VidLink stream proxy URL — routes through CF Worker /animekai route.
+ * The CF Worker detects VidLink CDN domains and forwards to RPI's dedicated
+ * /vidlink/stream endpoint which has the correct headers for vodvidl.site.
+ */
+export function getVidLinkStreamProxyUrl(url: string): string {
+  const baseUrl = getFlixerProxyBaseUrl();
+  return `${baseUrl}/animekai?url=${encodeURIComponent(url)}`;
+}
+
+// ============================================================================
+// VidSrc Proxy Configuration
+// ============================================================================
+
+/**
+ * Get VidSrc/2embed stream proxy URL — routes through CF Worker /animekai route.
+ * The CF Worker detects VidSrc CDN domains and forwards to RPI's dedicated
+ * /vidsrc/stream endpoint.
+ */
+export function getVidSrcStreamProxyUrl(url: string, referer?: string): string {
+  const baseUrl = getFlixerProxyBaseUrl();
+  let proxyUrl = `${baseUrl}/animekai?url=${encodeURIComponent(url)}`;
+  if (referer) proxyUrl += `&referer=${encodeURIComponent(referer)}`;
+  return proxyUrl;
+}
+
+// ============================================================================
+// 1movies Proxy Configuration
+// ============================================================================
+
+/**
+ * Get 1movies stream proxy URL — routes through CF Worker /animekai route.
+ * The CF Worker detects 1movies CDN domains (p.XXXXX.workers.dev) and forwards
+ * to RPI's dedicated /1movies/stream endpoint.
+ */
+export function get1moviesStreamProxyUrl(url: string): string {
+  const baseUrl = getFlixerProxyBaseUrl();
+  return `${baseUrl}/animekai?url=${encodeURIComponent(url)}`;
+}
+
 // ============================================================================
 // VIPRow Proxy Configuration
 // ============================================================================

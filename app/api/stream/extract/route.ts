@@ -15,7 +15,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { ExtractionRequest } from '@/app/lib/providers/types';
 import { isAnimeContent } from '@/app/lib/services/animekai-extractor';
 import { performanceMonitor } from '@/app/lib/utils/performance-monitor';
-import { getStreamProxyUrl, getAnimeKaiProxyUrl, isMegaUpCdnUrl, is1moviesCdnUrl, isAnimeKaiSource } from '@/app/lib/proxy-config';
+import { getStreamProxyUrl, getAnimeKaiProxyUrl, getFlixerStreamProxyUrl, getVidLinkStreamProxyUrl, getVidSrcStreamProxyUrl, get1moviesStreamProxyUrl, isMegaUpCdnUrl, is1moviesCdnUrl, isAnimeKaiSource } from '@/app/lib/proxy-config';
 
 // Lazy-load registry to prevent module-load crashes on CF Pages runtime.
 // If any provider import fails (e.g., Node.js APIs), the whole module would crash
@@ -125,8 +125,23 @@ function maybeProxyUrl(source: any, provider: string): string {
     // VidLink CDN domains block datacenter IPs
     const isVidLinkCdn = source.url.includes('vodvidl.site') || source.url.includes('videostr.net');
 
-    // Route through residential proxy for CDNs that block datacenter IPs
-    if (isAnimeKai || isAnimeKaiSrc || isMegaUpCdn || is1moviesCdn || is1movies || isFlixer || isVidLink || isVidLinkCdn || isMultiEmbed || isVidSrc) {
+    // Route through provider-specific proxy for CDNs that block datacenter IPs
+    if (isFlixer) {
+      return getFlixerStreamProxyUrl(source.url);
+    }
+    if (isAnimeKai || isAnimeKaiSrc || isMegaUpCdn) {
+      return getAnimeKaiProxyUrl(source.url);
+    }
+    if (isVidLink || isVidLinkCdn) {
+      return getVidLinkStreamProxyUrl(source.url);
+    }
+    if (isVidSrc) {
+      return getVidSrcStreamProxyUrl(source.url, source.referer);
+    }
+    if (is1moviesCdn || is1movies) {
+      return get1moviesStreamProxyUrl(source.url);
+    }
+    if (isMultiEmbed) {
       return getAnimeKaiProxyUrl(source.url);
     }
 

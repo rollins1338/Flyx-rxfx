@@ -364,6 +364,7 @@ const PROXY_ALLOWED_DOMAINS = [
   // Flixer
   'flixer.sh',
   'flixer.cc',
+  'hexa.su',
   'workers.dev', // Flixer CDN uses p.XXXXX.workers.dev
   // VidLink CDN (storm.vodvidl.site, videostr.net — behind Cloudflare, blocks datacenter IPs)
   'vodvidl.site',
@@ -1227,7 +1228,7 @@ function proxyAnimeKaiStream(targetUrl, customUserAgent, customReferer, customOr
   // Flixer CDN REQUIRES Referer header, MegaUp CDN BLOCKS it
   else if (isFlixerCdn) {
     // Flixer CDN needs Referer header
-    headers['Referer'] = customReferer || 'https://flixer.sh/';
+    headers['Referer'] = customReferer || 'https://hexa.su/';
     console.log(`[AnimeKai] Flixer CDN detected - adding Referer: ${headers['Referer']}`);
   } else if (isVidLinkCdn) {
     // VidLink CDN (storm.vodvidl.site) — the m3u8 URL has embedded headers as query params
@@ -1333,6 +1334,259 @@ function proxyAnimeKaiStream(targetUrl, customUserAgent, customReferer, customOr
     proxyReq.destroy();
   });
 
+  proxyReq.end();
+}
+
+// ============================================================================
+// DEDICATED PROVIDER PROXY FUNCTIONS
+// Each provider gets its own handler with provider-specific header logic.
+// This replaces the monolithic proxyAnimeKaiStream domain-sniffing approach.
+// ============================================================================
+
+/**
+ * Flixer CDN proxy — p.XXXXX.workers.dev
+ * Requires: Referer: https://hexa.su/, Origin: https://hexa.su
+ */
+function proxyFlixerStream(targetUrl, customUserAgent, res) {
+  const url = new URL(targetUrl);
+  const client = url.protocol === 'https:' ? https : http;
+  const headers = {
+    'User-Agent': customUserAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': '*/*',
+    'Accept-Encoding': 'identity',
+    'Connection': 'keep-alive',
+    'Referer': 'https://hexa.su/',
+    'Origin': 'https://hexa.su',
+  };
+  console.log(`[Flixer] ${targetUrl.substring(0, 100)}...`);
+  _proxyWithHeaders(client, url, headers, targetUrl, customUserAgent, 'https://hexa.su/', 'https://hexa.su', null, res, 'Flixer');
+}
+
+/**
+ * HiAnime/MegaCloud CDN proxy — /_v paths on rotating domains
+ * Requires: Referer: https://megacloud.blog/, Origin: https://megacloud.blog
+ * Uses fetch() for MegaCloud CDN (Node https gets 403 due to TLS fingerprinting)
+ */
+function proxyHiAnimeStream(targetUrl, customUserAgent, res) {
+  const url = new URL(targetUrl);
+  const isMegaCloudCdn = url.pathname.startsWith('/_v');
+
+  if (isMegaCloudCdn) {
+    // MegaCloud CDN — use fetch() (undici) which has different TLS fingerprint
+    const fetchUA = customUserAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
+    const megaHeaders = {
+      'User-Agent': fetchUA,
+      'Accept': '*/*',
+      'Accept-Encoding': 'identity',
+      'Referer': 'https://megacloud.blog/',
+      'Origin': 'https://megacloud.blog',
+    };
+    console.log(`[HiAnime] MegaCloud CDN: ${targetUrl.substring(0, 100)}...`);
+    fetch(targetUrl, { headers: megaHeaders, signal: AbortSignal.timeout(30000) })
+      .then(async (fetchRes) => {
+        console.log(`[HiAnime CDN] ← ${fetchRes.status} ${fetchRes.headers.get('content-type') || 'unknown'}`);
+        if (!fetchRes.ok) {
+          const errText = await fetchRes.text();
+          if (!res.headersSent) {
+            res.writeHead(fetchRes.status, { 'Content-Type': 'text/plain', 'Access-Control-Allow-Origin': '*' });
+            res.end(errText);
+          }
+          return;
+        }
+        const ct = fetchRes.headers.get('content-type') || 'application/octet-stream';
+        const respHeaders = {
+          'Content-Type': ct,
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Expose-Headers': 'Content-Length, Content-Range',
+          'X-Proxied-By': 'rpi-hianime',
+        };
+        if (fetchRes.headers.get('content-length')) respHeaders['Content-Length'] = fetchRes.headers.get('content-length');
+        if (!res.headersSent) res.writeHead(200, respHeaders);
+        const reader = fetchRes.body.getReader();
+        const pump = async () => {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) { res.end(); return; }
+            res.write(Buffer.from(value));
+          }
+        };
+        pump().catch(err => { console.error(`[HiAnime CDN stream] Error: ${err.message}`); if (!res.writableEnded) res.end(); });
+      })
+      .catch(err => {
+        console.error(`[HiAnime CDN] fetch error: ${err.message}`);
+        if (!res.headersSent) {
+          res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+          res.end(JSON.stringify({ error: 'HiAnime CDN fetch failed', details: err.message }));
+        }
+      });
+    return;
+  }
+
+  // Non-MegaCloud HiAnime URLs — use https with megacloud.blog referer
+  const client = url.protocol === 'https:' ? https : http;
+  const headers = {
+    'User-Agent': customUserAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': '*/*',
+    'Accept-Encoding': 'identity',
+    'Connection': 'keep-alive',
+    'Referer': 'https://megacloud.blog/',
+    'Origin': 'https://megacloud.blog',
+  };
+  console.log(`[HiAnime] ${targetUrl.substring(0, 100)}...`);
+  _proxyWithHeaders(client, url, headers, targetUrl, customUserAgent, 'https://megacloud.blog/', 'https://megacloud.blog', null, res, 'HiAnime');
+}
+
+/**
+ * VidLink CDN proxy — storm.vodvidl.site, videostr.net
+ * Requires: Referer/Origin from embedded headers or videostr.net defaults
+ */
+function proxyVidLinkStream(targetUrl, customUserAgent, res) {
+  const url = new URL(targetUrl);
+  const client = url.protocol === 'https:' ? https : http;
+  const headers = {
+    'User-Agent': customUserAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': '*/*',
+    'Accept-Encoding': 'identity',
+    'Connection': 'keep-alive',
+  };
+
+  // VidLink CDN embeds headers as query params
+  const headersParam = url.searchParams.get('headers');
+  if (headersParam) {
+    try {
+      const parsed = JSON.parse(headersParam);
+      if (parsed.referer) headers['Referer'] = parsed.referer;
+      if (parsed.origin) headers['Origin'] = parsed.origin;
+      console.log(`[VidLink] Using embedded headers: Referer=${headers['Referer']}, Origin=${headers['Origin']}`);
+    } catch {
+      headers['Referer'] = 'https://videostr.net/';
+      headers['Origin'] = 'https://videostr.net';
+    }
+  } else {
+    headers['Referer'] = 'https://videostr.net/';
+    headers['Origin'] = 'https://videostr.net';
+  }
+  console.log(`[VidLink] ${targetUrl.substring(0, 100)}...`);
+  _proxyWithHeaders(client, url, headers, targetUrl, customUserAgent, headers['Referer'], headers['Origin'], null, res, 'VidLink');
+}
+
+/**
+ * DLHD CDN proxy — dvalna.ru, soyspace.cyou, adsfadfds.cfd, ksohls.ru
+ * Requires: Referer + Origin (ksohls.ru) + Authorization: Bearer JWT for M3U8
+ */
+function proxyDlhdStream(targetUrl, customUserAgent, customReferer, customOrigin, customAuth, res) {
+  const url = new URL(targetUrl);
+  const client = url.protocol === 'https:' ? https : http;
+  const headers = {
+    'User-Agent': customUserAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': '*/*',
+    'Accept-Encoding': 'identity',
+    'Connection': 'keep-alive',
+    'Referer': customReferer || 'https://www.ksohls.ru/',
+    'Origin': customOrigin || 'https://www.ksohls.ru',
+  };
+  if (customAuth) {
+    headers['Authorization'] = customAuth;
+    console.log(`[DLHD] Auth header: ${customAuth.substring(0, 30)}...`);
+  }
+  console.log(`[DLHD] ${targetUrl.substring(0, 100)}... Referer: ${headers['Referer']}, Auth: ${customAuth ? 'YES' : 'NO'}`);
+  _proxyWithHeaders(client, url, headers, targetUrl, customUserAgent, headers['Referer'], headers['Origin'], customAuth, res, 'DLHD');
+}
+
+/**
+ * VidSrc/2embed CDN proxy — vidsrc.*, 2embed.*, cloudnestra.*
+ * Requires: Referer from the embed domain
+ */
+function proxyVidSrcStream(targetUrl, customUserAgent, customReferer, res) {
+  const url = new URL(targetUrl);
+  const client = url.protocol === 'https:' ? https : http;
+  const headers = {
+    'User-Agent': customUserAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': '*/*',
+    'Accept-Encoding': 'identity',
+    'Connection': 'keep-alive',
+  };
+  if (customReferer) {
+    headers['Referer'] = customReferer;
+  }
+  console.log(`[VidSrc] ${targetUrl.substring(0, 100)}...`);
+  _proxyWithHeaders(client, url, headers, targetUrl, customUserAgent, customReferer, null, null, res, 'VidSrc');
+}
+
+/**
+ * 1movies CDN proxy — p.XXXXX.workers.dev (same CDN as Flixer but different referer)
+ * Requires: Referer: https://111movies.com/
+ */
+function proxy1moviesStream(targetUrl, customUserAgent, res) {
+  const url = new URL(targetUrl);
+  const client = url.protocol === 'https:' ? https : http;
+  const headers = {
+    'User-Agent': customUserAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': '*/*',
+    'Accept-Encoding': 'identity',
+    'Connection': 'keep-alive',
+    'Referer': 'https://111movies.com/',
+  };
+  console.log(`[1movies] ${targetUrl.substring(0, 100)}...`);
+  _proxyWithHeaders(client, url, headers, targetUrl, customUserAgent, 'https://111movies.com/', null, null, res, '1movies');
+}
+
+/**
+ * Shared https proxy helper — used by all dedicated provider handlers.
+ * Handles redirects, streaming, timeouts, and client disconnect.
+ */
+function _proxyWithHeaders(client, url, headers, targetUrl, customUserAgent, customReferer, customOrigin, customAuth, res, providerTag) {
+  const options = {
+    hostname: url.hostname,
+    port: url.port || (url.protocol === 'https:' ? 443 : 80),
+    path: url.pathname + url.search,
+    method: 'GET',
+    headers,
+    timeout: 60000,
+    rejectUnauthorized: false,
+  };
+
+  const proxyReq = client.request(options, (proxyRes) => {
+    const contentType = proxyRes.headers['content-type'] || 'application/octet-stream';
+    console.log(`[${providerTag} Response] ${proxyRes.statusCode} - ${contentType}`);
+
+    if ([301, 302, 303, 307, 308].includes(proxyRes.statusCode) && proxyRes.headers.location) {
+      const redirectUrl = proxyRes.headers.location;
+      const absoluteUrl = redirectUrl.startsWith('http') ? redirectUrl : new URL(redirectUrl, targetUrl).toString();
+      console.log(`[${providerTag} Redirect] → ${absoluteUrl.substring(0, 80)}...`);
+      _proxyWithHeaders(client, new URL(absoluteUrl), headers, absoluteUrl, customUserAgent, customReferer, customOrigin, customAuth, res, providerTag);
+      return;
+    }
+
+    res.writeHead(proxyRes.statusCode, {
+      'Content-Type': contentType,
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Expose-Headers': 'Content-Length, Content-Range',
+      'X-Proxied-By': `rpi-${providerTag.toLowerCase()}`,
+    });
+    proxyRes.pipe(res);
+    proxyRes.on('error', (err) => {
+      console.error(`[${providerTag} Stream Error] ${err.message}`);
+      if (!res.headersSent) res.writeHead(502);
+      res.end();
+    });
+  });
+
+  proxyReq.on('error', (err) => {
+    console.error(`[${providerTag} Error] ${err.message}`);
+    if (!res.headersSent) {
+      res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ error: `${providerTag} proxy error`, details: err.message }));
+    }
+  });
+  proxyReq.on('timeout', () => {
+    proxyReq.destroy();
+    if (!res.headersSent) {
+      res.writeHead(504, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ error: `${providerTag} stream timeout` }));
+    }
+  });
+  res.on('close', () => { proxyReq.destroy(); });
   proxyReq.end();
 }
 
@@ -3390,10 +3644,156 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // AnimeKai proxy endpoint - proxies MegaUp/Flixer/DLHD CDN streams from residential IP
+  // =========================================================================
+  // DEDICATED PROVIDER STREAM ENDPOINTS
+  // Each provider gets its own route with provider-specific header logic.
+  // =========================================================================
+
+  // Flixer CDN stream proxy — p.XXXXX.workers.dev
+  if (reqUrl.pathname === '/flixer/stream') {
+    const targetUrl = reqUrl.searchParams.get('url');
+    const customUserAgent = reqUrl.searchParams.get('ua');
+    if (!targetUrl) {
+      res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ error: 'Missing url parameter' }));
+    }
+    try {
+      const decoded = decodeURIComponent(targetUrl);
+      if (!isAllowedProxyDomain(decoded)) {
+        res.writeHead(403, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        return res.end(JSON.stringify({ error: 'Domain not allowed' }));
+      }
+      proxyFlixerStream(decoded, customUserAgent ? decodeURIComponent(customUserAgent) : null, res);
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ error: 'Invalid URL' }));
+    }
+    return;
+  }
+
+  // HiAnime/MegaCloud CDN stream proxy
+  if (reqUrl.pathname === '/hianime/stream') {
+    const targetUrl = reqUrl.searchParams.get('url');
+    const customUserAgent = reqUrl.searchParams.get('ua');
+    if (!targetUrl) {
+      res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ error: 'Missing url parameter' }));
+    }
+    try {
+      const decoded = decodeURIComponent(targetUrl);
+      if (!isAllowedProxyDomain(decoded)) {
+        res.writeHead(403, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        return res.end(JSON.stringify({ error: 'Domain not allowed' }));
+      }
+      proxyHiAnimeStream(decoded, customUserAgent ? decodeURIComponent(customUserAgent) : null, res);
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ error: 'Invalid URL' }));
+    }
+    return;
+  }
+
+  // VidLink CDN stream proxy — vodvidl.site, videostr.net
+  if (reqUrl.pathname === '/vidlink/stream') {
+    const targetUrl = reqUrl.searchParams.get('url');
+    const customUserAgent = reqUrl.searchParams.get('ua');
+    if (!targetUrl) {
+      res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ error: 'Missing url parameter' }));
+    }
+    try {
+      const decoded = decodeURIComponent(targetUrl);
+      if (!isAllowedProxyDomain(decoded)) {
+        res.writeHead(403, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        return res.end(JSON.stringify({ error: 'Domain not allowed' }));
+      }
+      proxyVidLinkStream(decoded, customUserAgent ? decodeURIComponent(customUserAgent) : null, res);
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ error: 'Invalid URL' }));
+    }
+    return;
+  }
+
+  // DLHD CDN stream proxy — dvalna.ru, soyspace.cyou, adsfadfds.cfd, ksohls.ru
+  if (reqUrl.pathname === '/dlhd/stream') {
+    const targetUrl = reqUrl.searchParams.get('url');
+    const customUserAgent = reqUrl.searchParams.get('ua');
+    const customReferer = reqUrl.searchParams.get('referer');
+    const customOrigin = reqUrl.searchParams.get('origin');
+    const customAuth = reqUrl.searchParams.get('auth');
+    if (!targetUrl) {
+      res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ error: 'Missing url parameter' }));
+    }
+    try {
+      const decoded = decodeURIComponent(targetUrl);
+      if (!isAllowedProxyDomain(decoded)) {
+        res.writeHead(403, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        return res.end(JSON.stringify({ error: 'Domain not allowed' }));
+      }
+      proxyDlhdStream(
+        decoded,
+        customUserAgent ? decodeURIComponent(customUserAgent) : null,
+        customReferer ? decodeURIComponent(customReferer) : null,
+        customOrigin ? decodeURIComponent(customOrigin) : null,
+        customAuth ? decodeURIComponent(customAuth) : null,
+        res
+      );
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ error: 'Invalid URL' }));
+    }
+    return;
+  }
+
+  // VidSrc/2embed CDN stream proxy
+  if (reqUrl.pathname === '/vidsrc/stream') {
+    const targetUrl = reqUrl.searchParams.get('url');
+    const customUserAgent = reqUrl.searchParams.get('ua');
+    const customReferer = reqUrl.searchParams.get('referer');
+    if (!targetUrl) {
+      res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ error: 'Missing url parameter' }));
+    }
+    try {
+      const decoded = decodeURIComponent(targetUrl);
+      if (!isAllowedProxyDomain(decoded)) {
+        res.writeHead(403, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        return res.end(JSON.stringify({ error: 'Domain not allowed' }));
+      }
+      proxyVidSrcStream(decoded, customUserAgent ? decodeURIComponent(customUserAgent) : null, customReferer ? decodeURIComponent(customReferer) : null, res);
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ error: 'Invalid URL' }));
+    }
+    return;
+  }
+
+  // 1movies CDN stream proxy — p.XXXXX.workers.dev with 111movies.com referer
+  if (reqUrl.pathname === '/1movies/stream') {
+    const targetUrl = reqUrl.searchParams.get('url');
+    const customUserAgent = reqUrl.searchParams.get('ua');
+    if (!targetUrl) {
+      res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ error: 'Missing url parameter' }));
+    }
+    try {
+      const decoded = decodeURIComponent(targetUrl);
+      if (!isAllowedProxyDomain(decoded)) {
+        res.writeHead(403, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        return res.end(JSON.stringify({ error: 'Domain not allowed' }));
+      }
+      proxy1moviesStream(decoded, customUserAgent ? decodeURIComponent(customUserAgent) : null, res);
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ error: 'Invalid URL' }));
+    }
+    return;
+  }
+
+  // AnimeKai proxy endpoint — NOW ONLY for actual AnimeKai/MegaUp CDN streams
   // MegaUp blocks datacenter IPs and requests with Origin/Referer headers
-  // Flixer CDN blocks datacenter IPs but REQUIRES Referer header
-  // dvalna.ru/soyspace.cyou/adsfadfds.cfd (DLHD) blocks datacenter IPs and REQUIRES Referer, Origin, AND Authorization headers
   if (reqUrl.pathname === '/animekai') {
     const targetUrl = reqUrl.searchParams.get('url');
     const customUserAgent = reqUrl.searchParams.get('ua');
@@ -4774,8 +5174,14 @@ server.listen(PORT, () => {
 ║    GET /ppv?url=<encoded_url>    - PPV.to stream proxy    ║
 ║    GET /heartbeat?channel=&server=&domain= - DLHD session ║
 ║    GET /iptv/stream?url=&mac=&token= - IPTV stream proxy  ║
-║    GET /animekai?url=&referer= - AnimeKai/Flixer CDN      ║
+║    GET /animekai?url=&referer= - AnimeKai/MegaUp CDN       ║
 ║    GET /animekai/extract?embed=<encrypted> - Full extract ║
+║    GET /flixer/stream?url= - Flixer CDN proxy             ║
+║    GET /hianime/stream?url= - HiAnime/MegaCloud CDN      ║
+║    GET /vidlink/stream?url= - VidLink CDN proxy           ║
+║    GET /dlhd/stream?url=&referer=&auth= - DLHD CDN proxy ║
+║    GET /vidsrc/stream?url=&referer= - VidSrc CDN proxy   ║
+║    GET /1movies/stream?url= - 1movies CDN proxy           ║
 ║    GET /viprow/stream?url=&link=&cf_proxy= - VIPRow m3u8  ║
 ║    GET /viprow/manifest?url=&cf_proxy= - VIPRow manifest  ║
 ║    GET /viprow/key?url= - VIPRow AES key proxy            ║
