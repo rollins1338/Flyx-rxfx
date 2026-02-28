@@ -8,8 +8,6 @@ import { GlassPanel } from '@/components/ui/GlassPanel';
 import { FluidButton } from '@/components/ui/FluidButton';
 import styles from './AnimeDetails.module.css';
 
-const EPISODES_PER_PAGE = 100; // Jikan API returns 100 per page
-
 interface EpisodeData {
   number: number;
   title: string;
@@ -29,44 +27,58 @@ interface Props {
 export default function AnimeDetailsClient({ anime, allSeasons, totalEpisodes }: Props) {
   const router = useRouter();
   const [selectedSeason, setSelectedSeason] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
   const [episodes, setEpisodes] = useState<EpisodeData[]>([]);
-  const [loadingEpisodes, setLoadingEpisodes] = useState(false);
-  const [totalPages, setTotalPages] = useState(1);
   
   const currentSeason = allSeasons[selectedSeason] || allSeasons[0];
   const isMovie = anime.type === 'Movie';
 
-  // Fetch episodes for current page when season or page changes
+  // Generate episodes directly from the season's episode count — no API call needed.
+  // We already have the count from MAL data passed as server props.
+  // Then try to enhance with Jikan episode details (titles, air dates, filler flags) in the background.
   useEffect(() => {
     if (!currentSeason || isMovie) return;
     
-    const malId = currentSeason.malId;
-    
-    async function fetchEpisodesPage() {
-      setLoadingEpisodes(true);
-      try {
-        const response = await fetch(`/api/content/mal-episodes?malId=${malId}&page=${currentPage}`);
-        const data = await response.json();
-        
-        if (data.success && data.data) {
-          setEpisodes(data.data.episodes || []);
-          setTotalPages(data.data.totalPages || 1);
-        }
-      } catch (error) {
-        console.error('[AnimeDetails] Failed to fetch episodes:', error);
-      } finally {
-        setLoadingEpisodes(false);
-      }
+    const epCount = currentSeason.episodes || 0;
+    if (epCount === 0) {
+      setEpisodes([]);
+      return;
     }
-    
-    fetchEpisodesPage();
-  }, [currentSeason, currentPage, isMovie]);
 
-  // Reset to page 1 when season changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [selectedSeason]);
+    // Immediately generate episode list from count
+    const generated: EpisodeData[] = Array.from({ length: epCount }, (_, i) => ({
+      number: i + 1,
+      title: `Episode ${i + 1}`,
+      titleJapanese: null,
+      aired: null,
+      score: null,
+      filler: false,
+      recap: false,
+    }));
+    setEpisodes(generated);
+
+    // Try to enhance with Jikan details in the background (non-blocking)
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch(`/api/content/mal-episodes?malId=${currentSeason.malId}&page=1`);
+        if (!response.ok || cancelled) return;
+        const data = await response.json();
+        if (cancelled || !data.success || !data.data?.episodes?.length) return;
+
+        // Merge Jikan details into our generated list
+        const jikanEps: EpisodeData[] = data.data.episodes;
+        const merged = generated.map(ep => {
+          const detail = jikanEps.find((j: EpisodeData) => j.number === ep.number);
+          return detail ? { ...ep, ...detail } : ep;
+        });
+        if (!cancelled) setEpisodes(merged);
+      } catch {
+        // Jikan enhancement failed — that's fine, we already have the basic list
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [currentSeason, isMovie]);
 
   const handleBack = () => {
     router.push('/anime');
@@ -102,13 +114,6 @@ export default function AnimeDetailsClient({ anime, allSeasons, totalEpisodes }:
   };
 
   const seasonThumbnail = getSeasonThumbnail();
-  
-  // Generate page options for dropdown
-  const pageOptions = Array.from({ length: totalPages }, (_, i) => {
-    const start = i * EPISODES_PER_PAGE + 1;
-    const end = Math.min((i + 1) * EPISODES_PER_PAGE, (currentSeason?.episodes || totalPages * EPISODES_PER_PAGE));
-    return { page: i + 1, label: `${start} - ${end}` };
-  });
 
   return (
     <div className={styles.container}>
@@ -212,51 +217,8 @@ export default function AnimeDetailsClient({ anime, allSeasons, totalEpisodes }:
               </div>
             )}
 
-            {/* Page Selector */}
-            {totalPages > 1 && (
-              <div className={styles.pagination}>
-                <button 
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1 || loadingEpisodes}
-                  className={styles.paginationButton}
-                >
-                  ← Prev
-                </button>
-                
-                <select 
-                  value={currentPage}
-                  onChange={(e) => setCurrentPage(Number(e.target.value))}
-                  className={styles.paginationSelect}
-                  disabled={loadingEpisodes}
-                >
-                  {pageOptions.map(({ page, label }) => (
-                    <option key={page} value={page}>
-                      Episodes {label}
-                    </option>
-                  ))}
-                </select>
-                
-                <button 
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages || loadingEpisodes}
-                  className={styles.paginationButton}
-                >
-                  Next →
-                </button>
-              </div>
-            )}
-
-            {/* Loading indicator */}
-            {loadingEpisodes && (
-              <div className={styles.loadingEpisodes}>
-                <div className={styles.spinner} />
-                <p>Loading episodes...</p>
-              </div>
-            )}
-
             {/* Episode Grid */}
-            {!loadingEpisodes && (
-              <div className={styles.episodeGrid}>
+            <div className={styles.episodeGrid}>
                 {episodes.map((ep) => {
                   const airDate = formatAirDate(ep.aired);
                   const isFuture = ep.aired ? new Date(ep.aired) > new Date() : false;
@@ -305,7 +267,6 @@ export default function AnimeDetailsClient({ anime, allSeasons, totalEpisodes }:
                   );
                 })}
               </div>
-            )}
           </GlassPanel>
         </section>
       )}
