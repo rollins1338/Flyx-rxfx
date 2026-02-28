@@ -31,7 +31,12 @@ export interface Env {
   RPI_PROXY_KEY?: string;
 }
 
-const FLIXER_API_BASE = 'https://plsdontscrapemelove.flixer.sh';
+// Flixer/Hexa API base — they rotate domains periodically.
+// flixer.sh went NXDOMAIN ~Feb 2026, migrated to flixer.cc with same API.
+// flixer.cc added a Joken JWT JS challenge that blocks all non-browser requests.
+// hexa.su (same backend, different domain) serves the API at themoviedb.hexa.su
+// with NO JS challenge — direct API access works from datacenter IPs.
+const FLIXER_API_BASE = 'https://themoviedb.hexa.su';
 
 // Global env reference for RPI proxy
 let globalEnv: Env | null = null;
@@ -77,6 +82,7 @@ function jsonResponse(data: object, status: number): Response {
 }
 
 // Server name to display name mapping (NATO alphabet to mythology)
+// hexa.su supports all 26 NATO servers; we prioritize the first 7 that typically return sources
 const SERVER_NAMES: Record<string, string> = {
   alpha: 'Ares',
   bravo: 'Balder',
@@ -85,11 +91,25 @@ const SERVER_NAMES: Record<string, string> = {
   echo: 'Eros',
   foxtrot: 'Freya',
   golf: 'Gaia',
-  hotel: 'Hera',
+  hotel: 'Hades',
   india: 'Iris',
   juliet: 'Juno',
-  kilo: 'Kali',
+  kilo: 'Kronos',
   lima: 'Loki',
+  mike: 'Medusa',
+  november: 'Nyx',
+  oscar: 'Odin',
+  papa: 'Persephone',
+  quebec: 'Quirinus',
+  romeo: 'Ra',
+  sierra: 'Selene',
+  tango: 'Thor',
+  uniform: 'Uranus',
+  victor: 'Vulcan',
+  whiskey: 'Woden',
+  xray: 'Xolotl',
+  yankee: 'Ymir',
+  zulu: 'Zeus',
 };
 
 /**
@@ -526,7 +546,11 @@ async function ensureWasmInitialized(logger: ReturnType<typeof createLogger>): P
     cachedApiKey = cachedWasmLoader.getImgKey();
     logger.info('Flixer WASM initialized', { keyPrefix: cachedApiKey.slice(0, 16) });
   })();
-  wasmInitPromise.catch(() => { wasmInitPromise = null; });
+  wasmInitPromise.catch(() => { 
+    wasmInitPromise = null;
+    cachedWasmLoader = null;
+    cachedApiKey = null;
+  });
   return wasmInitPromise;
 }
 
@@ -549,15 +573,39 @@ function getOrCreateWarmup(apiKey: string, warmupPath: string): Promise<void> {
  * Sync with Flixer server time
  */
 async function syncServerTime(): Promise<void> {
-  const localTimeBefore = Date.now();
-  // Direct fetch — Flixer API doesn't block datacenter IPs
-  const response = await fetch(`${FLIXER_API_BASE}/api/time?t=${localTimeBefore}`);
-  const localTimeAfter = Date.now();
-  const data = await response.json() as { timestamp: number };
-  
-  const rtt = localTimeAfter - localTimeBefore;
-  const serverTimeMs = data.timestamp * 1000;
-  serverTimeOffset = serverTimeMs + (rtt / 2) - localTimeAfter;
+  try {
+    const localTimeBefore = Date.now();
+    // hexa.su time sync — no JS challenge, direct fetch works
+    const response = await fetchWithRpi(`${FLIXER_API_BASE}/api/time?t=${localTimeBefore}`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    
+    if (!response.ok) {
+      console.log(`[Flixer] Time sync failed: HTTP ${response.status}, using local time`);
+      serverTimeOffset = 0;
+      return;
+    }
+    
+    const localTimeAfter = Date.now();
+    const text = await response.text();
+    
+    // Guard against non-JSON responses (e.g., Cloudflare error pages)
+    let data: { timestamp: number };
+    try {
+      data = JSON.parse(text);
+    } catch {
+      console.log(`[Flixer] Time sync returned non-JSON: ${text.substring(0, 80)}, using local time`);
+      serverTimeOffset = 0;
+      return;
+    }
+    
+    const rtt = localTimeAfter - localTimeBefore;
+    const serverTimeMs = data.timestamp * 1000;
+    serverTimeOffset = serverTimeMs + (rtt / 2) - localTimeAfter;
+  } catch (e) {
+    console.log(`[Flixer] Time sync error: ${e instanceof Error ? e.message : String(e)}, using local time`);
+    serverTimeOffset = 0;
+  }
 }
 
 function getServerTimestamp(): number {
@@ -615,7 +663,7 @@ function generateAuthHeaders(apiKey: string, path: string): Record<string, strin
     'Accept': 'text/plain',
     'Accept-Language': 'en-US,en;q=0.9',
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
-    'Referer': 'https://flixer.sh/',
+    'Referer': 'https://flixer.cc/',
     'sec-ch-ua': '"Chromium";v="143", "Not A(Brand";v="24"',
     'sec-ch-ua-mobile': '?0',
     'sec-ch-ua-platform': '"Windows"',
@@ -657,7 +705,7 @@ async function makeFlixerRequest(
     'Accept': 'text/plain',
     'Accept-Language': 'en-US,en;q=0.9',
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
-    'Referer': 'https://flixer.sh/',
+    'Referer': 'https://flixer.cc/',
     'sec-ch-ua': '"Chromium";v="143", "Not A(Brand";v="24"',
     'sec-ch-ua-mobile': '?0',
     'sec-ch-ua-platform': '"Windows"',
@@ -669,13 +717,20 @@ async function makeFlixerRequest(
   // - Origin header
   // - sec-fetch-* headers
   
-  const response = await fetch(`${FLIXER_API_BASE}${path}`, {
+  // Route through RPI if configured, otherwise direct.
+  // hexa.su doesn't have a JS challenge, so direct fetch works from CF Workers.
+  const response = await fetchWithRpi(`${FLIXER_API_BASE}${path}`, {
     headers,
     signal: AbortSignal.timeout(8000),
   });
   
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+    const errorText = await response.text();
+    // Detect Cloudflare infrastructure errors (1016 = DNS error, 1015 = rate limited, etc.)
+    if (errorText.includes('error code:') || errorText.includes('Cloudflare')) {
+      throw new Error(`Flixer API unreachable (CF error): ${errorText.substring(0, 100)}`);
+    }
+    throw new Error(`HTTP ${response.status}: ${errorText.substring(0, 200)}`);
   }
   
   return response.text();
@@ -786,7 +841,7 @@ async function extractAllServers(
             title: `Flixer ${SERVER_NAMES[server] || server}`,
             url: result.url,
             type: 'hls',
-            referer: 'https://flixer.sh/',
+            referer: 'https://flixer.cc/',
             requiresSegmentProxy: true,
             status: 'working',
             language: 'en',
@@ -937,7 +992,7 @@ export async function handleFlixerRequest(request: Request, env: Env): Promise<R
           title: `Flixer ${displayName}`,
           url: result.url,
           type: 'hls',
-          referer: 'https://flixer.sh/',
+          referer: 'https://flixer.cc/',
           requiresSegmentProxy: true,
           status: 'working',
           language: 'en',

@@ -493,7 +493,7 @@ async function fetchViaRpiProxy(
     if (customReferer) {
       rpiParams.set('referer', customReferer);
     } else if (decodedUrl.match(/p\.\d+\.workers\.dev/)) {
-      rpiParams.set('referer', 'https://flixer.sh/');
+      rpiParams.set('referer', 'https://flixer.cc/');
     } else if (decodedUrl.includes('vodvidl.site') || decodedUrl.includes('videostr.net')) {
       // VidLink CDN — extract embedded headers from URL if present
       try {

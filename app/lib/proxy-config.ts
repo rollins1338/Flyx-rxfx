@@ -420,11 +420,10 @@ function getFlixerProxyBaseUrl(): string {
 }
 
 /**
- * Check if a URL is from Flixer CDN
+ * Check if a URL is from Flixer/Hexa CDN
  */
 export function isFlixerCdnUrl(url: string): boolean {
-  // Flixer uses Cloudflare Workers CDN
-  return url.includes('flixer') || url.includes('plsdontscrapemelove');
+  return url.includes('flixer') || url.includes('plsdontscrapemelove') || url.includes('hexa.su') || url.includes('themoviedb.hexa');
 }
 
 // ============================================================================

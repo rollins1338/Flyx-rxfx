@@ -40,7 +40,7 @@ interface FlixerApiResponse {
   server?: string;
 }
 
-const FLIXER_BASE_URL = 'https://flixer.sh';
+const FLIXER_BASE_URL = 'https://hexa.su';
 const SUBTITLE_API = 'https://sub.wyzie.ru';
 
 // Flixer is back online (February 2026) — PRIMARY provider for movies and TV
@@ -54,15 +54,29 @@ const SERVER_NAMES: Record<string, string> = {
   echo: 'Eros',
   foxtrot: 'Freya',
   golf: 'Gaia',
-  hotel: 'Hera',
+  hotel: 'Hades',
   india: 'Iris',
   juliet: 'Juno',
-  kilo: 'Kali',
+  kilo: 'Kronos',
   lima: 'Loki',
+  mike: 'Medusa',
+  november: 'Nyx',
+  oscar: 'Odin',
+  papa: 'Persephone',
+  quebec: 'Quirinus',
+  romeo: 'Ra',
+  sierra: 'Selene',
+  tango: 'Thor',
+  uniform: 'Uranus',
+  victor: 'Vulcan',
+  whiskey: 'Woden',
+  xray: 'Xolotl',
+  yankee: 'Ymir',
+  zulu: 'Zeus',
 };
 
-// Fast servers for per-server fallback (don't overwhelm RPI with all 12)
-const FAST_SERVERS = ['alpha', 'bravo', 'delta', 'echo'];
+// Fast servers for per-server fallback — hexa returns 6-7 servers typically
+const FAST_SERVERS = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot'];
 
 async function fetchSubtitles(
   tmdbId: string,

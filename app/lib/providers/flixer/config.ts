@@ -3,7 +3,7 @@
  * Constants and settings specific to the Flixer provider.
  */
 
-export const FLIXER_BASE_URL = 'https://flixer.sh';
+export const FLIXER_BASE_URL = 'https://flixer.cc';
 export const SUBTITLE_API = 'https://sub.wyzie.ru';
 
 export const SERVER_NAMES: Record<string, string> = {

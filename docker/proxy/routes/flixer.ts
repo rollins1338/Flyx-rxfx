@@ -15,7 +15,9 @@ import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import { createHmac, randomBytes, randomUUID } from "crypto";
 
-const FLIXER_API_BASE = "https://plsdontscrapemelove.flixer.sh";
+// flixer.sh went NXDOMAIN ~Feb 2026, migrated to flixer.cc with same API.
+// flixer.cc added a Joken JWT JS challenge — switched to hexa.su backend (same API, no challenge).
+const FLIXER_API_BASE = "https://themoviedb.hexa.su";
 const SERVER_NAMES: Record<string, string> = {
   alpha: "Ares",
   bravo: "Balder",
@@ -24,11 +26,25 @@ const SERVER_NAMES: Record<string, string> = {
   echo: "Eros",
   foxtrot: "Freya",
   golf: "Gaia",
-  hotel: "Hera",
+  hotel: "Hades",
   india: "Iris",
   juliet: "Juno",
-  kilo: "Kali",
+  kilo: "Kronos",
   lima: "Loki",
+  mike: "Medusa",
+  november: "Nyx",
+  oscar: "Odin",
+  papa: "Persephone",
+  quebec: "Quirinus",
+  romeo: "Ra",
+  sierra: "Selene",
+  tango: "Thor",
+  uniform: "Uranus",
+  victor: "Vulcan",
+  whiskey: "Woden",
+  xray: "Xolotl",
+  yankee: "Ymir",
+  zulu: "Zeus",
 };
 
 // Module-level state
@@ -659,7 +675,7 @@ async function makeFlixerRequest(
     "X-Client-Fingerprint": generateClientFingerprint(),
     Accept: "text/plain",
     "Accept-Language": "en-US,en;q=0.9",
-    Referer: "https://flixer.sh/",
+    Referer: "https://flixer.cc/",
     "sec-ch-ua": '"Chromium";v="143", "Not A(Brand";v="24"',
     "sec-ch-ua-mobile": "?0",
     "sec-ch-ua-platform": '"Windows"',
@@ -873,7 +889,7 @@ export async function handleFlixerExtract(
           title: `Flixer ${SERVER_NAMES[server] || server}`,
           url: streamUrl,
           type: "hls",
-          referer: "https://flixer.sh/",
+          referer: "https://flixer.cc/",
           requiresSegmentProxy: true,
           status: "working",
           language: "en",

@@ -363,6 +363,7 @@ const PROXY_ALLOWED_DOMAINS = [
   'modistreams.org',
   // Flixer
   'flixer.sh',
+  'flixer.cc',
   'workers.dev', // Flixer CDN uses p.XXXXX.workers.dev
   // VidLink CDN (storm.vodvidl.site, videostr.net — behind Cloudflare, blocks datacenter IPs)
   'vodvidl.site',
