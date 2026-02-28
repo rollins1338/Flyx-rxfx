@@ -260,7 +260,7 @@ function CompletionTab({ cd }: { cd: ReturnType<typeof useContentSlice>['data'] 
 /* Shared                                                             */
 /* ------------------------------------------------------------------ */
 
-function ConnectionBadge({ connected, lastUpdate }: { connected: boolean; lastUpdate: number }) {
+function ConnectionBadge({ connected }: { connected: boolean; lastUpdate?: number }) {
   return (
     <div
       style={{
