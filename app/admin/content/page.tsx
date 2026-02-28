@@ -25,7 +25,6 @@ import {
   PageHeader,
   LoadingState,
   EmptyState,
-  getPercentage,
   getCompletionColor,
 } from '../components/ui';
 
