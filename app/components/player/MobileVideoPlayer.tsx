@@ -612,12 +612,12 @@ export default function MobileVideoPlayer({
       playbackStartTimeoutRef.current = null;
     }
     
-    // Auto-advance: if playback doesn't start within 1s, try next source
+    // Auto-advance: if playback doesn't start within 2s, try next source
     const startPlaybackTimeout = () => {
       playbackStartTimeoutRef.current = setTimeout(() => {
         if (playbackStartedRef.current) return;
         
-        console.log(`[MobilePlayer] Source ${currentSourceIndex} didn't start within 1s, auto-advancing...`);
+        console.log(`[MobilePlayer] Source ${currentSourceIndex} didn't start within 2s, auto-advancing...`);
         const nextIdx = currentSourceIndex + 1;
         if (nextIdx < availableSources.length && availableSources[nextIdx]?.url) {
           console.log(`[MobilePlayer] Auto-advancing to source ${nextIdx}: ${availableSources[nextIdx].title}`);
@@ -625,7 +625,7 @@ export default function MobileVideoPlayer({
         } else {
           console.log('[MobilePlayer] No more sources in current provider, exhausted');
         }
-      }, 1000);
+      }, 2000);
     };
     
     // Cancel timeout when playback actually starts

@@ -1127,12 +1127,12 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
       playbackStartTimeoutRef.current = null;
     }
     
-    // Auto-advance: if playback doesn't start within 1s, try next source in the list
+    // Auto-advance: if playback doesn't start within 2s, try next source in the list
     const startPlaybackTimeout = () => {
       playbackStartTimeoutRef.current = setTimeout(() => {
         if (playbackStartedRef.current) return; // Already playing, ignore
         
-        console.log(`[VideoPlayer] Source ${currentSourceIndex} didn't start within 1s, auto-advancing...`);
+        console.log(`[VideoPlayer] Source ${currentSourceIndex} didn't start within 2s, auto-advancing...`);
         
         // Save position before switching
         if (video.currentTime > 0 && pendingSeekTimeRef.current === null) {
@@ -1159,7 +1159,7 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
           console.log('[VideoPlayer] No more sources in current provider, exhausted');
           // Let the existing error handling / provider fallback take over
         }
-      }, 1000);
+      }, 2000);
     };
     
     // Listen for the 'playing' event to cancel the timeout
@@ -4614,14 +4614,9 @@ export default function VideoPlayer({ tmdbId, mediaType, season, episode, title,
               setShowSubtitles(false);
               setHighlightServerButton(false); // Clear highlight when clicked
               // Initialize menu provider to current provider when opening
-              // For anime content, prefer anime provider even if currently on a fallback
+              // Always show the tab of the provider that's currently playing
               if (!showServerMenu) {
-                if (isAnimeContent) {
-                  const animeP = sourcesCache['hianime']?.length ? 'hianime' : sourcesCache['animekai']?.length ? 'animekai' : provider;
-                  setMenuProvider(animeP);
-                } else {
-                  setMenuProvider(provider);
-                }
+                setMenuProvider(provider);
               }
             }}
             className={`${styles.btn} ${highlightServerButton ? styles.serverButtonHighlight : ''}`}
