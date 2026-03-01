@@ -233,6 +233,9 @@ export default function DetailsPageClient({
   const [animeEntries, setAnimeEntries] = useState<AnimeEntry[]>([]);
   const [selectedMalId, setSelectedMalId] = useState<number | null>(null);
   
+  // Jikan episode details (air dates, titles, filler flags) keyed by MAL ID
+  const [malEpisodeDetails, setMalEpisodeDetails] = useState<Record<number, Record<number, { title: string; aired: string; score: number | null; filler: boolean; recap: boolean }>>>({});
+  
   // For anime: maps TMDB season to MAL parts (e.g., TMDB S2 -> MAL Part 1, 2, 3)
   // Structure: { tmdbSeason: number, malParts: MALSeason[], tmdbEpisodes: Episode[] }
   const [animeSeasonMapping, setAnimeSeasonMapping] = useState<{
@@ -389,6 +392,49 @@ export default function DetailsPageClient({
     setSelectedMalId(malId);
     console.log('[DetailsPage] Selected anime entry:', malId);
   };
+
+  // Fetch Jikan episode details (air dates, titles) when MAL entry changes
+  useEffect(() => {
+    if (!selectedMalId) return;
+    // Skip if we already have details for this MAL ID
+    if (malEpisodeDetails[selectedMalId]) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const epMap: Record<number, { title: string; aired: string; score: number | null; filler: boolean; recap: boolean }> = {};
+        let page = 1;
+        let hasNextPage = true;
+
+        while (hasNextPage && !cancelled) {
+          const res = await fetch(`/api/content/mal-episodes?malId=${selectedMalId}&page=${page}`);
+          if (!res.ok || cancelled) break;
+          const data = await res.json();
+          if (!data.success || !data.data?.episodes?.length) break;
+
+          for (const ep of data.data.episodes) {
+            epMap[ep.number] = {
+              title: ep.title,
+              aired: ep.aired || '',
+              score: ep.score,
+              filler: ep.filler,
+              recap: ep.recap,
+            };
+          }
+          hasNextPage = data.data.hasNextPage;
+          page++;
+        }
+
+        if (!cancelled && Object.keys(epMap).length > 0) {
+          setMalEpisodeDetails(prev => ({ ...prev, [selectedMalId]: epMap }));
+        }
+      } catch {
+        // Non-critical — episodes still work without air dates
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [selectedMalId, malEpisodeDetails]);
   
   // Get the currently selected anime entry
   const getSelectedAnimeEntry = () => {
@@ -401,17 +447,20 @@ export default function DetailsPageClient({
     const entry = getSelectedAnimeEntry();
     if (!entry) return [];
     
+    const details = selectedMalId ? malEpisodeDetails[selectedMalId] : null;
+    
     // Generate episode numbers 1 to entry.episodes
     const episodes = [];
     for (let i = 1; i <= (entry.episodes || 0); i++) {
+      const jikan = details?.[i];
       episodes.push({
         id: `${entry.malId}-${i}`,
         episodeNumber: i,
         seasonNumber: 1, // MAL entries are treated as single seasons
-        title: `Episode ${i}`,
+        title: jikan?.title || `Episode ${i}`,
         overview: '',
         stillPath: '', // No thumbnail for generated episodes
-        airDate: '',
+        airDate: jikan?.aired || '',
         runtime: 0,
         // Store MAL info for navigation
         _malId: entry.malId,

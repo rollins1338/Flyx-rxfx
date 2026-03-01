@@ -23,6 +23,12 @@
 
 .sidebarCollapsed {
   width: var(--sidebar-collapsed-width);
+  overflow: visible;
+}
+
+/* Allow tooltips to escape nav items when sidebar is collapsed */
+.sidebarCollapsed .navItem {
+  overflow: visible;
 }
 
 /* ----- Logo ----- */
@@ -355,6 +361,8 @@
   text-decoration: none;
   font-size: 0.8125rem;
   font-weight: 500;
+  position: relative;
+  overflow: visible;
   transition:
     background var(--nav-transition),
     color var(--nav-transition);
@@ -363,6 +371,10 @@
 .communityLink:hover {
   background: var(--nav-bg-hover);
   color: var(--nav-text);
+}
+
+.communityLink:hover .tooltip {
+  opacity: 1;
 }
 
 .communityLink:focus-visible {

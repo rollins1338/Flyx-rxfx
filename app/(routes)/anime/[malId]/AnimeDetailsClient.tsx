@@ -60,18 +60,28 @@ export default function AnimeDetailsClient({ anime, allSeasons, totalEpisodes }:
     let cancelled = false;
     (async () => {
       try {
-        const response = await fetch(`/api/content/mal-episodes?malId=${currentSeason.malId}&page=1`);
-        if (!response.ok || cancelled) return;
-        const data = await response.json();
-        if (cancelled || !data.success || !data.data?.episodes?.length) return;
+        // Fetch all pages of episode details
+        let allJikanEps: EpisodeData[] = [];
+        let page = 1;
+        let hasNextPage = true;
 
-        // Merge Jikan details into our generated list
-        const jikanEps: EpisodeData[] = data.data.episodes;
-        const merged = generated.map(ep => {
-          const detail = jikanEps.find((j: EpisodeData) => j.number === ep.number);
-          return detail ? { ...ep, ...detail } : ep;
-        });
-        if (!cancelled) setEpisodes(merged);
+        while (hasNextPage && !cancelled) {
+          const response = await fetch(`/api/content/mal-episodes?malId=${currentSeason.malId}&page=${page}`);
+          if (!response.ok || cancelled) break;
+          const data = await response.json();
+          if (cancelled || !data.success || !data.data?.episodes?.length) break;
+
+          allJikanEps = allJikanEps.concat(data.data.episodes);
+          hasNextPage = data.data.hasNextPage;
+          page++;
+
+          // Merge what we have so far for progressive updates
+          const merged = generated.map(ep => {
+            const detail = allJikanEps.find((j: EpisodeData) => j.number === ep.number);
+            return detail ? { ...ep, ...detail } : ep;
+          });
+          if (!cancelled) setEpisodes(merged);
+        }
       } catch {
         // Jikan enhancement failed — that's fine, we already have the basic list
       }
