@@ -32,7 +32,7 @@ export function NavigationOverlay() {
   if (!isAdminRoute && !isWatchMode) {
     if (isMobile) {
       paddingBottom = 'var(--bottom-tab-height)';
-    } else if (isTablet || collapsed) {
+    } else if (collapsed) {
       marginLeft = 'var(--sidebar-collapsed-width)';
     } else {
       marginLeft = 'var(--sidebar-width)';
@@ -51,7 +51,7 @@ export function NavigationOverlay() {
 
       {!isAdminRoute && !isWatchMode && !isMobile && (
         <SidebarNav
-          collapsed={isTablet ? true : collapsed}
+          collapsed={collapsed}
           onToggleCollapse={toggle}
           currentPath={pathname}
         />

@@ -28,6 +28,9 @@ export function useViewport(): Viewport {
   });
 
   useEffect(() => {
+    // Sync immediately on mount — SSR default may differ from actual width
+    setViewport(getViewport(window.innerWidth));
+
     let timeout: ReturnType<typeof setTimeout> | null = null;
 
     const handleResize = () => {

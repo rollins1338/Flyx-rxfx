@@ -43,7 +43,7 @@ export function NavigationShell({ children }: NavigationShellProps) {
     // no offset
   } else if (isMobile) {
     shellClass += ` ${styles.shellMobile}`;
-  } else if (isTablet || collapsed) {
+  } else if (collapsed) {
     shellClass += ` ${styles.shellWithRail}`;
   } else {
     shellClass += ` ${styles.shellWithSidebar}`;
@@ -53,7 +53,7 @@ export function NavigationShell({ children }: NavigationShellProps) {
     <div className={shellClass}>
       {!isWatchMode && !isMobile && (
         <SidebarNav
-          collapsed={isTablet ? true : collapsed}
+          collapsed={collapsed}
           onToggleCollapse={toggle}
           currentPath={pathname}
         />

@@ -75,11 +75,21 @@
   background: transparent;
   width: 100%;
   text-align: left;
+  /* Override global button styles */
+  backdrop-filter: none;
+  transform: none;
+}
+
+.navItem::before {
+  /* Override global button ::before gradient overlay */
+  content: none;
 }
 
 .navItem:hover {
   background: var(--nav-bg-hover);
   color: var(--nav-text);
+  transform: none;
+  box-shadow: none;
 }
 
 /* ----- Active Indicator ----- */
@@ -91,6 +101,7 @@
 
 .navItemActive::before {
   content: '';
+  display: block;
   position: absolute;
   left: 0;
   top: 6px;
@@ -140,11 +151,22 @@
   padding: 0;
   margin: 0 auto;
   flex-shrink: 0;
+  /* Override global button styles */
+  backdrop-filter: none;
+  overflow: visible;
+  transform: none;
+  position: relative;
+}
+
+.collapseToggle::before {
+  display: none;
 }
 
 .collapseToggle:hover {
   background: var(--nav-bg-hover);
   color: var(--nav-text);
+  transform: none;
+  box-shadow: none;
 }
 
 /* ----- Focus Ring (3:1 contrast — #6366f1 on #0f0f14) ----- */
