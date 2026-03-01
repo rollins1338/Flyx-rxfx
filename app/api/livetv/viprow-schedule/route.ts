@@ -34,6 +34,7 @@ export async function GET() {
         'Accept': 'text/html,application/xhtml+xml',
         'Accept-Language': 'en-US,en;q=0.9',
       },
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!response.ok) {
@@ -145,9 +146,18 @@ export async function GET() {
 
   } catch (error: unknown) {
     console.error('[VIPRow Schedule] Error:', error);
+    // Return empty results instead of 500 so the frontend still works
     return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to fetch schedule',
-    }, { status: 500 });
+      success: true,
+      count: 0,
+      events: [],
+      bySport: {},
+      fetchedAt: new Date().toISOString(),
+      warning: error instanceof Error ? error.message : 'VIPRow unavailable',
+    }, {
+      headers: {
+        'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+      },
+    });
   }
 }

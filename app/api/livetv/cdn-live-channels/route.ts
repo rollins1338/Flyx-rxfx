@@ -41,19 +41,30 @@ export async function GET(request: NextRequest) {
 
     const workerRes = await fetch(`${CDN_LIVE_WORKER}/channels`, {
       headers: { 'Accept': 'application/json' },
-      next: { revalidate: 300 },
     });
 
     if (!workerRes.ok) {
-      return NextResponse.json(
-        { error: 'Failed to fetch channels', status: workerRes.status },
-        { status: workerRes.status }
-      );
+      console.error('[CDN Live] Worker returned', workerRes.status);
+      return NextResponse.json({
+        total: 0,
+        online: 0,
+        channels: [],
+        byCountry: {},
+        countries: [],
+        warning: `CDN worker returned ${workerRes.status}`,
+      });
     }
 
     const data = await workerRes.json() as { total_channels?: number; channels?: NativeChannel[] };
     if (!data.channels || !Array.isArray(data.channels)) {
-      return NextResponse.json({ error: 'Invalid response from worker' }, { status: 502 });
+      return NextResponse.json({
+        total: 0,
+        online: 0,
+        channels: [],
+        byCountry: {},
+        countries: [],
+        warning: 'Invalid response from CDN worker',
+      });
     }
 
     let channels: CDNLiveChannel[] = data.channels.map((ch: NativeChannel, idx: number) => ({
@@ -89,9 +100,14 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('CDN Live channels error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch channels', details: String(error) },
-      { status: 500 }
-    );
+    // Return empty results instead of 500 so the frontend still works
+    return NextResponse.json({
+      total: 0,
+      online: 0,
+      channels: [],
+      byCountry: {},
+      countries: [],
+      warning: String(error),
+    });
   }
 }
