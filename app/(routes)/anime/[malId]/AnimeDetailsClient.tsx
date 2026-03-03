@@ -4,9 +4,27 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import type { MALAnime, MALSeason } from '@/lib/services/mal';
+import type { MediaItem } from '@/types/media';
 import { GlassPanel } from '@/components/ui/GlassPanel';
 import { FluidButton } from '@/components/ui/FluidButton';
+import { WatchlistButton } from '@/components/ui/WatchlistButton';
 import styles from './AnimeDetails.module.css';
+
+/** Convert MALAnime to a MediaItem so the WatchlistButton can consume it. */
+function malToMediaItem(anime: MALAnime): MediaItem {
+  return {
+    id: `mal-${anime.mal_id}`,
+    title: anime.title_english || anime.title,
+    name: anime.title,
+    overview: anime.synopsis || undefined,
+    posterPath: anime.images.jpg.large_image_url,
+    backdropPath: anime.images.jpg.large_image_url,
+    vote_average: anime.score ?? undefined,
+    mediaType: anime.type === 'Movie' ? 'movie' : 'tv',
+    genres: anime.genres?.map(g => ({ id: g.mal_id, name: g.name })),
+    releaseDate: anime.aired?.from ?? undefined,
+  };
+}
 
 interface EpisodeData {
   number: number;
@@ -183,12 +201,15 @@ export default function AnimeDetailsClient({ anime, allSeasons, totalEpisodes }:
 
             <p className={styles.synopsis}>{anime.synopsis}</p>
 
-            <FluidButton onClick={handleWatchNow} variant="primary" size="lg">
-              <svg className={styles.playIcon} fill="currentColor" viewBox="0 0 24 24">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-              {isMovie ? 'Watch Movie' : 'Watch Now'}
-            </FluidButton>
+            <div className={styles.actions}>
+              <FluidButton onClick={handleWatchNow} variant="primary" size="lg">
+                <svg className={styles.playIcon} fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+                {isMovie ? 'Watch Movie' : 'Watch Now'}
+              </FluidButton>
+              <WatchlistButton item={malToMediaItem(anime)} variant="full" />
+            </div>
           </div>
         </div>
       </div>

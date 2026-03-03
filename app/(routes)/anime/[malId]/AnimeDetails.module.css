@@ -121,6 +121,13 @@
   color: rgba(255,255,255,0.9);
 }
 
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
 .playIcon {
   width: 24px;
   height: 24px;
